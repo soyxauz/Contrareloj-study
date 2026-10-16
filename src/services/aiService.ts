@@ -166,11 +166,9 @@ async function fetchWithProxyFallback(
   options: RequestInit,
   bodyData?: Record<string, unknown>
 ): Promise<Response> {
-  const isLocalHost = typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-  // En localhost, si es ollama.com, pasar directamente por el proxy de Vite para evitar error CORS en consola
-  if (isLocalHost && url.includes('ollama.com')) {
+  // Si la petición es hacia ollama.com, intentar primero por /api/ai-proxy
+  // (funciona en Localhost vía Vite proxy, y en Vercel/Netlify vía Serverless Function)
+  if (url.includes('ollama.com')) {
     try {
       const proxyRes = await fetch('/api/ai-proxy', {
         method: 'POST',
@@ -184,9 +182,13 @@ async function fetchWithProxyFallback(
           data: bodyData,
         }),
       });
-      return proxyRes;
+      // Si el proxy responde (sea 200 o código del endpoint destino), retornarlo
+      // Solo si devuelve 404 o 405 (ej. hosting estático como GitHub Pages), continuar
+      if (proxyRes.status !== 404 && proxyRes.status !== 405) {
+        return proxyRes;
+      }
     } catch {
-      // Si el proxy falla, intentar fetch directo
+      // Continuar con llamada directa si el proxy no responde
     }
   }
 
@@ -194,25 +196,25 @@ async function fetchWithProxyFallback(
     const res = await fetch(url, options);
     return res;
   } catch (err: unknown) {
-    // Si el navegador falla por red o CORS, reintentar por proxy Vite si estamos en localhost
-    if (isLocalHost) {
-      try {
-        const proxyRes = await fetch('/api/ai-proxy', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            url,
-            method: options.method || 'GET',
-            headers: options.headers || {},
-            data: bodyData,
-          }),
-        });
+    // Si la llamada directa falló (por ejemplo por CORS), intentar /api/ai-proxy
+    try {
+      const proxyRes = await fetch('/api/ai-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url,
+          method: options.method || 'GET',
+          headers: options.headers || {},
+          data: bodyData,
+        }),
+      });
+      if (proxyRes.status !== 404 && proxyRes.status !== 405) {
         return proxyRes;
-      } catch {
-        throw err;
       }
+    } catch {
+      throw err;
     }
     throw err;
   }
@@ -227,8 +229,6 @@ export async function testAIConnection(override?: AISettings): Promise<{
   const settings = override || getAISettings();
   const cleanBase = settings.baseUrl.replace(/\/+$/, '');
   const isLocal = cleanBase.includes('localhost') || cleanBase.includes('127.0.0.1');
-  const isLocalHost = typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   if (typeof window !== 'undefined' && window.location.protocol === 'https:' && isLocal) {
     return {
@@ -237,11 +237,12 @@ export async function testAIConnection(override?: AISettings): Promise<{
     };
   }
 
-  // Si está en la web estática (GitHub Pages / Netlify) y usa ollama.com sin proxy backend
-  if (!isLocalHost && cleanBase.includes('ollama.com')) {
+  // Si está específicamente en GitHub Pages (alojamiento estático sin serverless)
+  const isGitHubPages = typeof window !== 'undefined' && window.location.hostname.includes('github.io');
+  if (isGitHubPages && cleanBase.includes('ollama.com')) {
     return {
       success: false,
-      message: 'En entornos web estáticos (GitHub Pages), los navegadores bloquean peticiones directas a Ollama Cloud por política CORS. En la web te recomendamos usar el preset de Google Gemini o Groq con su clave gratuita. En localhost:5173 tu Ollama Cloud funciona al 100% mediante el proxy local.',
+      message: 'En GitHub Pages (alojamiento estático sin funciones serverless), los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Para usar Ollama Cloud en la web pública, despliega tu repositorio en Vercel o Netlify (que admiten la función serverless /api/ai-proxy ya incluida en el proyecto) o usa el preajuste de Google Gemini / Groq.',
     };
   }
 
@@ -387,12 +388,10 @@ export async function queryAICompletion(
 
   const cleanBase = settings.baseUrl.replace(/\/+$/, '');
   const isLocal = cleanBase.includes('localhost') || cleanBase.includes('127.0.0.1');
-  const isLocalHost = typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-  if (!isLocalHost && cleanBase.includes('ollama.com')) {
+  const isGitHubPages = typeof window !== 'undefined' && window.location.hostname.includes('github.io');
+  if (isGitHubPages && cleanBase.includes('ollama.com')) {
     throw new Error(
-      'En GitHub Pages, los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Abre "Motor de IA" y selecciona Google Gemini o Groq con su clave gratuita.'
+      'En GitHub Pages, los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Despliega en Vercel o Netlify (para activar la función serverless /api/ai-proxy incluida) o selecciona Google Gemini / Groq.'
     );
   }
 
