@@ -2552,11 +2552,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         )}
 
         {/* ── ACTION ROW: HISTORIAL DE PREGUNTAS + THUMBS UP / DOWN ────── */}
-        <div className="flex items-center justify-between gap-4 mb-6 sm:mb-8">
+        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className="px-5 py-2.5 rounded-full bg-[#d5c7ee] hover:bg-[#e4d8fb] text-[#1b113b] font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-2 active:scale-95"
+            className="px-4 sm:px-5 py-2.5 rounded-full bg-[#d5c7ee] hover:bg-[#e4d8fb] text-[#1b113b] font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-2 active:scale-95 min-h-[44px]"
           >
             <span>Historial de preguntas</span>
           </button>
@@ -2566,7 +2566,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               type="button"
               onClick={() => setFeedbackGiven(feedbackGiven === 'up' ? null : 'up')}
               title="Pregunta clara y de alta calidad"
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-110 active:scale-90 ${
+              className={`w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-110 active:scale-90 ${
                 feedbackGiven === 'up'
                   ? 'bg-[#22c55e] text-white ring-2 ring-emerald-300 scale-105'
                   : 'bg-[#4ade80] hover:bg-[#22c55e] text-[#0f291e]'
@@ -2578,7 +2578,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               type="button"
               onClick={() => setFeedbackGiven(feedbackGiven === 'down' ? null : 'down')}
               title="Reportar pregunta o redacción confusa"
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-110 active:scale-90 ${
+              className={`w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-110 active:scale-90 ${
                 feedbackGiven === 'down'
                   ? 'bg-[#ef4444] text-white ring-2 ring-rose-300 scale-105'
                   : 'bg-[#f87171] hover:bg-[#ef4444] text-[#3b0d0d]'
@@ -2590,11 +2590,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         </div>
 
         {/* ── CENTERED "SIGUIENTE PREGUNTA" / "SALTAR PREGUNTA" / "AVANZAR AL NIVEL" BUTTON ── */}
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center mb-6 sm:mb-8">
           <button
             type="button"
             onClick={handleNext}
-            className={`px-8 py-3.5 rounded-full font-bold text-sm sm:text-base shadow-lg transition-all transform hover:scale-[1.03] active:scale-95 flex items-center gap-2 cursor-pointer ${
+            className={`w-full sm:w-auto justify-center px-8 py-3.5 rounded-full font-bold text-sm sm:text-base shadow-lg transition-all transform hover:scale-[1.03] active:scale-95 flex items-center gap-2 cursor-pointer min-h-[48px] ${
               currentLevelCorrect >= levelTarget
                 ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-violet-300 hover:from-amber-300 hover:to-violet-200 text-slate-950 font-extrabold shadow-amber-500/25 ring-2 ring-amber-400/50'
                 : 'bg-[#c8b6e2] hover:bg-[#d9caf2] text-[#1a1038]'
@@ -2613,7 +2613,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
         {/* ── BOTÓN JUSTIFICACIÓN (VISIBLE TRAS RESPONDER SI AÚN NO ESTÁ ABIERTA) ── */}
         {isAnswered && !showJustification && (
-          <div className="flex justify-center -mt-4 mb-8 animate-fadeIn">
+          <div className="flex justify-center -mt-2 sm:-mt-4 mb-6 sm:mb-8 animate-fadeIn">
             <button
               type="button"
               onClick={() => {
@@ -2622,7 +2622,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }, 50);
               }}
-              className="px-6 py-2.5 rounded-full bg-[#20183f] hover:bg-[#2b2054] border border-violet-500/40 hover:border-violet-400 text-violet-200 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto justify-center px-6 py-3 rounded-full bg-[#20183f] hover:bg-[#2b2054] border border-violet-500/40 hover:border-violet-400 text-violet-200 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer min-h-[44px]"
             >
               <FileText className="w-4 h-4 text-amber-400" />
               <span>Justificación</span>

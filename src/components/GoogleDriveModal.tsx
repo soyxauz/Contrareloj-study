@@ -107,8 +107,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   const isConnected = !!syncState.userEmail;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-lg bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+      <div className="w-full max-w-lg bg-thea-surface border-t sm:border border-thea-border rounded-t-3xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col">
+        {/* Mobile Pull Handle */}
+        <div className="w-12 h-1.5 bg-slate-600/70 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
         {/* Glow accent */}
         <div className="absolute -top-24 -right-24 w-52 h-52 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-52 h-52 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
@@ -116,21 +119,23 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight border border-transparent hover:border-thea-border transition-all cursor-pointer"
+          className="absolute top-4 sm:top-5 right-4 sm:right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight border border-transparent hover:border-thea-border transition-all cursor-pointer z-10"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Modal Header */}
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-indigo-600 flex items-center justify-center text-white mb-3 shadow-lg shadow-emerald-900/30">
-            <Cloud className="w-6 h-6" />
+        {/* Scrollable Content Container */}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+          {/* Modal Header */}
+          <div className="text-center mb-4 sm:mb-6">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-indigo-600 flex items-center justify-center text-white mb-3 shadow-lg shadow-emerald-900/30">
+              <Cloud className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl font-bold text-white">Google Drive Cloud Sync</h2>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              Guarda tus usuarios, kits de estudio e imágenes en tu propia unidad para acceder desde cualquier equipo.
+            </p>
           </div>
-          <h2 className="text-xl font-bold text-white">Google Drive Cloud Sync</h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            Guarda tus usuarios, kits de estudio e imágenes en tu propia unidad para acceder desde cualquier equipo.
-          </p>
-        </div>
 
         {/* Error or Notice Banners */}
         {syncState.errorMessage && (
@@ -303,5 +308,6 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         </div>
       </div>
     </div>
+  </div>
   );
 };

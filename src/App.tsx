@@ -6,6 +6,7 @@ import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
 import { googleDriveService } from './services/googleDriveService';
 import { Navbar } from './components/Navbar';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
 import type { InputTab } from './components/CreateStudyKitView';
 
@@ -292,7 +293,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Mode View */}
-      <main className="flex-1">
+      <main className="flex-1 pb-24 md:pb-8">
         {currentMode === 'home' && (
           <HomeView
             kits={kits}
@@ -424,12 +425,23 @@ export const App: React.FC = () => {
         </React.Suspense>
       )}
 
-      {/* Footer */}
-      <footer className="py-6 border-t border-thea-border text-center text-xs text-slate-500">
+      {/* Footer (hidden on small screens to prioritize clean mobile viewport) */}
+      <footer className="hidden md:block py-6 border-t border-thea-border text-center text-xs text-slate-500">
         <p>
           Contrareloj Study • Plataforma de Aprendizaje Adaptativo con Inteligencia Pedagógica y RAG
         </p>
       </footer>
+
+      {/* Mobile Bottom Navigation Bar (Thumb ergonomic) */}
+      <MobileBottomNav
+        currentMode={currentMode}
+        onSelectMode={(mode) => handleNavigate(mode)}
+        onOpenAISettings={() => setShowAIModal(true)}
+        onOpenAuth={() => setShowAuthModal(true)}
+        onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
+        currentUser={currentUser}
+        currentKit={currentKit}
+      />
     </div>
   );
 };

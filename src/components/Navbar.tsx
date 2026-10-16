@@ -91,9 +91,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right Badges & Controls with separated logical sections */}
-        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-          {/* Group 1: Navigation Actions */}
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          {/* Group 1: Navigation Actions (Desktop only, mobile uses bottom bar) */}
+          <div className="hidden md:flex items-center gap-2">
             {/* Create Kit Button */}
             <button
               onClick={() => onSelectMode('create')}
@@ -105,7 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Crear Kit</span>
+              <span>Crear Kit</span>
             </button>
 
             {/* Home Button */}
@@ -123,16 +123,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Subtle Divider */}
-          <div className="hidden sm:block h-5 w-px bg-thea-border/80" />
+          <div className="hidden md:block h-5 w-px bg-thea-border/80" />
 
           {/* Group 2: Status & Streaks */}
           <div className="flex items-center gap-2">
             {/* Streak indicator real */}
             <div
               title={`Racha de estudio: ${realStreak} ${realStreak === 1 ? 'día consecutivo' : 'días consecutivos'}`}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-thea-surface border border-thea-border text-xs text-orange-400 font-semibold"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-thea-surface border border-thea-border text-xs text-orange-400 font-semibold"
             >
-              <Flame className="w-4 h-4 fill-orange-500 text-orange-500" />
+              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-orange-500 text-orange-500" />
               <span>{realStreak}</span>
             </div>
           </div>
@@ -150,7 +150,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? `Google Drive sincronizado (${driveState.userEmail})`
                   : 'Conectar Google Drive para respaldo en la nube'
               }
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold shadow-sm cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold shadow-sm cursor-pointer ${
                 driveState.status === 'syncing'
                   ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
                   : driveState.userEmail
@@ -173,14 +173,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* AI Engine */}
+            {/* AI Engine (desktop header, on mobile available in bottom bar) */}
             <button
               onClick={onOpenAISettings}
               title="Configuración de IA (Ollama Cloud / API)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-950/40 hover:bg-violet-900/50 border border-violet-500/40 text-violet-300 hover:text-white transition-all text-xs font-semibold shadow-sm cursor-pointer"
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-950/40 hover:bg-violet-900/50 border border-violet-500/40 text-violet-300 hover:text-white transition-all text-xs font-semibold shadow-sm cursor-pointer"
             >
               <Bot className="w-3.5 h-3.5 text-violet-400" />
-              <span className="hidden sm:inline">IA Engine</span>
+              <span>IA Engine</span>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             </button>
           </div>
@@ -225,14 +225,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Navigation Tabs — only visible in study modes */}
       {showModeTabs && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-2.5 scrollbar-none border-t border-thea-border/40 text-xs sm:text-sm font-medium">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-2 sm:py-2.5 scrollbar-none border-t border-thea-border/40 text-xs sm:text-sm font-medium touch-pan-x">
           {modes.map(mode => {
             const active = currentMode === mode.id;
             return (
               <button
                 key={mode.id}
                 onClick={() => onSelectMode(mode.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-all whitespace-nowrap text-xs sm:text-sm ${
                   active
                     ? 'bg-violet-600 text-white font-semibold shadow-md shadow-violet-900/30'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-thea-surface'

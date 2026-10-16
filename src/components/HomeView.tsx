@@ -294,7 +294,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           <button
             onClick={() => onNavigate('create', 'topic')}
-            className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-violet-900/40 group shrink-0 cursor-pointer"
+            className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-violet-900/40 group shrink-0 cursor-pointer min-h-[48px]"
           >
             <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
             <span>Crear Study Kit</span>
@@ -540,7 +540,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             setKitMenuOpenId(isMenuOpen ? null : kit.id);
                           }}
                           title="Opciones de este Study Kit"
-                          className={`p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-colors cursor-pointer ${
+                          className={`p-2 sm:p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-colors cursor-pointer ${
                             isMenuOpen ? 'bg-white/20 text-white' : ''
                           }`}
                         >

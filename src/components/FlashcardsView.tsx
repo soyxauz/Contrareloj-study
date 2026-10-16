@@ -421,7 +421,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
             <button
               type="button"
               onClick={handlePrevCard}
-              className="p-3.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-white transition-all cursor-pointer shadow-md flex items-center gap-1.5 text-xs font-bold active:scale-95"
+              className="p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-white transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 text-xs font-bold active:scale-95"
               title="Tarjeta anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -429,25 +429,25 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
             </button>
 
             {/* Botones de Evaluación */}
-            <div className="flex items-center gap-2.5 sm:gap-3 flex-1 justify-center max-w-md">
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center max-w-md">
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('to-learn')}
-                className="flex-1 py-3 px-3 rounded-2xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95"
+                className="flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95 flex items-center justify-center"
               >
                 Aún no la sé
               </button>
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('known')}
-                className="flex-1 py-3 px-3 rounded-2xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-amber-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95"
+                className="flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-amber-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95 flex items-center justify-center"
               >
                 La conozco
               </button>
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('mastered')}
-                className="flex-1 py-3 px-3 rounded-2xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95"
+                className="flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95 flex items-center justify-center"
               >
                 ¡Dominada!
               </button>
@@ -456,7 +456,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
             <button
               type="button"
               onClick={handleNextCard}
-              className="p-3.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-white transition-all cursor-pointer shadow-md flex items-center gap-1.5 text-xs font-bold active:scale-95"
+              className="p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-white transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 text-xs font-bold active:scale-95"
               title="Siguiente tarjeta"
             >
               <span className="hidden sm:inline">Siguiente</span>

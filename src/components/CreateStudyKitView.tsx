@@ -523,19 +523,19 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       </div>
 
       {/* Tab Selector */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
+      <div className="flex sm:grid sm:grid-cols-5 gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
         {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-col items-center gap-2 p-3.5 rounded-xl border transition-all ${
+            className={`flex flex-col items-center justify-center gap-2 p-3 sm:p-3.5 rounded-xl border transition-all shrink-0 min-w-[105px] sm:min-w-0 cursor-pointer ${
               activeTab === tab.id
                 ? 'bg-violet-600/20 border-violet-500 text-violet-300 shadow-lg shadow-violet-900/20'
                 : 'bg-thea-surface border-thea-border text-slate-400 hover:text-slate-200 hover:bg-thea-surfaceLight'
             }`}
           >
             {tab.icon}
-            <span className="text-xs font-semibold text-center">{tab.label}</span>
+            <span className="text-xs font-semibold text-center leading-tight">{tab.label}</span>
           </button>
         ))}
       </div>

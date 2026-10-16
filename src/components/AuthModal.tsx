@@ -104,8 +104,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-md bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+      <div className="w-full max-w-md bg-thea-surface border-t sm:border border-thea-border rounded-t-3xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-y-auto">
+        {/* Mobile Pull Handle */}
+        <div className="w-12 h-1.5 bg-slate-600/70 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
         {/* Glow accent */}
         <div className="absolute -top-20 -right-20 w-48 h-48 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />

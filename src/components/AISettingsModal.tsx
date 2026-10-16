@@ -106,10 +106,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   const activePreset = AI_PRESETS.find(p => p.id === selectedPresetId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-      <div className="bg-thea-surface border border-thea-border rounded-3xl max-w-xl w-full p-5 sm:p-7 shadow-2xl relative overflow-hidden max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+      <div className="bg-thea-surface border-t sm:border border-thea-border rounded-t-3xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col">
+        {/* Mobile Pull Handle */}
+        <div className="w-12 h-1.5 bg-slate-600/70 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
         {/* Decorative Top Accent */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 via-indigo-500 to-amber-400" />
+        <div className="hidden sm:block absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 via-indigo-500 to-amber-400" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between mb-5 pb-3 border-b border-thea-border shrink-0">
