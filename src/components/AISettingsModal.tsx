@@ -70,7 +70,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     try {
       const res = await testAIConnection(settings);
       setTestResult(res);
-      if (res.models && res.models.length > 0 && !res.models.includes(settings.model)) {
+      if (res.models && res.models.length > 0 && !settings.model) {
         setSettings(prev => ({ ...prev, model: res.models![0] }));
       }
     } finally {

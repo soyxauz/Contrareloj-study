@@ -24,15 +24,15 @@ export interface AIPreset {
 
 export const AI_PRESETS: AIPreset[] = [
   {
-    id: 'gemini',
-    name: 'Google Gemini',
+    id: 'ollama-cloud',
+    name: 'Ollama Cloud (Gemma 4)',
     provider: 'openai-compatible',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    model: 'gemini-1.5-flash',
-    keyPlaceholder: 'AIzaSy...',
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    description: 'Endpoint oficial OpenAI de Google Gemini. Nivel gratuito en AI Studio.',
-    badge: 'Recomendado / Gratis',
+    baseUrl: 'https://ollama.com/v1',
+    model: 'gemma4:31b',
+    keyPlaceholder: '716a4f59...',
+    keyUrl: 'https://ollama.com/settings/keys',
+    description: 'Servicio cloud oficial con modelo Gemma 4 (31B). Nivel de cuenta activo.',
+    badge: 'Tu Cuenta / Activo',
     freeTier: true,
   },
   {
@@ -44,18 +44,19 @@ export const AI_PRESETS: AIPreset[] = [
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
     description: 'Ultra rápido y gratuito. Genera hasta 50 preguntas en segundos.',
-    badge: 'Ultra Rápido / Gratis',
+    badge: 'Recomendado / Gratis',
     freeTier: true,
   },
   {
-    id: 'ollama',
-    name: 'Ollama Local',
-    provider: 'ollama',
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'llama3.2',
-    keyPlaceholder: 'No requiere clave de API',
-    description: 'Ejecución 100% privada y offline. Requiere Ollama corriendo en tu equipo.',
-    badge: 'Offline / Privado',
+    id: 'gemini',
+    name: 'Google Gemini',
+    provider: 'openai-compatible',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-1.5-flash',
+    keyPlaceholder: 'AIzaSy...',
+    keyUrl: 'https://aistudio.google.com/app/apikey',
+    description: 'Endpoint oficial OpenAI de Google Gemini. Nivel gratuito en AI Studio.',
+    badge: 'Oficial Google / Gratis',
     freeTier: true,
   },
   {
@@ -94,35 +95,54 @@ export const AI_PRESETS: AIPreset[] = [
     badge: 'Multi-Modelo',
     freeTier: true,
   },
+  {
+    id: 'ollama',
+    name: 'Ollama Local',
+    provider: 'ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    model: 'llama3.2',
+    keyPlaceholder: 'No requiere clave de API',
+    description: 'Ejecución 100% privada y offline. Requiere Ollama corriendo en tu equipo.',
+    badge: 'Offline / Privado',
+    freeTier: true,
+  },
 ];
 
 const STORAGE_KEY = 'thea_ai_settings';
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
-  provider: 'ollama',
-  baseUrl: 'http://localhost:11434/v1',
-  apiKey: '',
-  model: 'llama3.2',
+  provider: 'openai-compatible',
+  baseUrl: 'https://ollama.com/v1',
+  apiKey: '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl',
+  model: 'gemma4:31b',
   timeoutMs: 45000,
 };
 
 export function getAISettings(): AISettings {
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Limpiar configuraciones previas que apuntaban al dominio web de ollama.com
-      if (parsed.baseUrl && parsed.baseUrl.includes('ollama.com')) {
-        const cleaned: AISettings = {
+      // Si apuntaba a localhost inactivo o la clave fue borrada o el modelo estaba desactualizado
+      if (
+        !parsed.apiKey ||
+        parsed.apiKey.trim() === '' ||
+        parsed.baseUrl === 'http://localhost:11434/v1' ||
+        parsed.baseUrl?.includes('11434') ||
+        parsed.model === 'gemma4:31b-cloud' ||
+        parsed.model === 'llama3.2'
+      ) {
+        const restored: AISettings = {
+          ...DEFAULT_AI_SETTINGS,
           ...parsed,
-          provider: 'ollama',
-          baseUrl: 'http://localhost:11434/v1',
-          apiKey: '',
-          model: 'llama3.2',
+          provider: 'openai-compatible',
+          baseUrl: 'https://ollama.com/v1',
+          apiKey: DEFAULT_AI_SETTINGS.apiKey,
+          model: 'gemma4:31b',
         };
-        saveAISettings(cleaned);
-        return cleaned;
+        saveAISettings(restored);
+        return restored;
       }
       return { ...DEFAULT_AI_SETTINGS, ...parsed };
     } catch {
@@ -137,7 +157,7 @@ export function saveAISettings(settings: AISettings): void {
 }
 
 /**
- * Cliente de red inteligente con reintento automático por proxy local anti-CORS.
+ * Cliente de red inteligente con enrutamiento por proxy local anti-CORS.
  * Si el navegador bloquea la llamada directa por CORS o puertos locales,
  * se enruta transparentemente a través del servidor Vite (/api/ai-proxy).
  */
@@ -146,17 +166,11 @@ async function fetchWithProxyFallback(
   options: RequestInit,
   bodyData?: Record<string, unknown>
 ): Promise<Response> {
-  try {
-    const res = await fetch(url, options);
-    return res;
-  } catch (err: unknown) {
-    // En servidores estáticos en la nube (Netlify, GitHub Pages) no existe el proxy local /api/ai-proxy
-    const isStaticEnv = typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
-    if (isStaticEnv) {
-      throw err;
-    }
+  const isLocalHost = typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-    // En desarrollo local Vite, reintentar por el proxy local anti-CORS
+  // En localhost, si es ollama.com, pasar directamente por el proxy de Vite para evitar error CORS en consola
+  if (isLocalHost && url.includes('ollama.com')) {
     try {
       const proxyRes = await fetch('/api/ai-proxy', {
         method: 'POST',
@@ -170,14 +184,37 @@ async function fetchWithProxyFallback(
           data: bodyData,
         }),
       });
-
-      if (proxyRes.status === 404 || proxyRes.status === 405) {
-        throw err;
-      }
       return proxyRes;
     } catch {
-      throw err;
+      // Si el proxy falla, intentar fetch directo
     }
+  }
+
+  try {
+    const res = await fetch(url, options);
+    return res;
+  } catch (err: unknown) {
+    // Si el navegador falla por red o CORS, reintentar por proxy Vite si estamos en localhost
+    if (isLocalHost) {
+      try {
+        const proxyRes = await fetch('/api/ai-proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            url,
+            method: options.method || 'GET',
+            headers: options.headers || {},
+            data: bodyData,
+          }),
+        });
+        return proxyRes;
+      } catch {
+        throw err;
+      }
+    }
+    throw err;
   }
 }
 
@@ -190,18 +227,21 @@ export async function testAIConnection(override?: AISettings): Promise<{
   const settings = override || getAISettings();
   const cleanBase = settings.baseUrl.replace(/\/+$/, '');
   const isLocal = cleanBase.includes('localhost') || cleanBase.includes('127.0.0.1');
-
-  if (cleanBase.includes('ollama.com')) {
-    return {
-      success: false,
-      message: 'ollama.com es el sitio web de Ollama, no un endpoint de API en la nube. Si tienes Ollama instalado en tu PC, selecciona el preset "Ollama Local" (http://localhost:11434). Si deseas usar IA en la nube, selecciona Google Gemini o Groq e ingresa su clave gratuita.',
-    };
-  }
+  const isLocalHost = typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   if (typeof window !== 'undefined' && window.location.protocol === 'https:' && isLocal) {
     return {
       success: false,
-      message: 'Estás conectado a través de HTTPS. Los navegadores bloquean llamadas a servidores HTTP locales (localhost:11434) por política de contenido mixto. Para usar IA en la web, selecciona Google Gemini o Groq con su clave gratuita.',
+      message: 'Estás conectado a través de HTTPS. Los navegadores bloquean llamadas a servidores HTTP locales (localhost:11434) por política de contenido mixto. Para usar IA en la web, selecciona un proveedor en la nube con su clave.',
+    };
+  }
+
+  // Si está en la web estática (GitHub Pages / Netlify) y usa ollama.com sin proxy backend
+  if (!isLocalHost && cleanBase.includes('ollama.com')) {
+    return {
+      success: false,
+      message: 'En entornos web estáticos (GitHub Pages), los navegadores bloquean peticiones directas a Ollama Cloud por política CORS. En la web te recomendamos usar el preset de Google Gemini o Groq con su clave gratuita. En localhost:5173 tu Ollama Cloud funciona al 100% mediante el proxy local.',
     };
   }
 
@@ -234,9 +274,40 @@ export async function testAIConnection(override?: AISettings): Promise<{
       });
     });
 
+    // Si /models devuelve error, verificar enviando un ping liviano a chat/completions
+    if (!res || !res.ok) {
+      try {
+        const pingPayload = {
+          model: settings.model || 'gemma4:31b',
+          messages: [{ role: 'user', content: 'test' }],
+          max_tokens: 1,
+        };
+        const pingRes = await fetchWithProxyFallback(
+          `${cleanBase}/chat/completions`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(pingPayload),
+            signal: controller.signal,
+          },
+          pingPayload
+        );
+        if (pingRes && pingRes.ok) {
+          clearTimeout(timeout);
+          return {
+            success: true,
+            message: `Conexión establecida con éxito. Modelo activo: ${settings.model || 'gemma4:31b'}.`,
+            models: [settings.model || 'gemma4:31b'],
+          };
+        }
+      } catch {
+        // Continuar con el manejo de respuesta normal
+      }
+    }
+
     clearTimeout(timeout);
 
-    if (res.ok) {
+    if (res && res.ok) {
       const data = await res.json();
       let modelList: string[] = [];
       if (Array.isArray(data.data)) {
@@ -376,7 +447,10 @@ export async function queryAICompletion(
     }
 
     const json = await response.json();
-    const content = json.choices?.[0]?.message?.content;
+    const content =
+      json.choices?.[0]?.message?.content ||
+      json.choices?.[0]?.message?.reasoning ||
+      json.choices?.[0]?.text;
     if (!content) {
       throw new Error('Respuesta de IA vacía recibida del proveedor.');
     }
