@@ -361,6 +361,12 @@ export async function testAIConnection(override?: AISettings): Promise<{
         message: `No se pudo conectar a Ollama local en ${cleanBase}. Verifica que esté activo con: set OLLAMA_ORIGINS=* && ollama serve`,
       };
     }
+    if (msg.includes('Failed to fetch') || msg.includes('CORS') || msg.includes('NetworkError')) {
+      return {
+        success: false,
+        message: `Error de política de seguridad (CORS): El proveedor en ${cleanBase} no admite conexiones directas desde navegadores web sin un servidor backend. En GitHub Pages te recomendamos usar Google Gemini o Groq (gratuitos con soporte CORS para navegador). En localhost:5173 tu Ollama Cloud funciona al 100%.`,
+      };
+    }
     return {
       success: false,
       message: `Error de red al conectar con ${cleanBase}: ${msg}`,
@@ -381,6 +387,14 @@ export async function queryAICompletion(
 
   const cleanBase = settings.baseUrl.replace(/\/+$/, '');
   const isLocal = cleanBase.includes('localhost') || cleanBase.includes('127.0.0.1');
+  const isLocalHost = typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  if (!isLocalHost && cleanBase.includes('ollama.com')) {
+    throw new Error(
+      'En GitHub Pages, los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Abre "Motor de IA" y selecciona Google Gemini o Groq con su clave gratuita.'
+    );
+  }
 
   if (!isLocal && !settings.apiKey.trim()) {
     throw new Error(

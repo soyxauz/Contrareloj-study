@@ -44,6 +44,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('groq');
+  const isLocalHost = typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   useEffect(() => {
     if (isOpen) {
@@ -177,9 +179,9 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
                 Selecciona tu Proveedor de IA (Preajustes Rápidos):
               </label>
-              <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
+              <span className={`text-[10px] flex items-center gap-1 font-semibold ${isLocalHost ? 'text-emerald-400' : 'text-cyan-400'}`}>
                 <ShieldCheck className="w-3 h-3" />
-                Proxy Anti-CORS Activo
+                {isLocalHost ? 'Proxy Anti-CORS Local Activo' : 'Versión Web (GitHub Pages)'}
               </span>
             </div>
 
@@ -237,6 +239,44 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 <span>Obtener API Key</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
+            </div>
+          )}
+
+          {/* Ollama Cloud guidance on static web hosting */}
+          {selectedPresetId === 'ollama-cloud' && !isLocalHost && (
+            <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/35 text-xs text-amber-200/90 leading-relaxed">
+              <div className="font-bold flex items-center gap-1.5 mb-1.5 text-amber-300">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                Compatibilidad en GitHub Pages:
+              </div>
+              <p className="text-[11px] text-slate-300 mb-2">
+                Ollama Cloud no admite peticiones directas desde páginas web estáticas sin backend (bloqueo por política de CORS del navegador).
+              </p>
+              <p className="text-[11px] text-slate-300 mb-2.5">
+                Para generar preguntas en esta versión web de GitHub Pages, te recomendamos activar <strong>Google Gemini</strong> o <strong>Groq Cloud</strong> (ambos son 100% gratuitos y admiten CORS en navegadores).
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const groqPreset = AI_PRESETS.find(p => p.id === 'groq');
+                    if (groqPreset) applyPreset(groqPreset);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-200 hover:text-white font-semibold text-[11px] transition-colors"
+                >
+                  Usar Groq Cloud
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const geminiPreset = AI_PRESETS.find(p => p.id === 'gemini');
+                    if (geminiPreset) applyPreset(geminiPreset);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-violet-600/30 hover:bg-violet-600 border border-violet-500/40 text-violet-200 hover:text-white font-semibold text-[11px] transition-colors"
+                >
+                  Usar Google Gemini
+                </button>
+              </div>
             </div>
           )}
 
