@@ -24,15 +24,15 @@ export interface AIPreset {
 
 export const AI_PRESETS: AIPreset[] = [
   {
-    id: 'ollama-cloud',
-    name: 'Ollama Cloud',
+    id: 'gemini',
+    name: 'Google Gemini',
     provider: 'openai-compatible',
-    baseUrl: 'https://ollama.com/v1',
-    model: 'gemma4:31b-cloud',
-    keyPlaceholder: '716a4f59...',
-    keyUrl: 'https://ollama.com/settings/keys',
-    description: 'Servicio cloud oficial de Ollama con modelo Gemma 4 (31B). Nivel gratuito activo.',
-    badge: 'Tu Cuenta / Activo',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-1.5-flash',
+    keyPlaceholder: 'AIzaSy...',
+    keyUrl: 'https://aistudio.google.com/app/apikey',
+    description: 'Endpoint oficial OpenAI de Google Gemini. Nivel gratuito en AI Studio.',
+    badge: 'Recomendado / Gratis',
     freeTier: true,
   },
   {
@@ -44,19 +44,18 @@ export const AI_PRESETS: AIPreset[] = [
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
     description: 'Ultra rápido y gratuito. Genera hasta 50 preguntas en segundos.',
-    badge: 'Recomendado / Gratis',
+    badge: 'Ultra Rápido / Gratis',
     freeTier: true,
   },
   {
-    id: 'gemini',
-    name: 'Google Gemini',
-    provider: 'openai-compatible',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    model: 'gemini-1.5-flash',
-    keyPlaceholder: 'AIzaSy...',
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    description: 'Endpoint oficial OpenAI de Google Gemini. Nivel gratuito en AI Studio.',
-    badge: 'Oficial Google / Gratis',
+    id: 'ollama',
+    name: 'Ollama Local',
+    provider: 'ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    model: 'llama3.2',
+    keyPlaceholder: 'No requiere clave de API',
+    description: 'Ejecución 100% privada y offline. Requiere Ollama corriendo en tu equipo.',
+    badge: 'Offline / Privado',
     freeTier: true,
   },
   {
@@ -95,27 +94,16 @@ export const AI_PRESETS: AIPreset[] = [
     badge: 'Multi-Modelo',
     freeTier: true,
   },
-  {
-    id: 'ollama',
-    name: 'Ollama Local',
-    provider: 'ollama',
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'llama3.2',
-    keyPlaceholder: 'No requiere clave de API',
-    description: 'Ejecución 100% privada y offline. Requiere Ollama corriendo en tu equipo.',
-    badge: 'Offline / Privado',
-    freeTier: true,
-  },
 ];
 
 const STORAGE_KEY = 'thea_ai_settings';
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
-  provider: 'openai-compatible',
-  baseUrl: 'https://ollama.com/v1',
-  apiKey: '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl',
-  model: 'gemma4:31b-cloud',
+  provider: 'ollama',
+  baseUrl: 'http://localhost:11434/v1',
+  apiKey: '',
+  model: 'llama3.2',
   timeoutMs: 45000,
 };
 
@@ -124,21 +112,17 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Migración automática si apuntaba a localhost (que fallaba) o clave vacía
-      if (
-        parsed.baseUrl === 'http://localhost:11434/v1' ||
-        !parsed.apiKey ||
-        parsed.apiKey.includes('2ddf7933b2fe')
-      ) {
-        const updated: AISettings = {
+      // Limpiar configuraciones previas que apuntaban al dominio web de ollama.com
+      if (parsed.baseUrl && parsed.baseUrl.includes('ollama.com')) {
+        const cleaned: AISettings = {
           ...parsed,
-          provider: 'openai-compatible',
-          baseUrl: 'https://ollama.com/v1',
-          apiKey: '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl',
-          model: 'gemma4:31b-cloud',
+          provider: 'ollama',
+          baseUrl: 'http://localhost:11434/v1',
+          apiKey: '',
+          model: 'llama3.2',
         };
-        saveAISettings(updated);
-        return updated;
+        saveAISettings(cleaned);
+        return cleaned;
       }
       return { ...DEFAULT_AI_SETTINGS, ...parsed };
     } catch {
@@ -166,7 +150,13 @@ async function fetchWithProxyFallback(
     const res = await fetch(url, options);
     return res;
   } catch (err: unknown) {
-    // Si el navegador falla por red o CORS (ej. Failed to fetch), reintentar por proxy Vite
+    // En servidores estáticos en la nube (Netlify, GitHub Pages) no existe el proxy local /api/ai-proxy
+    const isStaticEnv = typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
+    if (isStaticEnv) {
+      throw err;
+    }
+
+    // En desarrollo local Vite, reintentar por el proxy local anti-CORS
     try {
       const proxyRes = await fetch('/api/ai-proxy', {
         method: 'POST',
@@ -180,6 +170,10 @@ async function fetchWithProxyFallback(
           data: bodyData,
         }),
       });
+
+      if (proxyRes.status === 404 || proxyRes.status === 405) {
+        throw err;
+      }
       return proxyRes;
     } catch {
       throw err;
@@ -196,6 +190,20 @@ export async function testAIConnection(override?: AISettings): Promise<{
   const settings = override || getAISettings();
   const cleanBase = settings.baseUrl.replace(/\/+$/, '');
   const isLocal = cleanBase.includes('localhost') || cleanBase.includes('127.0.0.1');
+
+  if (cleanBase.includes('ollama.com')) {
+    return {
+      success: false,
+      message: 'ollama.com es el sitio web de Ollama, no un endpoint de API en la nube. Si tienes Ollama instalado en tu PC, selecciona el preset "Ollama Local" (http://localhost:11434). Si deseas usar IA en la nube, selecciona Google Gemini o Groq e ingresa su clave gratuita.',
+    };
+  }
+
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && isLocal) {
+    return {
+      success: false,
+      message: 'Estás conectado a través de HTTPS. Los navegadores bloquean llamadas a servidores HTTP locales (localhost:11434) por política de contenido mixto. Para usar IA en la web, selecciona Google Gemini o Groq con su clave gratuita.',
+    };
+  }
 
   if (!isLocal && !settings.apiKey.trim()) {
     return {

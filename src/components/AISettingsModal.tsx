@@ -95,13 +95,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       provider: preset.provider,
       baseUrl: preset.baseUrl,
       model: preset.model,
-      // Conservar la clave si el usuario ya ingresó una, o prellenar si es Ollama Cloud
-      apiKey:
-        preset.id === 'ollama-cloud'
-          ? (prev.apiKey || '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl')
-          : preset.id === 'ollama'
-          ? ''
-          : prev.apiKey,
+      // Conservar la clave si el usuario ya ingresó una, o dejar vacía si es Ollama local
+      apiKey: preset.id === 'ollama' ? '' : prev.apiKey,
     }));
     setTestResult(null);
   };
