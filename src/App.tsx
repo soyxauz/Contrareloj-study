@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
 import { DEFAULT_STUDY_KITS } from './data/defaultKits';
-import { BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
+import { BookOpen, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
 import { googleDriveService, type DriveSyncState } from './services/googleDriveService';
@@ -54,17 +54,7 @@ export const App: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
   const [driveSyncState, setDriveSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
-  const [driveNotice, setDriveNotice] = useState<string | null>(null);
-  const noticeTimerRef = useRef<any>(null);
   const isLoggingOutRef = useRef(false);
-
-  const triggerDriveNotice = (msg: string) => {
-    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
-    setDriveNotice(msg);
-    noticeTimerRef.current = setTimeout(() => {
-      setDriveNotice(null);
-    }, 4500);
-  };
 
   useEffect(() => {
     const unsubscribe = googleDriveService.subscribe((state) => {
@@ -143,7 +133,6 @@ export const App: React.FC = () => {
           if (clean.length > 0) {
             setKits(clean);
             if (!currentKit) setCurrentKit(clean[0]);
-            triggerDriveNotice(`Progreso sincronizado desde Google Drive (${clean.length} kits).`);
           }
         }
         if (typeof window !== 'undefined') {
@@ -234,7 +223,6 @@ export const App: React.FC = () => {
         if (firstPulled) {
           localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
         }
-        triggerDriveNotice(`Progreso sincronizado desde Google Drive (${cleanPulled.length} kits).`);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('thea_ai_settings_changed'));
         }
@@ -266,7 +254,6 @@ export const App: React.FC = () => {
             if (firstPulled) {
               localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
             }
-            triggerDriveNotice(`Progreso sincronizado desde Google Drive (${cleanPulled.length} kits).`);
           }
         }
         if (typeof window !== 'undefined') {
@@ -286,10 +273,7 @@ export const App: React.FC = () => {
         if (clean.length > 0) {
           setKits(clean);
           if (!currentKit) setCurrentKit(clean[0]);
-          triggerDriveNotice(`Progreso sincronizado desde Google Drive (${clean.length} kits).`);
         }
-      } else {
-        triggerDriveNotice('Conexión con Google Drive renovada.');
       }
     } catch (err) {
       console.error('Error al reconectar Google Drive:', err);
@@ -567,14 +551,6 @@ export const App: React.FC = () => {
         currentUser={currentUser}
         currentKit={currentKit}
       />
-
-      {/* Google Drive Auto-Sync Discrete Toast Notification */}
-      {driveNotice && (
-        <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/50 text-emerald-200 text-xs sm:text-sm font-semibold shadow-2xl backdrop-blur-md animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span>{driveNotice}</span>
-        </div>
-      )}
     </div>
   );
 };
