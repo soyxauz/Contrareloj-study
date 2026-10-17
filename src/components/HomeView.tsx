@@ -752,7 +752,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                       {isActive && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/20">
-                          Activo
+                          Último abierto
                         </span>
                       )}
 
@@ -987,7 +987,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 </p>
                                 {isCurrent && (
                                   <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                                    Activo
+                                    Último abierto
                                   </span>
                                 )}
                               </div>
