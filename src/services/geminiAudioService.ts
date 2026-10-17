@@ -96,6 +96,7 @@ export const DEFAULT_PODCAST_SETTINGS: PodcastSettings = {
   mateoVoice: 'Puck',
   playbackSpeed: 1,
   geminiApiKey: '',
+  orientation: '',
 };
 
 const PODCAST_SETTINGS_KEY = 'contrareloj_podcast_settings';

@@ -1450,16 +1450,21 @@ Incluye:
 export async function generateAIPodcast(
   rawText: string,
   title: string,
-  category: string
+  category: string,
+  orientation?: string
 ): Promise<PodcastEpisode | null> {
   const settings = getAISettings();
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
+  const orientationDirective = orientation?.trim()
+    ? `\nORIENTACIÓN Y ENFOQUE ESPECÍFICO DEL EPISODIO SOLICITADO:\n"${orientation.trim()}"\nDebes ajustar estrictamente el tono, estilo, nivel de rigor, ritmo, profundidad conceptual e interacciones entre los presentadores a esta orientación.\n`
+    : '';
+
   const systemPrompt = `Eres el productor ejecutivo del podcast educativo Contrareloj Review.
 A partir del texto proporcionado, genera un episodio de repaso dinámico, entretenido y riguroso entre Sofia (Host entusiasta) y Alex (Tutor pedagógico experto).
 Deben discutir los puntos centrales del tema con naturalidad, analogías y claridad 100% en español.
-
+${orientationDirective}
 ${translationDirective}
 
 Responde ÚNICAMENTE con un JSON con la estructura:
@@ -1474,7 +1479,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   }
 } `;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera el podcast (diálogo 100% en español):`;
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}${orientation?.trim() ? `\n\nOrientación requerida para el podcast:\n${orientation.trim()}` : ''}\n\nGenera el podcast (diálogo 100% en español):`;
 
   if (settings.enabled) {
     try {

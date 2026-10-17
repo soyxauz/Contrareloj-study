@@ -168,6 +168,7 @@ export interface PodcastSettings {
   mateoVoice: string;
   playbackSpeed: number;
   geminiApiKey?: string;
+  orientation?: string;
 }
 
 export interface User {

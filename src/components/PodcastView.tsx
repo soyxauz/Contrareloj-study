@@ -14,9 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings2,
-  Key,
   Check,
-  ExternalLink,
   X,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
@@ -38,7 +36,6 @@ function formatSeconds(totalSecs: number): string {
 import {
   GEMINI_VOICES,
   getGeminiAudioApiKey,
-  setGeminiAudioApiKey,
   synthesizeGeminiSpeech,
   prefetchGeminiSpeech,
   getPodcastSettings,
@@ -71,8 +68,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [mateoVoice, setMateoVoice] = useState<string>(() => getPodcastSettings().mateoVoice || 'Puck');
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => getPodcastSettings().geminiApiKey || getGeminiAudioApiKey());
-  const [keySavedFeedback, setKeySavedFeedback] = useState(false);
+  const [orientationInput, setOrientationInput] = useState<string>(() => getPodcastSettings().orientation || '');
+  const [orientationSavedFeedback, setOrientationSavedFeedback] = useState(false);
+  const [noKeyWarning, setNoKeyWarning] = useState(false);
   const [isTestingVoice, setIsTestingVoice] = useState(false);
 
   const isPlayingRef = useRef(isPlaying);
@@ -148,7 +146,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       if (fresh.voiceEngine) setVoiceEngine(fresh.voiceEngine);
       if (fresh.sofiaVoice) setSofiaVoice(fresh.sofiaVoice);
       if (fresh.mateoVoice) setMateoVoice(fresh.mateoVoice);
-      if (fresh.geminiApiKey) setGeminiKeyInput(fresh.geminiApiKey);
+      if (fresh.orientation !== undefined) setOrientationInput(fresh.orientation);
     };
 
     window.addEventListener('contrareloj_podcast_settings_changed', handleSettingsChanged);
@@ -922,10 +920,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const handleGeneratePodcast = async () => {
     setIsGenerating(true);
     try {
+      const activeOrientation = orientationInput || getPodcastSettings().orientation;
       const generated = await generateAIPodcast(
         kit.sourceText || kit.description,
         kit.title,
-        kit.category
+        kit.category,
+        activeOrientation
       );
       if (generated && onUpdateKit) {
         onUpdateKit({ ...kit, podcast: generated });
@@ -974,9 +974,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   const handleCloseVoiceModal = () => {
     setShowVoiceModal(false);
-    const cur = getPodcastSettings();
+    setNoKeyWarning(false);
+    const updated = savePodcastSettings({ orientation: orientationInput.trim() });
     if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-      googleDriveService.syncPodcastSettingsToDrive(cur).catch(console.warn);
+      googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
     }
   };
 
@@ -1444,140 +1445,179 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 </div>
               </div>
 
-              {/* Input API Key de Google Gemini */}
+              {/* Cuadro de Orientación y Enfoque del Podcast */}
               <div className="pt-2 border-t border-thea-border">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5 text-amber-400" />
-                    API Key de Google Gemini
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Orientación y Enfoque del Podcast
                   </label>
-                  <a
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline"
-                  >
-                    Obtener clave gratis <ExternalLink className="w-3 h-3" />
-                  </a>
+                  {orientationSavedFeedback && (
+                    <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-400" /> ¡Guardada y sincronizada!
+                    </span>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={geminiKeyInput}
-                    onChange={(e) => setGeminiKeyInput(e.target.value)}
-                    placeholder="AIzaSy..."
-                    className="flex-1 bg-thea-bg border border-thea-border rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
+
+                {/* Botones de Estilos Rápidos */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
                   <button
                     type="button"
-                    onClick={async () => {
-                      const cleanKey = geminiKeyInput.trim();
-                      setGeminiAudioApiKey(cleanKey);
-                      const updated = savePodcastSettings({
-                        geminiApiKey: cleanKey,
-                        voiceEngine: cleanKey ? 'gemini' : voiceEngine,
-                      });
-                      setKeySavedFeedback(true);
-                      setTimeout(() => setKeySavedFeedback(false), 2500);
-                      if (cleanKey) {
-                        setVoiceEngine('gemini');
-                      }
-                      if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                        await Promise.all([
-                          googleDriveService.syncPodcastSettingsToDrive(updated),
-                          googleDriveService.syncAISettingsToDrive(),
-                        ]).catch(console.warn);
-                      }
-                    }}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all cursor-pointer shrink-0"
+                    onClick={() => setOrientationInput('Enfoque riguroso para examen: conceptos clave, definiciones exactas, fórmulas o leyes relevantes y posibles preguntas trampa.')}
+                    className="px-2.5 py-1 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[11px] text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
                   >
-                    {keySavedFeedback ? '¡Guardada y Sincronizada!' : 'Guardar y Sincronizar'}
+                    Examen riguroso
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrientationInput('Debate dinámico y conversacional entre Sofía y Mateo: usan analogías de la vida real, tono entretenido y explicaciones frescas.')}
+                    className="px-2.5 py-1 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[11px] text-slate-300 hover:text-violet-300 transition-colors cursor-pointer"
+                  >
+                    Debate ameno
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrientationInput('Explicación pedagógica paso a paso desde los fundamentos básicos hasta los avanzados, ideal para aprender el tema por primera vez.')}
+                    className="px-2.5 py-1 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[11px] text-slate-300 hover:text-emerald-300 transition-colors cursor-pointer"
+                  >
+                    Explicación pedagógica
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  Las claves de Google AI Studio cuentan con nivel gratuito sin tarjeta de crédito y se sincronizan con tu Google Drive.
-                </p>
+
+                {/* Textarea multilínea */}
+                <div className="space-y-2">
+                  <textarea
+                    rows={3}
+                    value={orientationInput}
+                    onChange={(e) => setOrientationInput(e.target.value)}
+                    placeholder="Instrucciones personalizadas para el podcast (ej: enfócate en los puntos difíciles, debate las diferencias de conceptos, incluye preguntas desafiantes...)"
+                    className="w-full bg-thea-bg border border-thea-border rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed font-sans"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-slate-400">
+                      Define la directiva que la IA seguirá al generar los guiones de tus episodios.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const updated = savePodcastSettings({ orientation: orientationInput.trim() });
+                        setOrientationSavedFeedback(true);
+                        setTimeout(() => setOrientationSavedFeedback(false), 2500);
+                        if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                          await googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                        }
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all cursor-pointer shrink-0"
+                    >
+                      {orientationSavedFeedback ? '¡Guardada!' : 'Guardar Orientación'}
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* Botones de Acción */}
-              <div className="flex items-center justify-between pt-3 border-t border-thea-border">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isTestingVoice || !geminiKeyInput.trim()}
-                    onClick={async () => {
-                      try {
-                        setIsTestingVoice(true);
-                        stopCurrentAudio();
-                        const testUrl = await synthesizeGeminiSpeech(
-                          '¡Hola! Soy Sofía en Contrareloj Study. ¡Me alegra mucho que estemos repasando juntos hoy!',
-                          sofiaVoice,
-                          geminiKeyInput.trim()
-                        );
-                        let audio = audioPlayerRef.current;
-                        if (!audio) {
-                          audio = new Audio();
-                          audioPlayerRef.current = audio;
+              {/* Botones de Acción y Prueba de Voces */}
+              <div className="pt-3 border-t border-thea-border">
+                {noKeyWarning && (
+                  <div className="mb-2.5 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+                    <span>Para probar voces neuronales con emociones, ingresa tu API Key de Gemini en los Ajustes de IA generales (icono de engranaje).</span>
+                    <button
+                      type="button"
+                      onClick={() => setNoKeyWarning(false)}
+                      className="text-amber-400 hover:text-white ml-2 text-xs font-bold underline cursor-pointer"
+                    >
+                      Entendido
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isTestingVoice}
+                      onClick={async () => {
+                        const activeKey = getGeminiAudioApiKey();
+                        if (!activeKey) {
+                          setNoKeyWarning(true);
+                          return;
                         }
-                        audio.src = testUrl;
-                        audio.playbackRate = 1;
-                        audio.onended = () => setIsTestingVoice(false);
-                        audio.onerror = () => setIsTestingVoice(false);
-                        await audio.play();
-                      } catch (err: unknown) {
-                        setIsTestingVoice(false);
-                        const msg = err instanceof Error ? err.message : String(err);
-                        alert('Fallo al probar la voz: ' + (msg || 'Revisa tu clave de Gemini'));
-                      }
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-amber-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-                  >
-                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
-                    <span>Probar Sofía</span>
-                  </button>
+                        try {
+                          setIsTestingVoice(true);
+                          stopCurrentAudio();
+                          const testUrl = await synthesizeGeminiSpeech(
+                            '¡Hola! Soy Sofía en Contrareloj Study. ¡Me alegra mucho que estemos repasando juntos hoy!',
+                            sofiaVoice,
+                            activeKey
+                          );
+                          let audio = audioPlayerRef.current;
+                          if (!audio) {
+                            audio = new Audio();
+                            audioPlayerRef.current = audio;
+                          }
+                          audio.src = testUrl;
+                          audio.playbackRate = 1;
+                          audio.onended = () => setIsTestingVoice(false);
+                          audio.onerror = () => setIsTestingVoice(false);
+                          await audio.play();
+                        } catch (err: unknown) {
+                          setIsTestingVoice(false);
+                          const msg = err instanceof Error ? err.message : String(err);
+                          alert('Fallo al probar la voz: ' + (msg || 'Revisa tu clave de Gemini en Ajustes de IA'));
+                        }
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-amber-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
+                      <span>Probar Sofía</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isTestingVoice}
+                      onClick={async () => {
+                        const activeKey = getGeminiAudioApiKey();
+                        if (!activeKey) {
+                          setNoKeyWarning(true);
+                          return;
+                        }
+                        try {
+                          setIsTestingVoice(true);
+                          stopCurrentAudio();
+                          const testUrl = await synthesizeGeminiSpeech(
+                            '¡Y yo soy Mateo! Vamos a profundizar en cada concepto para que apruebes con la máxima nota.',
+                            mateoVoice,
+                            activeKey
+                          );
+                          let audio = audioPlayerRef.current;
+                          if (!audio) {
+                            audio = new Audio();
+                            audioPlayerRef.current = audio;
+                          }
+                          audio.src = testUrl;
+                          audio.playbackRate = 1;
+                          audio.onended = () => setIsTestingVoice(false);
+                          audio.onerror = () => setIsTestingVoice(false);
+                          await audio.play();
+                        } catch (err: unknown) {
+                          setIsTestingVoice(false);
+                          const msg = err instanceof Error ? err.message : String(err);
+                          alert('Fallo al probar la voz: ' + (msg || 'Revisa tu clave de Gemini en Ajustes de IA'));
+                        }
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-violet-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-400" />}
+                      <span>Probar Mateo</span>
+                    </button>
+                  </div>
 
                   <button
                     type="button"
-                    disabled={isTestingVoice || !geminiKeyInput.trim()}
-                    onClick={async () => {
-                      try {
-                        setIsTestingVoice(true);
-                        stopCurrentAudio();
-                        const testUrl = await synthesizeGeminiSpeech(
-                          '¡Y yo soy Mateo! Vamos a profundizar en cada concepto para que apruebes con la máxima nota.',
-                          mateoVoice,
-                          geminiKeyInput.trim()
-                        );
-                        let audio = audioPlayerRef.current;
-                        if (!audio) {
-                          audio = new Audio();
-                          audioPlayerRef.current = audio;
-                        }
-                        audio.src = testUrl;
-                        audio.playbackRate = 1;
-                        audio.onended = () => setIsTestingVoice(false);
-                        audio.onerror = () => setIsTestingVoice(false);
-                        await audio.play();
-                      } catch (err: unknown) {
-                        setIsTestingVoice(false);
-                        const msg = err instanceof Error ? err.message : String(err);
-                        alert('Fallo al probar la voz: ' + (msg || 'Revisa tu clave de Gemini'));
-                      }
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-violet-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                    onClick={handleCloseVoiceModal}
+                    className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
                   >
-                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-400" />}
-                    <span>Probar Mateo</span>
+                    Listo
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleCloseVoiceModal}
-                  className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
-                >
-                  Listo
-                </button>
               </div>
             </div>
           </div>
