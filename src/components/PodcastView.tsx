@@ -116,6 +116,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const isScrubbingRef = useRef(false);
   const wasPlayingBeforeScrubRef = useRef(false);
   const isAudioSeekingRef = useRef(false);
+  const loadedAudioSegmentRef = useRef<number>(-1);
 
   // Helper síncrono para mantener estado y referencias siempre alineados en el mismo tick
   const setWordPosition = useCallback((globalIdx: number, segIdx: number, wordInSegIdx: number) => {
@@ -434,6 +435,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     currentUtteranceRef.current = utterance;
+    loadedAudioSegmentRef.current = index;
 
     const { voice, pitch, rateFactor } = getSpeakerAcoustics(speakerName, cleanText);
 
@@ -453,7 +455,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Seguimiento sincronizado palabra por palabra en el navegador
     utterance.onboundary = (e) => {
-      if (isScrubbingRef.current || isManualInterruptionRef.current) return;
+      if (isScrubbingRef.current || isManualInterruptionRef.current || !isPlayingRef.current) return;
       if (e.name === 'word') {
         const textSoFar = textToSpeak.slice(0, e.charIndex);
         const spokenWordCount = textSoFar.trim() ? textSoFar.trim().split(/\s+/).length : 0;
@@ -561,6 +563,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         if (audio.src !== audioUrl) {
           audio.src = audioUrl;
         }
+        loadedAudioSegmentRef.current = index;
         audio.playbackRate = playbackSpeedRef.current;
         audio.muted = isMutedRef.current;
 
@@ -586,6 +589,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         // Seguimiento continuo palabra por palabra con el reloj de audio
         audio.ontimeupdate = () => {
           if (isScrubbingRef.current || isAudioSeekingRef.current || isManualInterruptionRef.current) return;
+          if (!isPlayingRef.current) return;
           if (audio && audio.duration && Number.isFinite(audio.duration) && rawWords.length > 0) {
             const ratio = Math.max(0, Math.min(0.999, audio.currentTime / audio.duration));
             const currentW = Math.floor(ratio * rawWords.length);
@@ -659,17 +663,15 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const target = allWords[safeGlobal];
     if (!target) return;
 
-    const prevSegment = currentLineIndexRef.current;
-    const isSameSegment = target.segmentIndex === prevSegment;
-
     // Actualizar estado y refs de inmediato de forma síncrona
     setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment);
 
     const willPlay = forcePlay !== undefined ? forcePlay : isPlayingRef.current;
+    const isSameLoadedSegment = loadedAudioSegmentRef.current === target.segmentIndex;
 
-    // Si estamos en el mismo segmento y tenemos audio HTML5 ya cargado
+    // Si estamos en el mismo segmento ya cargado y tenemos audio HTML5 ya disponible con duración
     const audio = audioPlayerRef.current;
-    if (voiceEngineRef.current === 'gemini' && audio && isSameSegment && audio.duration && Number.isFinite(audio.duration)) {
+    if (voiceEngineRef.current === 'gemini' && audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
       const segmentWords = podcast?.dialogue[target.segmentIndex]
         ? podcast.dialogue[target.segmentIndex].text.replace(/[*_#`~[\]]/g, '').trim().split(/\s+/).filter(Boolean)
         : [];
@@ -713,6 +715,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     // Si cambiamos de segmento o estamos con SpeechSynthesis
     isManualInterruptionRef.current = true;
     stopCurrentAudio();
+    loadedAudioSegmentRef.current = -1;
 
     setTimeout(() => {
       isManualInterruptionRef.current = false;
@@ -753,12 +756,19 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment);
   }, [allWords, setWordPosition]);
 
-  const handleScrubEnd = useCallback(() => {
+  const handleScrubEnd = useCallback((e?: React.SyntheticEvent | Event) => {
     if (!isScrubbingRef.current) return;
     isScrubbingRef.current = false;
     setIsScrubbing(false);
 
-    const targetGlobal = currentGlobalWordIndexRef.current;
+    let targetGlobal = currentGlobalWordIndexRef.current;
+    if (e && 'target' in e && (e.target as HTMLInputElement)?.value !== undefined) {
+      const inputVal = Number((e.target as HTMLInputElement).value);
+      if (!isNaN(inputVal)) {
+        targetGlobal = inputVal;
+      }
+    }
+
     const shouldResume = wasPlayingBeforeScrubRef.current;
     seekToGlobalWord(targetGlobal, shouldResume);
   }, [seekToGlobalWord]);
@@ -844,6 +854,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const handleRestart = () => {
     isManualInterruptionRef.current = true;
     stopCurrentAudio();
+    loadedAudioSegmentRef.current = -1;
     if (audioPlayerRef.current) {
       audioPlayerRef.current.currentTime = 0;
     }
