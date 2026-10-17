@@ -43,6 +43,8 @@ let currentState: DriveSyncState = {
 try {
   const lastSync = localStorage.getItem(STORAGE_LAST_SYNC_KEY);
   const rawProfile = localStorage.getItem(STORAGE_PROFILE_KEY);
+  const token = localStorage.getItem(STORAGE_TOKEN_KEY);
+  const expStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
   if (lastSync) {
     currentState.lastSyncTime = parseInt(lastSync, 10);
   }
@@ -51,6 +53,21 @@ try {
     currentState.userEmail = prof.email || null;
     currentState.userName = prof.name || null;
     currentState.avatarUrl = prof.avatarUrl || null;
+
+    if (token && expStr) {
+      const exp = parseInt(expStr, 10);
+      if (Date.now() > exp - 60000) {
+        currentState.status = 'needs_reauth';
+        currentState.errorMessage = 'Tu sesión de Google Drive requiere reconexión.';
+      } else {
+        currentState.status = 'synced';
+      }
+    } else {
+      currentState.status = 'needs_reauth';
+      currentState.errorMessage = 'Tu sesión de Google Drive requiere reconexión.';
+    }
+  } else {
+    currentState.status = 'unlinked';
   }
 } catch {
   // Ignore parsing errors
@@ -198,6 +215,82 @@ export const googleDriveService = {
     } catch {
       return null;
     }
+  },
+
+  /**
+   * Indica si la cuenta de Google Drive ha sido vinculada previamente en este navegador.
+   */
+  isLinked(): boolean {
+    return Boolean(localStorage.getItem(STORAGE_PROFILE_KEY));
+  },
+
+  /**
+   * Intenta renovar el token de acceso de Google de forma silenciosa sin interrumpir al usuario.
+   */
+  async attemptSilentTokenRefresh(): Promise<string | null> {
+    const clientId = this.getClientId();
+    if (!clientId) return null;
+
+    try {
+      await ensureGsiLoaded();
+      return await new Promise<string | null>((resolve) => {
+        try {
+          const timeout = setTimeout(() => {
+            resolve(null);
+          }, 3500);
+
+          const client = (window as any).google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+            prompt: '',
+            callback: (response: any) => {
+              clearTimeout(timeout);
+              if (response.error || !response.access_token) {
+                resolve(null);
+                return;
+              }
+              const expiresIn = response.expires_in ? parseInt(response.expires_in, 10) : 3600;
+              this.setAccessToken(response.access_token, expiresIn);
+              updateState({ status: 'idle', errorMessage: null });
+              resolve(response.access_token);
+            },
+            error_callback: () => {
+              clearTimeout(timeout);
+              resolve(null);
+            },
+          });
+
+          // Solicitar token silenciosamente sin forzar selector si la sesión del navegador sigue activa
+          client.requestAccessToken({ prompt: '' });
+        } catch {
+          resolve(null);
+        }
+      });
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Sincronización automática optimizada para el arranque de la aplicación o inicio de sesión.
+   */
+  async autoSyncOnStartup(userId: string): Promise<StudyKit[] | null> {
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+
+    if (!token) {
+      if (this.isLinked()) {
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+        });
+      }
+      return null;
+    }
+
+    return this.pullFromDrive(userId);
   },
 
   /**

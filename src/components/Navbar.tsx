@@ -143,13 +143,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onOpenGoogleDrive}
               title={
-                driveState.userEmail
+                driveState.status === 'needs_reauth'
+                  ? 'Sesión de Google Drive expirada - Clic para reconectar en 1 clic'
+                  : driveState.userEmail
                   ? `Google Drive sincronizado (${driveState.userEmail})`
                   : 'Conectar Google Drive para respaldo en la nube'
               }
               className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-xl border transition-all text-xs font-semibold shadow-sm cursor-pointer shrink-0 ${
                 driveState.status === 'syncing'
                   ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
+                  : driveState.status === 'needs_reauth'
+                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 hover:border-amber-400'
                   : driveState.userEmail
                   ? 'bg-emerald-950/30 hover:bg-emerald-900/40 border-emerald-500/40 text-emerald-300 hover:text-white'
                   : 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-slate-300 hover:text-white'
@@ -160,13 +164,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               ) : (
                 <Cloud
                   className={`w-3.5 h-3.5 ${
-                    driveState.userEmail ? 'text-emerald-400' : 'text-slate-400'
+                    driveState.status === 'needs_reauth'
+                      ? 'text-amber-400'
+                      : driveState.userEmail
+                      ? 'text-emerald-400'
+                      : 'text-slate-400'
                   }`}
                 />
               )}
               <span className="hidden sm:inline">Drive</span>
               {driveState.userEmail && (
-                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400" />
+                <span
+                  className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
+                    driveState.status === 'needs_reauth'
+                      ? 'bg-amber-400 animate-pulse'
+                      : 'bg-emerald-400'
+                  }`}
+                />
               )}
             </button>
 

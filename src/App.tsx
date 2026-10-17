@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
 import { DEFAULT_STUDY_KITS } from './data/defaultKits';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
-import { googleDriveService } from './services/googleDriveService';
+import { googleDriveService, type DriveSyncState } from './services/googleDriveService';
 import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -53,7 +53,25 @@ export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
+  const [driveSyncState, setDriveSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
+  const [driveNotice, setDriveNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<any>(null);
   const isLoggingOutRef = useRef(false);
+
+  const triggerDriveNotice = (msg: string) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setDriveNotice(msg);
+    noticeTimerRef.current = setTimeout(() => {
+      setDriveNotice(null);
+    }, 4500);
+  };
+
+  useEffect(() => {
+    const unsubscribe = googleDriveService.subscribe((state) => {
+      setDriveSyncState(state);
+    });
+    return unsubscribe;
+  }, []);
 
   // Load kits from authService: si no hay usuario autenticado, inicia completamente vacío
   const [kits, setKits] = useState<StudyKit[]>(() => {
@@ -115,15 +133,17 @@ export const App: React.FC = () => {
     }
   }, [kits, currentUser]);
 
-  // Sincronización al inicio desde Google Drive solo si hay usuario autenticado y token válido
+  // Sincronización automática al inicio desde Google Drive (con renovación silenciosa si es necesario)
   useEffect(() => {
-    if (currentUser && googleDriveService.getValidAccessToken()) {
-      googleDriveService.pullFromDrive(currentUser.id).then((pulled) => {
+    if (!currentUser) return;
+    if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+      googleDriveService.autoSyncOnStartup(currentUser.id).then((pulled) => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const clean = pulled.filter(k => !isCorruptedKit(k));
           if (clean.length > 0) {
             setKits(clean);
             if (!currentKit) setCurrentKit(clean[0]);
+            triggerDriveNotice(`Progreso sincronizado desde Google Drive (${clean.length} kits).`);
           }
         }
         if (typeof window !== 'undefined') {
@@ -190,7 +210,7 @@ export const App: React.FC = () => {
     }
   }, [currentKit, kits]);
 
-  const handleAuthSuccess = (user: User) => {
+  const handleAuthSuccess = (user: User, syncedKits?: StudyKit[] | null) => {
     isLoggingOutRef.current = false;
     setCurrentUser(user);
 
@@ -203,7 +223,26 @@ export const App: React.FC = () => {
       authService.saveUserAISettings(user.id, currentSettings);
     }
 
-    // 2. Restaurar kits del usuario guardados localmente
+    // 2. Si ya vinieron kits sincronizados directamente de Google Drive (login con Google)
+    if (syncedKits && Array.isArray(syncedKits) && syncedKits.length > 0) {
+      const cleanPulled = syncedKits.filter(k => !isCorruptedKit(k));
+      if (cleanPulled.length > 0) {
+        setKits(cleanPulled);
+        authService.saveUserKits(user.id, cleanPulled);
+        const firstPulled = cleanPulled[0] || null;
+        setCurrentKit(firstPulled);
+        if (firstPulled) {
+          localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
+        }
+        triggerDriveNotice(`Progreso sincronizado desde Google Drive (${cleanPulled.length} kits).`);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('thea_ai_settings_changed'));
+        }
+        return;
+      }
+    }
+
+    // 3. Restaurar kits del usuario guardados localmente
     const userKits = authService.getUserKits(user.id);
     const clean = userKits.filter(k => !isCorruptedKit(k));
     setKits(clean);
@@ -215,9 +254,9 @@ export const App: React.FC = () => {
       localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
     }
 
-    // 3. Sincronizar con Google Drive para recuperar todo el progreso en la nube
-    if (googleDriveService.getValidAccessToken()) {
-      googleDriveService.pullFromDrive(user.id).then((pulled) => {
+    // 4. Sincronizar con Google Drive para recuperar todo el progreso en la nube
+    if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+      googleDriveService.autoSyncOnStartup(user.id).then((pulled) => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const cleanPulled = pulled.filter(k => !isCorruptedKit(k));
           if (cleanPulled.length > 0) {
@@ -227,6 +266,7 @@ export const App: React.FC = () => {
             if (firstPulled) {
               localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
             }
+            triggerDriveNotice(`Progreso sincronizado desde Google Drive (${cleanPulled.length} kits).`);
           }
         }
         if (typeof window !== 'undefined') {
@@ -235,6 +275,24 @@ export const App: React.FC = () => {
       }).catch(err => {
         console.warn('[App] Error al sincronizar desde Google Drive tras login:', err);
       });
+    }
+  };
+
+  const handleReconnectDrive = async () => {
+    try {
+      const res = await googleDriveService.loginAndSync();
+      if (res.kits) {
+        const clean = res.kits.filter(k => !isCorruptedKit(k));
+        if (clean.length > 0) {
+          setKits(clean);
+          if (!currentKit) setCurrentKit(clean[0]);
+          triggerDriveNotice(`Progreso sincronizado desde Google Drive (${clean.length} kits).`);
+        }
+      } else {
+        triggerDriveNotice('Conexión con Google Drive renovada.');
+      }
+    } catch (err) {
+      console.error('Error al reconectar Google Drive:', err);
     }
   };
 
@@ -338,6 +396,23 @@ export const App: React.FC = () => {
         onOpenAuth={() => setShowAuthModal(true)}
         onLogout={handleLogout}
       />
+
+      {/* Reconnect Google Drive Discrete Banner */}
+      {currentUser && driveSyncState.status === 'needs_reauth' && (
+        <div className="bg-amber-950/80 border-b border-amber-500/40 px-4 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Tu cuenta de Google Drive requiere renovar autorización para mantener la sincronización activa.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleReconnectDrive}
+            className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0 cursor-pointer shadow-sm transition-all active:scale-95"
+          >
+            Reconectar en 1 clic
+          </button>
+        </div>
+      )}
 
       {/* Main Mode View */}
       <main className="flex-1 pb-24 md:pb-8">
@@ -492,6 +567,14 @@ export const App: React.FC = () => {
         currentUser={currentUser}
         currentKit={currentKit}
       />
+
+      {/* Google Drive Auto-Sync Discrete Toast Notification */}
+      {driveNotice && (
+        <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/50 text-emerald-200 text-xs sm:text-sm font-semibold shadow-2xl backdrop-blur-md animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span>{driveNotice}</span>
+        </div>
+      )}
     </div>
   );
 };

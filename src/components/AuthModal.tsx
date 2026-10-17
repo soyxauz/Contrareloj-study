@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { User } from '../types';
+import type { User, StudyKit } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
 import {
@@ -17,7 +17,7 @@ import {
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthSuccess: (user: User) => void;
+  onAuthSuccess: (user: User, syncedKits?: StudyKit[] | null) => void;
   onOpenGoogleDriveSetup?: () => void;
   initialMode?: 'login' | 'register';
 }
@@ -56,7 +56,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const res = await googleDriveService.loginAndSync();
       if (res.user) {
-        onAuthSuccess(res.user);
+        onAuthSuccess(res.user, res.kits);
         onClose();
       }
     } catch (err: any) {
