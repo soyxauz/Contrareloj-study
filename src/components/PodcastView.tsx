@@ -111,6 +111,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const currentGlobalWordIndexRef = useRef(0);
   const speakDialogueLineRef = useRef<((index: number, startWordIdx?: number) => void) | null>(null);
 
+  // Control de arrastre y desplazamiento del scrubber (evita saltos y bucles de retroceso)
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const isScrubbingRef = useRef(false);
+  const wasPlayingBeforeScrubRef = useRef(false);
+  const isAudioSeekingRef = useRef(false);
+
   // Helper síncrono para mantener estado y referencias siempre alineados en el mismo tick
   const setWordPosition = useCallback((globalIdx: number, segIdx: number, wordInSegIdx: number) => {
     currentGlobalWordIndexRef.current = globalIdx;
@@ -447,7 +453,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Seguimiento sincronizado palabra por palabra en el navegador
     utterance.onboundary = (e) => {
-      if (isManualInterruptionRef.current) return;
+      if (isScrubbingRef.current || isManualInterruptionRef.current) return;
       if (e.name === 'word') {
         const textSoFar = textToSpeak.slice(0, e.charIndex);
         const spokenWordCount = textSoFar.trim() ? textSoFar.trim().split(/\s+/).length : 0;
@@ -579,7 +585,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
         // Seguimiento continuo palabra por palabra con el reloj de audio
         audio.ontimeupdate = () => {
-          if (isManualInterruptionRef.current) return;
+          if (isScrubbingRef.current || isAudioSeekingRef.current || isManualInterruptionRef.current) return;
           if (audio && audio.duration && Number.isFinite(audio.duration) && rawWords.length > 0) {
             const ratio = Math.max(0, Math.min(0.999, audio.currentTime / audio.duration));
             const currentW = Math.floor(ratio * rawWords.length);
@@ -647,7 +653,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   };
 
   // Navegar a una palabra global específica en el podcast
-  const seekToGlobalWord = useCallback((targetGlobalIndex: number) => {
+  const seekToGlobalWord = useCallback((targetGlobalIndex: number, forcePlay?: boolean) => {
     if (allWords.length === 0) return;
     const safeGlobal = Math.max(0, Math.min(allWords.length - 1, targetGlobalIndex));
     const target = allWords[safeGlobal];
@@ -659,6 +665,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     // Actualizar estado y refs de inmediato de forma síncrona
     setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment);
 
+    const willPlay = forcePlay !== undefined ? forcePlay : isPlayingRef.current;
+
     // Si estamos en el mismo segmento y tenemos audio HTML5 ya cargado
     const audio = audioPlayerRef.current;
     if (voiceEngineRef.current === 'gemini' && audio && isSameSegment && audio.duration && Number.isFinite(audio.duration)) {
@@ -669,13 +677,35 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       const targetTime = (target.wordIndexInSegment / totalWords) * audio.duration;
 
       isManualInterruptionRef.current = true;
-      audio.currentTime = Math.max(0, Math.min(audio.duration - 0.05, targetTime));
-      setTimeout(() => {
-        isManualInterruptionRef.current = false;
-      }, 80);
+      isAudioSeekingRef.current = true;
 
-      if (isPlayingRef.current && audio.paused) {
-        audio.play().catch(console.warn);
+      const finishSeek = () => {
+        audio.removeEventListener('seeked', finishSeek);
+        setTimeout(() => {
+          isAudioSeekingRef.current = false;
+          isManualInterruptionRef.current = false;
+        }, 120);
+      };
+      audio.addEventListener('seeked', finishSeek, { once: true });
+
+      audio.currentTime = Math.max(0, Math.min(audio.duration - 0.05, targetTime));
+
+      // Fallback por si 'seeked' no se dispara (ej. si currentTime ya era muy similar)
+      setTimeout(() => {
+        isAudioSeekingRef.current = false;
+        isManualInterruptionRef.current = false;
+      }, 350);
+
+      if (willPlay) {
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+        if (audio.paused) {
+          audio.play().catch(console.warn);
+        }
+      } else {
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+        audio.pause();
       }
       return;
     }
@@ -686,11 +716,68 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     setTimeout(() => {
       isManualInterruptionRef.current = false;
-      if (isPlayingRef.current) {
+      if (willPlay) {
+        setIsPlaying(true);
+        isPlayingRef.current = true;
         speakDialogueLineRef.current?.(target.segmentIndex, target.wordIndexInSegment);
+      } else {
+        setIsPlaying(false);
+        isPlayingRef.current = false;
       }
     }, 60);
   }, [allWords, podcast?.dialogue, setWordPosition, stopCurrentAudio]);
+
+  // Control de arrastre interactivo del scrubber
+  const handleScrubStart = useCallback(() => {
+    isScrubbingRef.current = true;
+    setIsScrubbing(true);
+    wasPlayingBeforeScrubRef.current = isPlayingRef.current;
+
+    // Pausar temporalmente para que el audio no siga avanzando mientras el usuario arrastra
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.pause();
+    }
+    setIsAudioActive(false);
+  }, []);
+
+  const handleScrubChange = useCallback((targetGlobalIndex: number) => {
+    if (allWords.length === 0) return;
+    const safeGlobal = Math.max(0, Math.min(allWords.length - 1, targetGlobalIndex));
+    const target = allWords[safeGlobal];
+    if (!target) return;
+
+    // Actualizar de forma visual e inmediata el cursor, el texto y el contador sin disparar audio
+    setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment);
+  }, [allWords, setWordPosition]);
+
+  const handleScrubEnd = useCallback(() => {
+    if (!isScrubbingRef.current) return;
+    isScrubbingRef.current = false;
+    setIsScrubbing(false);
+
+    const targetGlobal = currentGlobalWordIndexRef.current;
+    const shouldResume = wasPlayingBeforeScrubRef.current;
+    seekToGlobalWord(targetGlobal, shouldResume);
+  }, [seekToGlobalWord]);
+
+  // Listener global de pointerup para asegurar que si el usuario suelta fuera de la barra, se consolide el salto
+  useEffect(() => {
+    if (!isScrubbing) return;
+
+    const onGlobalPointerUp = () => {
+      handleScrubEnd();
+    };
+
+    window.addEventListener('pointerup', onGlobalPointerUp);
+    window.addEventListener('pointercancel', onGlobalPointerUp);
+    return () => {
+      window.removeEventListener('pointerup', onGlobalPointerUp);
+      window.removeEventListener('pointercancel', onGlobalPointerUp);
+    };
+  }, [isScrubbing, handleScrubEnd]);
 
   // Avanzar o retroceder palabra por palabra
   const handleStepWord = useCallback((direction: -1 | 1) => {
@@ -1085,8 +1172,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   min={0}
                   max={Math.max(1, allWords.length - 1)}
                   value={currentGlobalWordIndex}
-                  onChange={(e) => seekToGlobalWord(Number(e.target.value))}
-                  className="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 focus:outline-none transition-all group-hover:h-3"
+                  onPointerDown={handleScrubStart}
+                  onChange={(e) => handleScrubChange(Number(e.target.value))}
+                  onPointerUp={handleScrubEnd}
+                  onKeyUp={handleScrubEnd}
+                  className="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 focus:outline-none transition-[height] group-hover:h-3"
                   title="Arrastra para navegar con precisión palabra por palabra en el episodio"
                 />
               </div>
