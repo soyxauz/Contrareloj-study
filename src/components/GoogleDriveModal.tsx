@@ -4,12 +4,9 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
-  Key,
   X,
   LogOut,
   FolderSync,
-  HelpCircle,
   User,
 } from 'lucide-react';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
@@ -35,8 +32,6 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   onLogout,
 }) => {
   const [syncState, setSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
-  const [clientId, setClientId] = useState<string>(() => googleDriveService.getClientId());
-  const [showConfig, setShowConfig] = useState<boolean>(() => !googleDriveService.hasClientId());
   const [isProcessing, setIsProcessing] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
 
@@ -48,15 +43,6 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
-
-  const handleSaveClientId = (e: React.FormEvent) => {
-    e.preventDefault();
-    googleDriveService.setClientId(clientId);
-    setNoticeMessage('Client ID guardado correctamente.');
-    if (clientId.trim().length > 0) {
-      setShowConfig(false);
-    }
-  };
 
   const handleConnect = async () => {
     setIsProcessing(true);
@@ -74,9 +60,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       }
       setNoticeMessage('Conexión con Google Drive establecida y datos sincronizados.');
     } catch (err: any) {
-      if (err?.message === 'CLIENT_ID_MISSING') {
-        setShowConfig(true);
-      }
+      setNoticeMessage(err?.message || 'Error al conectar con Google Drive.');
     } finally {
       setIsProcessing(false);
     }
@@ -281,73 +265,6 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           </div>
         )}
 
-        {/* Client ID Configuration Section */}
-        <div className="border-t border-thea-border pt-4">
-          <div className="flex items-center justify-between mb-2">
-            <button
-              type="button"
-              onClick={() => setShowConfig(!showConfig)}
-              className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Key className="w-3.5 h-3.5 text-violet-400" />
-              <span>{showConfig ? 'Ocultar configuración de Client ID' : 'Configurar Client ID de Google Cloud'}</span>
-            </button>
-            <a
-              href="https://console.cloud.google.com/apis/credentials"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors"
-            >
-              <span>Consola Google Cloud</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-
-          {showConfig && (
-            <div className="bg-thea-bg/90 border border-thea-border rounded-xl p-3.5 text-xs space-y-3 mt-2">
-              <form onSubmit={handleSaveClientId} className="space-y-2.5">
-                <label className="block text-[11px] font-semibold text-slate-300">
-                  Google OAuth 2.0 Web Client ID
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    placeholder="xxxx-xxxx.apps.googleusercontent.com"
-                    className="flex-1 bg-thea-surface border border-thea-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
-                  />
-                  <button
-                    type="submit"
-                    className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-semibold text-xs transition-colors shrink-0 cursor-pointer"
-                  >
-                    Guardar
-                  </button>
-                </div>
-              </form>
-
-              {/* Instructions list */}
-              <div className="pt-2 border-t border-thea-border/40 text-[11px] text-slate-400 space-y-1.5">
-                <div className="font-semibold text-slate-300 flex items-center gap-1">
-                  <HelpCircle className="w-3.5 h-3.5 text-violet-400" />
-                  <span>Pasos para obtener tu Client ID gratis:</span>
-                </div>
-                <ol className="list-decimal list-inside space-y-1 pl-1 text-slate-400">
-                  <li>Crea o selecciona un proyecto en Google Cloud Console.</li>
-                  <li>Habilita la API de <strong>Google Drive API</strong> en la Biblioteca.</li>
-                  <li>En Credenciales, crea un <strong>ID de cliente de OAuth (Aplicación Web)</strong>.</li>
-                  <li>
-                    En 'Orígenes de JavaScript autorizados', agrega:{' '}
-                    <code className="text-violet-300 bg-violet-950/60 px-1 py-0.5 rounded">
-                      {typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'}
-                    </code>
-                  </li>
-                  <li>Pega el Client ID arriba y pulsa Guardar.</li>
-                </ol>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   </div>
