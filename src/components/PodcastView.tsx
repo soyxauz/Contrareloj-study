@@ -37,6 +37,7 @@ import {
   GEMINI_VOICES,
   getGeminiAudioApiKey,
   synthesizeGeminiSpeech,
+  prefetchGeminiSpeech,
   preloadEntirePodcast,
   getPodcastSettings,
   savePodcastSettings,
@@ -95,6 +96,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [orientationSavedFeedback, setOrientationSavedFeedback] = useState(false);
   const [noKeyWarning, setNoKeyWarning] = useState(false);
   const [isTestingVoice, setIsTestingVoice] = useState(false);
+  const [synthesisError, setSynthesisError] = useState<string | null>(null);
 
   const isPlayingRef = useRef(isPlaying);
   const currentLineIndexRef = useRef(currentLineIndex);
@@ -105,6 +107,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const voiceEngineRef = useRef(voiceEngine);
+  const synthesisRetryCountRef = useRef(0);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -293,15 +296,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   const podcast = kit.podcast;
 
-  // Pre-sintetizar en segundo plano el episodio completo con voces neuronales apenas se cree o visualice
+  // Pre-sintetizar el primer parlamento al cargar para arranque instantáneo (0ms)
   useEffect(() => {
     if (podcast?.dialogue && podcast.dialogue.length > 0 && getGeminiAudioApiKey()) {
-      preloadEntirePodcast(podcast.dialogue, sofiaVoice, mateoVoice);
-
-      // Pre-cargar y pre-decodificar de inmediato el audio del primer parlamento (Host - Sofía)
       const firstItem = podcast.dialogue[0];
       const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(firstItem.speaker);
       const voice = isFemale ? sofiaVoice : mateoVoice;
+
       synthesizeGeminiSpeech(firstItem.text, voice, 'high')
         .then((url) => {
           if (isMountedRef.current) {
@@ -310,9 +311,19 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             firstAudio.src = url;
             firstAudio.load();
             preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
+
+            // Una vez que el turno 0 esté listo, precargar con baja prioridad el turno 1
+            if (podcast.dialogue[1]) {
+              const secondItem = podcast.dialogue[1];
+              const secondIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(secondItem.speaker);
+              const secondVoice = secondIsFemale ? sofiaVoice : mateoVoice;
+              prefetchGeminiSpeech(secondItem.text, secondVoice, undefined, 'normal');
+            }
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.warn('[PodcastView] Error en precarga inicial de Turno 0:', err);
+        });
     }
   }, [podcast?.dialogue, sofiaVoice, mateoVoice]);
 
@@ -727,7 +738,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           const nextIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(nextItem.speaker);
           const nextVoice = nextIsFemale ? sofiaVoice : mateoVoice;
 
-          synthesizeGeminiSpeech(nextClean, nextVoice, 'high')
+          synthesizeGeminiSpeech(nextClean, nextVoice, 'normal')
             .then((nextUrl) => {
               if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
                 const nextAudio = new Audio();
@@ -759,6 +770,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
         audio.onplay = () => {
           setIsAudioActive(true);
+          synthesisRetryCountRef.current = 0;
+          setSynthesisError(null);
         };
 
         let hasAdvancedThisLine = false;
@@ -843,12 +856,20 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         }
         console.warn('[GeminiAudio] Error en síntesis de voz neuronal:', err);
         setIsAudioActive(false);
-        // Si el motor es Gemini, reintentar la síntesis con Gemini tras pausa; NUNCA recurrir a la voz sintética del navegador
-        setTimeout(() => {
-          if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-            speakDialogueLine(index, safeWordIdx);
-          }
-        }, 1500);
+
+        if (synthesisRetryCountRef.current < 2) {
+          synthesisRetryCountRef.current += 1;
+          setTimeout(() => {
+            if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
+              speakDialogueLine(index, safeWordIdx);
+            }
+          }, 3500);
+        } else {
+          synthesisRetryCountRef.current = 0;
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          setSynthesisError('La cuota de Google Gemini está ocupada temporalmente (límite de peticiones por minuto). Espera unos segundos y vuelve a presionar Play.');
+        }
         return;
       }
     }
@@ -1061,6 +1082,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   // Alternar reproducción
   const handleTogglePlay = () => {
+    setSynthesisError(null);
+    synthesisRetryCountRef.current = 0;
     if (isPlaying) {
       setIsPlaying(false);
       isPlayingRef.current = false;
@@ -1082,6 +1105,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   // Reiniciar episodio desde el principio
   const handleRestart = () => {
+    setSynthesisError(null);
+    synthesisRetryCountRef.current = 0;
     isManualInterruptionRef.current = true;
     stopCurrentAudio();
     loadedAudioSegmentRef.current = -1;
@@ -1136,7 +1161,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         onUpdateKit({ ...kit, podcast: generated });
       }
       if (generated?.dialogue && generated.dialogue.length > 0 && getGeminiAudioApiKey()) {
-        preloadEntirePodcast(generated.dialogue, sofiaVoice, mateoVoice);
         const firstItem = generated.dialogue[0];
         const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(firstItem.speaker);
         const voice = isFemale ? sofiaVoice : mateoVoice;
@@ -1148,6 +1172,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               firstAudio.src = url;
               firstAudio.load();
               preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
+
+              if (generated.dialogue[1]) {
+                const secondItem = generated.dialogue[1];
+                const secondIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(secondItem.speaker);
+                const secondVoice = secondIsFemale ? sofiaVoice : mateoVoice;
+                prefetchGeminiSpeech(secondItem.text, secondVoice, undefined, 'normal');
+              }
             }
           })
           .catch(() => {});
@@ -1350,6 +1381,23 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 />
               ))}
             </div>
+
+            {/* Alerta visible si la cuota de la API de Gemini está temporalmente ocupada */}
+            {synthesisError && (
+              <div className="mb-4 max-w-2xl mx-auto px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex items-center justify-between shadow-lg animate-fadeIn">
+                <span className="flex-1 mr-3 leading-relaxed font-medium">{synthesisError}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSynthesisError(null);
+                    handleTogglePlay();
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all shrink-0 cursor-pointer text-xs"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
 
             {/* Current Active Dialogue Bubble */}
             <div className="bg-thea-surfaceLight/80 backdrop-blur border border-thea-border rounded-2xl p-5 mb-6 max-w-2xl mx-auto shadow-inner text-left relative z-10">

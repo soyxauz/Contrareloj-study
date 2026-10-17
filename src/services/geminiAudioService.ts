@@ -415,10 +415,6 @@ async function fetchGeminiAudioPcmChunk(
 ): Promise<AudioChunkResult> {
   const modelsToTry = [
     'gemini-3.8-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-3.8-flash-tts',
-    'gemini-2.0-flash-exp',
     'gemini-3.1-flash-tts-preview',
   ];
   let lastError: Error | null = null;
@@ -427,10 +423,21 @@ async function fetchGeminiAudioPcmChunk(
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const payload = {
+      systemInstruction: {
+        parts: [
+          {
+            text: 'Eres un locutor profesional en un podcast educativo de alta fidelidad. Tu única misión es leer en voz alta de manera textual, completa, fluida y exacta todo el texto proporcionado, desde la primera hasta la última palabra. No omitas ningún fragmento, no resumas, no cortes oraciones y no agregues comentarios propios. Mantén una entonación humana, expresiva, cálida y adecuada al contexto del tema.',
+          },
+        ],
+      },
       contents: [
         {
           role: 'user',
-          parts: [{ text: chunkText }],
+          parts: [
+            {
+              text: `Lee en voz alta exactamente y por completo el siguiente parlamento:\n\n${chunkText}`,
+            },
+          ],
         },
       ],
       generationConfig: {
@@ -445,7 +452,7 @@ async function fetchGeminiAudioPcmChunk(
       },
     };
 
-    // Reintentar máximo 1 vez si Google responde con 429, luego conmutar de inmediato al siguiente modelo
+    // Reintentar máximo 1 vez si Google responde con 429
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         let response: Response;
@@ -471,12 +478,13 @@ async function fetchGeminiAudioPcmChunk(
         }
 
         if (response.status === 429 || response.status === 503 || response.status === 500) {
+          const errBody = await response.text();
           if (attempt === 0) {
-            console.warn(`[GeminiAudio] Cuota temporal (${response.status}) en ${model}. Reintentando en 1000ms...`);
-            await new Promise(r => setTimeout(r, 1000));
+            console.warn(`[GeminiAudio] Cuota temporal (${response.status}) en ${model}. Esperando 3000ms antes de reintentar...`);
+            await new Promise(r => setTimeout(r, 3000));
             continue;
           } else {
-            console.warn(`[GeminiAudio] Cuota agotada en ${model}. Conmutando de inmediato al siguiente modelo...`);
+            console.warn(`[GeminiAudio] Cuota agotada en ${model}: ${errBody.slice(0, 300)}.`);
             break;
           }
         }
@@ -686,9 +694,9 @@ class AudioSynthesisQueueManager {
 
       const now = Date.now();
       const elapsed = now - this.lastRequestTime;
-      // Para reproduccion activa prioritaria (high), respuesta inmediata (50ms).
-      // Para precarga pasiva de fondo (normal), espaciado seguro de 2000ms.
-      const minInterval = item.priority === 'high' ? 50 : 2000;
+      // Para reproducción activa prioritaria (high), espaciado de 800ms.
+      // Para precarga pasiva de fondo (normal), espaciado seguro de 3500ms para no saturar el límite de 15 RPM de Google AI Studio.
+      const minInterval = item.priority === 'high' ? 800 : 3500;
       if (elapsed < minInterval) {
         await new Promise(r => setTimeout(r, minInterval - elapsed));
       }
@@ -769,10 +777,8 @@ export function prefetchGeminiSpeech(
 }
 
 /**
- * Pre-sintetiza progresivamente el podcast con una ventana deslizante inteligente
- * de 3 turnos por delante. Esto garantiza que el turno actual y el siguiente siempre
- * estén listos en memoria para transiciones sin cortes (0ms) entre Host y Tutor,
- * evitando saturar la cuota gratuita de Google AI Studio con peticiones innecesarias.
+ * Pre-sintetiza progresivamente el turno inmediatamente posterior (startIndex + 1)
+ * de forma secuencial y espaciada para evitar agotar la cuota de Google AI Studio (15 RPM).
  */
 export function preloadEntirePodcast(
   dialogue: Array<{ text: string; speaker: string }>,
@@ -784,12 +790,11 @@ export function preloadEntirePodcast(
   const apiKey = getGeminiAudioApiKey();
   if (!apiKey) return;
 
-  const windowEnd = Math.min(dialogue.length, startIndex + 3);
-  for (let i = startIndex; i < windowEnd; i++) {
-    const item = dialogue[i];
+  const nextIndex = startIndex + 1;
+  if (dialogue[nextIndex]) {
+    const item = dialogue[nextIndex];
     const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(item.speaker);
     const voice = isFemale ? sofiaVoice : mateoVoice;
-    const priority = i <= startIndex + 1 ? 'high' : 'normal';
-    prefetchGeminiSpeech(item.text, voice, apiKey, priority);
+    prefetchGeminiSpeech(item.text, voice, apiKey, 'normal');
   }
 }
