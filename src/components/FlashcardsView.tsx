@@ -11,8 +11,17 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Settings,
+  X,
+  Target,
+  HelpCircle,
+  BookOpen,
 } from 'lucide-react';
-import { generateAIFlashcards, generateAdditionalAIFlashcards } from '../services/aiService';
+import {
+  generateAIFlashcards,
+  generateAdditionalAIFlashcards,
+  generateTargetedAIFlashcards,
+} from '../services/aiService';
 import { FormattedText } from './FormattedText';
 
 interface FlashcardsViewProps {
@@ -31,6 +40,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
   const [isSwappingMastered, setIsSwappingMastered] = useState(false);
   const [statusNotification, setStatusNotification] = useState<string | null>(null);
   const [textSize, setTextSize] = useState<'medium' | 'large' | 'huge'>('large');
+
+  // Estados para calibración de enfoque (Tuerca)
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [focusTopic, setFocusTopic] = useState('');
+  const [focusRatio, setFocusRatio] = useState<'mixed-70-30' | 'only-questions' | 'only-concepts'>('mixed-70-30');
+  const [targetCount, setTargetCount] = useState<number>(10);
+  const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
 
   // Term Matching Game State
   const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
@@ -143,7 +159,52 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
     }
   };
 
+  // Generar lote calibrado según el enfoque de la tuerca
+  const handleGenerateCalibratedFlashcards = async () => {
+    setIsGeneratingTargeted(true);
+    try {
+      const existingTerms = [...cards.map(c => c.term), ...archivedCards.map(c => c.term)];
+      const source = kit.sourceText || kit.description;
+      const freshBatch = await generateTargetedAIFlashcards(
+        source,
+        kit.title,
+        kit.category,
+        {
+          focusTopic: focusTopic.trim() || undefined,
+          styleRatio: focusRatio,
+          count: targetCount,
+          existingTerms,
+        }
+      );
+
+      if (freshBatch.length > 0) {
+        // Regla: Añadir SIEMPRE a la baraja existente sin borrar las anteriores
+        const nextCards = [...cards, ...freshBatch];
+        setCards(nextCards);
+        if (onUpdateKit) {
+          onUpdateKit({
+            ...kit,
+            flashcards: nextCards,
+            archivedFlashcards: archivedCards,
+          });
+        }
+        setShowConfigModal(false);
+        showNotification(`¡Éxito! Se añadieron ${freshBatch.length} flashcards calibradas a la baraja.`);
+      } else {
+        showNotification('No se pudieron generar nuevas flashcards para ese criterio.');
+      }
+    } catch (e) {
+      console.error(e);
+      showNotification('Error al generar las flashcards calibradas.');
+    } finally {
+      setIsGeneratingTargeted(false);
+    }
+  };
+
   const currentCard = cards[currentIdx % (cards.length || 1)];
+  const isQuestionCard =
+    currentCard?.type === 'question' ||
+    Boolean(currentCard?.term && /^\s*¿|\?\s*$/.test(currentCard.term));
 
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
     setCards(prev => {
@@ -261,6 +322,17 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
             </button>
           </div>
 
+          {/* Botón de Calibración / Tuerca de Enfoque */}
+          <button
+            type="button"
+            onClick={() => setShowConfigModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border hover:border-violet-500/60 text-xs font-bold text-slate-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 group"
+            title="Calibrar enfoque y proporción de las flashcards"
+          >
+            <Settings className="w-4 h-4 text-violet-400 group-hover:rotate-45 transition-transform" />
+            <span className="hidden sm:inline">Enfoque</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -372,11 +444,29 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
               onClick={() => setIsFlipped(!isFlipped)}
               className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group min-h-[380px] sm:min-h-[440px] rounded-3xl`}
             >
-              {/* CARA FRONTAL (TÉRMINO CLAVE) */}
-              <div className="card-face rounded-3xl bg-gradient-to-tr from-[#140e2e] via-[#1a123d] to-[#25184f] border-2 border-[#332263] group-hover:border-violet-500/70 transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center">
-                <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-widest text-violet-300/80">
-                  <span>TÉRMINO CLAVE</span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-violet-900/40 border border-violet-500/30 text-violet-300">
+              {/* CARA FRONTAL (TÉRMINO O PREGUNTA CONCRETA) */}
+              <div className={`card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border-2 ${
+                isQuestionCard
+                  ? 'bg-gradient-to-tr from-[#0a182a] via-[#10243e] to-[#163659] border-cyan-500/50 group-hover:border-cyan-400'
+                  : 'bg-gradient-to-tr from-[#140e2e] via-[#1a123d] to-[#25184f] border-[#332263] group-hover:border-violet-500/70'
+              }`}>
+                <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+                  {isQuestionCard ? (
+                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 font-extrabold text-[11px] shadow-sm">
+                      <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />
+                      PREGUNTA CONCRETA
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-950/80 border border-violet-500/50 text-violet-300 font-extrabold text-[11px] shadow-sm">
+                      <BookOpen className="w-3.5 h-3.5 text-violet-400" />
+                      TÉRMINO CLAVE
+                    </span>
+                  )}
+                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
+                    isQuestionCard
+                      ? 'bg-cyan-900/40 border-cyan-500/30 text-cyan-300'
+                      : 'bg-violet-900/40 border-violet-500/30 text-violet-300'
+                  }`}>
                     Frente
                   </span>
                 </div>
@@ -387,17 +477,41 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 group-hover:text-amber-300 transition-colors font-medium">
+                <div className={`flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors ${
+                  isQuestionCard
+                    ? 'text-cyan-300/80 group-hover:text-cyan-200'
+                    : 'text-slate-400 group-hover:text-amber-300'
+                }`}>
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Haz clic para voltear y ver la definición</span>
+                  <span>
+                    {isQuestionCard
+                      ? 'Haz clic para voltear y ver la respuesta'
+                      : 'Haz clic para voltear y ver la definición'}
+                  </span>
                 </div>
               </div>
 
-              {/* CARA POSTERIOR (DEFINICIÓN & CONCEPTO) */}
-              <div className="card-face card-back rounded-3xl bg-gradient-to-tr from-[#121933] via-[#152347] to-[#1e3366] border-2 border-indigo-500/60 group-hover:border-indigo-400 transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center">
-                <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-widest text-indigo-300/80">
-                  <span>DEFINICIÓN & CONCEPTO DIDÁCTICO</span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-900/40 border border-indigo-500/30 text-indigo-300">
+              {/* CARA POSTERIOR (DEFINICIÓN O RESPUESTA) */}
+              <div className={`card-face card-back rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border-2 ${
+                isQuestionCard
+                  ? 'bg-gradient-to-tr from-[#0a1f33] via-[#0f2c47] to-[#15426b] border-sky-500/60 group-hover:border-sky-400'
+                  : 'bg-gradient-to-tr from-[#121933] via-[#152347] to-[#1e3366] border-indigo-500/60 group-hover:border-indigo-400'
+              }`}>
+                <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+                  {isQuestionCard ? (
+                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-500/50 text-sky-300 font-extrabold text-[11px] shadow-sm">
+                      RESPUESTA CONCISA
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-500/50 text-indigo-300 font-extrabold text-[11px] shadow-sm">
+                      DEFINICIÓN & CONCEPTO
+                    </span>
+                  )}
+                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
+                    isQuestionCard
+                      ? 'bg-sky-900/40 border-sky-500/30 text-sky-300'
+                      : 'bg-indigo-900/40 border-indigo-500/30 text-indigo-300'
+                  }`}>
                     Reverso
                   </span>
                 </div>
@@ -408,9 +522,17 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 group-hover:text-amber-300 transition-colors font-medium">
+                <div className={`flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors ${
+                  isQuestionCard
+                    ? 'text-sky-300/80 group-hover:text-cyan-200'
+                    : 'text-slate-400 group-hover:text-amber-300'
+                }`}>
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Haz clic para volver a ver el término</span>
+                  <span>
+                    {isQuestionCard
+                      ? 'Haz clic para volver a ver la pregunta'
+                      : 'Haz clic para volver a ver el término'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -538,6 +660,176 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de Calibración de Enfoque de Flashcards (Tuerca) */}
+      {showConfigModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-thea-surface border border-thea-border rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative overflow-hidden">
+            {/* Cabecera del Modal */}
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Calibrar Enfoque de Flashcards</h3>
+                  <p className="text-xs text-slate-400">
+                    Ajusta el tema específico y la proporción de términos vs preguntas
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="p-1.5 rounded-xl hover:bg-thea-surfaceLight text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Formulario */}
+            <div className="space-y-5">
+              {/* Campo 1: Subtema o Enfoque Temático */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                  Subtema o Enfoque Específico (Opcional)
+                </label>
+                <div className="relative">
+                  <Target className="w-4 h-4 text-violet-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={focusTopic}
+                    onChange={e => setFocusTopic(e.target.value)}
+                    placeholder="Ej. Mecanismo de acción, fórmulas, casos clínicos o tema particular..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900/80 border border-thea-border text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Si se deja en blanco, la IA extraerá los puntos más relevantes de todo el documento.
+                </p>
+              </div>
+
+              {/* Campo 2: Proporción de Formato */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                  Proporción de Formato
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFocusRatio('mixed-70-30')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      focusRatio === 'mixed-70-30'
+                        ? 'border-violet-500 bg-violet-600/20 text-white ring-1 ring-violet-500'
+                        : 'border-thea-border bg-slate-900/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-xs font-extrabold block text-violet-300 mb-1">
+                      70% Términos / 30% Preguntas
+                    </span>
+                    <span className="text-[11px] leading-tight text-slate-400">
+                      Balance didáctico óptimo para memorización.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFocusRatio('only-questions')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      focusRatio === 'only-questions'
+                        ? 'border-cyan-500 bg-cyan-600/20 text-white ring-1 ring-cyan-500'
+                        : 'border-thea-border bg-slate-900/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-xs font-extrabold block text-cyan-300 mb-1">
+                      100% Preguntas Cortas
+                    </span>
+                    <span className="text-[11px] leading-tight text-slate-400">
+                      Preguntas sumamente directas con respuestas concisas.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFocusRatio('only-concepts')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      focusRatio === 'only-concepts'
+                        ? 'border-amber-500 bg-amber-600/20 text-white ring-1 ring-amber-500'
+                        : 'border-thea-border bg-slate-900/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-xs font-extrabold block text-amber-300 mb-1">
+                      100% Términos Clave
+                    </span>
+                    <span className="text-[11px] leading-tight text-slate-400">
+                      Concepto o vocablo al frente y definición al reverso.
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Campo 3: Cantidad de tarjetas */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                  Cantidad de Nuevas Tarjetas
+                </label>
+                <div className="flex items-center gap-2">
+                  {[8, 10, 12, 16].map(num => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setTargetCount(num)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        targetCount === num
+                          ? 'border-violet-500 bg-violet-600 text-white shadow-md'
+                          : 'border-thea-border bg-slate-900/50 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {num} tarjetas
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Información sobre la suma a la baraja */}
+              <div className="p-3 rounded-xl bg-violet-950/30 border border-violet-500/20 text-[11px] text-violet-200/90 leading-relaxed">
+                <strong>Nota:</strong> Las nuevas tarjetas generadas se sumarán directamente a tu baraja actual sin eliminar las existentes ni resetear tu progreso.
+              </div>
+
+              {/* Botones de Acción */}
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-thea-border">
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(false)}
+                  disabled={isGeneratingTargeted}
+                  className="px-4 py-2.5 rounded-xl border border-thea-border text-xs font-bold text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateCalibratedFlashcards}
+                  disabled={isGeneratingTargeted}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-violet-900/40 transition-all cursor-pointer"
+                >
+                  {isGeneratingTargeted ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Generando {targetCount} Tarjetas con IA...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Generar y Añadir a la Baraja</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1114,7 +1114,7 @@ export async function generateCompleteAIPedagogicalBatch(
   return allQuestions;
 }
 
-/** Generación de Flashcards bajo demanda */
+/** Generación de Flashcards bajo demanda con proporción 70% conceptos / 30% preguntas cortas */
 export async function generateAIFlashcards(
   rawText: string,
   title: string,
@@ -1124,19 +1124,28 @@ export async function generateAIFlashcards(
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada.
-A partir del texto del estudiante, extrae los conceptos o términos clave esenciales y genera exactamente entre 8 y 12 flashcards rigurosas en español.
+  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada de Contrareloj Study.
+A partir del texto del estudiante, extrae conceptos clave esenciales y genera exactamente entre 8 y 12 flashcards rigurosas en español.
 
 ${translationDirective}
+
+DISTRIBUCIÓN OBLIGATORIA (70% CONCEPTOS / 30% PREGUNTAS SUMAMENTE CORTAS Y CONCRETAS):
+1. APROXIMADAMENTE EL 70% DE LAS FICHAS en formato de TÉRMINOS CLAVE ("type": "concept"):
+   - "term": Palabra clave, término o principio conceptual (máximo 4 a 6 palabras).
+   - "definition": Definición académica concisa, nítida y precisa (1 o 2 oraciones).
+2. APROXIMADAMENTE EL 30% DE LAS FICHAS en formato de PREGUNTAS SUMAMENTE CORTAS Y CONCRETAS ("type": "question"):
+   - "term": Pregunta sumamente corta, directa y concreta (ej. "¿Cuál es el principal neurotransmisor inhibitorio?", "¿Qué enzima regula el paso limitante?", "¿En qué fase ocurre la replicación del ADN?").
+   - "definition": Respuesta directa, concisa y exacta (máximo 1 o 2 líneas sin rodeos).
 
 Responde ÚNICAMENTE con un JSON con la estructura:
 {
   "flashcards": [
-    { "term": "Concepto o Principio", "definition": "Definición concisa, clara y precisa sin rodeos" }
+    { "type": "concept", "term": "Concepto o Principio", "definition": "Definición concisa, clara y precisa sin rodeos" },
+    { "type": "question", "term": "¿Pregunta sumamente corta y concreta?", "definition": "Respuesta directa y exacta sin rodeos" }
   ]
 }`;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera las flashcards (100% en español):`;
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera las flashcards (70% palabras clave / 30% preguntas sumamente cortas, 100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -1151,12 +1160,16 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       if (match) {
         const parsed = JSON.parse(match[0]);
         if (Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
-          return parsed.flashcards.map((f: { term: string; definition: string }, i: number) => ({
-            id: `fc-ai-${Date.now()}-${i}`,
-            term: f.term,
-            definition: f.definition,
-            mastery: 'to-learn' as const,
-          }));
+          return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
+            const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
+            return {
+              id: `fc-ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+              term: f.term,
+              definition: f.definition,
+              mastery: 'to-learn' as const,
+              type: isQ ? ('question' as const) : ('concept' as const),
+            };
+          });
         }
       }
     } catch (e) {
@@ -1180,20 +1193,25 @@ export async function generateAdditionalAIFlashcards(
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada.
+  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada de Contrareloj Study.
 A partir del texto del estudiante, extrae conceptos o términos clave esenciales NO vistos previamente y genera exactamente ${count} flashcards rigurosas en español.
 
 ${translationDirective}
+
+DISTRIBUCIÓN OBLIGATORIA (70% CONCEPTOS / 30% PREGUNTAS SUMAMENTE CORTAS Y CONCRETAS):
+1. APROXIMADAMENTE EL 70% DE LAS FICHAS ("type": "concept"): Término clave en "term", definición concisa en "definition".
+2. APROXIMADAMENTE EL 30% DE LAS FICHAS ("type": "question"): Pregunta sumamente corta y concreta en "term" (ej: "¿Qué enzima inicia...?"), respuesta directa en "definition".
 
 ${excludeList ? `EVITA estrictamente repetir estos conceptos ya cubiertos: [${excludeList}].` : ''}
 Responde ÚNICAMENTE con un JSON con la estructura:
 {
   "flashcards": [
-    { "term": "Concepto o Principio", "definition": "Definición concisa, clara y precisa sin rodeos" }
+    { "type": "concept", "term": "Concepto o Principio", "definition": "Definición concisa, clara y precisa sin rodeos" },
+    { "type": "question", "term": "¿Pregunta sumamente corta y concreta?", "definition": "Respuesta directa y exacta sin rodeos" }
   ]
 }`;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera las ${count} flashcards adicionales (100% en español):`;
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera las ${count} flashcards adicionales (70% conceptos / 30% preguntas cortas, 100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -1208,12 +1226,16 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       if (match) {
         const parsed = JSON.parse(match[0]);
         if (Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
-          return parsed.flashcards.map((f: { term: string; definition: string }, i: number) => ({
-            id: `fc-ai-${Date.now()}-${i}`,
-            term: f.term,
-            definition: f.definition,
-            mastery: 'to-learn' as const,
-          }));
+          return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
+            const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
+            return {
+              id: `fc-ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+              term: f.term,
+              definition: f.definition,
+              mastery: 'to-learn' as const,
+              type: isQ ? ('question' as const) : ('concept' as const),
+            };
+          });
         }
       }
     } catch (e) {
@@ -1241,15 +1263,134 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       term = words.slice(0, Math.min(5, words.length)).join(' ');
       def = p;
     }
+    const isQ = (i % 3 === 2);
     fallbacks.push({
       id: `fc-fallback-${Date.now()}-${i}`,
-      term,
+      term: isQ ? `¿Qué caracteriza a ${term}?` : term,
       definition: def,
       mastery: 'to-learn',
+      type: isQ ? 'question' : 'concept',
     });
   }
 
   return fallbacks;
+}
+
+export interface TargetedFlashcardsOptions {
+  focusTopic?: string;
+  styleRatio?: 'mixed-70-30' | 'only-questions' | 'only-concepts';
+  count?: number;
+  existingTerms?: string[];
+  chunks?: DocumentChunk[];
+}
+
+/** Generación calibrada de flashcards con enfoque temático y proporción configurable (Tuerca) */
+export async function generateTargetedAIFlashcards(
+  rawText: string,
+  title: string,
+  category: string,
+  options: TargetedFlashcardsOptions = {}
+): Promise<Flashcard[]> {
+  const settings = getAISettings();
+  const count = options.count || 10;
+  const focusTopic = (options.focusTopic || '').trim();
+  const styleRatio = options.styleRatio || 'mixed-70-30';
+  const existingTerms = options.existingTerms || [];
+  const excludeList = existingTerms.slice(-35).join(', ');
+
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
+  let styleDirective = '';
+  if (styleRatio === 'only-questions') {
+    styleDirective = `DISTRIBUCIÓN OBLIGATORIA (100% PREGUNTAS SUMAMENTE CORTAS Y CONCRETAS):
+- Todas las flashcards deben tener "type": "question".
+- "term": Pregunta sumamente corta, precisa y directa (ej. "¿Cuál es el mecanismo de...?", "¿Qué fármaco es de primera línea para...?").
+- "definition": Respuesta directa, concisa y exacta sin rodeos (máximo 1 o 2 líneas).`;
+  } else if (styleRatio === 'only-concepts') {
+    styleDirective = `DISTRIBUCIÓN OBLIGATORIA (100% TÉRMINOS CLAVE Y CONCEPTOS):
+- Todas las flashcards deben tener "type": "concept".
+- "term": Palabra clave o término conceptual nuclear (máximo 4 a 6 palabras).
+- "definition": Definición académica concisa, nítida y precisa (1 o 2 oraciones).`;
+  } else {
+    styleDirective = `DISTRIBUCIÓN OBLIGATORIA (70% CONCEPTOS / 30% PREGUNTAS SUMAMENTE CORTAS Y CONCRETAS):
+1. APROXIMADAMENTE EL 70% DE LAS FICHAS ("type": "concept"): Término clave en "term", definición concisa en "definition".
+2. APROXIMADAMENTE EL 30% DE LAS FICHAS ("type": "question"): Pregunta sumamente corta y concreta en "term" (ej: "¿Qué enzima regula...?"), respuesta directa y exacta en "definition".`;
+  }
+
+  const topicDirective = focusTopic
+    ? `ENFOQUE TEMÁTICO PRIORITARIO:
+Concéntrate rigurosa y exclusivamente en el subtema: "${focusTopic}". Extrae conceptos y formula preguntas directas sobre este núcleo temático.`
+    : 'Aborda los núcleos conceptuales y procedimentales más importantes del texto.';
+
+  const systemPrompt = `Eres el tutor pedagógico experto en repetición espaciada y Active Recall de Contrareloj Study.
+Tu objetivo es formular exactamente ${count} flashcards de alta efectividad memorística calibradas al enfoque solicitado.
+
+${translationDirective}
+
+${topicDirective}
+
+${styleDirective}
+
+${excludeList ? `EVITA estrictamente repetir estos conceptos ya cubiertos: [${excludeList}].` : ''}
+
+Responde ÚNICAMENTE con un JSON con la estructura:
+{
+  "flashcards": [
+    { "type": "concept", "term": "Concepto o Principio", "definition": "Definición concisa, clara y precisa sin rodeos" },
+    { "type": "question", "term": "¿Pregunta sumamente corta y concreta?", "definition": "Respuesta directa y exacta sin rodeos" }
+  ]
+}`;
+
+  let sourceSnippet = '';
+  if (options.chunks && options.chunks.length > 0) {
+    if (focusTopic) {
+      const qLower = focusTopic.toLowerCase();
+      const matched = options.chunks.filter(c =>
+        c.text.toLowerCase().includes(qLower) || (c.heading || '').toLowerCase().includes(qLower)
+      );
+      const chosen = matched.length > 0 ? matched.slice(0, 8) : options.chunks.slice(0, 8);
+      sourceSnippet = chosen.map(c => `[Sección: ${c.heading || 'Parte'}]\n${c.text}`).join('\n\n---\n\n');
+    } else {
+      sourceSnippet = options.chunks.slice(0, 8).map(c => c.text).join('\n\n');
+    }
+  } else {
+    sourceSnippet = rawText.slice(0, 8000);
+  }
+
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${sourceSnippet.slice(0, 8000)}\n\nGenera las ${count} flashcards calibradas (${focusTopic ? `Enfoque: "${focusTopic}", ` : ''}100% en español):`;
+
+  if (settings.enabled) {
+    try {
+      const res = await queryAICompletion(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        true
+      );
+      const match = res.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        if (Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
+          return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
+            const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
+            return {
+              id: `fc-calibrated-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+              term: f.term,
+              definition: f.definition,
+              mastery: 'to-learn' as const,
+              type: isQ ? ('question' as const) : ('concept' as const),
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Flashcards Targeted AI] Error generando flashcards calibradas con IA:', e);
+    }
+  }
+
+  return generateAdditionalAIFlashcards(rawText, title, category, existingTerms, count);
 }
 
 /** Generación de Guía de Estudio bajo demanda */

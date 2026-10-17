@@ -94,6 +94,7 @@ export interface Flashcard {
   term: string;
   definition: string;
   mastery: 'to-learn' | 'known' | 'mastered';
+  type?: 'concept' | 'question';
   sourceChunkText?: string;
   sourcePageOrSlide?: number;
   sourceAsset?: DocumentAsset;
