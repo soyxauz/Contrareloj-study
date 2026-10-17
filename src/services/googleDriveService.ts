@@ -559,8 +559,9 @@ export const googleDriveService = {
 
   /**
    * Flujo unificado: Iniciar sesión con Google, vincular la cuenta en Contrareloj Study y sincronizar datos.
+   * Admite callback para cerrar el modal de forma instantánea tan pronto se autoriza la cuenta de Google.
    */
-  async loginAndSync(): Promise<{ user: User; kits: StudyKit[] | null }> {
+  async loginAndSync(onFastAuthenticated?: (user: User, localOrFastKits: StudyKit[]) => void): Promise<{ user: User; kits: StudyKit[] | null }> {
     updateState({ status: 'syncing', errorMessage: null });
     try {
       let token = this.getValidAccessToken();
@@ -585,6 +586,12 @@ export const googleDriveService = {
 
       if (!authRes.success || !authRes.user) {
         throw new Error(authRes.error || 'No se pudo vincular la cuenta local.');
+      }
+
+      // Si se proporcionó callback, notificar de inmediato para cerrar el modal y mostrar el dashboard sin demoras
+      if (onFastAuthenticated) {
+        const localKits = authService.getUserKits(authRes.user.id);
+        onFastAuthenticated(authRes.user, localKits);
       }
 
       // Sincronizar hacia abajo desde la nube
@@ -754,7 +761,7 @@ export const googleDriveService = {
   /**
    * Lee y parsea el contenido de un archivo JSON desde Google Drive.
    */
-  async readJsonFromDrive(token: string, fileId: string): Promise<any> {
+  async readJsonFromDrive<T = any>(token: string, fileId: string): Promise<T> {
     const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -768,7 +775,7 @@ export const googleDriveService = {
       throw new Error(`Error al leer archivo de Drive (${res.status})`);
     }
 
-    return await res.json();
+    return (await res.json()) as T;
   },
 
   /**
@@ -863,7 +870,57 @@ export const googleDriveService = {
   },
 
   /**
-   * Descarga el estado completo guardado en Google Drive y lo restaura localmente.
+   * Sincroniza activos visuales de forma asíncrona en segundo plano sin congelar la interfaz.
+   */
+  async syncAssetsInBackground(token: string, rootFolderId: string): Promise<void> {
+    try {
+      const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
+      const driveAssetFiles = await this.listFilesInFolder(token, assetsFolderId);
+
+      if (driveAssetFiles.length === 0) return;
+
+      const localAssets = await getAllStoredAssets();
+      const localIds = new Set(localAssets.map(a => a.id));
+      const assetsToDownload = driveAssetFiles.filter(f => {
+        const rawId = f.name.replace(/\.[^/.]+$/, '');
+        return !localIds.has(rawId);
+      });
+
+      if (assetsToDownload.length === 0) return;
+
+      // Descargar en lotes de 4 concurrentes para no saturar la red ni la memoria
+      const BATCH_SIZE = 4;
+      for (let i = 0; i < assetsToDownload.length; i += BATCH_SIZE) {
+        const batch = assetsToDownload.slice(i, i + BATCH_SIZE);
+        const downloadedBatch = await Promise.all(
+          batch.map(async (file): Promise<DocumentAsset | null> => {
+            const rawId = file.name.replace(/\.[^/.]+$/, '');
+            try {
+              const dataUrl = await this.downloadAssetDataUrl(token, file.id);
+              return {
+                id: rawId,
+                type: 'image',
+                dataUrl,
+              };
+            } catch (dlErr) {
+              console.warn(`[GoogleDriveService] Error descargando activo ${file.name}:`, dlErr);
+              return null;
+            }
+          })
+        );
+
+        const validAssets = downloadedBatch.filter((a): a is DocumentAsset => a !== null);
+        if (validAssets.length > 0) {
+          await saveAssetsToIndexedDB(validAssets);
+        }
+      }
+    } catch (e) {
+      console.warn('[GoogleDriveService] Error en syncAssetsInBackground:', e);
+    }
+  },
+
+  /**
+   * Descarga el estado completo guardado en Google Drive y lo restaura localmente con consultas paralelas ultra rápidas.
    */
   async pullFromDrive(userId: string): Promise<StudyKit[] | null> {
     const token = this.getValidAccessToken();
@@ -883,154 +940,88 @@ export const googleDriveService = {
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
 
-      // 1. Sincronizar usuarios de la app
-      const usersFile = await this.findFileInFolder(token, rootFolderId, 'thea_auth_users.json');
-      if (usersFile) {
-        try {
-          const remoteUsers = await this.readJsonFromDrive(token, usersFile.id);
-          if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
-            const localUsers = authService.getRawStoredUsers();
-            const mergedMap = new Map<string, any>();
-            for (const u of localUsers) mergedMap.set(u.id, u);
-            for (const u of remoteUsers) {
-              const localU = mergedMap.get(u.id);
-              if (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) {
-                u.aiSettings.verified = true;
-                authService.saveUserAISettings(u.id, u.aiSettings);
-                const currentSettings = getAISettings();
-                if (!currentSettings.apiKey || currentSettings.apiKey.trim().length === 0) {
-                  saveAISettings(u.aiSettings);
-                }
-              }
-              mergedMap.set(u.id, { ...localU, ...u });
-            }
-            authService.setRawStoredUsers(Array.from(mergedMap.values()));
-          }
-        } catch (e) {
-          console.warn('[GoogleDriveService] Error sincronizando usuarios remotos:', e);
-        }
+      // 1. Obtener todos los archivos en la carpeta raíz en UNA sola llamada de red
+      const rootFiles = await this.listFilesInFolder(token, rootFolderId);
+      const rootFilesMap = new Map<string, { id: string; name: string }>();
+      for (const f of rootFiles) {
+        rootFilesMap.set(f.name, f);
       }
 
-      // 2. Sincronizar kits de estudio del usuario
+      const usersFile = rootFilesMap.get('thea_auth_users.json');
       const userKitsFileName = `thea_kits_${userId}.json`;
-      let kitsFile = await this.findFileInFolder(token, rootFolderId, userKitsFileName);
-      if (!kitsFile) {
-        // Fallback al nombre genérico si se guardó anteriormente
-        kitsFile = await this.findFileInFolder(token, rootFolderId, 'thea_study_kits.json');
-      }
-
-      let pulledKits: StudyKit[] | null = null;
-      if (kitsFile) {
-        try {
-          pulledKits = await this.readJsonFromDrive(token, kitsFile.id);
-          if (Array.isArray(pulledKits)) {
-            authService.saveUserKits(userId, pulledKits);
-          }
-        } catch (e) {
-          console.warn('[GoogleDriveService] Error leyendo kits de Drive:', e);
-        }
-      }
-
-      // 2.5 Sincronizar progreso y memoria de Smart Study de todos los libros (nivel, respuestas, historial)
+      const kitsFile = rootFilesMap.get(userKitsFileName) || rootFilesMap.get('thea_study_kits.json');
       const userProgressFileName = `thea_progress_${userId}.json`;
-      let progressFile = await this.findFileInFolder(token, rootFolderId, userProgressFileName);
-      if (!progressFile) {
-        progressFile = await this.findFileInFolder(token, rootFolderId, 'thea_progress.json');
-      }
+      const progressFile = rootFilesMap.get(userProgressFileName) || rootFilesMap.get('thea_progress.json');
+      const aiSettingsFile = rootFilesMap.get('thea_ai_settings.json');
 
-      if (progressFile) {
-        try {
-          const cloudProgress = await this.readJsonFromDrive(token, progressFile.id);
-          if (cloudProgress?.sessions && typeof cloudProgress.sessions === 'object') {
-            authService.saveAllSmartStudySessions(userId, cloudProgress.sessions, cloudProgress.revealedQuestions);
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
+      // 2. Descargar todos los archivos JSON esenciales en paralelo ultrarrápido (sub-segundo)
+      const [remoteUsers, pulledKits, cloudProgress, remoteAISettings] = await Promise.all([
+        usersFile ? this.readJsonFromDrive<any[]>(token, usersFile.id).catch(() => null) : null,
+        kitsFile ? this.readJsonFromDrive<StudyKit[]>(token, kitsFile.id).catch(() => null) : null,
+        progressFile ? this.readJsonFromDrive<any>(token, progressFile.id).catch(() => null) : null,
+        aiSettingsFile ? this.readJsonFromDrive<AISettings>(token, aiSettingsFile.id).catch(() => null) : null,
+      ]);
+
+      // 3. Procesar e integrar usuarios
+      if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+        const localUsers = authService.getRawStoredUsers();
+        const mergedMap = new Map<string, any>();
+        for (const u of localUsers) mergedMap.set(u.id, u);
+        for (const u of remoteUsers) {
+          const localU = mergedMap.get(u.id);
+          if (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) {
+            u.aiSettings.verified = true;
+            authService.saveUserAISettings(u.id, u.aiSettings);
+            const currentSettings = getAISettings();
+            if (!currentSettings.apiKey || currentSettings.apiKey.trim().length === 0) {
+              saveAISettings(u.aiSettings);
             }
           }
-        } catch (e) {
-          console.warn('[GoogleDriveService] Error leyendo progreso de Smart Study de Drive:', e);
+          mergedMap.set(u.id, { ...localU, ...u });
         }
+        authService.setRawStoredUsers(Array.from(mergedMap.values()));
       }
 
-      // 3. Sincronizar activos visuales desde subcarpeta 'assets/'
-      const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
-      const driveAssetFiles = await this.listFilesInFolder(token, assetsFolderId);
-
-      if (driveAssetFiles.length > 0) {
-        const localAssets = await getAllStoredAssets();
-        const localIds = new Set(localAssets.map(a => a.id));
-        const assetsToDownload = driveAssetFiles.filter(f => {
-          const rawId = f.name.replace(/\.[^/.]+$/, '');
-          return !localIds.has(rawId);
-        });
-
-        if (assetsToDownload.length > 0) {
-          const downloadedAssets: DocumentAsset[] = [];
-          for (let i = 0; i < assetsToDownload.length; i++) {
-            const file = assetsToDownload[i];
-            const rawId = file.name.replace(/\.[^/.]+$/, '');
-            try {
-              const dataUrl = await this.downloadAssetDataUrl(token, file.id);
-              downloadedAssets.push({
-                id: rawId,
-                type: 'image',
-                dataUrl,
-              });
-            } catch (dlErr) {
-              console.warn(`[GoogleDriveService] Error descargando activo ${file.name}:`, dlErr);
-            }
-          }
-
-          if (downloadedAssets.length > 0) {
-            await saveAssetsToIndexedDB(downloadedAssets);
-          }
-        }
+      // 4. Procesar e integrar kits de estudio
+      if (Array.isArray(pulledKits)) {
+        authService.saveUserKits(userId, pulledKits);
       }
 
-      // 4. Sincronizar ajustes de IA y API personal desde Google Drive
-      const aiSettingsFile = await this.findFileInFolder(token, rootFolderId, 'thea_ai_settings.json');
+      // 5. Procesar e integrar progreso de Smart Study (nivel, respuestas, historial)
+      if (cloudProgress?.sessions && typeof cloudProgress.sessions === 'object') {
+        authService.saveAllSmartStudySessions(userId, cloudProgress.sessions, cloudProgress.revealedQuestions);
+      }
+
+      // 6. Procesar e integrar ajustes de IA
       const localAISettings = getAISettings();
-      if (aiSettingsFile) {
-        try {
-          const remoteAISettings = await this.readJsonFromDrive(token, aiSettingsFile.id);
-          if (remoteAISettings && typeof remoteAISettings === 'object') {
-            const remoteHasKey = Boolean(remoteAISettings.apiKey && remoteAISettings.apiKey.trim().length > 0);
-            const localHasKey = Boolean(localAISettings.apiKey && localAISettings.apiKey.trim().length > 0);
+      if (remoteAISettings && typeof remoteAISettings === 'object') {
+        const remoteHasKey = Boolean(remoteAISettings.apiKey && remoteAISettings.apiKey.trim().length > 0);
+        const localHasKey = Boolean(localAISettings.apiKey && localAISettings.apiKey.trim().length > 0);
 
-            if (remoteHasKey) {
-              // Si la nube tiene API Key guardada, importarla y desbloquear
-              const merged: AISettings = {
-                ...remoteAISettings,
-                verified: true,
-              };
-              saveAISettings(merged);
-              if (userId) {
-                authService.saveUserAISettings(userId, merged);
-              }
-              const activeUser = authService.getCurrentUser();
-              if (activeUser) {
-                authService.saveUserAISettings(activeUser.id, merged);
-              }
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new Event('thea_ai_settings_changed'));
-              }
-            } else if (localHasKey) {
-              // Si la nube no tenía clave pero localmente sí tenemos una, subirla a Drive
-              await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings);
-            }
+        if (remoteHasKey) {
+          const merged: AISettings = {
+            ...remoteAISettings,
+            verified: true,
+          };
+          saveAISettings(merged);
+          if (userId) {
+            authService.saveUserAISettings(userId, merged);
           }
-        } catch (aiErr) {
-          console.warn('[GoogleDriveService] Error sincronizando ajustes de IA desde Drive:', aiErr);
-        }
-      } else {
-        // Si thea_ai_settings.json aún no existe en Drive pero hay clave local, subirla de inmediato
-        if (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) {
-          try {
-            await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings);
-          } catch (e) {
-            console.warn('[GoogleDriveService] Error creando thea_ai_settings.json inicial en Drive:', e);
+          const activeUser = authService.getCurrentUser();
+          if (activeUser) {
+            authService.saveUserAISettings(activeUser.id, merged);
           }
+        } else if (localHasKey) {
+          this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
         }
+      } else if (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) {
+        this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
+      }
+
+      // 7. Notificar inmediatamente que los datos y el progreso están listos
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('thea_ai_settings_changed'));
+        window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
       }
 
       const now = Date.now();
@@ -1038,8 +1029,13 @@ export const googleDriveService = {
       updateState({
         status: 'synced',
         lastSyncTime: now,
-        filesSyncedCount: driveAssetFiles.length + (kitsFile ? 1 : 0),
+        filesSyncedCount: rootFiles.length,
         errorMessage: null,
+      });
+
+      // 8. Descarga de activos visuales en segundo plano sin bloquear el retorno ni la UI
+      this.syncAssetsInBackground(token, rootFolderId).catch((err) => {
+        console.warn('[GoogleDriveService] Error en sincronización de activos en segundo plano:', err);
       });
 
       return pulledKits;
