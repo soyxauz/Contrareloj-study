@@ -1,4 +1,4 @@
-import type { User, StudyKit, SmartStudySessionState } from '../types';
+import type { User, StudyKit, SmartStudySessionState, PodcastSettings } from '../types';
 import type { AISettings } from './aiService';
 import { DEFAULT_STUDY_KITS } from '../data/defaultKits';
 import {
@@ -13,6 +13,7 @@ import {
 interface StoredUserRecord extends User {
   passwordHash: string;
   aiSettings?: AISettings;
+  podcastSettings?: PodcastSettings;
 }
 
 const STORAGE_USERS_KEY = 'thea_auth_users';
@@ -671,12 +672,20 @@ export const authService = {
       const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.apiKey && parsed.apiKey.trim().length > 0) return parsed;
+        const hasKey = Boolean(
+          (parsed.apiKey && parsed.apiKey.trim().length > 0) ||
+          (parsed.geminiApiKey && parsed.geminiApiKey.trim().length > 0)
+        );
+        if (hasKey) return parsed;
       }
       // Buscar también dentro del registro de usuario
       const users = getStoredUsers();
       const user = users.find(u => u.id === userId);
-      if (user?.aiSettings && user.aiSettings.apiKey && user.aiSettings.apiKey.trim().length > 0) {
+      const userHasKey = Boolean(
+        (user?.aiSettings?.apiKey && user.aiSettings.apiKey.trim().length > 0) ||
+        (user?.aiSettings?.geminiApiKey && user.aiSettings.geminiApiKey.trim().length > 0)
+      );
+      if (user?.aiSettings && userHasKey) {
         return user.aiSettings;
       }
       return raw ? JSON.parse(raw) : (user?.aiSettings || null);
@@ -704,6 +713,46 @@ export const authService = {
       }
     } catch (e) {
       console.error('Error al guardar configuración de IA del usuario', e);
+    }
+  },
+
+  /**
+   * Obtiene la configuración de Podcast guardada para un usuario específico.
+   */
+  getUserPodcastSettings(userId: string | null): PodcastSettings | null {
+    if (!userId) return null;
+    try {
+      const key = `thea_user_podcast_settings_${userId}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+      const users = getStoredUsers();
+      const user = users.find(u => u.id === userId);
+      return user?.podcastSettings || null;
+    } catch (e) {
+      console.error('Error al leer configuración de podcast del usuario', e);
+      return null;
+    }
+  },
+
+  /**
+   * Guarda la configuración de Podcast asociada al perfil de un usuario específico.
+   */
+  saveUserPodcastSettings(userId: string | null, settings: PodcastSettings): void {
+    if (!userId) return;
+    try {
+      const key = `thea_user_podcast_settings_${userId}`;
+      localStorage.setItem(key, JSON.stringify(settings));
+
+      const users = getStoredUsers();
+      const userIndex = users.findIndex(u => u.id === userId);
+      if (userIndex >= 0) {
+        users[userIndex].podcastSettings = settings;
+        saveStoredUsers(users);
+      }
+    } catch (e) {
+      console.error('Error al guardar configuración de podcast del usuario', e);
     }
   }
 };

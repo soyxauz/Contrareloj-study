@@ -162,6 +162,14 @@ export interface DeveloperSettings {
   bypassPaywall: boolean;
 }
 
+export interface PodcastSettings {
+  voiceEngine: 'gemini' | 'browser';
+  sofiaVoice: string;
+  mateoVoice: string;
+  playbackSpeed: number;
+  geminiApiKey?: string;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -170,6 +178,8 @@ export interface User {
   email?: string;
   googleId?: string;
   avatarUrl?: string;
+  aiSettings?: any;
+  podcastSettings?: PodcastSettings;
 }
 
 export interface SmartStudySessionState {

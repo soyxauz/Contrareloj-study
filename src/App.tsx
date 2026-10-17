@@ -5,6 +5,7 @@ import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
 import { googleDriveService, type DriveSyncState } from './services/googleDriveService';
 import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
+import { savePodcastSettings } from './services/geminiAudioService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
@@ -278,10 +279,28 @@ export const App: React.FC = () => {
     // 1. Restaurar ajustes de IA asociados a esta cuenta
     const userAISettings = authService.getUserAISettings(user.id);
     const currentSettings = getAISettings();
-    if (userAISettings && userAISettings.apiKey && userAISettings.apiKey.trim().length > 0) {
+    const userHasAiKey = Boolean(
+      (userAISettings?.apiKey && userAISettings.apiKey.trim().length > 0) ||
+      (userAISettings?.geminiApiKey && userAISettings.geminiApiKey.trim().length > 0)
+    );
+    const currentHasAiKey = Boolean(
+      (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
+      (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0)
+    );
+
+    if (userAISettings && userHasAiKey) {
       saveAISettings(userAISettings);
-    } else if (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) {
+      if (userAISettings.geminiApiKey?.trim()) {
+        localStorage.setItem('contrareloj_gemini_api_key', userAISettings.geminiApiKey.trim());
+      }
+    } else if (currentHasAiKey) {
       authService.saveUserAISettings(user.id, currentSettings);
+    }
+
+    // 1.1 Restaurar ajustes de Podcast asociados a esta cuenta
+    const userPodcastSettings = authService.getUserPodcastSettings(user.id);
+    if (userPodcastSettings) {
+      savePodcastSettings(userPodcastSettings);
     }
 
     // 2. Si ya vinieron kits sincronizados directamente de Google Drive (login con Google)

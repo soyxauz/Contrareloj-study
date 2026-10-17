@@ -1,4 +1,8 @@
 import { getAISettings, saveAISettings } from './aiService';
+import type { PodcastSettings } from '../types';
+import { authService } from './authService';
+
+export type { PodcastSettings };
 
 /**
  * Servicio de síntesis de voz neuronal con emociones impulsado por Google Gemini Flash Audio.
@@ -86,6 +90,83 @@ function getAudioDatabase(): Promise<IDBDatabase | null> {
   });
 }
 
+export const DEFAULT_PODCAST_SETTINGS: PodcastSettings = {
+  voiceEngine: 'gemini',
+  sofiaVoice: 'Aoede',
+  mateoVoice: 'Puck',
+  playbackSpeed: 1,
+  geminiApiKey: '',
+};
+
+const PODCAST_SETTINGS_KEY = 'contrareloj_podcast_settings';
+const PODCAST_SETTINGS_LEGACY_KEY = 'thea_podcast_settings';
+
+/**
+ * Obtiene la configuración de Podcast persistida (local y compatible con multicuenta).
+ */
+export function getPodcastSettings(): PodcastSettings {
+  let settings: PodcastSettings = { ...DEFAULT_PODCAST_SETTINGS };
+  try {
+    const raw = typeof localStorage !== 'undefined'
+      ? (localStorage.getItem(PODCAST_SETTINGS_KEY) || localStorage.getItem(PODCAST_SETTINGS_LEGACY_KEY))
+      : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      settings = { ...settings, ...parsed };
+    }
+  } catch (e) {
+    console.warn('[GeminiAudio] Error al leer ajustes de podcast locales:', e);
+  }
+
+  // Si no tiene apiKey pero existe en AISettings o standalone, integrarla
+  const currentKey = getGeminiAudioApiKey();
+  if (!settings.geminiApiKey && currentKey) {
+    settings.geminiApiKey = currentKey;
+  }
+  return settings;
+}
+
+/**
+ * Guarda la configuración de Podcast de forma reactiva y multicuenta.
+ */
+export function savePodcastSettings(partial: Partial<PodcastSettings>): PodcastSettings {
+  const current = getPodcastSettings();
+  const updated: PodcastSettings = {
+    ...current,
+    ...partial,
+  };
+
+  try {
+    localStorage.setItem(PODCAST_SETTINGS_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('[GeminiAudio] Error al guardar ajustes de podcast en localStorage:', e);
+  }
+
+  // Si se actualizó la clave de Gemini
+  if (partial.geminiApiKey !== undefined) {
+    const cleanKey = partial.geminiApiKey.trim();
+    localStorage.setItem('contrareloj_gemini_api_key', cleanKey);
+    const ai = getAISettings();
+    saveAISettings({
+      ...ai,
+      geminiApiKey: cleanKey,
+    });
+  }
+
+  // Asociar al usuario autenticado activo si existe
+  const currentUser = authService.getCurrentUser();
+  if (currentUser) {
+    authService.saveUserPodcastSettings(currentUser.id, updated);
+  }
+
+  // Emitir evento reactivo para refrescar la interfaz en tiempo real
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('contrareloj_podcast_settings_changed', { detail: updated }));
+  }
+
+  return updated;
+}
+
 /**
  * Obtiene la API Key activa para Gemini Audio.
  */
@@ -107,7 +188,7 @@ export function getGeminiAudioApiKey(): string {
 }
 
 /**
- * Guarda la API Key dedicada para Gemini Audio.
+ * Guarda la API Key dedicada para Gemini Audio y actualiza la configuración global del podcast.
  */
 export function setGeminiAudioApiKey(key: string): void {
   const clean = key.trim();
@@ -117,6 +198,7 @@ export function setGeminiAudioApiKey(key: string): void {
     ...settings,
     geminiApiKey: clean,
   });
+  savePodcastSettings({ geminiApiKey: clean });
 }
 
 /**

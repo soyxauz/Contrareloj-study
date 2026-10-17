@@ -1,4 +1,4 @@
-import type { StudyKit, DocumentAsset, User } from '../types';
+import type { StudyKit, DocumentAsset, User, PodcastSettings } from '../types';
 import { authService } from './authService';
 import {
   getAllStoredAssets,
@@ -9,6 +9,7 @@ import {
   removeSessionItem
 } from './storageService';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
+import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
 
@@ -1043,13 +1044,16 @@ export const googleDriveService = {
       const userProgressFileName = `thea_progress_${userId}.json`;
       const progressFile = rootFilesMap.get(userProgressFileName) || rootFilesMap.get('thea_progress.json');
       const aiSettingsFile = rootFilesMap.get('thea_ai_settings.json');
+      const userPodcastSettingsFileName = `thea_podcast_settings_${userId}.json`;
+      const podcastSettingsFile = rootFilesMap.get(userPodcastSettingsFileName) || rootFilesMap.get('thea_podcast_settings.json');
 
       // 2. Descargar todos los archivos JSON esenciales en paralelo ultrarrápido (sub-segundo)
-      const [remoteUsers, pulledKits, cloudProgress, remoteAISettings] = await Promise.all([
+      const [remoteUsers, pulledKits, cloudProgress, remoteAISettings, remotePodcastSettings] = await Promise.all([
         usersFile ? this.readJsonFromDrive<any[]>(token, usersFile.id).catch(() => null) : null,
         kitsFile ? this.readJsonFromDrive<StudyKit[]>(token, kitsFile.id).catch(() => null) : null,
         progressFile ? this.readJsonFromDrive<any>(token, progressFile.id).catch(() => null) : null,
         aiSettingsFile ? this.readJsonFromDrive<AISettings>(token, aiSettingsFile.id).catch(() => null) : null,
+        podcastSettingsFile ? this.readJsonFromDrive<PodcastSettings>(token, podcastSettingsFile.id).catch(() => null) : null,
       ]);
 
       // 3. Procesar e integrar usuarios
@@ -1059,13 +1063,24 @@ export const googleDriveService = {
         for (const u of localUsers) mergedMap.set(u.id, u);
         for (const u of remoteUsers) {
           const localU = mergedMap.get(u.id);
-          if (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) {
+          const uHasAiKey = Boolean(
+            (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) ||
+            (u.aiSettings?.geminiApiKey && u.aiSettings.geminiApiKey.trim().length > 0)
+          );
+          if (uHasAiKey) {
             u.aiSettings.verified = true;
             authService.saveUserAISettings(u.id, u.aiSettings);
             const currentSettings = getAISettings();
-            if (!currentSettings.apiKey || currentSettings.apiKey.trim().length === 0) {
+            const currHasKey = Boolean(
+              (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
+              (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0)
+            );
+            if (!currHasKey) {
               saveAISettings(u.aiSettings);
             }
+          }
+          if (u.podcastSettings) {
+            authService.saveUserPodcastSettings(u.id, u.podcastSettings);
           }
           mergedMap.set(u.id, { ...localU, ...u });
         }
@@ -1085,8 +1100,14 @@ export const googleDriveService = {
       // 6. Procesar e integrar ajustes de IA
       const localAISettings = getAISettings();
       if (remoteAISettings && typeof remoteAISettings === 'object') {
-        const remoteHasKey = Boolean(remoteAISettings.apiKey && remoteAISettings.apiKey.trim().length > 0);
-        const localHasKey = Boolean(localAISettings.apiKey && localAISettings.apiKey.trim().length > 0);
+        const remoteHasKey = Boolean(
+          (remoteAISettings.apiKey && remoteAISettings.apiKey.trim().length > 0) ||
+          (remoteAISettings.geminiApiKey && remoteAISettings.geminiApiKey.trim().length > 0)
+        );
+        const localHasKey = Boolean(
+          (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
+          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0)
+        );
 
         if (remoteHasKey) {
           const merged: AISettings = {
@@ -1094,6 +1115,10 @@ export const googleDriveService = {
             verified: true,
           };
           saveAISettings(merged);
+          if (remoteAISettings.geminiApiKey?.trim()) {
+            localStorage.setItem('contrareloj_gemini_api_key', remoteAISettings.geminiApiKey.trim());
+            savePodcastSettings({ geminiApiKey: remoteAISettings.geminiApiKey.trim() });
+          }
           if (userId) {
             authService.saveUserAISettings(userId, merged);
           }
@@ -1104,13 +1129,42 @@ export const googleDriveService = {
         } else if (localHasKey) {
           this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
         }
-      } else if (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) {
+      } else if (
+        (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
+        (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0)
+      ) {
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
+      }
+
+      // 6.1 Procesar e integrar ajustes de Podcast
+      if (remotePodcastSettings && typeof remotePodcastSettings === 'object') {
+        savePodcastSettings(remotePodcastSettings);
+        if (userId) {
+          authService.saveUserPodcastSettings(userId, remotePodcastSettings);
+        }
+        if (remotePodcastSettings.geminiApiKey && remotePodcastSettings.geminiApiKey.trim().length > 0) {
+          localStorage.setItem('contrareloj_gemini_api_key', remotePodcastSettings.geminiApiKey.trim());
+          const currAi = getAISettings();
+          saveAISettings({
+            ...currAi,
+            geminiApiKey: remotePodcastSettings.geminiApiKey.trim(),
+          });
+        }
+      } else {
+        const localPodcastSettings = getPodcastSettings();
+        if (
+          localPodcastSettings.geminiApiKey ||
+          localPodcastSettings.sofiaVoice !== 'Aoede' ||
+          localPodcastSettings.mateoVoice !== 'Puck'
+        ) {
+          this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', localPodcastSettings).catch(() => {});
+        }
       }
 
       // 7. Notificar inmediatamente que los datos y el progreso están listos
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('thea_ai_settings_changed'));
+        window.dispatchEvent(new CustomEvent('contrareloj_podcast_settings_changed', { detail: getPodcastSettings() }));
         window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
       }
 
@@ -1188,10 +1242,12 @@ export const googleDriveService = {
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
 
+      const currentPodcastSettings = getPodcastSettings();
       await Promise.all([
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers),
         this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits),
         this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
+        this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', currentPodcastSettings),
       ]);
 
       // 2. Subir activos visuales a subcarpeta 'assets/' concurrentemente en lotes de 6
@@ -1217,9 +1273,13 @@ export const googleDriveService = {
         uploadedCount += batch.length;
       }
 
-      // 3. Guardar configuración de IA y API propia en Google Drive solo si tiene clave
+      // 3. Guardar configuración de IA y API propia en Google Drive si tiene clave personal o Gemini
       const currentAISettings = getAISettings();
-      if (currentAISettings.apiKey && currentAISettings.apiKey.trim().length > 0) {
+      const hasAiKey = Boolean(
+        (currentAISettings.apiKey && currentAISettings.apiKey.trim().length > 0) ||
+        (currentAISettings.geminiApiKey && currentAISettings.geminiApiKey.trim().length > 0)
+      );
+      if (hasAiKey) {
         await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', currentAISettings);
       }
 
@@ -1409,6 +1469,48 @@ export const googleDriveService = {
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
           return this.syncAISettingsToDrive(overrideSettings);
+        }
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+        });
+      }
+      return false;
+    }
+  },
+
+  /**
+   * Sube inmediatamente la configuración de Podcast a Google Drive (voces, motor, velocidad y clave Gemini).
+   */
+  async syncPodcastSettingsToDrive(overrideSettings?: PodcastSettings): Promise<boolean> {
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) {
+      const hasEmail = Boolean(localStorage.getItem(STORAGE_PROFILE_KEY));
+      if (hasEmail) {
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+        });
+      }
+      return false;
+    }
+
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const podcastSettings = overrideSettings || getPodcastSettings();
+      await this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', podcastSettings);
+      return true;
+    } catch (e: any) {
+      console.warn('[GoogleDriveService] Error sincronizando ajustes de podcast con Drive:', e);
+      const is401 = e?.message?.includes('401') || e?.message?.includes('TOKEN_EXPIRED') || e?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        const refreshedToken = await this.attemptSilentTokenRefresh();
+        if (refreshedToken) {
+          return this.syncPodcastSettingsToDrive(overrideSettings);
         }
         updateState({
           status: 'needs_reauth',

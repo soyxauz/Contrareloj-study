@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
+import { savePodcastSettings } from '../services/geminiAudioService';
 
 interface AISettingsModalProps {
   isOpen: boolean;
@@ -157,6 +158,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   const handleClose = () => {
     if (settings.apiKey && settings.apiKey.trim().length > 0) {
       const updated: AISettings = { ...settings, verified: true };
+      if (updated.apiKey.startsWith('AIzaSy') || updated.baseUrl?.includes('googleapis')) {
+        updated.geminiApiKey = updated.apiKey;
+        localStorage.setItem('contrareloj_gemini_api_key', updated.apiKey);
+        const podUpdated = savePodcastSettings({ geminiApiKey: updated.apiKey });
+        googleDriveService.syncPodcastSettingsToDrive(podUpdated).catch(console.warn);
+      }
       saveAISettings(updated);
       const user = authService.getCurrentUser();
       if (user) authService.saveUserAISettings(user.id, updated);
@@ -169,6 +176,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     let currentSettings = { ...settings };
     if (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) {
       currentSettings.verified = true;
+      if (currentSettings.apiKey.startsWith('AIzaSy') || currentSettings.baseUrl?.includes('googleapis')) {
+        currentSettings.geminiApiKey = currentSettings.apiKey;
+        localStorage.setItem('contrareloj_gemini_api_key', currentSettings.apiKey);
+        const podUpdated = savePodcastSettings({ geminiApiKey: currentSettings.apiKey });
+        googleDriveService.syncPodcastSettingsToDrive(podUpdated).catch(console.warn);
+      }
     }
 
     // Persistir de inmediato para que la interfaz se desbloquee al instante sin esperas

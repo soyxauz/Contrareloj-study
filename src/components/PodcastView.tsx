@@ -41,7 +41,10 @@ import {
   setGeminiAudioApiKey,
   synthesizeGeminiSpeech,
   prefetchGeminiSpeech,
+  getPodcastSettings,
+  savePodcastSettings,
 } from '../services/geminiAudioService';
+import { googleDriveService } from '../services/googleDriveService';
 
 interface PodcastViewProps {
   kit: StudyKit;
@@ -51,22 +54,24 @@ interface PodcastViewProps {
 export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => getPodcastSettings().playbackSpeed || 1);
   const [activeTab, setActiveTab] = useState<'player' | 'transcript'>('player');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  // Motor de voz neuronal con emociones Gemini Flash
+  // Motor de voz neuronal con emociones Gemini Flash (hidratado desde persistencia local y nube)
   const [voiceEngine, setVoiceEngine] = useState<'gemini' | 'browser'>(() => {
+    const ps = getPodcastSettings();
+    if (ps.voiceEngine) return ps.voiceEngine;
     return getGeminiAudioApiKey() ? 'gemini' : 'browser';
   });
-  const [sofiaVoice, setSofiaVoice] = useState<string>('Aoede');
-  const [mateoVoice, setMateoVoice] = useState<string>('Puck');
+  const [sofiaVoice, setSofiaVoice] = useState<string>(() => getPodcastSettings().sofiaVoice || 'Aoede');
+  const [mateoVoice, setMateoVoice] = useState<string>(() => getPodcastSettings().mateoVoice || 'Puck');
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => getGeminiAudioApiKey());
+  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => getPodcastSettings().geminiApiKey || getGeminiAudioApiKey());
   const [keySavedFeedback, setKeySavedFeedback] = useState(false);
   const [isTestingVoice, setIsTestingVoice] = useState(false);
 
@@ -112,6 +117,28 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   useEffect(() => {
     currentGlobalWordIndexRef.current = currentGlobalWordIndex;
   }, [currentGlobalWordIndex]);
+
+  // Escuchar sincronización reactiva en tiempo real (desde la nube o ajustes)
+  useEffect(() => {
+    const handleSettingsChanged = () => {
+      const fresh = getPodcastSettings();
+      if (fresh.playbackSpeed && fresh.playbackSpeed !== playbackSpeedRef.current) {
+        setPlaybackSpeed(fresh.playbackSpeed);
+        playbackSpeedRef.current = fresh.playbackSpeed;
+      }
+      if (fresh.voiceEngine) setVoiceEngine(fresh.voiceEngine);
+      if (fresh.sofiaVoice) setSofiaVoice(fresh.sofiaVoice);
+      if (fresh.mateoVoice) setMateoVoice(fresh.mateoVoice);
+      if (fresh.geminiApiKey) setGeminiKeyInput(fresh.geminiApiKey);
+    };
+
+    window.addEventListener('contrareloj_podcast_settings_changed', handleSettingsChanged);
+    window.addEventListener('thea_ai_settings_changed', handleSettingsChanged);
+    return () => {
+      window.removeEventListener('contrareloj_podcast_settings_changed', handleSettingsChanged);
+      window.removeEventListener('thea_ai_settings_changed', handleSettingsChanged);
+    };
+  }, []);
 
   // Detener de forma limpia y unificada cualquier reproducción (HTML5 Audio o SpeechSynthesis)
   const stopCurrentAudio = useCallback(() => {
@@ -589,6 +616,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     setPlaybackSpeed(newSpeed);
     playbackSpeedRef.current = newSpeed;
 
+    const updated = savePodcastSettings({ playbackSpeed: newSpeed });
+    if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+      googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+    }
+
     if (audioPlayerRef.current) {
       audioPlayerRef.current.playbackRate = newSpeed;
     }
@@ -768,6 +800,14 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     );
   }
 
+  const handleCloseVoiceModal = () => {
+    setShowVoiceModal(false);
+    const cur = getPodcastSettings();
+    if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+      googleDriveService.syncPodcastSettingsToDrive(cur).catch(console.warn);
+    }
+  };
+
   if (!currentItem) return null;
   const speakerAcoustics = getSpeakerAcoustics(currentItem.speaker, currentItem.text);
 
@@ -801,6 +841,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   const nextEngine = voiceEngine === 'gemini' ? 'browser' : 'gemini';
                   setVoiceEngine(nextEngine);
                   stopCurrentAudio();
+                  const updated = savePodcastSettings({ voiceEngine: nextEngine });
+                  if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                    googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                  }
                 }
               }}
               className={`px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
@@ -1151,7 +1195,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               </div>
               <button
                 type="button"
-                onClick={() => setShowVoiceModal(false)}
+                onClick={handleCloseVoiceModal}
                 className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1169,7 +1213,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                     <button
                       key={v.id}
                       type="button"
-                      onClick={() => setSofiaVoice(v.id)}
+                      onClick={() => {
+                        setSofiaVoice(v.id);
+                        const updated = savePodcastSettings({ sofiaVoice: v.id });
+                        if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                          googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                        }
+                      }}
                       className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                         sofiaVoice === v.id
                           ? 'border-amber-400 bg-amber-500/10 shadow-md ring-1 ring-amber-400/40'
@@ -1196,7 +1246,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                     <button
                       key={v.id}
                       type="button"
-                      onClick={() => setMateoVoice(v.id)}
+                      onClick={() => {
+                        setMateoVoice(v.id);
+                        const updated = savePodcastSettings({ mateoVoice: v.id });
+                        if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                          googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                        }
+                      }}
                       className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
                         mateoVoice === v.id
                           ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
@@ -1239,21 +1295,32 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      setGeminiAudioApiKey(geminiKeyInput.trim());
+                    onClick={async () => {
+                      const cleanKey = geminiKeyInput.trim();
+                      setGeminiAudioApiKey(cleanKey);
+                      const updated = savePodcastSettings({
+                        geminiApiKey: cleanKey,
+                        voiceEngine: cleanKey ? 'gemini' : voiceEngine,
+                      });
                       setKeySavedFeedback(true);
-                      setTimeout(() => setKeySavedFeedback(false), 2000);
-                      if (geminiKeyInput.trim()) {
+                      setTimeout(() => setKeySavedFeedback(false), 2500);
+                      if (cleanKey) {
                         setVoiceEngine('gemini');
+                      }
+                      if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                        await Promise.all([
+                          googleDriveService.syncPodcastSettingsToDrive(updated),
+                          googleDriveService.syncAISettingsToDrive(),
+                        ]).catch(console.warn);
                       }
                     }}
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all cursor-pointer shrink-0"
                   >
-                    {keySavedFeedback ? '¡Guardada!' : 'Guardar'}
+                    {keySavedFeedback ? '¡Guardada y Sincronizada!' : 'Guardar y Sincronizar'}
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1.5">
-                  Las claves de Google AI Studio cuentan con nivel gratuito sin tarjeta de crédito.
+                  Las claves de Google AI Studio cuentan con nivel gratuito sin tarjeta de crédito y se sincronizan con tu Google Drive.
                 </p>
               </div>
 
@@ -1331,7 +1398,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
                 <button
                   type="button"
-                  onClick={() => setShowVoiceModal(false)}
+                  onClick={handleCloseVoiceModal}
                   className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
                 >
                   Listo
