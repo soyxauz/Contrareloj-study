@@ -264,7 +264,14 @@ export async function synthesizeGeminiSpeech(
   }
 
   const requestPromise = (async () => {
-    const modelsToTry = ['gemini-2.0-flash', 'gemini-2.5-flash'];
+    // Modelos oficiales recomendados por Google AI Studio para TTS y audio multimodal
+    const modelsToTry = [
+      'gemini-3.8-flash-tts',
+      'gemini-3.8-flash-lite-tts',
+      'gemini-3.8-flash',
+      'gemini-2.0-flash-exp',
+      'gemini-2.0-flash',
+    ];
     let lastError: Error | null = null;
 
     for (const model of modelsToTry) {
@@ -276,7 +283,7 @@ export async function synthesizeGeminiSpeech(
             role: 'user',
             parts: [
               {
-                text: `Instrucción de locución: Actúa como un locutor profesional de podcast en español. Lee el siguiente diálogo con entonación natural, humana, expresiva, cálida y con inflexión emocional acorde al contenido:\n\n"${cleanText}"`,
+                text: cleanText,
               },
             ],
           },
