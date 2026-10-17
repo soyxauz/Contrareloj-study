@@ -414,165 +414,126 @@ async function fetchGeminiAudioPcmChunk(
   apiKey: string
 ): Promise<AudioChunkResult> {
   const modelsToTry = [
+    'gemini-2.0-flash',
     'gemini-3.8-flash-tts',
     'gemini-3.8-flash-lite-tts',
-    'gemini-2.0-flash',
     'gemini-3.1-flash-tts-preview',
   ];
   let lastError: Error | null = null;
-  const isFemaleVoice = /(aoede|kore)/i.test(voiceName);
 
   for (const model of modelsToTry) {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const payloadsToTry = [
-      {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: chunkText,
-                speechMetadata: {
-                  style: isFemaleVoice
-                    ? 'conversational, warm and expressive'
-                    : 'clear, energetic and dynamic',
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName,
-              },
+    const payload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: chunkText }],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName,
             },
           },
         },
       },
-      {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: chunkText,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName,
-              },
-            },
-          },
-        },
-      },
-    ];
+    };
 
-    for (const payload of payloadsToTry) {
-      // Reintentar hasta 4 veces con retroceso exponencial si Google responde con 429 o error temporal
-      for (let attempt = 0; attempt < 4; attempt++) {
+    // Reintentar hasta 4 veces con retroceso exponencial si Google responde con 429 o error temporal
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        let response: Response;
+
         try {
-          let response: Response;
-
-          try {
-            response = await fetch(endpoint, {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } catch {
+          // Fallback proxy serverless
+          response = await fetch('/api/ai-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: endpoint,
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            });
-          } catch {
-            // Fallback proxy serverless
-            response = await fetch('/api/ai-proxy', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                url: endpoint,
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                data: payload,
-              }),
-            });
-          }
-
-          if (response.status === 429 || response.status === 503 || response.status === 500) {
-            const backoffMs = Math.min(16000, 2000 * Math.pow(2, attempt));
-            console.warn(`[GeminiAudio] Cuota temporal (${response.status}) en ${model}. Pausando ${backoffMs}ms antes de reintentar... (intento ${attempt + 1}/4)`);
-            await new Promise(r => setTimeout(r, backoffMs));
-            continue;
-          }
-
-          if (!response.ok) {
-            const errBody = await response.text();
-            if (response.status === 400 && 'speechMetadata' in (payload.contents[0].parts[0] as any)) {
-              break;
-            }
-            throw new Error(`HTTP ${response.status} en modelo ${model}: ${errBody.slice(0, 200)}`);
-          }
-
-          const data = await response.json();
-          const candidate = data.candidates?.[0];
-          const part = candidate?.content?.parts?.find(
-            (p: any) => p.inlineData?.data || p.inline_data?.data || p.audio?.data
-          );
-
-          if (!part) {
-            console.warn(`[GeminiAudio] Respuesta de ${model} recibida sin audio:`, JSON.stringify(candidate || data).slice(0, 300));
-            throw new Error(`Respuesta de ${model} no contiene datos de audio.`);
-          }
-
-          const inlineObj = part.inlineData || part.inline_data || part.audio;
-          const base64Audio = inlineObj.data;
-          const mimeType = inlineObj.mimeType || inlineObj.mime_type || 'audio/wav';
-
-          const binaryString = atob(base64Audio);
-          const len = binaryString.length;
-          const bytes = new Uint8Array(len);
-          for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-
-          let isWav = false;
-          let sampleRate = 24000;
-
-          if (
-            bytes.length >= 44 &&
-            bytes[0] === 0x52 && // 'R'
-            bytes[1] === 0x49 && // 'I'
-            bytes[2] === 0x46 && // 'F'
-            bytes[3] === 0x46    // 'F'
-          ) {
-            isWav = true;
-            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-            sampleRate = view.getUint32(24, true);
-          } else {
-            const rateMatch = mimeType.match(/rate=(\d+)/i);
-            if (rateMatch) {
-              sampleRate = parseInt(rateMatch[1], 10);
-            }
-          }
-
-          const pcmBytes = isWav ? bytes.slice(44) : bytes;
-
-          return {
-            rawBytes: bytes,
-            pcmBytes,
-            sampleRate,
-            isWav,
-          };
-        } catch (err: unknown) {
-          lastError = err instanceof Error ? err : new Error(String(err));
-          console.warn(`[GeminiAudio] Fallo al generar fragmento con ${model}:`, lastError.message);
-          break;
+              data: payload,
+            }),
+          });
         }
+
+        if (response.status === 429 || response.status === 503 || response.status === 500) {
+          const backoffMs = Math.min(16000, 2000 * Math.pow(2, attempt));
+          console.warn(`[GeminiAudio] Cuota temporal (${response.status}) en ${model}. Pausando ${backoffMs}ms antes de reintentar... (intento ${attempt + 1}/4)`);
+          await new Promise(r => setTimeout(r, backoffMs));
+          continue;
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text();
+          throw new Error(`HTTP ${response.status} en modelo ${model}: ${errBody.slice(0, 200)}`);
+        }
+
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        const part = candidate?.content?.parts?.find(
+          (p: any) => p.inlineData?.data || p.inline_data?.data || p.audio?.data
+        );
+
+        if (!part) {
+          console.warn(`[GeminiAudio] Respuesta de ${model} recibida sin audio:`, JSON.stringify(candidate || data).slice(0, 300));
+          throw new Error(`Respuesta de ${model} no contiene datos de audio.`);
+        }
+
+        const inlineObj = part.inlineData || part.inline_data || part.audio;
+        const base64Audio = inlineObj.data;
+        const mimeType = inlineObj.mimeType || inlineObj.mime_type || 'audio/wav';
+
+        const binaryString = atob(base64Audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        let isWav = false;
+        let sampleRate = 24000;
+
+        if (
+          bytes.length >= 44 &&
+          bytes[0] === 0x52 && // 'R'
+          bytes[1] === 0x49 && // 'I'
+          bytes[2] === 0x46 && // 'F'
+          bytes[3] === 0x46    // 'F'
+        ) {
+          isWav = true;
+          const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+          sampleRate = view.getUint32(24, true);
+        } else {
+          const rateMatch = mimeType.match(/rate=(\d+)/i);
+          if (rateMatch) {
+            sampleRate = parseInt(rateMatch[1], 10);
+          }
+        }
+
+        const pcmBytes = isWav ? bytes.slice(44) : bytes;
+
+        return {
+          rawBytes: bytes,
+          pcmBytes,
+          sampleRate,
+          isWav,
+        };
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.warn(`[GeminiAudio] Fallo al generar fragmento con ${model}:`, lastError.message);
+        break;
       }
     }
   }
@@ -588,7 +549,7 @@ async function executeSingleSynthesis(
   voiceName: string,
   apiKey: string
 ): Promise<string> {
-  const chunks = splitTextIntoSpeechChunks(cleanText, 120);
+  const chunks = splitTextIntoSpeechChunks(cleanText, 300);
 
   let finalBlob: Blob;
 
@@ -656,6 +617,16 @@ class AudioSynthesisQueueManager {
       return Promise.resolve(memoryAudioUrlCache.get(cacheKey)!);
     }
 
+    // Si ya está en la cola pero ahora se solicita con prioridad 'high', elevarlo al frente inmediatamente
+    const existingIndex = this.queue.findIndex(
+      q => computeCacheKey(q.voiceName, q.cleanText) === cacheKey
+    );
+    if (existingIndex !== -1 && priority === 'high') {
+      const [item] = this.queue.splice(existingIndex, 1);
+      item.priority = 'high';
+      this.queue.unshift(item);
+    }
+
     if (ongoingRequests.has(cacheKey)) {
       return ongoingRequests.get(cacheKey)!;
     }
@@ -669,7 +640,7 @@ class AudioSynthesisQueueManager {
 
         const item: QueueItem = { cleanText, voiceName, apiKey, priority, resolve, reject };
         if (priority === 'high') {
-          // El parlamento que el usuario está escuchando ahora salta al frente
+          // El parlamento activo salta al frente absoluto de la cola
           this.queue.unshift(item);
         } else {
           this.queue.push(item);
@@ -709,9 +680,9 @@ class AudioSynthesisQueueManager {
 
       const now = Date.now();
       const elapsed = now - this.lastRequestTime;
-      // Para reproduccion activa prioritaria (high), respuesta rapida (250ms).
-      // Para precarga pasiva de fondo (normal), espaciado seguro de 2500ms para no saturar 15 RPM.
-      const minInterval = item.priority === 'high' ? 250 : 2500;
+      // Para reproduccion activa prioritaria (high), respuesta inmediata (50ms).
+      // Para precarga pasiva de fondo (normal), espaciado seguro de 2000ms.
+      const minInterval = item.priority === 'high' ? 50 : 2000;
       if (elapsed < minInterval) {
         await new Promise(r => setTimeout(r, minInterval - elapsed));
       }
@@ -775,7 +746,8 @@ export async function synthesizeGeminiSpeech(
 export function prefetchGeminiSpeech(
   text: string,
   voiceName: string = 'Aoede',
-  apiKeyOverride?: string
+  apiKeyOverride?: string,
+  priority: 'high' | 'normal' = 'normal'
 ): void {
   const cleanText = text
     .replace(/[*_#`~[\]]/g, '')
@@ -787,13 +759,13 @@ export function prefetchGeminiSpeech(
   const apiKey = apiKeyOverride?.trim() || getGeminiAudioApiKey();
   if (!apiKey) return;
 
-  audioQueue.enqueue(cleanText, voiceName, apiKey, 'normal').catch(() => {});
+  audioQueue.enqueue(cleanText, voiceName, apiKey, priority).catch(() => {});
 }
 
 /**
  * Pre-sintetiza progresivamente el episodio completo de podcast en segundo plano
- * apenas se crea o se abre, asegurando que cuando el usuario reproduzca cualquier parlamento,
- * el audio con emociones ya esté listo en IndexedDB para reproducción con cero latencia y sin cortes.
+ * apenas se crea o se abre, priorizando los 2 primeros turnos (Host y Tutor) de forma inmediata
+ * para que cuando el usuario pulse Play el audio arranque con 0ms de latencia y no haya cortes.
  */
 export function preloadEntirePodcast(
   dialogue: Array<{ text: string; speaker: string }>,
@@ -804,9 +776,11 @@ export function preloadEntirePodcast(
   const apiKey = getGeminiAudioApiKey();
   if (!apiKey) return;
 
-  dialogue.forEach(item => {
+  dialogue.forEach((item, index) => {
     const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(item.speaker);
     const voice = isFemale ? sofiaVoice : mateoVoice;
-    prefetchGeminiSpeech(item.text, voice, apiKey);
+    // Las 2 primeras intervenciones (Host y Tutor) se sintetizan con máxima prioridad
+    const priority = index < 2 ? 'high' : 'normal';
+    prefetchGeminiSpeech(item.text, voice, apiKey, priority);
   });
 }

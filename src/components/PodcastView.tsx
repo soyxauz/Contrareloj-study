@@ -196,6 +196,20 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   useEffect(() => {
     if (podcast?.dialogue && podcast.dialogue.length > 0 && getGeminiAudioApiKey()) {
       preloadEntirePodcast(podcast.dialogue, sofiaVoice, mateoVoice);
+
+      // Pre-cargar y pre-decodificar de inmediato el audio del primer parlamento (Host - Sofía)
+      const firstItem = podcast.dialogue[0];
+      const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(firstItem.speaker);
+      const voice = isFemale ? sofiaVoice : mateoVoice;
+      synthesizeGeminiSpeech(firstItem.text, voice, 'high')
+        .then((url) => {
+          const firstAudio = new Audio();
+          firstAudio.preload = 'auto';
+          firstAudio.src = url;
+          firstAudio.load();
+          preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
+        })
+        .catch(() => {});
     }
   }, [podcast?.dialogue, sofiaVoice, mateoVoice]);
 
@@ -505,7 +519,17 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const speakDialogueLine = useCallback(async (index: number, startWordIdx: number = 0) => {
     if (!podcast || !podcast.dialogue || !podcast.dialogue[index]) return;
 
-    stopCurrentAudio();
+    const isPreloaded = Boolean(
+      preloadedNextAudioRef.current && preloadedNextAudioRef.current.index === index
+    );
+
+    if (!isPreloaded) {
+      stopCurrentAudio();
+    } else if (audioPlayerRef.current) {
+      audioPlayerRef.current.ontimeupdate = null;
+      audioPlayerRef.current.onended = null;
+      audioPlayerRef.current.onerror = null;
+    }
 
     const item = podcast.dialogue[index];
     const cleanText = item.text
@@ -580,7 +604,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         audio.playbackRate = playbackSpeedRef.current;
         audio.muted = isMutedRef.current;
 
-        // Iniciar de inmediato la pre-síntesis y pre-carga en memoria del SIGUIENTE turno de diálogo
+        // Iniciar de inmediato la pre-síntesis y pre-carga en memoria del SIGUIENTE turno de diálogo con prioridad alta
         if (podcast.dialogue[index + 1]) {
           const nextIdx = index + 1;
           const nextItem = podcast.dialogue[nextIdx];
@@ -592,7 +616,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           const nextIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(nextItem.speaker);
           const nextVoice = nextIsFemale ? sofiaVoice : mateoVoice;
 
-          synthesizeGeminiSpeech(nextClean, nextVoice, 'normal')
+          synthesizeGeminiSpeech(nextClean, nextVoice, 'high')
             .then((nextUrl) => {
               if (isPlayingRef.current && !isManualInterruptionRef.current) {
                 const nextAudio = new Audio();
@@ -626,6 +650,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           setIsAudioActive(true);
         };
 
+        let hasAdvancedThisLine = false;
+        const triggerAdvance = () => {
+          if (hasAdvancedThisLine || !isPlayingRef.current || isManualInterruptionRef.current) return;
+          hasAdvancedThisLine = true;
+          advanceToNextLine(index);
+        };
+
         // Seguimiento continuo palabra por palabra con el reloj de audio
         audio.ontimeupdate = () => {
           if (isScrubbingRef.current || isAudioSeekingRef.current || isManualInterruptionRef.current) return;
@@ -634,15 +665,22 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             const ratio = Math.max(0, Math.min(0.999, audio.currentTime / audio.duration));
             const currentW = Math.floor(ratio * rawWords.length);
             setWordPosition(baseGlobal + currentW, index, currentW);
+
+            // Transición imperceptible entre Host y Tutor al concluir la locución
+            if (
+              audio.duration > 0.8 &&
+              audio.currentTime >= audio.duration - 0.05 &&
+              preloadedNextAudioRef.current &&
+              preloadedNextAudioRef.current.index === index + 1
+            ) {
+              triggerAdvance();
+            }
           }
         };
 
         audio.onended = () => {
           setIsAudioActive(false);
-          if (isPlayingRef.current && !isManualInterruptionRef.current) {
-            // Transición instantánea (0ms) entre parlamentos sin cortes
-            advanceToNextLine(index);
-          }
+          triggerAdvance();
         };
 
         audio.onerror = (err) => {
@@ -982,6 +1020,18 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       }
       if (generated?.dialogue && generated.dialogue.length > 0 && getGeminiAudioApiKey()) {
         preloadEntirePodcast(generated.dialogue, sofiaVoice, mateoVoice);
+        const firstItem = generated.dialogue[0];
+        const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(firstItem.speaker);
+        const voice = isFemale ? sofiaVoice : mateoVoice;
+        synthesizeGeminiSpeech(firstItem.text, voice, 'high')
+          .then((url) => {
+            const firstAudio = new Audio();
+            firstAudio.preload = 'auto';
+            firstAudio.src = url;
+            firstAudio.load();
+            preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
+          })
+          .catch(() => {});
       }
     } catch (e) {
       console.error(e);
