@@ -1508,7 +1508,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   return null;
 }
 
-/** Tutor interactivo "Ask Thea" potenciado por IA con fallback inteligente */
+/** Asistente IA Contrareloj potenciado por IA con fallback inteligente */
 export async function askTheaAI(
   userQuery: string,
   kit: StudyKit,

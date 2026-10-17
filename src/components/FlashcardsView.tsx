@@ -279,7 +279,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
           </div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Layers className="w-6 h-6 text-violet-400" />
-            <span>Flashcards & Juegos Thea</span>
+            <span>Flashcards & Juegos Contrareloj Study</span>
           </h1>
         </div>
 

@@ -20,7 +20,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit }) => {
     {
       id: 'm1',
       sender: 'thea',
-      text: `¡Hola! Soy Thea, tu tutora de estudio personal impulsada por IA. Tengo indexados todos los materiales de "${kit.title}". ¿Qué concepto o duda te gustaría que te explique a fondo?`,
+      text: `¡Hola! Soy Contrareloj Study, tu tutor de estudio personal impulsado por IA. Tengo indexados todos los materiales de "${kit.title}". ¿Qué concepto o duda te gustaría que te explique a fondo?`,
       timestamp: 'Ahora'
     }
   ]);
@@ -88,7 +88,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit }) => {
           </div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <MessageSquareText className="w-6 h-6 text-violet-400" />
-            <span>Tutor Académico IA (Contrareloj Study)</span>
+            <span>Asistente IA Contrareloj</span>
           </h1>
         </div>
 
@@ -146,7 +146,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit }) => {
                 <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                 <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
-                <span className="ml-2 font-medium">Thea está redactando la explicación...</span>
+                <span className="ml-2 font-medium">Contrareloj Study está redactando la explicación...</span>
               </div>
             </div>
           )}
