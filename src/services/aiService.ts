@@ -7,6 +7,7 @@ export interface AISettings {
   apiKey: string;
   model: string;
   timeoutMs: number;
+  verified?: boolean;
 }
 
 export interface AIPreset {
@@ -23,6 +24,18 @@ export interface AIPreset {
 }
 
 export const AI_PRESETS: AIPreset[] = [
+  {
+    id: 'ollama-cloud',
+    name: 'Ollama Cloud (Gemma 4)',
+    provider: 'openai-compatible',
+    baseUrl: 'https://ollama.com/v1',
+    model: 'gemma4:31b',
+    keyPlaceholder: 'Ingresa tu API Key de Ollama Cloud',
+    keyUrl: 'https://ollama.com/settings/keys',
+    description: 'Servicio cloud oficial con modelo Gemma 4 (31B). Requiere tu API Key personal.',
+    badge: 'Ollama Cloud',
+    freeTier: true,
+  },
   {
     id: 'groq',
     name: 'Groq Cloud',
@@ -101,10 +114,11 @@ const STORAGE_KEY = 'thea_ai_settings';
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
   provider: 'openai-compatible',
-  baseUrl: 'https://api.groq.com/openai/v1',
+  baseUrl: 'https://ollama.com/v1',
   apiKey: '',
-  model: 'llama-3.3-70b-versatile',
+  model: 'gemma4:31b',
   timeoutMs: 45000,
+  verified: false,
 };
 
 export function getAISettings(): AISettings {
@@ -112,28 +126,21 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Limpiar claves obsoletas de servidor o modelos descontinuados
+      // Limpiar claves obsoletas de servidor
       if (
         parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' ||
-        parsed.baseUrl === 'https://ollama.com/v1' ||
         parsed.baseUrl === 'http://localhost:11434/v1' ||
         parsed.baseUrl?.includes('11434') ||
         parsed.model === 'gemma4:31b-cloud' ||
-        parsed.model === 'gemma4:31b' ||
         parsed.model === 'llama3.2'
       ) {
         const cleaned: AISettings = {
           ...DEFAULT_AI_SETTINGS,
           ...parsed,
-          baseUrl: (parsed.baseUrl?.includes('11434') || parsed.baseUrl === 'https://ollama.com/v1')
-            ? DEFAULT_AI_SETTINGS.baseUrl
-            : (parsed.baseUrl || DEFAULT_AI_SETTINGS.baseUrl),
-          apiKey: (parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' || !parsed.apiKey)
-            ? ''
-            : parsed.apiKey,
-          model: (parsed.model === 'gemma4:31b-cloud' || parsed.model === 'gemma4:31b' || parsed.model === 'llama3.2')
-            ? DEFAULT_AI_SETTINGS.model
-            : (parsed.model || DEFAULT_AI_SETTINGS.model),
+          baseUrl: parsed.baseUrl?.includes('11434') ? DEFAULT_AI_SETTINGS.baseUrl : (parsed.baseUrl || DEFAULT_AI_SETTINGS.baseUrl),
+          apiKey: parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' ? '' : (parsed.apiKey || ''),
+          model: (parsed.model === 'gemma4:31b-cloud' || parsed.model === 'llama3.2') ? DEFAULT_AI_SETTINGS.model : (parsed.model || DEFAULT_AI_SETTINGS.model),
+          verified: parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' ? false : Boolean(parsed.verified),
         };
         saveAISettings(cleaned);
         return cleaned;
@@ -148,10 +155,17 @@ export function getAISettings(): AISettings {
 
 export function saveAISettings(settings: AISettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  // Notificar cambios al sistema en tiempo real
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('thea_ai_settings_changed'));
+  }
 }
 
 export function resetAISettingsToDefault(): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_AI_SETTINGS));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('thea_ai_settings_changed'));
+  }
 }
 
 export function hasPersonalApiKey(): boolean {
@@ -161,6 +175,21 @@ export function hasPersonalApiKey(): boolean {
     current.apiKey.trim().length > 0 &&
     current.apiKey.trim() !== '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl'
   );
+}
+
+/**
+ * Determina si la integración de IA está plenamente configurada, probada y funcional (200 OK).
+ * Cuando devuelve false, las opciones de generación deben mostrarse en gris.
+ */
+export function isAIWorking(): boolean {
+  const current = getAISettings();
+  if (!current.enabled) return false;
+  const isLocal = Boolean(current.baseUrl?.includes('localhost') || current.baseUrl?.includes('127.0.0.1'));
+  const hasKey = hasPersonalApiKey();
+  if (isLocal) {
+    return Boolean(current.verified);
+  }
+  return Boolean(hasKey && current.verified);
 }
 
 /**

@@ -313,6 +313,7 @@ export const App: React.FC = () => {
             onUpdateKit={handleUpdateKit}
             onResetDefaults={handleResetDefaults}
             userId={currentUser?.id || null}
+            onOpenAISettings={() => setShowAIModal(true)}
           />
         )}
         {currentMode === 'create' && (

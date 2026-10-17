@@ -21,6 +21,8 @@ import {
   Image as ImageIcon,
   RotateCcw,
   Settings,
+  Lock,
+  Key,
 } from 'lucide-react';
 
 const YoutubeIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -36,7 +38,7 @@ import {
   sanitizeExtractedText,
 } from '../engine/contentProcessor';
 import type { ProcessedContent } from '../engine/contentProcessor';
-import { researchTopicAndGenerateKit, hasPersonalApiKey, getAISettings } from '../services/aiService';
+import { researchTopicAndGenerateKit, isAIWorking } from '../services/aiService';
 
 export type InputTab = 'topic' | 'text' | 'file' | 'link' | 'youtube';
 type CreationPhase = 'input' | 'processing' | 'success' | 'error';
@@ -94,10 +96,19 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
     return Array.from(new Set([...DEFAULT_FOCUS_AREAS, ...custom]));
   }, []);
 
-  const aiSettings = getAISettings();
-  const isLocalAI = Boolean(aiSettings.baseUrl?.includes('localhost') || aiSettings.baseUrl?.includes('127.0.0.1'));
-  const hasKey = hasPersonalApiKey();
-  const isAIReady = hasKey || isLocalAI;
+  const [isAIActive, setIsAIActive] = useState<boolean>(isAIWorking);
+
+  React.useEffect(() => {
+    const handleSettingsChange = () => {
+      setIsAIActive(isAIWorking());
+    };
+    window.addEventListener('thea_ai_settings_changed', handleSettingsChange);
+    window.addEventListener('storage', handleSettingsChange);
+    return () => {
+      window.removeEventListener('thea_ai_settings_changed', handleSettingsChange);
+      window.removeEventListener('storage', handleSettingsChange);
+    };
+  }, []);
 
   // Tab-specific inputs
   const [topicQuery, setTopicQuery] = useState('');
@@ -138,11 +149,11 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
   }, [uploadedMaterials]);
 
   const handleCreate = async () => {
-    if (!isAIReady) {
+    if (!isAIActive) {
       if (onOpenAISettings) {
         onOpenAISettings();
       }
-      setErrorMessage('Debes configurar una clave de API personal (Groq, Gemini, DeepSeek o local) para generar nuevos kits de estudio.');
+      setErrorMessage('Debes configurar una clave de API personal (Ollama Cloud, Groq, Gemini, DeepSeek o local) y verificar la conexión para generar nuevos kits de estudio.');
       setPhase('error');
       return;
     }
@@ -536,7 +547,33 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         </p>
       </div>
 
-      {/* Tab Selector */}
+      {/* Aviso de bloqueo si no hay API verificada */}
+      {!isAIActive && (
+        <div className="mb-6 p-6 rounded-3xl bg-slate-900/90 border border-slate-700/80 text-center shadow-xl animate-fadeIn">
+          <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 mx-auto flex items-center justify-center mb-3 text-amber-400">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h2 className="text-base sm:text-lg font-bold text-slate-200 mb-1">
+            Generador en Pausa (Opciones en Gris)
+          </h2>
+          <p className="text-xs text-slate-400 max-w-md mx-auto mb-4 leading-relaxed">
+            Todas las opciones están deshabilitadas hasta que ingreses tu API Key personal y se verifique automáticamente con éxito (200 OK). Una vez verificada, ¡volverá todo el color!
+          </p>
+          {onOpenAISettings && (
+            <button
+              type="button"
+              onClick={onOpenAISettings}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-violet-900/30 inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+            >
+              <Key className="w-4 h-4 text-amber-400" />
+              <span>Configurar y Probar API Key</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className={!isAIActive ? 'grayscale opacity-40 pointer-events-none select-none transition-all duration-300' : 'transition-all duration-300'}>
+        {/* Tab Selector */}
       <div className="flex sm:grid sm:grid-cols-5 gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
         {TABS.map(tab => (
           <button
@@ -890,49 +927,25 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         />
       </div>
 
-      {/* Alerta si inicia de 0 sin clave API configurada */}
-      {!isAIReady && (
-        <div className="mb-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5 text-left">
-          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-          <div className="flex-1 text-xs">
-            <div className="font-bold text-amber-200 text-sm">
-              Clave de API personal requerida
-            </div>
-            <p className="text-amber-300/80 mt-1 leading-relaxed">
-              Para generar nuevos Study Kits con IA debes ingresar tu clave de API personal (Groq, Google Gemini, DeepSeek u OpenAI) o conectar un Ollama local.
-            </p>
-            {onOpenAISettings && (
-              <button
-                type="button"
-                onClick={onOpenAISettings}
-                className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-semibold cursor-pointer transition-colors shadow-sm"
-              >
-                <Settings className="w-3.5 h-3.5 text-amber-400" />
-                <span>Configurar API Key</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+        {/* Create Button */}
+        <button
+          onClick={handleCreate}
+          disabled={!canCreate || !isAIActive}
+          className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-3 ${
+            canCreate && isAIActive
+              ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-xl shadow-violet-900/30 cursor-pointer'
+              : 'bg-thea-surface border border-thea-border text-slate-600 cursor-not-allowed shadow-none'
+          }`}
+        >
+          <Sparkles className="w-5 h-5" />
+          Crear Study Kit con Contrareloj Study
+        </button>
 
-      {/* Create Button */}
-      <button
-        onClick={handleCreate}
-        disabled={!canCreate}
-        className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-3 ${
-          canCreate
-            ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-xl shadow-violet-900/30 cursor-pointer'
-            : 'bg-thea-surface border border-thea-border text-slate-600 cursor-not-allowed'
-        }`}
-      >
-        <Sparkles className="w-5 h-5" />
-        Crear Study Kit con Contrareloj Study
-      </button>
-
-      {/* Info Footer */}
-      <p className="text-center text-xs text-slate-600 mt-4">
-        Todo se procesa localmente en tu navegador — sin subir nada a servidores externos
-      </p>
+        {/* Info Footer */}
+        <p className="text-center text-xs text-slate-600 mt-4">
+          Todo se procesa localmente en tu navegador — sin subir nada a servidores externos
+        </p>
+      </div>
     </div>
   );
 };

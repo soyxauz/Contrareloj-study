@@ -67,6 +67,62 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   }, [isOpen]);
 
+  // Prueba automática de conexión tan pronto se ingresa la clave de API
+  useEffect(() => {
+    if (!isOpen) return;
+    const cleanKey = settings.apiKey?.trim() || '';
+    const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
+
+    if (!cleanKey && !isLocal) {
+      if (settings.verified) {
+        setSettings(prev => ({ ...prev, verified: false }));
+        saveAISettings({ ...settings, verified: false });
+      }
+      setTestResult(null);
+      return;
+    }
+
+    // Si tiene una clave con al menos 6 caracteres o es local, probar automáticamente
+    if (cleanKey.length >= 6 || isLocal) {
+      const timer = setTimeout(async () => {
+        setIsTesting(true);
+        try {
+          const res = await testAIConnection(settings);
+          setTestResult(res);
+          if (res.success) {
+            const updated: AISettings = { ...settings, verified: true };
+            if (res.models && res.models.length > 0 && !settings.model) {
+              updated.model = res.models[0];
+            }
+            setSettings(updated);
+            saveAISettings(updated);
+
+            const user = authService.getCurrentUser();
+            if (user) {
+              authService.saveUserAISettings(user.id, updated);
+            }
+            if (googleDriveService.getValidAccessToken()) {
+              googleDriveService.syncAISettingsToDrive().catch(console.warn);
+            }
+          } else {
+            setSettings(prev => ({ ...prev, verified: false }));
+          }
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'Error al conectar con el proveedor.';
+          setTestResult({
+            success: false,
+            message: msg,
+          });
+          setSettings(prev => ({ ...prev, verified: false }));
+        } finally {
+          setIsTesting(false);
+        }
+      }, 600);
+
+      return () => clearTimeout(timer);
+    }
+  }, [settings.apiKey, settings.baseUrl, settings.model, isOpen]);
+
   if (!isOpen) return null;
 
   const handleTestConnection = async () => {
@@ -75,21 +131,49 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     try {
       const res = await testAIConnection(settings);
       setTestResult(res);
-      if (res.models && res.models.length > 0 && !settings.model) {
-        setSettings(prev => ({ ...prev, model: res.models![0] }));
+      if (res.success) {
+        const updated: AISettings = { ...settings, verified: true };
+        if (res.models && res.models.length > 0 && !settings.model) {
+          updated.model = res.models[0];
+        }
+        setSettings(updated);
+        saveAISettings(updated);
+
+        const user = authService.getCurrentUser();
+        if (user) {
+          authService.saveUserAISettings(user.id, updated);
+        }
+        if (googleDriveService.getValidAccessToken()) {
+          googleDriveService.syncAISettingsToDrive().catch(console.warn);
+        }
+      } else {
+        setSettings(prev => ({ ...prev, verified: false }));
       }
     } finally {
       setIsTesting(false);
     }
   };
 
-  const handleSave = () => {
-    saveAISettings(settings);
+  const handleSave = async () => {
+    let currentSettings = { ...settings };
+    if (!currentSettings.verified) {
+      setIsTesting(true);
+      const res = await testAIConnection(currentSettings);
+      setTestResult(res);
+      setIsTesting(false);
+      if (!res.success) {
+        return;
+      }
+      currentSettings.verified = true;
+      setSettings(currentSettings);
+    }
+
+    saveAISettings(currentSettings);
 
     // Asociar al usuario autenticado si existe sesión activa
     const user = authService.getCurrentUser();
     if (user) {
-      authService.saveUserAISettings(user.id, settings);
+      authService.saveUserAISettings(user.id, currentSettings);
     }
 
     // Si Google Drive está conectado, respaldar la API personal inmediatamente en la nube
@@ -361,15 +445,25 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 </button>
               </div>
               <div className="mt-1.5 text-[11px]">
-                {settings.apiKey && settings.apiKey.trim().length > 0 ? (
+                {isTesting ? (
+                  <span className="text-violet-300 flex items-center gap-1.5 font-medium animate-pulse">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-400 shrink-0" />
+                    Probando automáticamente clave de API (200 OK)...
+                  </span>
+                ) : settings.verified ? (
                   <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                    <Key className="w-3.5 h-3.5 text-amber-400" />
-                    API personal configurada: Se usarán tus credenciales privadas.
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    API verificada y activa (200 OK). ¡Todo desbloqueado y a todo color!
+                  </span>
+                ) : settings.apiKey && settings.apiKey.trim().length > 0 ? (
+                  <span className="text-amber-400 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    Clave ingresada no verificada. Espera la prueba automática o presiona &quot;Probar Conexión&quot;.
                   </span>
                 ) : (
                   <span className="text-amber-400 flex items-center gap-1 font-medium">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    Sin clave API: Ingresa tu clave personal para generar kits de estudio con IA.
+                    Sin clave API: Ingresa tu clave para que se pruebe automáticamente.
                   </span>
                 )}
               </div>

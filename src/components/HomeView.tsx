@@ -43,8 +43,11 @@ import {
   Check,
   Edit3,
   Hospital,
+  Lock,
+  Key,
 } from 'lucide-react';
 import type { InputTab } from './CreateStudyKitView';
+import { isAIWorking } from '../services/aiService';
 import { getGlobalRealStats, getBookRealStats } from '../services/statsService';
 import {
   OPAQUE_DARK_PALETTES,
@@ -113,6 +116,7 @@ interface HomeViewProps {
   onUpdateKit?: (kit: StudyKit) => void;
   onResetDefaults?: () => void;
   userId?: string | null;
+  onOpenAISettings?: () => void;
 }
 
 const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.ReactNode; gradient: string }[] = [
@@ -147,7 +151,22 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onUpdateKit,
   onResetDefaults,
   userId = null,
+  onOpenAISettings,
 }) => {
+  const [isAIActive, setIsAIActive] = React.useState<boolean>(isAIWorking);
+
+  React.useEffect(() => {
+    const handleSettingsChange = () => {
+      setIsAIActive(isAIWorking());
+    };
+    window.addEventListener('thea_ai_settings_changed', handleSettingsChange);
+    window.addEventListener('storage', handleSettingsChange);
+    return () => {
+      window.removeEventListener('thea_ai_settings_changed', handleSettingsChange);
+      window.removeEventListener('storage', handleSettingsChange);
+    };
+  }, []);
+
   const [selectedMateria, setSelectedMateria] = React.useState<string>('all');
   const [materiaVersion, setMateriaVersion] = React.useState<number>(0);
   const [showMateriaManagerModal, setShowMateriaManagerModal] = React.useState<boolean>(false);
@@ -292,13 +311,27 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={() => onNavigate('create', 'topic')}
-            className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-violet-900/40 group shrink-0 cursor-pointer min-h-[48px]"
-          >
-            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-            <span>Crear Study Kit</span>
-          </button>
+          {isAIActive ? (
+            <button
+              onClick={() => onNavigate('create', 'topic')}
+              className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-violet-900/40 group shrink-0 cursor-pointer min-h-[48px]"
+            >
+              <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+              <span>Crear Study Kit</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => (onOpenAISettings ? onOpenAISettings() : onNavigate('create'))}
+              className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-400 hover:text-slate-200 font-semibold text-sm sm:text-base transition-all group shrink-0 cursor-pointer min-h-[48px] shadow-none"
+              title="Configura tu API Key funcional para habilitar la creación de Study Kits"
+            >
+              <Lock className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+              <span>Crear Study Kit</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                Requiere API
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Source chips */}
@@ -306,25 +339,56 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-slate-400 font-semibold tracking-wide uppercase flex items-center gap-1.5">
               <span>Acepta:</span>
+              {!isAIActive && (
+                <span className="text-[11px] text-amber-400 font-normal lowercase">(en pausa hasta activar API)</span>
+              )}
             </span>
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
-              Desliza o haz clic para empezar
-            </span>
+            {isAIActive ? (
+              <span className="text-[11px] text-slate-500 hidden sm:inline">
+                Desliza o haz clic para empezar
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenAISettings}
+                className="text-[11px] text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+              >
+                <Key className="w-3 h-3" />
+                <span>Activar API para desbloquear</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none touch-pan-x">
-            {INPUT_SOURCES.map(src => (
-              <button
-                key={src.label}
-                type="button"
-                onClick={() => onNavigate('create', src.tab)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-thea-bg/90 border border-thea-border/80 text-slate-200 text-xs font-medium cursor-pointer transition-all shadow-sm active:scale-95 group shrink-0 ${src.hoverStyle}`}
-                title={`Hacer clic para crear con ${src.label}`}
-              >
-                <span className="transition-transform group-hover:scale-110 shrink-0">{src.icon}</span>
-                <span className="whitespace-nowrap font-medium">{src.label}</span>
-              </button>
-            ))}
+            {INPUT_SOURCES.map(src => {
+              if (isAIActive) {
+                return (
+                  <button
+                    key={src.label}
+                    type="button"
+                    onClick={() => onNavigate('create', src.tab)}
+                    className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-thea-bg/90 border border-thea-border/80 text-slate-200 text-xs font-medium cursor-pointer transition-all shadow-sm active:scale-95 group shrink-0 ${src.hoverStyle}`}
+                    title={`Hacer clic para crear con ${src.label}`}
+                  >
+                    <span className="transition-transform group-hover:scale-110 shrink-0">{src.icon}</span>
+                    <span className="whitespace-nowrap font-medium">{src.label}</span>
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={src.label}
+                  type="button"
+                  onClick={onOpenAISettings}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-500 text-xs font-medium cursor-pointer transition-all active:scale-95 group shrink-0 grayscale hover:text-slate-300 hover:border-slate-700"
+                  title="Configura tu API Key funcional para habilitar esta opción"
+                >
+                  <span className="opacity-50 shrink-0">{src.icon}</span>
+                  <span className="whitespace-nowrap font-medium">{src.label}</span>
+                  <Lock className="w-3 h-3 text-slate-600 group-hover:text-amber-400 shrink-0" />
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
