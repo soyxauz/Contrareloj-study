@@ -123,6 +123,7 @@ export interface StudyKit {
   chunks?: DocumentChunk[];
   assets?: DocumentAsset[];
   archivedFlashcards?: Flashcard[];
+  sourceLanguage?: string;
 }
 
 

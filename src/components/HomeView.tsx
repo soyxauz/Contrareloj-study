@@ -603,9 +603,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   {/* Top Area: Título y Menú de tres puntos */}
                   <div className="flex items-start justify-between gap-3 relative z-10">
                     <div className="max-w-[85%]">
-                      <span className="inline-block text-[10px] font-bold tracking-wider text-white/60 uppercase mb-1">
-                        {kit.category || 'General'}
-                      </span>
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <span className="inline-block text-[10px] font-bold tracking-wider text-white/60 uppercase">
+                          {kit.category || 'General'}
+                        </span>
+                        {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/15">
+                            <Globe className="w-2.5 h-2.5 opacity-70" />
+                            <span>ES (orig. {kit.sourceLanguage})</span>
+                          </span>
+                        )}
+                      </div>
                       <h3 className="font-bold text-white text-base sm:text-lg leading-tight line-clamp-2">
                         {kit.title}
                       </h3>

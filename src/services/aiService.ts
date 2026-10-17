@@ -1,4 +1,5 @@
 import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk } from '../types';
+import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 
 export interface AISettings {
   enabled: boolean;
@@ -705,7 +706,12 @@ export async function generateAIPedagogicalQuestions(
     hard: 'NIVEL DE EXIGENCIA DIFÍCIL / AVANZADO: Evalúa casos de alta complejidad, viñetas de casos clínicos si es medicina, conflictos jurídicos o doctrinarios si es derecho, o resolución de fallas/mecanismos si es ciencias o ingeniería. Distractores sutiles y técnicamente plausibles.',
   };
 
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
   const systemPrompt = `Eres el motor de inteligencia pedagógica de Contrareloj Study, una plataforma de estudio adaptativo de alta exigencia académica. Tu objetivo es recibir un texto de estudio (apuntes, artículos, libros o guías), comprender profundamente de qué trata, extraer sus núcleos conceptuales más importantes y transformarlos en preguntas de evaluación variadas, atractivas y de alto impacto memorístico.
+
+${translationDirective}
 
 FASE 1: ANÁLISIS DEL TEXTO Y DETECCIÓN CONCEPTUAL
 1. Limpieza de ruido: Ignora encabezados, pies de página, bibliografías, números de página o ejemplos anecdóticos sin peso académico.
@@ -808,6 +814,7 @@ ${sourceRepresentation}
   * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling"). No repitas un solo formato alternativo de forma monótona.
 - LÍMITES ESTRICTOS DE EXTENSIÓN: Máximo 50 palabras por enunciado estándar; únicamente si es la descripción de un caso práctico, viñeta o supuesto de hecho, el límite máximo sube a 80 palabras.
 - REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
+- TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
 
 Genera el JSON completo respetando la estructura exigida:`;
 
@@ -1114,8 +1121,14 @@ export async function generateAIFlashcards(
   category: string
 ): Promise<Flashcard[]> {
   const settings = getAISettings();
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
   const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada.
 A partir del texto del estudiante, extrae los conceptos o términos clave esenciales y genera exactamente entre 8 y 12 flashcards rigurosas en español.
+
+${translationDirective}
+
 Responde ÚNICAMENTE con un JSON con la estructura:
 {
   "flashcards": [
@@ -1123,7 +1136,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   ]
 }`;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera las flashcards:`;
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera las flashcards (100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -1164,8 +1177,14 @@ export async function generateAdditionalAIFlashcards(
 ): Promise<Flashcard[]> {
   const settings = getAISettings();
   const excludeList = existingTerms.slice(-30).join(', ');
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
   const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada.
 A partir del texto del estudiante, extrae conceptos o términos clave esenciales NO vistos previamente y genera exactamente ${count} flashcards rigurosas en español.
+
+${translationDirective}
+
 ${excludeList ? `EVITA estrictamente repetir estos conceptos ya cubiertos: [${excludeList}].` : ''}
 Responde ÚNICAMENTE con un JSON con la estructura:
 {
@@ -1174,7 +1193,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   ]
 }`;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera las ${count} flashcards adicionales:`;
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera las ${count} flashcards adicionales (100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -1240,8 +1259,14 @@ export async function generateAIStudyGuide(
   category: string
 ): Promise<string> {
   const settings = getAISettings();
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
   const systemPrompt = `Eres un redactor académico de élite de Contrareloj Study.
 Genera una Guía de Estudio estructurada en Markdown rigurosa, clara y pedagógica en español.
+
+${translationDirective}
+
 Incluye:
 # ${title}
 > **Resumen Ejecutivo:** Síntesis del material en 3 líneas directas.
@@ -1257,7 +1282,7 @@ Incluye:
 
 ## 4. Resumen Rápido / Mnemotecnia de Repaso`;
 
-  const userPrompt = `Documento ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera la guía de estudio en markdown:`;
+  const userPrompt = `Documento ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera la guía de estudio completa en español (markdown):`;
 
   if (settings.enabled) {
     try {
@@ -1286,9 +1311,15 @@ export async function generateAIPodcast(
   category: string
 ): Promise<PodcastEpisode | null> {
   const settings = getAISettings();
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
   const systemPrompt = `Eres el productor ejecutivo del podcast educativo Contrareloj Review.
 A partir del texto proporcionado, genera un episodio de repaso dinámico, entretenido y riguroso entre Sofia (Host entusiasta) y Alex (Tutor pedagógico experto).
-Deben discutir los puntos centrales del tema con naturalidad, analogías y claridad en español.
+Deben discutir los puntos centrales del tema con naturalidad, analogías y claridad 100% en español.
+
+${translationDirective}
+
 Responde ÚNICAMENTE con un JSON con la estructura:
 {
   "podcast": {
@@ -1299,9 +1330,9 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       { "speaker": "Alex", "time": "0:15", "text": "Exacto, Sofia. Lo fundamental que debemos comprender es..." }
     ]
   }
-}`;
+} `;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera el podcast:`;
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera el podcast (diálogo 100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -1354,7 +1385,9 @@ Estás ayudando al estudiante a dominar el tema: "${kit.title}" (Categoría: ${k
 Contexto del material de estudio del estudiante:
 ${kit.studyGuideMarkdown.slice(0, 5000)}
 
-Responde de forma clara, motivadora y estructurada en español. Usa viñetas, analogías o reglas mnemotécnicas cuando sea útil para aprender mejor.`,
+${getSpanishTranslationDirective(kit.sourceLanguage)}
+
+Responde siempre de forma clara, motivadora y estructurada en español. Si el material contiene pasajes o términos en otro idioma, tradúcelos y explícalos en español. Usa viñetas, analogías o reglas mnemotécnicas cuando sea útil para aprender mejor.`,
         },
       ];
 
@@ -1604,8 +1637,11 @@ export async function generateSocraticReformulatedQuestion(
     throw new Error('La integración de IA está desactivada en la configuración.');
   }
 
+  const translationDirective = getSpanishTranslationDirective();
   const systemPrompt = `Eres el motor de tutoría socrática de Contrareloj Study, plataforma adaptativa de alto rendimiento académico.
 Tu misión pedagógica es verificar la comprensión profunda y el dominio conceptual real de un estudiante mediante Active Recall y reformulación socrática.
+
+${translationDirective}
 
 EL ESTUDIANTE COMETIÓ UN ERROR EN ESTE CONCEPTO:
 - Concepto Clave: "${concept}"
@@ -1816,8 +1852,13 @@ export async function generateTargetedPedagogicalQuestions(
   3. Está TERMINANTEMENTE PROHIBIDO incluir distractores absurdos o descartables por longitud o tono. El estudiante debe dominar los matices más finos para no equivocarse.`
   };
 
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
   const systemPrompt = `Eres el evaluador de alta exigencia académica de Contrareloj Study.
 Tu objetivo es formular preguntas de evaluación altamente especializadas, enfocadas rigurosamente en el subtema solicitado por el usuario y calibradas al nivel pedagógico elegido.
+
+${translationDirective}
 
 ${levelInstructions[level]}
 
@@ -1883,6 +1924,7 @@ PARÁMETROS DE GENERACIÓN:
 - Nivel de dificultad: Nivel ${level} (${level === 3 ? 'MÁXIMA EXIGENCIA - OPCIONES SIMILARES' : level === 2 ? 'INTERMEDIO' : 'BÁSICO'})
 - Cantidad de preguntas a generar: ${count}
 - Límite de palabras: Máximo 50 palabras para enunciados estándar, o 80 palabras si es descripción de un caso.
+- TRADUCCIÓN OBLIGATORIA: Si el texto está en inglés u otro idioma, genera las preguntas, opciones y explicaciones 100% en español académico.
 - Recuerda: Alterna los estilos de pregunta y haz que el 50% de los enunciados sean CORTOS (1 o 2 líneas) para memorizar conceptos específicos.
 
 Genera las ${count} preguntas en formato JSON estricto:`;
@@ -2113,6 +2155,8 @@ export interface DocumentClassification {
   palabrasClave: string[];
   icon: string;
   color: string;
+  detectedLanguage?: string;
+  isForeign?: boolean;
 }
 
 export function getVisualsForMateria(materia: string): { icon: string; color: string } {
@@ -2164,13 +2208,16 @@ const MAX_CLASSIFICATION_CACHE = 40;
 /**
  * Clasifica automáticamente el contenido de un documento mediante IA:
  * Extrae la materia específica (ej: Farmacología, Derecho Penal, Bioquímica)
- * y el tema académico representativo en base al contenido real.
+ * y el tema académico representativo en base al contenido real,
+ * traduciendo obligatoriamente a español si el documento está en otro idioma.
  */
 export async function classifyDocumentWithAI(
   rawText: string,
   chunks?: DocumentChunk[]
 ): Promise<DocumentClassification> {
   const settings = getAISettings();
+  const langDetection = detectDocumentLanguage(rawText);
+
   if (!settings.enabled) {
     const fallbackMateria = 'General';
     const visuals = getVisualsForMateria(fallbackMateria);
@@ -2181,6 +2228,8 @@ export async function classifyDocumentWithAI(
       palabrasClave: [],
       icon: visuals.icon,
       color: visuals.color,
+      detectedLanguage: langDetection.detectedLanguage,
+      isForeign: langDetection.isForeign,
     };
   }
 
@@ -2197,24 +2246,28 @@ export async function classifyDocumentWithAI(
     return cached;
   }
 
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
   const systemPrompt = `Eres el clasificador académico experto de Contrareloj Study.
 Tu objetivo es analizar el contenido de un documento educativo y clasificarlo con alta precisión académica.
 
-DEBES IDENTIFICAR:
-1. "tema": El título o tema central real del documento (de 3 a 8 palabras). Debe ser concreto, académico y descriptivo del contenido (ej: "Mecanismo de Acción de Betalactámicos y Resistencia", "Teoría del Delito y Culpabilidad Penal", "Ciclo de Krebs y Fosforilación Oxidativa"). NO uses nombres de archivo ni palabras vacías como "Documento", "Apuntes" o "PDF".
-2. "materia": La materia o disciplina académica específica a la que pertenece (ej: "Farmacología", "Derecho Penal", "Bioquímica", "Fisiología Médica", "Ingeniería de Software", "Economía Internacional", "Microbiología", "Física Cuántica"). Sé específico con la disciplina exacta.
-3. "descripcion": Una síntesis académica en 1 o 2 oraciones concisas que explique qué abarca el material y qué se aprenderá.
-4. "palabras_clave": Una lista de 3 a 5 conceptos nucleares o palabras clave más relevantes del texto.
+${translationDirective}
+
+DEBES IDENTIFICAR (OBLIGATORIAMENTE EN ESPAÑOL):
+1. "tema": El título o tema central real del documento (de 3 a 8 palabras) OBLIGATORIAMENTE EN ESPAÑOL. Debe ser concreto, académico y descriptivo del contenido (ej: "Mecanismo de Acción de Betalactámicos y Resistencia", "Teoría del Delito y Culpabilidad Penal", "Ciclo de Krebs y Fosforilación Oxidativa"). Si el texto fuente está en inglés u otro idioma, TRADÚCELO AL ESPAÑOL. NO uses nombres de archivo ni palabras vacías como "Documento", "Apuntes" o "PDF".
+2. "materia": La materia o disciplina académica específica OBLIGATORIAMENTE EN ESPAÑOL (ej: "Farmacología", "Derecho Penal", "Bioquímica", "Fisiología Médica", "Ingeniería de Software", "Economía Internacional", "Microbiología", "Física Cuántica"). Sé específico con la disciplina exacta.
+3. "descripcion": Una síntesis académica en 1 o 2 oraciones concisas en español que explique qué abarca el material y qué se aprenderá.
+4. "palabras_clave": Una lista de 3 a 5 conceptos nucleares o palabras clave más relevantes del texto en español.
 
 FORMATO DE SALIDA (EXCLUSIVAMENTE OBJETO JSON VÁLIDO):
 {
-  "tema": "Tema concreto y académico del texto",
-  "materia": "Materia o disciplina académica específica",
-  "descripcion": "Descripción concisa en 1-2 líneas del contenido educativo.",
+  "tema": "Tema concreto y académico del texto en español",
+  "materia": "Materia o disciplina académica específica en español",
+  "descripcion": "Descripción concisa en 1-2 líneas del contenido educativo en español.",
   "palabras_clave": ["concepto1", "concepto2", "concepto3"]
 }`;
 
-  const userPrompt = `Analiza este fragmento del documento y clasifícalo en formato JSON:
+  const userPrompt = `Analiza este fragmento del documento y clasifícalo en formato JSON (100% en español):
 ${sampleText}`;
 
   try {
@@ -2255,6 +2308,8 @@ ${sampleText}`;
       palabrasClave,
       icon: visuals.icon,
       color: visuals.color,
+      detectedLanguage: langDetection.detectedLanguage,
+      isForeign: langDetection.isForeign,
     };
 
     if (classificationCache.size >= MAX_CLASSIFICATION_CACHE) {

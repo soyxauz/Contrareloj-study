@@ -3,6 +3,7 @@ import {
   generateCompleteAIPedagogicalBatch,
   classifyDocumentWithAI,
 } from '../services/aiService';
+import { detectDocumentLanguage } from '../services/languageService';
 import { chunkDocument } from './chunker';
 import { LocalVectorStore } from './vectorStore';
 import JSZip from 'jszip';
@@ -961,12 +962,22 @@ export async function processContentAsync(
     );
   }
 
+  // Detección automática del idioma del documento para traducción al español
+  const langDetection = detectDocumentLanguage(cleanText);
+  if (langDetection.isForeign) {
+    onProgress?.(`Documento en ${langDetection.detectedLanguage} detectado. Activando traducción automática al español...`);
+  }
+
   // Generar chunks semánticos e indexar en el almacén vectorial local
   const chunks = chunkDocument(cleanText, assets);
   const vectorStore = new LocalVectorStore(chunks);
 
   // Clasificación de materia y decisión de tema con IA en base al contenido
-  onProgress?.('Analizando contenido para clasificar materia y tema con IA...');
+  onProgress?.(
+    langDetection.isForeign
+      ? `Traduciendo y clasificando materia y tema al español con IA (${langDetection.detectedLanguage})...`
+      : 'Analizando contenido para clasificar materia y tema con IA...'
+  );
   const aiClassification = await classifyDocumentWithAI(cleanText, chunks);
 
   // Decisión de título (Tema):
@@ -992,6 +1003,11 @@ export async function processContentAsync(
 
   // Generar lote de preguntas pedagógicas EXCLUSIVAMENTE generadas por IA
   // Sin mezclas mecánicas ni plantillas sintéticas de relleno
+  onProgress?.(
+    langDetection.isForeign
+      ? `Generando lote de preguntas pedagógicas traducidas y adaptadas al español...`
+      : 'Generando el lote de preguntas pedagógicas...'
+  );
   const aiQuestions = await generateCompleteAIPedagogicalBatch(cleanText, chunks, onProgress);
 
   if (!aiQuestions || aiQuestions.length === 0) {
@@ -1049,6 +1065,7 @@ export async function processContentAsync(
     sourceText: cleanText,
     chunks,
     assets,
+    sourceLanguage: langDetection.detectedLanguage,
   };
 
   return {
