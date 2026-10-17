@@ -179,9 +179,24 @@ export function getGeminiAudioApiKey(): string {
   if (settings.apiKey?.trim().startsWith('AIzaSy') || settings.baseUrl?.includes('googleapis')) {
     return settings.apiKey.trim();
   }
+
+  // Verificar en ajustes de podcast guardados
+  try {
+    const rawPod = typeof localStorage !== 'undefined'
+      ? (localStorage.getItem('contrareloj_podcast_settings') || localStorage.getItem('thea_podcast_settings'))
+      : null;
+    if (rawPod) {
+      const parsed = JSON.parse(rawPod);
+      if (parsed.geminiApiKey?.trim()) {
+        return parsed.geminiApiKey.trim();
+      }
+    }
+  } catch {}
+
   const standalone =
-    localStorage.getItem('contrareloj_gemini_api_key') ||
-    localStorage.getItem('thea_gemini_api_key');
+    typeof localStorage !== 'undefined'
+      ? (localStorage.getItem('contrareloj_gemini_api_key') || localStorage.getItem('thea_gemini_api_key'))
+      : null;
   if (standalone?.trim()) {
     return standalone.trim();
   }
@@ -393,9 +408,11 @@ async function fetchGeminiAudioPcmChunk(
   apiKey: string
 ): Promise<AudioChunkResult> {
   const modelsToTry = [
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-exp',
+    'gemini-3.8-flash',
     'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-001',
+    'gemini-1.5-flash',
   ];
   let lastError: Error | null = null;
 
@@ -403,26 +420,18 @@ async function fetchGeminiAudioPcmChunk(
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const payload = {
-      systemInstruction: {
-        parts: [
-          {
-            text: 'Eres un locutor profesional en un podcast educativo de alta fidelidad. Tu única misión es leer en voz alta de manera textual, completa, fluida y exacta todo el texto proporcionado, desde la primera hasta la última palabra. No omitas ningún fragmento, no resumas, no cortes oraciones y no agregues comentarios propios. Mantén una entonación humana, expresiva, cálida y adecuada al contexto del tema.',
-          },
-        ],
-      },
       contents: [
         {
           role: 'user',
           parts: [
             {
-              text: `Lee en voz alta exactamente y por completo el siguiente parlamento:\n\n${chunkText}`,
+              text: chunkText,
             },
           ],
         },
       ],
       generationConfig: {
         responseModalities: ['AUDIO'],
-        maxOutputTokens: 8192,
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: {
@@ -463,7 +472,7 @@ async function fetchGeminiAudioPcmChunk(
 
       const data = await response.json();
       const candidate = data.candidates?.[0];
-      const part = candidate?.content?.parts?.[0];
+      const part = candidate?.content?.parts?.find((p: any) => p.inlineData?.data);
 
       if (!part?.inlineData?.data) {
         throw new Error(`Respuesta de ${model} no contiene datos de audio.`);
@@ -501,7 +510,7 @@ async function fetchGeminiAudioPcmChunk(
 }
 
 /**
- * Sintetiza un parlamento completo usando Gemini 2.0 Flash Audio TTS con emociones contextuales.
+ * Sintetiza un parlamento completo usando Gemini Flash Audio TTS con emociones contextuales.
  * Divide inteligentemente textos largos en fragmentos naturales, los sintetiza y concatena
  * el flujo PCM resultante para garantizar que el parlamento completo se escuche íntegro sin cortes.
  */
@@ -548,10 +557,12 @@ export async function synthesizeGeminiSpeech(
       const result = await fetchGeminiAudioPcmChunk(chunks[0], voiceName, apiKey);
       finalBlob = pcmToWavBlob(result.pcmBytes, result.sampleRate);
     } else {
-      // Sintetizar todos los fragmentos del parlamento en paralelo
-      const chunkResults = await Promise.all(
-        chunks.map((chunk) => fetchGeminiAudioPcmChunk(chunk, voiceName, apiKey))
-      );
+      // Sintetizar fragmentos secuencialmente para evitar errores de tasa de concurrencia (429)
+      const chunkResults: AudioChunkResult[] = [];
+      for (const chunk of chunks) {
+        const res = await fetchGeminiAudioPcmChunk(chunk, voiceName, apiKey);
+        chunkResults.push(res);
+      }
 
       // Concatenar todos los búferes PCM en un único flujo de audio continuo
       const totalPcmLength = chunkResults.reduce((acc, r) => acc + r.pcmBytes.length, 0);
