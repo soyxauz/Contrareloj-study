@@ -45,6 +45,13 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Mantener referencias frescas para eventos nativos sin reenganchar listeners
+  const zoomRef = useRef<number>(zoomLevel);
+  zoomRef.current = zoomLevel;
+  const panRef = useRef<{ x: number; y: number }>(pan);
+  panRef.current = pan;
 
   // Resetear zoom y paneo cada vez que cambia la imagen o se abre el modal
   useEffect(() => {
@@ -115,17 +122,50 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     };
   }, [isOpen, onClose, handleZoomIn, handleZoomOut, handleResetZoom, hasPrev, hasNext, onPrev, onNext]);
 
-  // Soporte para zoom con rueda de ratón (Ctrl + scroll o rueda normal en el contenedor)
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
+  // Soporte completo para zoom con la rueda del ratón (focalizado en la posición del puntero)
+  useEffect(() => {
+    if (!isOpen) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheelNative = (e: WheelEvent) => {
       e.preventDefault();
-      if (e.deltaY < 0) {
-        handleZoomIn();
-      } else {
-        handleZoomOut();
+      e.stopPropagation();
+
+      const currentZoom = zoomRef.current;
+      const currentPan = panRef.current;
+
+      // Paso proporcional según velocidad o desplazamiento de la rueda/trackpad
+      const rawStep = -e.deltaY * 0.002;
+      const clampedStep = Math.min(Math.max(rawStep, -0.35), 0.35);
+      const newZoom = Math.min(Math.max(Number((currentZoom + clampedStep).toFixed(2)), 0.5), 4.0);
+
+      if (newZoom === currentZoom) return;
+
+      if (newZoom <= 1) {
+        setZoomLevel(newZoom);
+        setPan({ x: 0, y: 0 });
+        return;
       }
-    }
-  };
+
+      // Zoom focalizado: centrar la ampliación en la coordenada exacta del cursor
+      const rect = container.getBoundingClientRect();
+      const cx = e.clientX - (rect.left + rect.width / 2);
+      const cy = e.clientY - (rect.top + rect.height / 2);
+
+      const ratio = newZoom / currentZoom;
+      const newPanX = cx - (cx - currentPan.x) * ratio;
+      const newPanY = cy - (cy - currentPan.y) * ratio;
+
+      setZoomLevel(newZoom);
+      setPan({ x: Math.round(newPanX), y: Math.round(newPanY) });
+    };
+
+    container.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', onWheelNative);
+    };
+  }, [isOpen]);
 
   // Arrastre suave para mover la imagen cuando hay zoom activo
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -271,8 +311,8 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
 
         {/* Área Central de Visualización y Zoom */}
         <div
+          ref={containerRef}
           className="relative flex-1 min-h-0 bg-black/80 overflow-hidden flex items-center justify-center p-4 cursor-default select-none"
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -317,7 +357,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 style={{
                   transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})`,
                   transformOrigin: 'center center',
-                  transition: isDragging ? 'none' : 'transform 0.16s ease-out'
+                  transition: isDragging ? 'none' : 'transform 0.1s ease-out'
                 }}
                 className={`max-h-[68vh] sm:max-h-[72vh] max-w-full object-contain rounded-lg shadow-2xl pointer-events-auto ${
                   zoomLevel > 1
@@ -338,10 +378,10 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
           </div>
 
           {/* Indicador de ayuda al usuario */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[10px] text-slate-400">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[10px] text-slate-300">
             {zoomLevel > 1
-              ? 'Arrastra para explorar la imagen | Clic o rueda para ajustar zoom'
-              : 'Haz clic en la imagen o usa los botones de zoom para ampliar'}
+              ? 'Rueda del ratón para zoom focalizado | Arrastra para mover | Clic para ciclar'
+              : 'Gira la rueda del ratón o haz clic en la imagen para ampliar'}
           </div>
         </div>
 
