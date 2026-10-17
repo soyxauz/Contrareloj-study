@@ -5,7 +5,7 @@ import { BookOpen } from 'lucide-react';
 import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
 import { googleDriveService } from './services/googleDriveService';
-import { resetAISettingsToDefault } from './services/aiService';
+import { resetAISettingsToDefault, saveAISettings } from './services/aiService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
@@ -184,6 +184,13 @@ export const App: React.FC = () => {
 
   const handleAuthSuccess = (user: User) => {
     setCurrentUser(user);
+
+    // Restaurar ajustes de IA asociados a esta cuenta si existen
+    const userAISettings = authService.getUserAISettings(user.id);
+    if (userAISettings) {
+      saveAISettings(userAISettings);
+    }
+
     const userKits = authService.getUserKits(user.id);
     const clean = userKits.filter(k => !isCorruptedKit(k));
     setKits(clean);

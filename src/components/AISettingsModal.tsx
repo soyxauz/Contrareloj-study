@@ -24,6 +24,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { googleDriveService } from '../services/googleDriveService';
+import { authService } from '../services/authService';
 
 interface AISettingsModalProps {
   isOpen: boolean;
@@ -84,6 +85,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   const handleSave = () => {
     saveAISettings(settings);
+
+    // Asociar al usuario autenticado si existe sesión activa
+    const user = authService.getCurrentUser();
+    if (user) {
+      authService.saveUserAISettings(user.id, settings);
+    }
+
     // Si Google Drive está conectado, respaldar la API personal inmediatamente en la nube
     if (googleDriveService.getValidAccessToken()) {
       googleDriveService.syncAISettingsToDrive().catch(err => {
@@ -354,14 +362,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               </div>
               <div className="mt-1.5 text-[11px]">
                 {settings.apiKey && settings.apiKey.trim().length > 0 ? (
-                  <span className="text-violet-300 flex items-center gap-1 font-medium">
-                    <Key className="w-3 h-3 text-amber-400" />
+                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                    <Key className="w-3.5 h-3.5 text-amber-400" />
                     API personal configurada: Se usarán tus credenciales privadas.
                   </span>
                 ) : (
-                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                    Modo estándar: Contrareloj Study usa la IA del servidor sin exigir clave personal.
+                  <span className="text-amber-400 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    Sin clave API: Ingresa tu clave personal para generar kits de estudio con IA.
                   </span>
                 )}
               </div>

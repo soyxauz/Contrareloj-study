@@ -665,6 +665,10 @@ export const googleDriveService = {
           const remoteAISettings = await this.readJsonFromDrive(token, aiSettingsFile.id);
           if (remoteAISettings && typeof remoteAISettings === 'object') {
             saveAISettings(remoteAISettings);
+            const user = authService.getCurrentUser();
+            if (user) {
+              authService.saveUserAISettings(user.id, remoteAISettings);
+            }
           }
         } catch (aiErr) {
           console.warn('[GoogleDriveService] Error sincronizando ajustes de IA desde Drive:', aiErr);

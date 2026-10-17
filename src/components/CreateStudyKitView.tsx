@@ -36,7 +36,7 @@ import {
   sanitizeExtractedText,
 } from '../engine/contentProcessor';
 import type { ProcessedContent } from '../engine/contentProcessor';
-import { researchTopicAndGenerateKit } from '../services/aiService';
+import { researchTopicAndGenerateKit, hasPersonalApiKey, getAISettings } from '../services/aiService';
 
 export type InputTab = 'topic' | 'text' | 'file' | 'link' | 'youtube';
 type CreationPhase = 'input' | 'processing' | 'success' | 'error';
@@ -94,6 +94,11 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
     return Array.from(new Set([...DEFAULT_FOCUS_AREAS, ...custom]));
   }, []);
 
+  const aiSettings = getAISettings();
+  const isLocalAI = Boolean(aiSettings.baseUrl?.includes('localhost') || aiSettings.baseUrl?.includes('127.0.0.1'));
+  const hasKey = hasPersonalApiKey();
+  const isAIReady = hasKey || isLocalAI;
+
   // Tab-specific inputs
   const [topicQuery, setTopicQuery] = useState('');
   const [topicFocus, setTopicFocus] = useState('General');
@@ -133,6 +138,15 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
   }, [uploadedMaterials]);
 
   const handleCreate = async () => {
+    if (!isAIReady) {
+      if (onOpenAISettings) {
+        onOpenAISettings();
+      }
+      setErrorMessage('Debes configurar una clave de API personal (Groq, Gemini, DeepSeek o local) para generar nuevos kits de estudio.');
+      setPhase('error');
+      return;
+    }
+
     setPhase('processing');
     setErrorMessage('');
 
@@ -875,6 +889,31 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           className="w-full bg-thea-bg border border-thea-border rounded-xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
         />
       </div>
+
+      {/* Alerta si inicia de 0 sin clave API configurada */}
+      {!isAIReady && (
+        <div className="mb-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5 text-left">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs">
+            <div className="font-bold text-amber-200 text-sm">
+              Clave de API personal requerida
+            </div>
+            <p className="text-amber-300/80 mt-1 leading-relaxed">
+              Para generar nuevos Study Kits con IA debes ingresar tu clave de API personal (Groq, Google Gemini, DeepSeek u OpenAI) o conectar un Ollama local.
+            </p>
+            {onOpenAISettings && (
+              <button
+                type="button"
+                onClick={onOpenAISettings}
+                className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-semibold cursor-pointer transition-colors shadow-sm"
+              >
+                <Settings className="w-3.5 h-3.5 text-amber-400" />
+                <span>Configurar API Key</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Create Button */}
       <button

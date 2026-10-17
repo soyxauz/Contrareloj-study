@@ -1,4 +1,5 @@
 import type { User, StudyKit, SmartStudySessionState } from '../types';
+import type { AISettings } from './aiService';
 import { DEFAULT_STUDY_KITS } from '../data/defaultKits';
 import { saveAssetsFromKits, stripHeavyAssetsForLocalStorage } from './storageService';
 
@@ -332,6 +333,35 @@ export const authService = {
       }
     } catch (e) {
       console.error('Error al registrar pregunta revelada', e);
+    }
+  },
+
+  /**
+   * Obtiene la configuración de IA guardada para un usuario específico.
+   */
+  getUserAISettings(userId: string | null): AISettings | null {
+    if (!userId) return null;
+    try {
+      const key = `thea_user_ai_settings_${userId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      console.error('Error al leer configuración de IA del usuario', e);
+      return null;
+    }
+  },
+
+  /**
+   * Guarda la configuración de IA asociada al perfil de un usuario específico.
+   */
+  saveUserAISettings(userId: string | null, settings: AISettings): void {
+    if (!userId) return;
+    try {
+      const key = `thea_user_ai_settings_${userId}`;
+      localStorage.setItem(key, JSON.stringify(settings));
+    } catch (e) {
+      console.error('Error al guardar configuración de IA del usuario', e);
     }
   }
 };

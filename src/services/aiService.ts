@@ -24,18 +24,6 @@ export interface AIPreset {
 
 export const AI_PRESETS: AIPreset[] = [
   {
-    id: 'ollama-cloud',
-    name: 'Ollama Cloud (Gemma 4)',
-    provider: 'openai-compatible',
-    baseUrl: 'https://ollama.com/v1',
-    model: 'gemma4:31b',
-    keyPlaceholder: '716a4f59...',
-    keyUrl: 'https://ollama.com/settings/keys',
-    description: 'Servicio cloud oficial con modelo Gemma 4 (31B). Nivel de cuenta activo.',
-    badge: 'Tu Cuenta / Activo',
-    freeTier: true,
-  },
-  {
     id: 'groq',
     name: 'Groq Cloud',
     provider: 'openai-compatible',
@@ -43,7 +31,7 @@ export const AI_PRESETS: AIPreset[] = [
     model: 'llama-3.3-70b-versatile',
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
-    description: 'Ultra rápido y gratuito. Genera hasta 50 preguntas en segundos.',
+    description: 'Ultra rápido y con nivel gratuito. Genera cuestionarios y kits completos en segundos.',
     badge: 'Recomendado / Gratis',
     freeTier: true,
   },
@@ -55,7 +43,7 @@ export const AI_PRESETS: AIPreset[] = [
     model: 'gemini-1.5-flash',
     keyPlaceholder: 'AIzaSy...',
     keyUrl: 'https://aistudio.google.com/app/apikey',
-    description: 'Endpoint oficial OpenAI de Google Gemini. Nivel gratuito en AI Studio.',
+    description: 'Endpoint oficial OpenAI de Google Gemini. Nivel gratuito disponible en Google AI Studio.',
     badge: 'Oficial Google / Gratis',
     freeTier: true,
   },
@@ -113,9 +101,9 @@ const STORAGE_KEY = 'thea_ai_settings';
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
   provider: 'openai-compatible',
-  baseUrl: 'https://ollama.com/v1',
-  apiKey: '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl',
-  model: 'gemma4:31b',
+  baseUrl: 'https://api.groq.com/openai/v1',
+  apiKey: '',
+  model: 'llama-3.3-70b-versatile',
   timeoutMs: 45000,
 };
 
@@ -124,25 +112,31 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Si apuntaba a localhost inactivo o la clave fue borrada o el modelo estaba desactualizado
+      // Limpiar claves obsoletas de servidor o modelos descontinuados
       if (
-        !parsed.apiKey ||
-        parsed.apiKey.trim() === '' ||
+        parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' ||
+        parsed.baseUrl === 'https://ollama.com/v1' ||
         parsed.baseUrl === 'http://localhost:11434/v1' ||
         parsed.baseUrl?.includes('11434') ||
         parsed.model === 'gemma4:31b-cloud' ||
+        parsed.model === 'gemma4:31b' ||
         parsed.model === 'llama3.2'
       ) {
-        const restored: AISettings = {
+        const cleaned: AISettings = {
           ...DEFAULT_AI_SETTINGS,
           ...parsed,
-          provider: 'openai-compatible',
-          baseUrl: 'https://ollama.com/v1',
-          apiKey: DEFAULT_AI_SETTINGS.apiKey,
-          model: 'gemma4:31b',
+          baseUrl: (parsed.baseUrl?.includes('11434') || parsed.baseUrl === 'https://ollama.com/v1')
+            ? DEFAULT_AI_SETTINGS.baseUrl
+            : (parsed.baseUrl || DEFAULT_AI_SETTINGS.baseUrl),
+          apiKey: (parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' || !parsed.apiKey)
+            ? ''
+            : parsed.apiKey,
+          model: (parsed.model === 'gemma4:31b-cloud' || parsed.model === 'gemma4:31b' || parsed.model === 'llama3.2')
+            ? DEFAULT_AI_SETTINGS.model
+            : (parsed.model || DEFAULT_AI_SETTINGS.model),
         };
-        saveAISettings(restored);
-        return restored;
+        saveAISettings(cleaned);
+        return cleaned;
       }
       return { ...DEFAULT_AI_SETTINGS, ...parsed };
     } catch {
@@ -164,8 +158,8 @@ export function hasPersonalApiKey(): boolean {
   const current = getAISettings();
   return Boolean(
     current.apiKey &&
-    current.apiKey.trim() !== '' &&
-    current.apiKey.trim() !== DEFAULT_AI_SETTINGS.apiKey
+    current.apiKey.trim().length > 0 &&
+    current.apiKey.trim() !== '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl'
   );
 }
 
@@ -260,12 +254,11 @@ export async function testAIConnection(override?: AISettings): Promise<{
   }
 
   const hasKey = Boolean(settings.apiKey && settings.apiKey.trim().length > 0);
-  const isDefaultServer = cleanBase.includes('ollama.com') || cleanBase === DEFAULT_AI_SETTINGS.baseUrl;
 
-  if (!isLocal && !hasKey && !isDefaultServer) {
+  if (!isLocal && !hasKey) {
     return {
       success: false,
-      message: 'Para usar este proveedor externo ingresa tu API Key. Si deseas usar el motor de IA sin clave personal, selecciona Ollama Cloud (Gemma 4).',
+      message: 'Ingresa tu clave de API personal (Groq, Gemini, DeepSeek u OpenAI) para probar la conexión.',
     };
   }
 
@@ -273,8 +266,8 @@ export async function testAIConnection(override?: AISettings): Promise<{
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(settings.timeoutMs, 8000));
 
-    const effectiveKey = hasKey ? settings.apiKey.trim() : DEFAULT_AI_SETTINGS.apiKey;
-    const effectiveBase = (hasKey || isLocal) ? cleanBase : DEFAULT_AI_SETTINGS.baseUrl;
+    const effectiveKey = settings.apiKey.trim();
+    const effectiveBase = cleanBase;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -416,11 +409,15 @@ export async function queryAICompletion(
 
   const hasPersonalKey = Boolean(settings.apiKey && settings.apiKey.trim().length > 0);
 
-  // Si el usuario no ha ingresado clave de API personal ni es servidor local,
-  // se enruta automáticamente hacia el servicio serverless de la app sin arrojar error ni bloquear la experiencia.
-  const targetBase = (hasPersonalKey || isLocal) ? cleanBase : DEFAULT_AI_SETTINGS.baseUrl;
-  const targetModel = hasPersonalKey ? (settings.model || 'gemma4:31b') : DEFAULT_AI_SETTINGS.model;
-  const targetKey = (hasPersonalKey || isLocal) ? settings.apiKey.trim() : DEFAULT_AI_SETTINGS.apiKey;
+  if (!isLocal && !hasPersonalKey) {
+    throw new Error(
+      'Para generar contenido con IA necesitas configurar tu API Key personal. Abre "Configurar IA" para ingresar tu clave gratuita (Groq, Gemini, DeepSeek o local).'
+    );
+  }
+
+  const targetBase = cleanBase;
+  const targetModel = settings.model || DEFAULT_AI_SETTINGS.model;
+  const targetKey = settings.apiKey.trim();
 
   const url = `${targetBase}/chat/completions`;
 
