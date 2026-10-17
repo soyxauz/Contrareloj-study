@@ -67,6 +67,9 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       if (res.kits && onKitsSynced) {
         onKitsSynced(res.kits);
       }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('thea_ai_settings_changed'));
+      }
       setNoticeMessage('Conexión con Google Drive establecida y datos sincronizados.');
     } catch (err: any) {
       if (err?.message === 'CLIENT_ID_MISSING') {
@@ -78,17 +81,21 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   };
 
   const handleManualSync = async () => {
-    if (!currentUser) return;
+    const effectiveUserId = currentUser?.id || (syncState.userEmail ? `usr_g_${syncState.userEmail}` : 'guest');
     setIsProcessing(true);
     setNoticeMessage(null);
     try {
-      // Primero descargamos actualizaciones remotas
-      const pulled = await googleDriveService.pullFromDrive(currentUser.id);
+      // Primero descargamos actualizaciones remotas (incluyendo thea_ai_settings.json)
+      const pulled = await googleDriveService.pullFromDrive(effectiveUserId);
       if (pulled && onKitsSynced) {
         onKitsSynced(pulled);
       }
       // Luego respaldamos el estado actual
-      await googleDriveService.pushToDrive(currentUser.id, kits);
+      await googleDriveService.pushToDrive(effectiveUserId, kits);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('thea_ai_settings_changed'));
+      }
       setNoticeMessage('Sincronización bidireccional completada con éxito.');
     } catch (err: any) {
       console.error('Error durante la sincronización manual:', err);

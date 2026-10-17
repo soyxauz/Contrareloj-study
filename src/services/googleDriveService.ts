@@ -1,7 +1,7 @@
 import type { StudyKit, DocumentAsset, User } from '../types';
 import { authService } from './authService';
 import { getAllStoredAssets, saveAssetsToIndexedDB, stripHeavyAssetsForLocalStorage } from './storageService';
-import { getAISettings, saveAISettings, resetAISettingsToDefault } from './aiService';
+import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id';
 
@@ -660,18 +660,47 @@ export const googleDriveService = {
 
       // 4. Sincronizar ajustes de IA y API personal desde Google Drive
       const aiSettingsFile = await this.findFileInFolder(token, rootFolderId, 'thea_ai_settings.json');
+      const localAISettings = getAISettings();
       if (aiSettingsFile) {
         try {
           const remoteAISettings = await this.readJsonFromDrive(token, aiSettingsFile.id);
           if (remoteAISettings && typeof remoteAISettings === 'object') {
-            saveAISettings(remoteAISettings);
-            const user = authService.getCurrentUser();
-            if (user) {
-              authService.saveUserAISettings(user.id, remoteAISettings);
+            const remoteHasKey = Boolean(remoteAISettings.apiKey && remoteAISettings.apiKey.trim().length > 0);
+            const localHasKey = Boolean(localAISettings.apiKey && localAISettings.apiKey.trim().length > 0);
+
+            if (remoteHasKey) {
+              // Si la nube tiene API Key guardada, importarla y desbloquear
+              const merged: AISettings = {
+                ...remoteAISettings,
+                verified: true,
+              };
+              saveAISettings(merged);
+              if (userId) {
+                authService.saveUserAISettings(userId, merged);
+              }
+              const activeUser = authService.getCurrentUser();
+              if (activeUser) {
+                authService.saveUserAISettings(activeUser.id, merged);
+              }
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event('thea_ai_settings_changed'));
+              }
+            } else if (localHasKey) {
+              // Si la nube no tenía clave pero localmente sí tenemos una, subirla a Drive
+              await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings);
             }
           }
         } catch (aiErr) {
           console.warn('[GoogleDriveService] Error sincronizando ajustes de IA desde Drive:', aiErr);
+        }
+      } else {
+        // Si thea_ai_settings.json aún no existe en Drive pero hay clave local, subirla de inmediato
+        if (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) {
+          try {
+            await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings);
+          } catch (e) {
+            console.warn('[GoogleDriveService] Error creando thea_ai_settings.json inicial en Drive:', e);
+          }
         }
       }
 
@@ -734,9 +763,11 @@ export const googleDriveService = {
         }
       }
 
-      // 4. Guardar configuración de IA y API propia en Google Drive
+      // 4. Guardar configuración de IA y API propia en Google Drive solo si tiene clave
       const currentAISettings = getAISettings();
-      await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', currentAISettings);
+      if (currentAISettings.apiKey && currentAISettings.apiKey.trim().length > 0) {
+        await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', currentAISettings);
+      }
 
       const now = Date.now();
       localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
@@ -755,13 +786,13 @@ export const googleDriveService = {
   /**
    * Sube inmediatamente la configuración de IA y API propia a Google Drive.
    */
-  async syncAISettingsToDrive(): Promise<boolean> {
+  async syncAISettingsToDrive(overrideSettings?: AISettings): Promise<boolean> {
     const token = this.getValidAccessToken();
     if (!token) return false;
 
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
-      const aiSettings = getAISettings();
+      const aiSettings = overrideSettings || getAISettings();
       await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', aiSettings);
       return true;
     } catch (e) {

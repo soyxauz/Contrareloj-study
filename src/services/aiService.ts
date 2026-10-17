@@ -126,24 +126,15 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Limpiar claves obsoletas de servidor
-      if (
-        parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' ||
-        parsed.baseUrl === 'http://localhost:11434/v1' ||
-        parsed.baseUrl?.includes('11434') ||
-        parsed.model === 'gemma4:31b-cloud' ||
-        parsed.model === 'llama3.2'
-      ) {
-        const cleaned: AISettings = {
-          ...DEFAULT_AI_SETTINGS,
-          ...parsed,
-          baseUrl: parsed.baseUrl?.includes('11434') ? DEFAULT_AI_SETTINGS.baseUrl : (parsed.baseUrl || DEFAULT_AI_SETTINGS.baseUrl),
-          apiKey: parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' ? '' : (parsed.apiKey || ''),
-          model: (parsed.model === 'gemma4:31b-cloud' || parsed.model === 'llama3.2') ? DEFAULT_AI_SETTINGS.model : (parsed.model || DEFAULT_AI_SETTINGS.model),
-          verified: parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl' ? false : Boolean(parsed.verified),
-        };
-        saveAISettings(cleaned);
-        return cleaned;
+      // Limpiar únicamente la clave de prueba obsoleta si aún estuviera en caché
+      if (parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl') {
+        parsed.apiKey = '';
+        parsed.verified = false;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        } catch {
+          // ignore
+        }
       }
       return { ...DEFAULT_AI_SETTINGS, ...parsed };
     } catch {
@@ -178,8 +169,9 @@ export function hasPersonalApiKey(): boolean {
 }
 
 /**
- * Determina si la integración de IA está plenamente configurada, probada y funcional (200 OK).
- * Cuando devuelve false, las opciones de generación deben mostrarse en gris.
+ * Determina si la integración de IA está lista para usarse.
+ * Desbloquea de inmediato las opciones y devuelve el color tan pronto el usuario
+ * ingresa una clave personal (Groq, Gemini, Ollama Cloud, etc.), si está verificada, o si es local.
  */
 export function isAIWorking(): boolean {
   const current = getAISettings();
@@ -187,9 +179,9 @@ export function isAIWorking(): boolean {
   const isLocal = Boolean(current.baseUrl?.includes('localhost') || current.baseUrl?.includes('127.0.0.1'));
   const hasKey = hasPersonalApiKey();
   if (isLocal) {
-    return Boolean(current.verified);
+    return true;
   }
-  return Boolean(hasKey && current.verified);
+  return Boolean(hasKey || current.verified);
 }
 
 /**

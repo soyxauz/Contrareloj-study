@@ -156,19 +156,25 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   const handleSave = async () => {
     let currentSettings = { ...settings };
-    if (!currentSettings.verified) {
-      setIsTesting(true);
+    setIsTesting(true);
+    try {
       const res = await testAIConnection(currentSettings);
       setTestResult(res);
-      setIsTesting(false);
-      if (!res.success) {
-        return;
+      if (res.success) {
+        currentSettings.verified = true;
+        if (res.models && res.models.length > 0 && !currentSettings.model) {
+          currentSettings.model = res.models[0];
+        }
       }
-      currentSettings.verified = true;
-      setSettings(currentSettings);
+    } catch {
+      // Continuar con el guardado para no obstaculizar al usuario
+    } finally {
+      setIsTesting(false);
     }
 
+    // Persistir siempre la configuración elegida por el usuario
     saveAISettings(currentSettings);
+    setSettings(currentSettings);
 
     // Asociar al usuario autenticado si existe sesión activa
     const user = authService.getCurrentUser();
@@ -176,12 +182,11 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       authService.saveUserAISettings(user.id, currentSettings);
     }
 
-    // Si Google Drive está conectado, respaldar la API personal inmediatamente en la nube
-    if (googleDriveService.getValidAccessToken()) {
-      googleDriveService.syncAISettingsToDrive().catch(err => {
-        console.warn('[AISettingsModal] Error al respaldar API en Google Drive:', err);
-      });
-    }
+    // Respaldar la API personal inmediatamente en Google Drive
+    googleDriveService.syncAISettingsToDrive(currentSettings).catch(err => {
+      console.warn('[AISettingsModal] Error al respaldar API en Google Drive:', err);
+    });
+
     setIsSaved(true);
     if (onSettingsSaved) onSettingsSaved();
     setTimeout(() => {
