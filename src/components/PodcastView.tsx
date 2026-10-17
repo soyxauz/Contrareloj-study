@@ -419,6 +419,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       const nextSeg = fromIndex + 1;
       const nextGlobal = segmentStartGlobalIndices[nextSeg] || 0;
       setWordPosition(nextGlobal, nextSeg, 0);
+
+      // Deslizar ventana de precarga para los próximos turnos de diálogo
+      if (voiceEngineRef.current === 'gemini') {
+        preloadEntirePodcast(podcast.dialogue, sofiaVoice, mateoVoice, nextSeg);
+      }
+
       speakDialogueLineRef.current?.(nextSeg, 0);
     } else {
       setIsPlaying(false);
@@ -426,7 +432,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       setIsAudioActive(false);
       setWordPosition(0, 0, 0);
     }
-  }, [podcast?.dialogue, segmentStartGlobalIndices, setWordPosition]);
+  }, [podcast?.dialogue, segmentStartGlobalIndices, setWordPosition, sofiaVoice, mateoVoice]);
 
   // Reproducir vocalmente mediante el motor del navegador (fallback local) con inicio por palabra
   const speakBrowserDialogueLine = useCallback((

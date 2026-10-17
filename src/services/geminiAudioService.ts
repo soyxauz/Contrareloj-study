@@ -414,7 +414,8 @@ async function fetchGeminiAudioPcmChunk(
   apiKey: string
 ): Promise<AudioChunkResult> {
   const modelsToTry = [
-    'gemini-2.0-flash',
+    'gemini-3.8-flash',
+    'gemini-3.8-flash-lite',
     'gemini-3.8-flash-tts',
     'gemini-3.8-flash-lite-tts',
     'gemini-3.1-flash-tts-preview',
@@ -443,8 +444,8 @@ async function fetchGeminiAudioPcmChunk(
       },
     };
 
-    // Reintentar hasta 4 veces con retroceso exponencial si Google responde con 429 o error temporal
-    for (let attempt = 0; attempt < 4; attempt++) {
+    // Reintentar máximo 1 vez si Google responde con 429, luego conmutar de inmediato al siguiente modelo
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
         let response: Response;
 
@@ -469,10 +470,14 @@ async function fetchGeminiAudioPcmChunk(
         }
 
         if (response.status === 429 || response.status === 503 || response.status === 500) {
-          const backoffMs = Math.min(16000, 2000 * Math.pow(2, attempt));
-          console.warn(`[GeminiAudio] Cuota temporal (${response.status}) en ${model}. Pausando ${backoffMs}ms antes de reintentar... (intento ${attempt + 1}/4)`);
-          await new Promise(r => setTimeout(r, backoffMs));
-          continue;
+          if (attempt === 0) {
+            console.warn(`[GeminiAudio] Cuota temporal (${response.status}) en ${model}. Reintentando en 1000ms...`);
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          } else {
+            console.warn(`[GeminiAudio] Cuota agotada en ${model}. Conmutando de inmediato al siguiente modelo...`);
+            break;
+          }
         }
 
         if (!response.ok) {
@@ -763,24 +768,27 @@ export function prefetchGeminiSpeech(
 }
 
 /**
- * Pre-sintetiza progresivamente el episodio completo de podcast en segundo plano
- * apenas se crea o se abre, priorizando los 2 primeros turnos (Host y Tutor) de forma inmediata
- * para que cuando el usuario pulse Play el audio arranque con 0ms de latencia y no haya cortes.
+ * Pre-sintetiza progresivamente el podcast con una ventana deslizante inteligente
+ * de 3 turnos por delante. Esto garantiza que el turno actual y el siguiente siempre
+ * estén listos en memoria para transiciones sin cortes (0ms) entre Host y Tutor,
+ * evitando saturar la cuota gratuita de Google AI Studio con peticiones innecesarias.
  */
 export function preloadEntirePodcast(
   dialogue: Array<{ text: string; speaker: string }>,
   sofiaVoice: string = 'Aoede',
-  mateoVoice: string = 'Puck'
+  mateoVoice: string = 'Puck',
+  startIndex: number = 0
 ): void {
   if (!dialogue || dialogue.length === 0) return;
   const apiKey = getGeminiAudioApiKey();
   if (!apiKey) return;
 
-  dialogue.forEach((item, index) => {
+  const windowEnd = Math.min(dialogue.length, startIndex + 3);
+  for (let i = startIndex; i < windowEnd; i++) {
+    const item = dialogue[i];
     const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(item.speaker);
     const voice = isFemale ? sofiaVoice : mateoVoice;
-    // Las 2 primeras intervenciones (Host y Tutor) se sintetizan con máxima prioridad
-    const priority = index < 2 ? 'high' : 'normal';
+    const priority = i <= startIndex + 1 ? 'high' : 'normal';
     prefetchGeminiSpeech(item.text, voice, apiKey, priority);
-  });
+  }
 }
