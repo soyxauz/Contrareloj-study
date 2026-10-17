@@ -226,7 +226,7 @@ function computeCacheKey(voice: string, text: string): string {
     hash = (hash << 5) - hash + text.charCodeAt(i);
     hash |= 0;
   }
-  return `v2_${voice}_${Math.abs(hash)}_${text.length}`;
+  return `v3_${voice}_${Math.abs(hash)}_${text.length}`;
 }
 
 /**
@@ -329,7 +329,7 @@ export function pcmToWavBlob(
  * garantizando que ningún fragmento exceda ~36-40 palabras para evitar cualquier truncamiento
  * o límite temporal por turno de la API de Gemini Flash Audio.
  */
-function splitTextIntoSpeechChunks(text: string, maxWordsPerChunk = 38): string[] {
+function splitTextIntoSpeechChunks(text: string, maxWordsPerChunk = 120): string[] {
   const clean = text.trim();
   if (!clean) return [];
 
@@ -395,12 +395,14 @@ function splitTextIntoSpeechChunks(text: string, maxWordsPerChunk = 38): string[
 }
 
 interface AudioChunkResult {
+  rawBytes: Uint8Array;
   pcmBytes: Uint8Array;
   sampleRate: number;
+  isWav: boolean;
 }
 
 /**
- * Realiza la petición a Gemini Flash Audio para sintetizar un fragmento individual de voz.
+ * Realiza la petición a Gemini Flash Audio TTS para sintetizar un fragmento individual de voz.
  */
 async function fetchGeminiAudioPcmChunk(
   chunkText: string,
@@ -408,101 +410,157 @@ async function fetchGeminiAudioPcmChunk(
   apiKey: string
 ): Promise<AudioChunkResult> {
   const modelsToTry = [
-    'gemini-3.8-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-001',
-    'gemini-1.5-flash',
+    'gemini-3.8-flash-tts',
+    'gemini-3.8-flash-lite-tts',
+    'gemini-3.1-flash-tts-preview',
+    'gemini-2.5-flash-tts',
+    'gemini-2.0-flash-exp',
   ];
   let lastError: Error | null = null;
+  const isFemaleVoice = /(aoede|kore)/i.test(voiceName);
 
   for (const model of modelsToTry) {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const payload = {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: chunkText,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName,
+    const payloadsToTry = [
+      {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: chunkText,
+                speechMetadata: {
+                  style: isFemaleVoice
+                    ? 'conversational, warm and expressive'
+                    : 'clear, energetic and dynamic',
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName,
+              },
             },
           },
         },
       },
-    };
+      {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: chunkText,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName,
+              },
+            },
+          },
+        },
+      },
+    ];
 
-    try {
-      let response: Response;
-
+    for (const payload of payloadsToTry) {
       try {
-        response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      } catch {
-        // Fallback proxy serverless
-        response = await fetch('/api/ai-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: endpoint,
+        let response: Response;
+
+        try {
+          response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            data: payload,
-          }),
-        });
+            body: JSON.stringify(payload),
+          });
+        } catch {
+          // Fallback proxy serverless
+          response = await fetch('/api/ai-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: endpoint,
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              data: payload,
+            }),
+          });
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text();
+          if (response.status === 400 && 'speechMetadata' in (payload.contents[0].parts[0] as any)) {
+            continue;
+          }
+          throw new Error(`HTTP ${response.status} en modelo ${model}: ${errBody.slice(0, 200)}`);
+        }
+
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        const part = candidate?.content?.parts?.find(
+          (p: any) => p.inlineData?.data || p.inline_data?.data || p.audio?.data
+        );
+
+        if (!part) {
+          console.warn(`[GeminiAudio] Respuesta de ${model} recibida sin audio:`, JSON.stringify(candidate || data).slice(0, 300));
+          throw new Error(`Respuesta de ${model} no contiene datos de audio.`);
+        }
+
+        const inlineObj = part.inlineData || part.inline_data || part.audio;
+        const base64Audio = inlineObj.data;
+        const mimeType = inlineObj.mimeType || inlineObj.mime_type || 'audio/wav';
+
+        const binaryString = atob(base64Audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        let isWav = false;
+        let sampleRate = 24000;
+
+        if (
+          bytes.length >= 44 &&
+          bytes[0] === 0x52 && // 'R'
+          bytes[1] === 0x49 && // 'I'
+          bytes[2] === 0x46 && // 'F'
+          bytes[3] === 0x46    // 'F'
+        ) {
+          isWav = true;
+          const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+          sampleRate = view.getUint32(24, true);
+        } else {
+          const rateMatch = mimeType.match(/rate=(\d+)/i);
+          if (rateMatch) {
+            sampleRate = parseInt(rateMatch[1], 10);
+          }
+        }
+
+        const pcmBytes = isWav ? bytes.slice(44) : bytes;
+
+        return {
+          rawBytes: bytes,
+          pcmBytes,
+          sampleRate,
+          isWav,
+        };
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.warn(`[GeminiAudio] Fallo al generar fragmento con ${model}:`, lastError.message);
+        break;
       }
-
-      if (!response.ok) {
-        const errBody = await response.text();
-        throw new Error(`HTTP ${response.status} en modelo ${model}: ${errBody.slice(0, 200)}`);
-      }
-
-      const data = await response.json();
-      const candidate = data.candidates?.[0];
-      const part = candidate?.content?.parts?.find((p: any) => p.inlineData?.data);
-
-      if (!part?.inlineData?.data) {
-        throw new Error(`Respuesta de ${model} no contiene datos de audio.`);
-      }
-
-      const base64Audio = part.inlineData.data;
-      const mimeType = part.inlineData.mimeType || 'audio/pcm;rate=24000';
-
-      const binaryString = atob(base64Audio);
-      const len = binaryString.length;
-      let bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      let sampleRate = 24000;
-      const rateMatch = mimeType.match(/rate=(\d+)/i);
-      if (rateMatch) {
-        sampleRate = parseInt(rateMatch[1], 10);
-      }
-
-      // Si el mimeType incluye WAV, la cabecera ocupa los primeros 44 bytes; extraer solo datos PCM
-      if (mimeType.toLowerCase().includes('wav') && bytes.length > 44) {
-        bytes = bytes.slice(44);
-      }
-
-      return { pcmBytes: bytes, sampleRate };
-    } catch (err: unknown) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`[GeminiAudio] Fallo al generar fragmento con ${model}, probando siguiente:`, lastError.message);
     }
   }
 
@@ -549,13 +607,17 @@ export async function synthesizeGeminiSpeech(
 
   const requestPromise = (async () => {
     // Dividir el parlamento en fragmentos seguros delimitados por oraciones completas
-    const chunks = splitTextIntoSpeechChunks(cleanText, 38);
+    const chunks = splitTextIntoSpeechChunks(cleanText, 120);
 
     let finalBlob: Blob;
 
     if (chunks.length === 1) {
       const result = await fetchGeminiAudioPcmChunk(chunks[0], voiceName, apiKey);
-      finalBlob = pcmToWavBlob(result.pcmBytes, result.sampleRate);
+      if (result.isWav) {
+        finalBlob = new Blob([result.rawBytes.buffer as ArrayBuffer], { type: 'audio/wav' });
+      } else {
+        finalBlob = pcmToWavBlob(result.pcmBytes, result.sampleRate);
+      }
     } else {
       // Sintetizar fragmentos secuencialmente para evitar errores de tasa de concurrencia (429)
       const chunkResults: AudioChunkResult[] = [];
