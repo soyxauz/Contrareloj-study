@@ -45,6 +45,7 @@ import {
   Hospital,
   Lock,
   Key,
+  LogIn,
 } from 'lucide-react';
 import type { InputTab } from './CreateStudyKitView';
 import { isAIWorking } from '../services/aiService';
@@ -117,6 +118,7 @@ interface HomeViewProps {
   onResetDefaults?: () => void;
   userId?: string | null;
   onOpenAISettings?: () => void;
+  onOpenAuth?: () => void;
 }
 
 const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.ReactNode; gradient: string }[] = [
@@ -152,6 +154,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onResetDefaults,
   userId = null,
   onOpenAISettings,
+  onOpenAuth,
 }) => {
   const [isAIActive, setIsAIActive] = React.useState<boolean>(isAIWorking);
 
@@ -523,25 +526,33 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-white mb-2">No tienes ningún Study Kit activo</h3>
             <p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-              Has eliminado todos tus libros de estudio. Puedes crear uno nuevo en cualquier momento o restablecer los kits de ejemplo predeterminados.
+              {userId
+                ? 'Aún no tienes Study Kits creados en esta cuenta. Sube tu material para generar uno nuevo o sincroniza con Google Drive.'
+                : 'Has cerrado sesión o aún no has iniciado sesión. Inicia sesión con tu cuenta para recuperar todo tu progreso guardado, o crea un kit nuevo.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={() => onNavigate('create')}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Crear nuevo Study Kit
-              </button>
-              {onResetDefaults && (
+              {!userId && onOpenAuth && (
                 <button
-                  onClick={onResetDefaults}
-                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-300 hover:text-white hover:bg-thea-surfaceLight text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  type="button"
+                  onClick={onOpenAuth}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  Restablecer kits de ejemplo
+                  <LogIn className="w-4 h-4" />
+                  <span>Iniciar Sesión</span>
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => onNavigate('create')}
+                className={`px-5 py-2.5 rounded-xl ${
+                  !userId && onOpenAuth
+                    ? 'bg-thea-surface border border-thea-border text-slate-200 hover:text-white hover:bg-thea-surfaceLight'
+                    : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-900/20'
+                } font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer`}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Crear nuevo Study Kit</span>
+              </button>
             </div>
           </div>
         ) : filteredKits.length === 0 ? (

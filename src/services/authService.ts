@@ -197,25 +197,25 @@ export const authService = {
    */
   getUserKits(userId: string | null): StudyKit[] {
     try {
-      const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
+      if (!userId) {
+        const key = 'thea_guest_kits';
+        const stored = localStorage.getItem(key);
+        if (stored !== null) {
+          return JSON.parse(stored);
+        }
+        return [];
+      }
+
+      const key = `thea_user_kits_${userId}`;
       const stored = localStorage.getItem(key);
       if (stored !== null) {
         return JSON.parse(stored);
       }
 
-      // Si es invitado y existe el legado `thea_study_kits_v2`, usarlo
-      if (!userId) {
-        const legacy = localStorage.getItem('thea_study_kits_v2');
-        if (legacy !== null) return JSON.parse(legacy);
-      }
-
-      // Inicializar con copias de los kits de fábrica solo en el primer inicio absoluto
-      const initial = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
-      localStorage.setItem(key, JSON.stringify(initial));
-      return initial;
+      return [];
     } catch (e) {
       console.error('Error al obtener kits de usuario', e);
-      return JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
+      return [];
     }
   },
 
@@ -224,17 +224,23 @@ export const authService = {
    * Transfiere automáticamente los activos pesados a IndexedDB para no saturar LocalStorage.
    */
   saveUserKits(userId: string | null, kits: StudyKit[]): void {
+    if (!userId) {
+      try {
+        localStorage.setItem('thea_guest_kits', JSON.stringify(kits));
+      } catch (e) {
+        console.warn('Error al guardar kits de invitado:', e);
+      }
+      return;
+    }
+
     // Persistir activos en IndexedDB en segundo plano
     saveAssetsFromKits(kits).catch((err) => {
       console.warn('[authService] Error al sincronizar activos con IndexedDB:', err);
     });
 
-    const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
+    const key = `thea_user_kits_${userId}`;
     try {
       localStorage.setItem(key, JSON.stringify(kits));
-      if (!userId) {
-        localStorage.setItem('thea_study_kits_v2', JSON.stringify(kits));
-      }
     } catch (e) {
       console.warn('Quota excedida al guardar kits completos en LocalStorage, optimizando con IndexedDB...', e);
       try {
@@ -248,7 +254,7 @@ export const authService = {
         }));
         localStorage.setItem(key, JSON.stringify(lightweight));
       } catch (fallbackErr) {
-        console.error('Error crítico al persistir kits en LocalStorage:', fallbackErr);
+        console.error('Error crítico al persistir kits ligeros:', fallbackErr);
       }
     }
   },

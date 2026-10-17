@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
 import { DEFAULT_STUDY_KITS } from './data/defaultKits';
 import { BookOpen } from 'lucide-react';
@@ -53,10 +53,12 @@ export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
+  const isLoggingOutRef = useRef(false);
 
-  // Load kits from authService (associated with currentUser or guest)
+  // Load kits from authService: si no hay usuario autenticado, inicia completamente vacío
   const [kits, setKits] = useState<StudyKit[]>(() => {
-    const userKits = authService.getUserKits(currentUser ? currentUser.id : null);
+    if (!currentUser) return [];
+    const userKits = authService.getUserKits(currentUser.id);
     const cleanKits = userKits.filter(k => !isCorruptedKit(k));
     return cleanKits;
   });
@@ -102,20 +104,21 @@ export const App: React.FC = () => {
     localStorage.setItem('thea_developersettings', JSON.stringify(permanentSettings));
   }, []);
 
-  // Sync Study Kits for current user or guest
+  // Sync Study Kits for current user (protegido contra sobreescritura al cerrar sesión)
   useEffect(() => {
+    if (isLoggingOutRef.current) return;
+    if (!currentUser) return;
     try {
-      authService.saveUserKits(currentUser ? currentUser.id : null, kits);
+      authService.saveUserKits(currentUser.id, kits);
     } catch (e) {
       console.error('Error al guardar Study Kits:', e);
     }
   }, [kits, currentUser]);
 
-  // Sincronización al inicio desde Google Drive si hay sesión activa o token válido
+  // Sincronización al inicio desde Google Drive solo si hay usuario autenticado y token válido
   useEffect(() => {
-    if (googleDriveService.getValidAccessToken()) {
-      const effectiveId = currentUser ? currentUser.id : 'guest';
-      googleDriveService.pullFromDrive(effectiveId).then((pulled) => {
+    if (currentUser && googleDriveService.getValidAccessToken()) {
+      googleDriveService.pullFromDrive(currentUser.id).then((pulled) => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const clean = pulled.filter(k => !isCorruptedKit(k));
           if (clean.length > 0) {
@@ -134,6 +137,7 @@ export const App: React.FC = () => {
 
   // Respaldo en segundo plano hacia Google Drive con debounce de 2.5s
   useEffect(() => {
+    if (isLoggingOutRef.current) return;
     if (!currentUser || !googleDriveService.getValidAccessToken()) return;
     const timer = setTimeout(() => {
       googleDriveService.pushToDrive(currentUser.id, kits).catch((err) => {
@@ -187,9 +191,10 @@ export const App: React.FC = () => {
   }, [currentKit, kits]);
 
   const handleAuthSuccess = (user: User) => {
+    isLoggingOutRef.current = false;
     setCurrentUser(user);
 
-    // Restaurar ajustes de IA asociados a esta cuenta solo si tienen clave válida
+    // 1. Restaurar ajustes de IA asociados a esta cuenta
     const userAISettings = authService.getUserAISettings(user.id);
     const currentSettings = getAISettings();
     if (userAISettings && userAISettings.apiKey && userAISettings.apiKey.trim().length > 0) {
@@ -198,6 +203,7 @@ export const App: React.FC = () => {
       authService.saveUserAISettings(user.id, currentSettings);
     }
 
+    // 2. Restaurar kits del usuario guardados localmente
     const userKits = authService.getUserKits(user.id);
     const clean = userKits.filter(k => !isCorruptedKit(k));
     setKits(clean);
@@ -208,22 +214,47 @@ export const App: React.FC = () => {
     } else {
       localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
     }
+
+    // 3. Sincronizar con Google Drive para recuperar todo el progreso en la nube
+    if (googleDriveService.getValidAccessToken()) {
+      googleDriveService.pullFromDrive(user.id).then((pulled) => {
+        if (pulled && Array.isArray(pulled) && pulled.length > 0) {
+          const cleanPulled = pulled.filter(k => !isCorruptedKit(k));
+          if (cleanPulled.length > 0) {
+            setKits(cleanPulled);
+            const firstPulled = cleanPulled[0] || null;
+            setCurrentKit(firstPulled);
+            if (firstPulled) {
+              localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
+            }
+          }
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('thea_ai_settings_changed'));
+        }
+      }).catch(err => {
+        console.warn('[App] Error al sincronizar desde Google Drive tras login:', err);
+      });
+    }
   };
 
   const handleLogout = () => {
-    googleDriveService.disconnect();
-    authService.logout();
-    resetAISettingsToDefault();
-    setCurrentUser(null);
-    const guestKits = authService.getUserKits(null);
-    const clean = guestKits.filter(k => !isCorruptedKit(k));
-    setKits(clean);
-    const first = clean[0] || null;
-    setCurrentKit(first);
-    if (first) {
-      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, first.id);
-    } else {
+    isLoggingOutRef.current = true;
+    try {
+      googleDriveService.disconnect();
+      authService.logout();
+      resetAISettingsToDefault();
+      setCurrentUser(null);
+      setKits([]);
+      setCurrentKit(null);
       localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
+      localStorage.setItem('thea_guest_kits', JSON.stringify([]));
+      localStorage.removeItem('thea_study_kits_v2');
+      setCurrentMode('home');
+    } finally {
+      setTimeout(() => {
+        isLoggingOutRef.current = false;
+      }, 400);
     }
   };
 
@@ -321,6 +352,7 @@ export const App: React.FC = () => {
             onResetDefaults={handleResetDefaults}
             userId={currentUser?.id || null}
             onOpenAISettings={() => setShowAIModal(true)}
+            onOpenAuth={() => setShowAuthModal(true)}
           />
         )}
         {currentMode === 'create' && (
@@ -438,6 +470,7 @@ export const App: React.FC = () => {
                 setCurrentKit(clean[0]);
               }
             }}
+            onLogout={handleLogout}
           />
         </React.Suspense>
       )}

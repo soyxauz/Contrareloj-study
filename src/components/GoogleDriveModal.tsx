@@ -22,6 +22,7 @@ interface GoogleDriveModalProps {
   kits: StudyKit[];
   onAuthSuccess?: (user: AppUser) => void;
   onKitsSynced?: (kits: StudyKit[]) => void;
+  onLogout?: () => void;
 }
 
 export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
@@ -31,6 +32,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   kits,
   onAuthSuccess,
   onKitsSynced,
+  onLogout,
 }) => {
   const [syncState, setSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
   const [clientId, setClientId] = useState<string>(() => googleDriveService.getClientId());
@@ -115,9 +117,14 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   };
 
   const handleDisconnect = () => {
-    if (window.confirm('¿Deseas desvincular Google Drive? Tus datos locales se conservarán en este dispositivo.')) {
-      googleDriveService.disconnect();
-      setNoticeMessage('Google Drive desvinculado.');
+    if (window.confirm('¿Deseas cerrar sesión de tu cuenta? Tu progreso se mantendrá respaldado y seguro en tu cuenta.')) {
+      if (onLogout) {
+        onLogout();
+      } else {
+        googleDriveService.disconnect();
+      }
+      setNoticeMessage('Sesión cerrada correctamente.');
+      onClose();
     }
   };
 
