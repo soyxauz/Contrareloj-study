@@ -1,6 +1,13 @@
 import type { StudyKit, DocumentAsset, User } from '../types';
 import { authService } from './authService';
-import { getAllStoredAssets, saveAssetsToIndexedDB, stripHeavyAssetsForLocalStorage } from './storageService';
+import {
+  getAllStoredAssets,
+  saveAssetsToIndexedDB,
+  stripHeavyAssetsForLocalStorage,
+  saveSessionItem,
+  getSessionItem,
+  removeSessionItem
+} from './storageService';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
@@ -38,6 +45,8 @@ let currentState: DriveSyncState = {
   avatarUrl: null,
   filesSyncedCount: 0,
 };
+
+let proactiveRefreshTimer: any = null;
 
 // Initialize cached state from storage
 try {
@@ -86,6 +95,97 @@ function notifyState(): void {
 function updateState(partial: Partial<DriveSyncState>): void {
   currentState = { ...currentState, ...partial };
   notifyState();
+}
+
+/**
+ * Restaura las credenciales y el estado de Google Drive desde IndexedDB
+ * en caso de que localStorage haya sido reiniciado o purgado por el navegador.
+ */
+async function restoreDriveStateFromIndexedDB(): Promise<void> {
+  try {
+    const [id, prof, token, exp, lastSync] = await Promise.all([
+      getSessionItem<string>(STORAGE_CLIENT_ID_KEY),
+      getSessionItem<any>(STORAGE_PROFILE_KEY),
+      getSessionItem<string>(STORAGE_TOKEN_KEY),
+      getSessionItem<string>(STORAGE_TOKEN_EXP_KEY),
+      getSessionItem<string>(STORAGE_LAST_SYNC_KEY),
+    ]);
+
+    let changed = false;
+    if (id && !localStorage.getItem(STORAGE_CLIENT_ID_KEY)) {
+      localStorage.setItem(STORAGE_CLIENT_ID_KEY, id);
+    }
+    if (prof && !localStorage.getItem(STORAGE_PROFILE_KEY)) {
+      localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(prof));
+      currentState.userEmail = prof.email || null;
+      currentState.userName = prof.name || null;
+      currentState.avatarUrl = prof.avatarUrl || null;
+      changed = true;
+    }
+    if (token && !localStorage.getItem(STORAGE_TOKEN_KEY)) {
+      localStorage.setItem(STORAGE_TOKEN_KEY, token);
+    }
+    if (exp && !localStorage.getItem(STORAGE_TOKEN_EXP_KEY)) {
+      localStorage.setItem(STORAGE_TOKEN_EXP_KEY, exp);
+    }
+    if (lastSync && !localStorage.getItem(STORAGE_LAST_SYNC_KEY)) {
+      localStorage.setItem(STORAGE_LAST_SYNC_KEY, lastSync);
+      currentState.lastSyncTime = parseInt(lastSync, 10);
+      changed = true;
+    }
+
+    if (changed) {
+      const currentToken = localStorage.getItem(STORAGE_TOKEN_KEY);
+      const currentExpStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
+      if (currentToken && currentExpStr) {
+        const expTime = parseInt(currentExpStr, 10);
+        if (Date.now() <= expTime - 60000) {
+          currentState.status = 'synced';
+        }
+      }
+      notifyState();
+    }
+  } catch (e) {
+    console.warn('[GoogleDriveService] Error al restaurar estado de Drive desde IndexedDB:', e);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  restoreDriveStateFromIndexedDB();
+}
+
+/**
+ * Monitor en segundo plano que renueva proactivamente el token de Google
+ * cada 5 minutos si está a menos de 15 minutos de expirar, manteniendo la sesión indefinida.
+ */
+function startProactiveTokenRefresher(): void {
+  if (typeof window === 'undefined') return;
+  if (proactiveRefreshTimer) return;
+
+  proactiveRefreshTimer = setInterval(() => {
+    try {
+      if (!googleDriveService.isLinked()) return;
+
+      const expStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
+      const token = localStorage.getItem(STORAGE_TOKEN_KEY);
+
+      const now = Date.now();
+      const expTime = expStr ? parseInt(expStr, 10) : 0;
+      const needsRefresh = !token || !expTime || (expTime - now < 15 * 60 * 1000);
+
+      if (needsRefresh) {
+        googleDriveService.attemptSilentTokenRefresh().catch((err) => {
+          console.warn('[GoogleDriveService] Renovación silenciosa en background diferida:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('[GoogleDriveService] Error en ciclo de renovación proactiva:', e);
+    }
+  }, 5 * 60 * 1000);
+}
+
+if (typeof window !== 'undefined') {
+  startProactiveTokenRefresher();
 }
 
 /**
@@ -178,15 +278,17 @@ export const googleDriveService = {
   },
 
   /**
-   * Guarda un nuevo Client ID en localStorage.
+   * Guarda un nuevo Client ID en localStorage e IndexedDB.
    */
   setClientId(clientId: string): void {
     const clean = clientId.trim();
     if (clean) {
       localStorage.setItem(STORAGE_CLIENT_ID_KEY, clean);
+      saveSessionItem(STORAGE_CLIENT_ID_KEY, clean).catch(() => {});
       updateState({ status: 'idle', errorMessage: null });
     } else {
       localStorage.removeItem(STORAGE_CLIENT_ID_KEY);
+      removeSessionItem(STORAGE_CLIENT_ID_KEY).catch(() => {});
     }
   },
 
@@ -226,6 +328,7 @@ export const googleDriveService = {
 
   /**
    * Intenta renovar el token de acceso de Google de forma silenciosa sin interrumpir al usuario.
+   * Utiliza el hint del perfil del usuario para resolver la cuenta en segundo plano de manera transparente.
    */
   async attemptSilentTokenRefresh(): Promise<string | null> {
     const clientId = this.getClientId();
@@ -233,13 +336,26 @@ export const googleDriveService = {
 
     try {
       await ensureGsiLoaded();
+
+      let userEmail: string | undefined;
+      const rawProfile = localStorage.getItem(STORAGE_PROFILE_KEY);
+      if (rawProfile) {
+        try {
+          const p = JSON.parse(rawProfile);
+          if (p?.email) userEmail = p.email;
+        } catch {}
+      }
+      if (!userEmail && currentState.userEmail) {
+        userEmail = currentState.userEmail;
+      }
+
       return await new Promise<string | null>((resolve) => {
         try {
           const timeout = setTimeout(() => {
             resolve(null);
-          }, 3500);
+          }, 6000);
 
-          const client = (window as any).google.accounts.oauth2.initTokenClient({
+          const clientConfig: any = {
             client_id: clientId,
             scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
             prompt: '',
@@ -251,17 +367,27 @@ export const googleDriveService = {
               }
               const expiresIn = response.expires_in ? parseInt(response.expires_in, 10) : 3600;
               this.setAccessToken(response.access_token, expiresIn);
-              updateState({ status: 'idle', errorMessage: null });
+              updateState({ status: 'synced', errorMessage: null });
               resolve(response.access_token);
             },
             error_callback: () => {
               clearTimeout(timeout);
               resolve(null);
             },
-          });
+          };
+
+          if (userEmail) {
+            clientConfig.hint = userEmail;
+          }
+
+          const client = (window as any).google.accounts.oauth2.initTokenClient(clientConfig);
 
           // Solicitar token silenciosamente sin forzar selector si la sesión del navegador sigue activa
-          client.requestAccessToken({ prompt: '' });
+          const reqOpts: any = { prompt: '' };
+          if (userEmail) {
+            reqOpts.hint = userEmail;
+          }
+          client.requestAccessToken(reqOpts);
         } catch {
           resolve(null);
         }
@@ -294,12 +420,14 @@ export const googleDriveService = {
   },
 
   /**
-   * Guarda el token de acceso con su tiempo de expiración.
+   * Guarda el token de acceso con su tiempo de expiración tanto en LocalStorage como en IndexedDB.
    */
   setAccessToken(token: string, expiresInSec: number = 3600): void {
     const expTime = Date.now() + expiresInSec * 1000;
     localStorage.setItem(STORAGE_TOKEN_KEY, token);
     localStorage.setItem(STORAGE_TOKEN_EXP_KEY, expTime.toString());
+    saveSessionItem(STORAGE_TOKEN_KEY, token).catch(() => {});
+    saveSessionItem(STORAGE_TOKEN_EXP_KEY, expTime.toString()).catch(() => {});
   },
 
   /**
@@ -308,10 +436,12 @@ export const googleDriveService = {
   clearAccessToken(): void {
     localStorage.removeItem(STORAGE_TOKEN_KEY);
     localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
+    removeSessionItem(STORAGE_TOKEN_KEY).catch(() => {});
+    removeSessionItem(STORAGE_TOKEN_EXP_KEY).catch(() => {});
   },
 
   /**
-   * Desconecta la cuenta de Google y remueve los tokens locales.
+   * Desconecta la cuenta de Google y remueve los tokens locales e IndexedDB.
    */
   disconnect(): void {
     const token = localStorage.getItem(STORAGE_TOKEN_KEY);
@@ -326,6 +456,11 @@ export const googleDriveService = {
     localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
     localStorage.removeItem(STORAGE_PROFILE_KEY);
     localStorage.removeItem(STORAGE_LAST_SYNC_KEY);
+
+    removeSessionItem(STORAGE_TOKEN_KEY).catch(() => {});
+    removeSessionItem(STORAGE_TOKEN_EXP_KEY).catch(() => {});
+    removeSessionItem(STORAGE_PROFILE_KEY).catch(() => {});
+    removeSessionItem(STORAGE_LAST_SYNC_KEY).catch(() => {});
 
     // Limpiar la API personal del almacenamiento local por privacidad al desconectar la cuenta
     resetAISettingsToDefault();
@@ -412,6 +547,7 @@ export const googleDriveService = {
     };
 
     localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
+    saveSessionItem(STORAGE_PROFILE_KEY, profile).catch(() => {});
     updateState({
       userEmail: profile.email,
       userName: profile.name,
@@ -891,9 +1027,13 @@ export const googleDriveService = {
       const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
       if (is401) {
         this.clearAccessToken();
+        const refreshedToken = await this.attemptSilentTokenRefresh();
+        if (refreshedToken) {
+          return this.pullFromDrive(userId);
+        }
         updateState({
           status: 'needs_reauth',
-          errorMessage: 'Tu sesión de Google Drive ha expirado. Haz clic en Reconectar Cuenta.',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
         });
       } else {
         updateState({ status: 'error', errorMessage: err?.message || 'Error al descargar datos de Drive.' });
@@ -903,16 +1043,19 @@ export const googleDriveService = {
   },
 
   /**
-   * Sube los datos locales actualizados a Google Drive en segundo plano.
+   * Sube los datos locales actualizados a Google Drive en segundo plano con auto-renovación silenciosa de token.
    */
   async pushToDrive(userId: string, kits: StudyKit[]): Promise<void> {
-    const token = this.getValidAccessToken();
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
     if (!token) {
       const hasEmail = Boolean(localStorage.getItem(STORAGE_PROFILE_KEY));
       if (hasEmail) {
         updateState({
           status: 'needs_reauth',
-          errorMessage: 'Tu sesión de Google Drive ha expirado. Reconecta tu cuenta para sincronizar.',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión para sincronizar.',
         });
       }
       return;
@@ -972,9 +1115,13 @@ export const googleDriveService = {
       const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
       if (is401) {
         this.clearAccessToken();
+        const refreshedToken = await this.attemptSilentTokenRefresh();
+        if (refreshedToken) {
+          return this.pushToDrive(userId, kits);
+        }
         updateState({
           status: 'needs_reauth',
-          errorMessage: 'Tu sesión de Google Drive ha expirado. Haz clic en Reconectar Cuenta.',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
         });
       } else {
         updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
@@ -986,13 +1133,16 @@ export const googleDriveService = {
    * Sube inmediatamente la configuración de IA y API propia a Google Drive.
    */
   async syncAISettingsToDrive(overrideSettings?: AISettings): Promise<boolean> {
-    const token = this.getValidAccessToken();
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
     if (!token) {
       const hasEmail = Boolean(localStorage.getItem(STORAGE_PROFILE_KEY));
       if (hasEmail) {
         updateState({
           status: 'needs_reauth',
-          errorMessage: 'Tu sesión de Google Drive ha expirado. Reconecta tu cuenta.',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
         });
       }
       return false;
@@ -1008,9 +1158,13 @@ export const googleDriveService = {
       const is401 = e?.message?.includes('401') || e?.message?.includes('TOKEN_EXPIRED') || e?.status === 401;
       if (is401) {
         this.clearAccessToken();
+        const refreshedToken = await this.attemptSilentTokenRefresh();
+        if (refreshedToken) {
+          return this.syncAISettingsToDrive(overrideSettings);
+        }
         updateState({
           status: 'needs_reauth',
-          errorMessage: 'Tu sesión de Google Drive ha expirado. Haz clic en Reconectar Cuenta.',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
         });
       }
       return false;

@@ -63,6 +63,21 @@ export const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
+  // Restauración de sesión persistente triple (IndexedDB / Cookie 1 año / LocalStorage)
+  useEffect(() => {
+    authService.restorePersistentSession().then((restoredUser) => {
+      if (restoredUser && !currentUser) {
+        setCurrentUser(restoredUser);
+        const userKits = authService.getUserKits(restoredUser.id);
+        const cleanKits = userKits.filter(k => !isCorruptedKit(k));
+        setKits(cleanKits);
+        if (cleanKits.length > 0 && !currentKit) {
+          setCurrentKit(cleanKits[0]);
+        }
+      }
+    });
+  }, []);
+
   // Load kits from authService: si no hay usuario autenticado, inicia completamente vacío
   const [kits, setKits] = useState<StudyKit[]>(() => {
     if (!currentUser) return [];

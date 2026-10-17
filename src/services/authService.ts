@@ -1,7 +1,14 @@
 import type { User, StudyKit, SmartStudySessionState } from '../types';
 import type { AISettings } from './aiService';
 import { DEFAULT_STUDY_KITS } from '../data/defaultKits';
-import { saveAssetsFromKits, stripHeavyAssetsForLocalStorage } from './storageService';
+import {
+  saveAssetsFromKits,
+  stripHeavyAssetsForLocalStorage,
+  saveSessionItem,
+  getSessionItem,
+  removeSessionItem,
+  requestPersistentStorage
+} from './storageService';
 
 interface StoredUserRecord extends User {
   passwordHash: string;
@@ -10,6 +17,63 @@ interface StoredUserRecord extends User {
 
 const STORAGE_USERS_KEY = 'thea_auth_users';
 const STORAGE_CURRENT_SESSION_KEY = 'thea_auth_session';
+
+function setSessionCookie(key: string, value: string, maxAgeDays = 365): void {
+  if (typeof document === 'undefined') return;
+  try {
+    const maxAge = maxAgeDays * 24 * 60 * 60;
+    document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  } catch (e) {
+    console.warn('[authService] Error guardando cookie de sesión:', e);
+  }
+}
+
+function getSessionCookie(key: string): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const cookies = document.cookie.split('; ');
+    const encodedKey = encodeURIComponent(key);
+    for (const c of cookies) {
+      const parts = c.split('=');
+      if (parts[0] === encodedKey) {
+        return decodeURIComponent(parts.slice(1).join('='));
+      }
+    }
+  } catch (e) {
+    console.warn('[authService] Error leyendo cookie de sesión:', e);
+  }
+  return null;
+}
+
+function removeSessionCookie(key: string): void {
+  if (typeof document === 'undefined') return;
+  try {
+    document.cookie = `${encodeURIComponent(key)}=; path=/; max-age=0; SameSite=Lax`;
+  } catch (e) {
+    console.warn('[authService] Error eliminando cookie de sesión:', e);
+  }
+}
+
+function persistSessionRecord(userId: string): void {
+  try {
+    localStorage.setItem(STORAGE_CURRENT_SESSION_KEY, userId);
+    setSessionCookie(STORAGE_CURRENT_SESSION_KEY, userId, 365);
+    saveSessionItem(STORAGE_CURRENT_SESSION_KEY, userId).catch(() => {});
+    requestPersistentStorage().catch(() => {});
+  } catch (e) {
+    console.warn('[authService] Error al persistir sesión extendida:', e);
+  }
+}
+
+function clearPersistedSessionRecord(): void {
+  try {
+    localStorage.removeItem(STORAGE_CURRENT_SESSION_KEY);
+    removeSessionCookie(STORAGE_CURRENT_SESSION_KEY);
+    removeSessionItem(STORAGE_CURRENT_SESSION_KEY).catch(() => {});
+  } catch (e) {
+    console.warn('[authService] Error al limpiar sesión extendida:', e);
+  }
+}
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -33,6 +97,7 @@ function getStoredUsers(): StoredUserRecord[] {
 function saveStoredUsers(users: StoredUserRecord[]): void {
   try {
     localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
+    saveSessionItem(STORAGE_USERS_KEY, users).catch(() => {});
   } catch (e) {
     console.error('Error al guardar usuarios en localStorage', e);
   }
@@ -41,10 +106,17 @@ function saveStoredUsers(users: StoredUserRecord[]): void {
 export const authService = {
   /**
    * Obtiene el usuario actual logueado o null si está en modo invitado.
+   * Cuenta con respaldo síncrono mediante cookie de 365 días en caso de purga de localStorage.
    */
   getCurrentUser(): User | null {
     try {
-      const currentId = localStorage.getItem(STORAGE_CURRENT_SESSION_KEY);
+      let currentId = localStorage.getItem(STORAGE_CURRENT_SESSION_KEY);
+      if (!currentId) {
+        currentId = getSessionCookie(STORAGE_CURRENT_SESSION_KEY);
+        if (currentId) {
+          localStorage.setItem(STORAGE_CURRENT_SESSION_KEY, currentId);
+        }
+      }
       if (!currentId) return null;
       const users = getStoredUsers();
       const user = users.find(u => u.id === currentId);
@@ -53,6 +125,45 @@ export const authService = {
       return safeUser;
     } catch (e) {
       console.error(e);
+      return null;
+    }
+  },
+
+  /**
+   * Restaura la sesión persistente desde IndexedDB si tanto LocalStorage como Cookies fueron limpiados.
+   */
+  async restorePersistentSession(): Promise<User | null> {
+    try {
+      const syncUser = this.getCurrentUser();
+      if (syncUser) {
+        persistSessionRecord(syncUser.id);
+        return syncUser;
+      }
+
+      const [storedId, storedUsers] = await Promise.all([
+        getSessionItem<string>(STORAGE_CURRENT_SESSION_KEY),
+        getSessionItem<StoredUserRecord[]>(STORAGE_USERS_KEY),
+      ]);
+
+      if (storedUsers && Array.isArray(storedUsers) && storedUsers.length > 0) {
+        const localUsers = getStoredUsers();
+        if (localUsers.length === 0) {
+          saveStoredUsers(storedUsers);
+        }
+      }
+
+      if (storedId) {
+        persistSessionRecord(storedId);
+        const users = getStoredUsers();
+        const user = users.find(u => u.id === storedId);
+        if (user) {
+          const { passwordHash: _, ...safeUser } = user;
+          return safeUser;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.warn('[authService] Error al restaurar sesión persistente desde IndexedDB:', e);
       return null;
     }
   },
@@ -93,8 +204,8 @@ export const authService = {
     const initialKits = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
     localStorage.setItem(`thea_user_kits_${newUser.id}`, JSON.stringify(initialKits));
 
-    // Iniciar sesión automáticamente
-    localStorage.setItem(STORAGE_CURRENT_SESSION_KEY, newUser.id);
+    // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
+    persistSessionRecord(newUser.id);
 
     const { passwordHash: _, ...safeUser } = newUser;
     return { success: true, user: safeUser };
@@ -117,7 +228,8 @@ export const authService = {
       return { success: false, error: 'Contraseña incorrecta. Por favor verifica tus datos.' };
     }
 
-    localStorage.setItem(STORAGE_CURRENT_SESSION_KEY, user.id);
+    // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
+    persistSessionRecord(user.id);
     const { passwordHash: _, ...safeUser } = user;
     return { success: true, user: safeUser };
   },
@@ -162,7 +274,8 @@ export const authService = {
         saveStoredUsers(users);
       }
 
-      localStorage.setItem(STORAGE_CURRENT_SESSION_KEY, existing.id);
+      // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
+      persistSessionRecord(existing.id);
       const { passwordHash: _, ...safeUser } = existing;
       return { success: true, user: safeUser };
     } catch (e: any) {
@@ -175,7 +288,7 @@ export const authService = {
    * Cierra la sesión activa regresando al modo invitado.
    */
   logout(): void {
-    localStorage.removeItem(STORAGE_CURRENT_SESSION_KEY);
+    clearPersistedSessionRecord();
   },
 
   /**
@@ -239,6 +352,7 @@ export const authService = {
     });
 
     const key = `thea_user_kits_${userId}`;
+    saveSessionItem(key, kits).catch(() => {});
     try {
       localStorage.setItem(key, JSON.stringify(kits));
     } catch (e) {

@@ -7,8 +7,9 @@ import type { DocumentAsset, StudyKit } from '../types';
  */
 
 const DB_NAME = 'TheaStorageDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const ASSET_STORE = 'assets';
+const SESSION_STORE = 'persistent_session';
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 const assetMemoryCache = new Map<string, DocumentAsset>();
@@ -32,6 +33,9 @@ function getDatabase(): Promise<IDBDatabase | null> {
         if (!db.objectStoreNames.contains(ASSET_STORE)) {
           db.createObjectStore(ASSET_STORE, { keyPath: 'id' });
         }
+        if (!db.objectStoreNames.contains(SESSION_STORE)) {
+          db.createObjectStore(SESSION_STORE, { keyPath: 'key' });
+        }
       };
 
       request.onsuccess = () => {
@@ -49,6 +53,88 @@ function getDatabase(): Promise<IDBDatabase | null> {
   });
 
   return dbPromise;
+}
+
+/**
+ * Solicita al navegador que garantice almacenamiento persistente inmutable.
+ */
+export async function requestPersistentStorage(): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+    try {
+      const isPersisted = await navigator.storage.persist();
+      return isPersisted;
+    } catch (e) {
+      console.warn('[StorageService] Error solicitando persistencia de almacenamiento:', e);
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Guarda un elemento de sesión en IndexedDB para recuperación permanente.
+ */
+export async function saveSessionItem(key: string, value: any): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SESSION_STORE, 'readwrite');
+      const store = tx.objectStore(SESSION_STORE);
+      store.put({ key, value, updatedAt: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Recupera un elemento de sesión desde IndexedDB.
+ */
+export async function getSessionItem<T = any>(key: string): Promise<T | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SESSION_STORE, 'readonly');
+      const store = tx.objectStore(SESSION_STORE);
+      const req = store.get(key);
+      req.onsuccess = () => {
+        if (req.result && req.result.value !== undefined) {
+          resolve(req.result.value as T);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Elimina un elemento de sesión de IndexedDB al cerrar sesión explícitamente.
+ */
+export async function removeSessionItem(key: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SESSION_STORE, 'readwrite');
+      const store = tx.objectStore(SESSION_STORE);
+      store.delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
 }
 
 /**
