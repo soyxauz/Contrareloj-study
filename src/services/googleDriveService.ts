@@ -595,7 +595,18 @@ export const googleDriveService = {
             const localUsers = authService.getRawStoredUsers();
             const mergedMap = new Map<string, any>();
             for (const u of localUsers) mergedMap.set(u.id, u);
-            for (const u of remoteUsers) mergedMap.set(u.id, u);
+            for (const u of remoteUsers) {
+              const localU = mergedMap.get(u.id);
+              if (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) {
+                u.aiSettings.verified = true;
+                authService.saveUserAISettings(u.id, u.aiSettings);
+                const currentSettings = getAISettings();
+                if (!currentSettings.apiKey || currentSettings.apiKey.trim().length === 0) {
+                  saveAISettings(u.aiSettings);
+                }
+              }
+              mergedMap.set(u.id, { ...localU, ...u });
+            }
             authService.setRawStoredUsers(Array.from(mergedMap.values()));
           }
         } catch (e) {

@@ -5,6 +5,7 @@ import { saveAssetsFromKits, stripHeavyAssetsForLocalStorage } from './storageSe
 
 interface StoredUserRecord extends User {
   passwordHash: string;
+  aiSettings?: AISettings;
 }
 
 const STORAGE_USERS_KEY = 'thea_auth_users';
@@ -344,8 +345,17 @@ export const authService = {
     try {
       const key = `thea_user_ai_settings_${userId}`;
       const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.apiKey && parsed.apiKey.trim().length > 0) return parsed;
+      }
+      // Buscar también dentro del registro de usuario
+      const users = getStoredUsers();
+      const user = users.find(u => u.id === userId);
+      if (user?.aiSettings && user.aiSettings.apiKey && user.aiSettings.apiKey.trim().length > 0) {
+        return user.aiSettings;
+      }
+      return raw ? JSON.parse(raw) : (user?.aiSettings || null);
     } catch (e) {
       console.error('Error al leer configuración de IA del usuario', e);
       return null;
@@ -360,6 +370,14 @@ export const authService = {
     try {
       const key = `thea_user_ai_settings_${userId}`;
       localStorage.setItem(key, JSON.stringify(settings));
+
+      // Guardar también dentro del registro de usuario para sincronización con Google Drive
+      const users = getStoredUsers();
+      const userIndex = users.findIndex(u => u.id === userId);
+      if (userIndex >= 0) {
+        users[userIndex].aiSettings = settings;
+        saveStoredUsers(users);
+      }
     } catch (e) {
       console.error('Error al guardar configuración de IA del usuario', e);
     }

@@ -154,25 +154,24 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
+  const handleClose = () => {
+    if (settings.apiKey && settings.apiKey.trim().length > 0) {
+      const updated: AISettings = { ...settings, verified: true };
+      saveAISettings(updated);
+      const user = authService.getCurrentUser();
+      if (user) authService.saveUserAISettings(user.id, updated);
+      googleDriveService.syncAISettingsToDrive(updated).catch(console.warn);
+    }
+    onClose();
+  };
+
   const handleSave = async () => {
     let currentSettings = { ...settings };
-    setIsTesting(true);
-    try {
-      const res = await testAIConnection(currentSettings);
-      setTestResult(res);
-      if (res.success) {
-        currentSettings.verified = true;
-        if (res.models && res.models.length > 0 && !currentSettings.model) {
-          currentSettings.model = res.models[0];
-        }
-      }
-    } catch {
-      // Continuar con el guardado para no obstaculizar al usuario
-    } finally {
-      setIsTesting(false);
+    if (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) {
+      currentSettings.verified = true;
     }
 
-    // Persistir siempre la configuración elegida por el usuario
+    // Persistir de inmediato para que la interfaz se desbloquee al instante sin esperas
     saveAISettings(currentSettings);
     setSettings(currentSettings);
 
@@ -192,7 +191,15 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     setTimeout(() => {
       setIsSaved(false);
       onClose();
-    }, 700);
+    }, 400);
+
+    // Ejecutar verificación en segundo plano para obtener lista de modelos si el servidor lo admite
+    testAIConnection(currentSettings).then(res => {
+      if (res.success && res.models && res.models.length > 0 && !currentSettings.model) {
+        currentSettings.model = res.models[0];
+        saveAISettings(currentSettings);
+      }
+    }).catch(() => {});
   };
 
   const applyPreset = (preset: AIPreset) => {
@@ -241,7 +248,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors"
           >
             <X className="w-5 h-5" />

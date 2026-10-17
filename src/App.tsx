@@ -5,7 +5,7 @@ import { BookOpen } from 'lucide-react';
 import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
 import { googleDriveService } from './services/googleDriveService';
-import { resetAISettingsToDefault, saveAISettings } from './services/aiService';
+import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
@@ -111,16 +111,20 @@ export const App: React.FC = () => {
     }
   }, [kits, currentUser]);
 
-  // Sincronización al inicio desde Google Drive si hay sesión activa
+  // Sincronización al inicio desde Google Drive si hay sesión activa o token válido
   useEffect(() => {
-    if (currentUser && googleDriveService.getValidAccessToken()) {
-      googleDriveService.pullFromDrive(currentUser.id).then((pulled) => {
+    if (googleDriveService.getValidAccessToken()) {
+      const effectiveId = currentUser ? currentUser.id : 'guest';
+      googleDriveService.pullFromDrive(effectiveId).then((pulled) => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const clean = pulled.filter(k => !isCorruptedKit(k));
           if (clean.length > 0) {
             setKits(clean);
             if (!currentKit) setCurrentKit(clean[0]);
           }
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('thea_ai_settings_changed'));
         }
       }).catch(err => {
         console.warn('[App] Error al sincronizar inicio desde Google Drive:', err);
@@ -185,10 +189,13 @@ export const App: React.FC = () => {
   const handleAuthSuccess = (user: User) => {
     setCurrentUser(user);
 
-    // Restaurar ajustes de IA asociados a esta cuenta si existen
+    // Restaurar ajustes de IA asociados a esta cuenta solo si tienen clave válida
     const userAISettings = authService.getUserAISettings(user.id);
-    if (userAISettings) {
+    const currentSettings = getAISettings();
+    if (userAISettings && userAISettings.apiKey && userAISettings.apiKey.trim().length > 0) {
       saveAISettings(userAISettings);
+    } else if (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) {
+      authService.saveUserAISettings(user.id, currentSettings);
     }
 
     const userKits = authService.getUserKits(user.id);
