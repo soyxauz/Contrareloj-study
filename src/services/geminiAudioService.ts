@@ -415,9 +415,10 @@ async function fetchGeminiAudioPcmChunk(
 ): Promise<AudioChunkResult> {
   const modelsToTry = [
     'gemini-3.8-flash',
-    'gemini-3.8-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
     'gemini-3.8-flash-tts',
-    'gemini-3.8-flash-lite-tts',
+    'gemini-2.0-flash-exp',
     'gemini-3.1-flash-tts-preview',
   ];
   let lastError: Error | null = null;
