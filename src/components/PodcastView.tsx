@@ -984,7 +984,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   </span>
                 </div>
               </div>
-              <div className="text-sm sm:text-base text-slate-100 font-medium leading-relaxed flex flex-wrap gap-x-1.5 gap-y-1 select-none">
+              <div className="text-sm sm:text-base font-medium leading-relaxed flex flex-wrap gap-x-1.5 gap-y-1 select-none">
                 {currentSegmentWords.map((word, wIdx) => {
                   const isCurrent = wIdx === currentWordIndexInSegment;
                   const isPast = wIdx < currentWordIndexInSegment;
@@ -995,12 +995,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                         const baseGlobal = segmentStartGlobalIndices[currentLineIndex] || 0;
                         seekToGlobalWord(baseGlobal + wIdx);
                       }}
-                      className={`px-1 py-0.5 rounded-lg cursor-pointer transition-all duration-150 ${
+                      className={`cursor-pointer transition-colors duration-150 ${
                         isCurrent
-                          ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md shadow-amber-500/40 scale-105 ring-2 ring-amber-300/60'
+                          ? 'text-white font-bold'
                           : isPast
-                          ? 'text-slate-200 hover:text-white'
-                          : 'text-slate-400/80 hover:text-white hover:bg-thea-surface'
+                          ? 'text-slate-400 hover:text-white'
+                          : 'text-slate-500 hover:text-white'
                       }`}
                       title={`Saltar a la palabra "${word}"`}
                     >
