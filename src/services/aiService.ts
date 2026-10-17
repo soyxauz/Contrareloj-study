@@ -13,7 +13,7 @@ export interface AISettings {
 }
 
 export interface AIPreset {
-  id: 'ollama-cloud' | 'groq' | 'gemini' | 'deepseek' | 'openai' | 'openrouter' | 'ollama';
+  id: 'ollama' | 'custom' | string;
   name: string;
   provider: 'ollama' | 'openai-compatible' | 'custom';
   baseUrl: string;
@@ -27,85 +27,13 @@ export interface AIPreset {
 
 export const AI_PRESETS: AIPreset[] = [
   {
-    id: 'ollama-cloud',
-    name: 'Ollama Cloud (Gemma 4)',
-    provider: 'openai-compatible',
-    baseUrl: 'https://ollama.com/v1',
-    model: 'gemma4:31b',
-    keyPlaceholder: 'Ingresa tu API Key de Ollama Cloud',
-    keyUrl: 'https://ollama.com/settings/keys',
-    description: 'Servicio cloud oficial con modelo Gemma 4 (31B). Requiere tu API Key personal.',
-    badge: 'Ollama Cloud',
-    freeTier: true,
-  },
-  {
-    id: 'groq',
-    name: 'Groq Cloud',
-    provider: 'openai-compatible',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    model: 'llama-3.3-70b-versatile',
-    keyPlaceholder: 'gsk_...',
-    keyUrl: 'https://console.groq.com/keys',
-    description: 'Ultra rápido y con nivel gratuito. Genera cuestionarios y kits completos en segundos.',
-    badge: 'Recomendado / Gratis',
-    freeTier: true,
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    provider: 'openai-compatible',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    model: 'gemini-1.5-flash',
-    keyPlaceholder: 'AIzaSy...',
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    description: 'Endpoint oficial OpenAI de Google Gemini. Nivel gratuito disponible en Google AI Studio.',
-    badge: 'Oficial Google / Gratis',
-    freeTier: true,
-  },
-  {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    provider: 'openai-compatible',
-    baseUrl: 'https://api.deepseek.com/v1',
-    model: 'deepseek-chat',
-    keyPlaceholder: 'sk-...',
-    keyUrl: 'https://platform.deepseek.com/api_keys',
-    description: 'Alta potencia de razonamiento lógico y pedagógico a muy bajo costo.',
-    badge: 'Alta Precisión',
-    freeTier: false,
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI (ChatGPT)',
-    provider: 'openai-compatible',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4o-mini',
-    keyPlaceholder: 'sk-proj-...',
-    keyUrl: 'https://platform.openai.com/api-keys',
-    description: 'Modelos GPT-4o y GPT-4o-mini oficiales de OpenAI.',
-    badge: 'OpenAI Oficial',
-    freeTier: false,
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    provider: 'openai-compatible',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'meta-llama/llama-3.3-70b-instruct',
-    keyPlaceholder: 'sk-or-v1-...',
-    keyUrl: 'https://openrouter.ai/keys',
-    description: 'Acceso unificado a múltiples modelos con opciones gratuitas.',
-    badge: 'Multi-Modelo',
-    freeTier: true,
-  },
-  {
     id: 'ollama',
     name: 'Ollama Local',
     provider: 'ollama',
     baseUrl: 'http://localhost:11434/v1',
     model: 'llama3.2',
-    keyPlaceholder: 'No requiere clave de API',
-    description: 'Ejecución 100% privada y offline. Requiere Ollama corriendo en tu equipo.',
+    keyPlaceholder: 'No requerida para Ollama local',
+    description: 'Ejecución 100% privada, offline y gratuita. Requiere Ollama corriendo en tu equipo.',
     badge: 'Offline / Privado',
     freeTier: true,
   },
@@ -115,12 +43,12 @@ const STORAGE_KEY = 'thea_ai_settings';
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
-  provider: 'openai-compatible',
-  baseUrl: 'https://ollama.com/v1',
+  provider: 'ollama',
+  baseUrl: 'http://localhost:11434/v1',
   apiKey: '',
-  model: 'gemma4:31b',
+  model: 'llama3.2',
   timeoutMs: 45000,
-  verified: false,
+  verified: true,
 };
 
 export function getAISettings(): AISettings {
@@ -128,7 +56,7 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      return { ...DEFAULT_AI_SETTINGS, ...parsed };
+      return { ...DEFAULT_AI_SETTINGS, ...parsed, enabled: true };
     } catch {
       // fallback
     }
@@ -137,7 +65,8 @@ export function getAISettings(): AISettings {
 }
 
 export function saveAISettings(settings: AISettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  const enforced = { ...settings, enabled: true };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(enforced));
   // Notificar cambios al sistema en tiempo real
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('thea_ai_settings_changed'));

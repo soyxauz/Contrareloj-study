@@ -20,7 +20,6 @@ import {
   RefreshCw,
   Cpu,
   ExternalLink,
-  Key,
   Cloud,
   Headphones,
   Sparkles
@@ -50,7 +49,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     models?: string[];
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('groq');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama');
   const isLocalHost = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
@@ -257,12 +256,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 <h2 className="text-base sm:text-lg font-bold text-white">
                   Motor de Inteligencia Artificial
                 </h2>
-                <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                  Universal API
+                <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Ollama Local
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Compatible con OpenAI, Google Gemini, DeepSeek, Groq, OpenRouter y Ollama
+                Configuración de Ollama Local para generación inteligente y offline
               </p>
             </div>
           </div>
@@ -277,50 +276,39 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto space-y-5 pr-1">
-          {/* Master AI Toggle */}
+          {/* Master AI Status - Siempre Activo */}
           <div className="p-3.5 rounded-2xl bg-thea-surfaceLight border border-thea-border flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Cpu className={`w-5 h-5 ${settings.enabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <Cpu className="w-5 h-5 text-emerald-400" />
               <div>
                 <span className="font-bold text-xs sm:text-sm text-white block">
                   Generación de Preguntas por IA Activa
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  {settings.enabled
-                    ? 'Evaluaciones 100% pedagógicas y ancladas generadas por LLM'
-                    : 'Modo desactivado'}
+                  Evaluaciones 100% pedagógicas y ancladas generadas localmente por Ollama
                 </span>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer ${
-                settings.enabled ? 'bg-violet-600' : 'bg-slate-700'
-              }`}
-            >
-              <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                  settings.enabled ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Siempre Activo</span>
+            </div>
           </div>
 
           {/* Provider Presets */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                Selecciona tu Proveedor de IA (Preajustes Rápidos):
+                Proveedor de IA:
               </label>
               <span className={`text-[10px] flex items-center gap-1 font-semibold ${isLocalHost ? 'text-emerald-400' : 'text-cyan-400'}`}>
                 <ShieldCheck className="w-3 h-3" />
-                {isLocalHost ? 'Proxy Anti-CORS Local Activo' : 'Versión Web (GitHub Pages)'}
+                {isLocalHost ? 'Servidor Local Detectado' : 'Versión Web'}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {AI_PRESETS.map(preset => {
                 const isSelected = selectedPresetId === preset.id;
                 return (
@@ -328,29 +316,30 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                     key={preset.id}
                     type="button"
                     onClick={() => applyPreset(preset)}
-                    className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                    className={`p-3.5 rounded-xl border text-left relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 transition-all ${
                       isSelected
                         ? 'border-violet-500 bg-violet-950/40 text-white ring-1 ring-violet-500/50 shadow-md shadow-violet-900/20'
-                        : 'border-thea-border bg-thea-surfaceLight text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                        : 'border-thea-border bg-thea-surfaceLight text-slate-400 hover:text-white'
                     }`}
                   >
                     <div>
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-xs font-bold leading-tight text-white block">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs sm:text-sm font-bold text-white block">
                           {preset.name}
                         </span>
-                        {preset.freeTier && (
-                          <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                            Gratis
-                          </span>
-                        )}
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                          Gratis
+                        </span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
+                          {preset.badge}
+                        </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-snug">
+                      <p className="text-[11px] text-slate-400 leading-snug">
                         {preset.description}
                       </p>
                     </div>
-                    <span className="text-[9px] text-violet-300 mt-2 block font-medium">
-                      {preset.model.split('/').pop()}
+                    <span className="text-xs text-violet-300 font-mono font-medium shrink-0 bg-violet-900/40 px-2.5 py-1 rounded-lg border border-violet-500/30 self-start sm:self-center">
+                      Modelo: {preset.model}
                     </span>
                   </button>
                 );
@@ -358,81 +347,22 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Key acquisition helper banner if cloud provider */}
-          {activePreset?.keyUrl && (
-            <div className="p-3 rounded-xl bg-violet-950/30 border border-violet-500/30 flex items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 text-slate-300">
-                <Key className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>¿No tienes clave de {activePreset.name}? Consíguela gratis:</span>
-              </div>
-              <a
-                href={activePreset.keyUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-600/30 hover:bg-violet-600 text-violet-200 hover:text-white font-semibold transition-colors shrink-0 text-[11px]"
-              >
-                <span>Obtener API Key</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+          {/* Ollama local guidance */}
+          <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200/90 leading-relaxed">
+            <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-300">
+              <Server className="w-4 h-4 text-amber-400 shrink-0" />
+              Instrucciones para Ollama Local en Windows:
             </div>
-          )}
-
-          {/* Ollama Cloud guidance on static web hosting */}
-          {selectedPresetId === 'ollama-cloud' && !isLocalHost && (
-            <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/35 text-xs text-amber-200/90 leading-relaxed">
-              <div className="font-bold flex items-center gap-1.5 mb-1.5 text-amber-300">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                Compatibilidad en GitHub Pages:
-              </div>
-              <p className="text-[11px] text-slate-300 mb-2">
-                Ollama Cloud no admite peticiones directas desde páginas web estáticas sin backend (bloqueo por política de CORS del navegador).
-              </p>
-              <p className="text-[11px] text-slate-300 mb-2.5">
-                Para generar preguntas en esta versión web de GitHub Pages, te recomendamos activar <strong>Google Gemini</strong> o <strong>Groq Cloud</strong> (ambos son 100% gratuitos y admiten CORS en navegadores).
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const groqPreset = AI_PRESETS.find(p => p.id === 'groq');
-                    if (groqPreset) applyPreset(groqPreset);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-200 hover:text-white font-semibold text-[11px] transition-colors"
-                >
-                  Usar Groq Cloud
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const geminiPreset = AI_PRESETS.find(p => p.id === 'gemini');
-                    if (geminiPreset) applyPreset(geminiPreset);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-violet-600/30 hover:bg-violet-600 border border-violet-500/40 text-violet-200 hover:text-white font-semibold text-[11px] transition-colors"
-                >
-                  Usar Google Gemini
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Ollama local guidance if selected */}
-          {selectedPresetId === 'ollama' && (
-            <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200/90 leading-relaxed">
-              <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-300">
-                <Server className="w-4 h-4 text-amber-400" />
-                Instrucciones para Ollama Local en Windows:
-              </div>
-              <p className="text-[11px] text-slate-300">
-                Para permitir llamadas del navegador, inicia Ollama en tu consola ejecutando:
-              </p>
-              <code className="block bg-black/50 border border-thea-border rounded-lg p-2 font-mono text-[11px] text-amber-300 my-1.5 select-all">
-                set OLLAMA_ORIGINS=* && ollama serve
-              </code>
-              <p className="text-[10px] text-slate-400">
-                Asegúrate de haber descargado el modelo con: <code>ollama pull {settings.model || 'llama3.2'}</code>
-              </p>
-            </div>
-          )}
+            <p className="text-[11px] text-slate-300">
+              Para permitir llamadas del navegador, inicia Ollama en tu consola ejecutando:
+            </p>
+            <code className="block bg-black/50 border border-thea-border rounded-lg p-2 font-mono text-[11px] text-amber-300 my-1.5 select-all">
+              set OLLAMA_ORIGINS=* && ollama serve
+            </code>
+            <p className="text-[10px] text-slate-400">
+              Asegúrate de haber descargado el modelo con: <code>ollama pull {settings.model || 'llama3.2'}</code>
+            </p>
+          </div>
 
           {/* Form Fields */}
           <div className="space-y-3.5 bg-thea-surfaceLight/60 border border-thea-border/80 rounded-2xl p-4">
@@ -445,7 +375,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 type="text"
                 value={settings.baseUrl}
                 onChange={e => setSettings(prev => ({ ...prev, baseUrl: e.target.value }))}
-                placeholder="https://api.groq.com/openai/v1"
+                placeholder="http://localhost:11434/v1"
                 className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
               />
             </div>
@@ -589,7 +519,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 type="text"
                 value={settings.model}
                 onChange={e => setSettings(prev => ({ ...prev, model: e.target.value }))}
-                placeholder="llama-3.3-70b-versatile, gemini-1.5-flash, etc."
+                placeholder="llama3.2, mistral, llama3.1, etc."
                 className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
               />
 
