@@ -109,6 +109,18 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [currentGlobalWordIndex, setCurrentGlobalWordIndex] = useState(0);
   const currentWordIndexRef = useRef(0);
   const currentGlobalWordIndexRef = useRef(0);
+  const speakDialogueLineRef = useRef<((index: number, startWordIdx?: number) => void) | null>(null);
+
+  // Helper síncrono para mantener estado y referencias siempre alineados en el mismo tick
+  const setWordPosition = useCallback((globalIdx: number, segIdx: number, wordInSegIdx: number) => {
+    currentGlobalWordIndexRef.current = globalIdx;
+    currentWordIndexRef.current = wordInSegIdx;
+    currentLineIndexRef.current = segIdx;
+
+    setCurrentGlobalWordIndex(globalIdx);
+    setCurrentWordIndexInSegment(wordInSegIdx);
+    setCurrentLineIndex(segIdx);
+  }, []);
 
   useEffect(() => {
     currentWordIndexRef.current = currentWordIndexInSegment;
@@ -143,10 +155,15 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   // Detener de forma limpia y unificada cualquier reproducción (HTML5 Audio o SpeechSynthesis)
   const stopCurrentAudio = useCallback(() => {
     if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
-      audioPlayerRef.current.currentTime = 0;
-      audioPlayerRef.current.onended = null;
-      audioPlayerRef.current.onerror = null;
+      const audio = audioPlayerRef.current;
+      audio.ontimeupdate = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.onplay = null;
+      audio.onloadedmetadata = null;
+      audio.pause();
+      // NOTA: NO asignamos audio.currentTime = 0 aquí para que pausar o cambiar controles
+      // no resetee la posición de la palabra que el usuario está escuchando o seleccionó.
     }
     if (currentUtteranceRef.current) {
       currentUtteranceRef.current.onstart = null;
@@ -373,20 +390,16 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     if (fromIndex < podcast.dialogue.length - 1) {
       const nextSeg = fromIndex + 1;
-      setCurrentLineIndex(nextSeg);
-      currentLineIndexRef.current = nextSeg;
-      setCurrentWordIndexInSegment(0);
       const nextGlobal = segmentStartGlobalIndices[nextSeg] || 0;
-      setCurrentGlobalWordIndex(nextGlobal);
+      setWordPosition(nextGlobal, nextSeg, 0);
+      speakDialogueLineRef.current?.(nextSeg, 0);
     } else {
       setIsPlaying(false);
+      isPlayingRef.current = false;
       setIsAudioActive(false);
-      setCurrentLineIndex(0);
-      currentLineIndexRef.current = 0;
-      setCurrentWordIndexInSegment(0);
-      setCurrentGlobalWordIndex(0);
+      setWordPosition(0, 0, 0);
     }
-  }, [podcast?.dialogue, segmentStartGlobalIndices]);
+  }, [podcast?.dialogue, segmentStartGlobalIndices, setWordPosition]);
 
   // Reproducir vocalmente mediante el motor del navegador (fallback local) con inicio por palabra
   const speakBrowserDialogueLine = useCallback((
@@ -434,13 +447,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Seguimiento sincronizado palabra por palabra en el navegador
     utterance.onboundary = (e) => {
+      if (isManualInterruptionRef.current) return;
       if (e.name === 'word') {
         const textSoFar = textToSpeak.slice(0, e.charIndex);
         const spokenWordCount = textSoFar.trim() ? textSoFar.trim().split(/\s+/).length : 0;
         const currentWord = Math.min(rawWords.length - 1, safeWordIdx + spokenWordCount);
-        setCurrentWordIndexInSegment(currentWord);
         const baseGlobal = segmentStartGlobalIndices[index] || 0;
-        setCurrentGlobalWordIndex(baseGlobal + currentWord);
+        setWordPosition(baseGlobal + currentWord, index, currentWord);
       }
     };
 
@@ -472,7 +485,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       window.speechSynthesis.resume();
     }
     window.speechSynthesis.speak(utterance);
-  }, [getSpeakerAcoustics, advanceToNextLine, segmentStartGlobalIndices]);
+  }, [getSpeakerAcoustics, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
 
   // Reproducir vocalmente una línea del diálogo con soporte para Gemini Flash Audio TTS y Fallback
   const speakDialogueLine = useCallback(async (index: number, startWordIdx: number = 0) => {
@@ -494,9 +507,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     const rawWords = cleanText.split(/\s+/).filter(Boolean);
     const safeWordIdx = Math.max(0, Math.min(rawWords.length - 1, startWordIdx));
-    setCurrentWordIndexInSegment(safeWordIdx);
     const baseGlobal = segmentStartGlobalIndices[index] || 0;
-    setCurrentGlobalWordIndex(baseGlobal + safeWordIdx);
+    setWordPosition(baseGlobal + safeWordIdx, index, safeWordIdx);
 
     if (isMutedRef.current) {
       const remainingWords = rawWords.slice(safeWordIdx);
@@ -540,14 +552,19 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           audioPlayerRef.current = audio;
         }
 
-        audio.src = audioUrl;
+        if (audio.src !== audioUrl) {
+          audio.src = audioUrl;
+        }
         audio.playbackRate = playbackSpeedRef.current;
         audio.muted = isMutedRef.current;
 
         // Si se especificó una palabra inicial dentro del segmento, saltar a ese punto exacto
         const setAudioTimeFromWord = () => {
-          if (audio && audio.duration && safeWordIdx > 0) {
-            audio.currentTime = (safeWordIdx / rawWords.length) * audio.duration;
+          if (audio && audio.duration && Number.isFinite(audio.duration) && rawWords.length > 0) {
+            const targetTime = (safeWordIdx / rawWords.length) * audio.duration;
+            if (Math.abs(audio.currentTime - targetTime) > 0.15) {
+              audio.currentTime = targetTime;
+            }
           }
         };
 
@@ -562,11 +579,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
         // Seguimiento continuo palabra por palabra con el reloj de audio
         audio.ontimeupdate = () => {
-          if (audio && audio.duration && rawWords.length > 0) {
+          if (isManualInterruptionRef.current) return;
+          if (audio && audio.duration && Number.isFinite(audio.duration) && rawWords.length > 0) {
             const ratio = Math.max(0, Math.min(0.999, audio.currentTime / audio.duration));
             const currentW = Math.floor(ratio * rawWords.length);
-            setCurrentWordIndexInSegment(currentW);
-            setCurrentGlobalWordIndex(baseGlobal + currentW);
+            setWordPosition(baseGlobal + currentW, index, currentW);
           }
         };
 
@@ -599,20 +616,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Ruta 2: Motor del Navegador (SpeechSynthesis)
     speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
-  }, [podcast, sofiaVoice, mateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine, segmentStartGlobalIndices]);
+  }, [podcast, sofiaVoice, mateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
 
-  // Sincronización del ciclo de vida de reproducción
-  useEffect(() => {
-    if (isPlaying) {
-      speakDialogueLine(currentLineIndex, currentWordIndexRef.current);
-    } else {
-      stopCurrentAudio();
-    }
-  }, [isPlaying, currentLineIndex, speakDialogueLine, stopCurrentAudio]);
+  // Mantener referencia mutable siempre actualizada
+  speakDialogueLineRef.current = speakDialogueLine;
 
-  // Cambio de velocidad sin reiniciar el guion
+  // Cambio de velocidad sin reiniciar el guion ni la posición de palabra
   const handleSpeedChange = (newSpeed: number) => {
-    isManualInterruptionRef.current = true;
     setPlaybackSpeed(newSpeed);
     playbackSpeedRef.current = newSpeed;
 
@@ -625,15 +635,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       audioPlayerRef.current.playbackRate = newSpeed;
     }
 
-    if (isPlaying) {
+    // Si está usando el sintetizador del navegador local (SpeechSynthesis), recrear el utterance con la nueva velocidad
+    if (voiceEngineRef.current !== 'gemini' && isPlayingRef.current) {
+      isManualInterruptionRef.current = true;
       stopCurrentAudio();
       setTimeout(() => {
         isManualInterruptionRef.current = false;
-        speakDialogueLine(currentLineIndexRef.current, currentWordIndexRef.current);
-      }, 50);
-    } else {
-      setTimeout(() => {
-        isManualInterruptionRef.current = false;
+        speakDialogueLineRef.current?.(currentLineIndexRef.current, currentWordIndexRef.current);
       }, 50);
     }
   };
@@ -645,45 +653,71 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const target = allWords[safeGlobal];
     if (!target) return;
 
+    const prevSegment = currentLineIndexRef.current;
+    const isSameSegment = target.segmentIndex === prevSegment;
+
+    // Actualizar estado y refs de inmediato de forma síncrona
+    setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment);
+
+    // Si estamos en el mismo segmento y tenemos audio HTML5 ya cargado
+    const audio = audioPlayerRef.current;
+    if (voiceEngineRef.current === 'gemini' && audio && isSameSegment && audio.duration && Number.isFinite(audio.duration)) {
+      const segmentWords = podcast?.dialogue[target.segmentIndex]
+        ? podcast.dialogue[target.segmentIndex].text.replace(/[*_#`~[\]]/g, '').trim().split(/\s+/).filter(Boolean)
+        : [];
+      const totalWords = segmentWords.length || 1;
+      const targetTime = (target.wordIndexInSegment / totalWords) * audio.duration;
+
+      isManualInterruptionRef.current = true;
+      audio.currentTime = Math.max(0, Math.min(audio.duration - 0.05, targetTime));
+      setTimeout(() => {
+        isManualInterruptionRef.current = false;
+      }, 80);
+
+      if (isPlayingRef.current && audio.paused) {
+        audio.play().catch(console.warn);
+      }
+      return;
+    }
+
+    // Si cambiamos de segmento o estamos con SpeechSynthesis
     isManualInterruptionRef.current = true;
     stopCurrentAudio();
-
-    setCurrentGlobalWordIndex(safeGlobal);
-    setCurrentWordIndexInSegment(target.wordIndexInSegment);
-
-    const targetSegIdx = target.segmentIndex;
-    setCurrentLineIndex(targetSegIdx);
-    currentLineIndexRef.current = targetSegIdx;
 
     setTimeout(() => {
       isManualInterruptionRef.current = false;
       if (isPlayingRef.current) {
-        speakDialogueLine(targetSegIdx, target.wordIndexInSegment);
+        speakDialogueLineRef.current?.(target.segmentIndex, target.wordIndexInSegment);
       }
     }, 60);
-  }, [allWords, stopCurrentAudio, speakDialogueLine]);
+  }, [allWords, podcast?.dialogue, setWordPosition, stopCurrentAudio]);
 
   // Avanzar o retroceder palabra por palabra
   const handleStepWord = useCallback((direction: -1 | 1) => {
     if (allWords.length === 0) return;
-    const nextGlobal = Math.max(0, Math.min(allWords.length - 1, currentGlobalWordIndexRef.current + direction));
+    const currentIdx = currentGlobalWordIndexRef.current;
+    const nextGlobal = Math.max(0, Math.min(allWords.length - 1, currentIdx + direction));
     seekToGlobalWord(nextGlobal);
   }, [allWords.length, seekToGlobalWord]);
 
   // Adelantar o atrasar a un segmento completo
-  const handleSeek = (targetIndex: number) => {
+  const handleSeek = useCallback((targetIndex: number) => {
     if (!podcast?.dialogue) return;
     const safeIdx = Math.max(0, Math.min(podcast.dialogue.length - 1, targetIndex));
     const targetGlobal = segmentStartGlobalIndices[safeIdx] || 0;
     seekToGlobalWord(targetGlobal);
-  };
+  }, [podcast?.dialogue, segmentStartGlobalIndices, seekToGlobalWord]);
 
   const handleSkipBackward = () => {
-    handleSeek(currentLineIndex - 1);
+    if (currentLineIndexRef.current > 0) {
+      handleSeek(currentLineIndexRef.current - 1);
+    }
   };
 
   const handleSkipForward = () => {
-    handleSeek(currentLineIndex + 1);
+    if (podcast?.dialogue && currentLineIndexRef.current < podcast.dialogue.length - 1) {
+      handleSeek(currentLineIndexRef.current + 1);
+    }
   };
 
   // Temporizador anti-congelamiento de SpeechSynthesis en Chromium
@@ -702,16 +736,20 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const handleTogglePlay = () => {
     if (isPlaying) {
       setIsPlaying(false);
+      isPlayingRef.current = false;
       isManualInterruptionRef.current = true;
       stopCurrentAudio();
       setTimeout(() => {
         isManualInterruptionRef.current = false;
       }, 50);
     } else {
-      if (currentLineIndex === 0 && !isMuted) {
+      if (currentLineIndexRef.current === 0 && currentWordIndexRef.current === 0 && !isMutedRef.current) {
         playIntroChime();
       }
       setIsPlaying(true);
+      isPlayingRef.current = true;
+      isManualInterruptionRef.current = false;
+      speakDialogueLineRef.current?.(currentLineIndexRef.current, currentWordIndexRef.current);
     }
   };
 
@@ -719,30 +757,39 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const handleRestart = () => {
     isManualInterruptionRef.current = true;
     stopCurrentAudio();
-    setCurrentLineIndex(0);
-    currentLineIndexRef.current = 0;
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.currentTime = 0;
+    }
+    setWordPosition(0, 0, 0);
 
     setTimeout(() => {
       isManualInterruptionRef.current = false;
-      if (isPlayingRef.current && !isMuted) {
+      if (isPlayingRef.current && !isMutedRef.current) {
         playIntroChime();
-        speakDialogueLine(0);
+        speakDialogueLineRef.current?.(0, 0);
       }
     }, 60);
   };
 
-  // Alternar silencio
+  // Alternar silencio sin reiniciar posición ni parar innecesariamente en audio HTML5
   const handleToggleMute = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
+    isMutedRef.current = nextMuted;
     if (audioPlayerRef.current) {
       audioPlayerRef.current.muted = nextMuted;
     }
     if (isPlaying) {
       if (nextMuted) {
-        stopCurrentAudio();
+        if (voiceEngineRef.current !== 'gemini') {
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+          }
+        }
       } else {
-        speakDialogueLine(currentLineIndex);
+        if (voiceEngineRef.current !== 'gemini') {
+          speakDialogueLineRef.current?.(currentLineIndexRef.current, currentWordIndexRef.current);
+        }
       }
     }
   };
