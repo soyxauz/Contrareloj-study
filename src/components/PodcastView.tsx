@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { StudyKit } from '../types';
 import {
   Play,
@@ -11,6 +11,8 @@ import {
   VolumeX,
   SkipBack,
   SkipForward,
+  ChevronLeft,
+  ChevronRight,
   Settings2,
   Key,
   Check,
@@ -18,6 +20,21 @@ import {
   X,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
+
+function parseTimeToSeconds(timeStr: string): number {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':').map(Number);
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 0;
+}
+
+function formatSeconds(totalSecs: number): string {
+  const mins = Math.floor(totalSecs / 60);
+  const secs = Math.floor(totalSecs % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
 import {
   GEMINI_VOICES,
   getGeminiAudioApiKey,
@@ -82,6 +99,20 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     voiceEngineRef.current = voiceEngine;
   }, [voiceEngine]);
 
+  // Estados y referencias para navegación granular palabra por palabra
+  const [currentWordIndexInSegment, setCurrentWordIndexInSegment] = useState(0);
+  const [currentGlobalWordIndex, setCurrentGlobalWordIndex] = useState(0);
+  const currentWordIndexRef = useRef(0);
+  const currentGlobalWordIndexRef = useRef(0);
+
+  useEffect(() => {
+    currentWordIndexRef.current = currentWordIndexInSegment;
+  }, [currentWordIndexInSegment]);
+
+  useEffect(() => {
+    currentGlobalWordIndexRef.current = currentGlobalWordIndex;
+  }, [currentGlobalWordIndex]);
+
   // Detener de forma limpia y unificada cualquier reproducción (HTML5 Audio o SpeechSynthesis)
   const stopCurrentAudio = useCallback(() => {
     if (audioPlayerRef.current) {
@@ -94,6 +125,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       currentUtteranceRef.current.onstart = null;
       currentUtteranceRef.current.onend = null;
       currentUtteranceRef.current.onerror = null;
+      currentUtteranceRef.current.onboundary = null;
     }
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -109,6 +141,69 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   }, [stopCurrentAudio]);
 
   const podcast = kit.podcast;
+
+  // Mapeo exhaustivo de todas las palabras del podcast para scrubber palabra por palabra
+  const allWords = useMemo(() => {
+    if (!podcast?.dialogue) return [];
+    const list: { segmentIndex: number; wordIndexInSegment: number; globalIndex: number; word: string }[] = [];
+    podcast.dialogue.forEach((item, sIdx) => {
+      const clean = item.text
+        .replace(/[*_#`~[\]]/g, '')
+        .replace(/https?:\/\/\S+/g, '')
+        .replace(/[$]/g, '')
+        .trim();
+      const words = clean ? clean.split(/\s+/).filter(Boolean) : ['...'];
+      words.forEach((w, wIdx) => {
+        list.push({
+          segmentIndex: sIdx,
+          wordIndexInSegment: wIdx,
+          globalIndex: list.length,
+          word: w,
+        });
+      });
+    });
+    return list;
+  }, [podcast?.dialogue]);
+
+  const segmentStartGlobalIndices = useMemo(() => {
+    if (!podcast?.dialogue) return [];
+    const offsets: number[] = [];
+    let count = 0;
+    podcast.dialogue.forEach((item) => {
+      offsets.push(count);
+      const clean = item.text
+        .replace(/[*_#`~[\]]/g, '')
+        .replace(/https?:\/\/\S+/g, '')
+        .replace(/[$]/g, '')
+        .trim();
+      const words = clean ? clean.split(/\s+/).filter(Boolean) : ['...'];
+      count += words.length;
+    });
+    return offsets;
+  }, [podcast?.dialogue]);
+
+  const currentItem = podcast?.dialogue ? (podcast.dialogue[currentLineIndex] || podcast.dialogue[0]) : null;
+
+  const currentSegmentWords = useMemo(() => {
+    if (!currentItem?.text) return [];
+    const clean = currentItem.text
+      .replace(/[*_#`~[\]]/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[$]/g, '')
+      .trim();
+    return clean ? clean.split(/\s+/).filter(Boolean) : [];
+  }, [currentItem?.text]);
+
+  const currentTimeDisplay = useMemo(() => {
+    if (!currentItem || !podcast?.dialogue) return '0:00';
+    const startSecs = parseTimeToSeconds(currentItem.time);
+    const nextItem = podcast.dialogue[currentLineIndex + 1];
+    const nextSecs = nextItem ? parseTimeToSeconds(nextItem.time) : startSecs + Math.max(15, currentSegmentWords.length * 0.4);
+    const segDuration = Math.max(2, nextSecs - startSecs);
+    const wordRatio = currentSegmentWords.length > 0 ? (currentWordIndexInSegment / currentSegmentWords.length) : 0;
+    const currentSecs = Math.round(startSecs + wordRatio * segDuration);
+    return formatSeconds(currentSecs);
+  }, [currentItem, podcast?.dialogue, currentLineIndex, currentWordIndexInSegment, currentSegmentWords.length]);
 
   // Cargar catálogo de voces del sintetizador del navegador
   useEffect(() => {
@@ -250,25 +345,48 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (!podcast?.dialogue) return;
 
     if (fromIndex < podcast.dialogue.length - 1) {
-      setCurrentLineIndex(fromIndex + 1);
+      const nextSeg = fromIndex + 1;
+      setCurrentLineIndex(nextSeg);
+      currentLineIndexRef.current = nextSeg;
+      setCurrentWordIndexInSegment(0);
+      const nextGlobal = segmentStartGlobalIndices[nextSeg] || 0;
+      setCurrentGlobalWordIndex(nextGlobal);
     } else {
       setIsPlaying(false);
       setIsAudioActive(false);
       setCurrentLineIndex(0);
+      currentLineIndexRef.current = 0;
+      setCurrentWordIndexInSegment(0);
+      setCurrentGlobalWordIndex(0);
     }
-  }, [podcast?.dialogue]);
+  }, [podcast?.dialogue, segmentStartGlobalIndices]);
 
-  // Reproducir vocalmente mediante el motor del navegador (fallback local)
-  const speakBrowserDialogueLine = useCallback((index: number, cleanText: string, speakerName: string) => {
+  // Reproducir vocalmente mediante el motor del navegador (fallback local) con inicio por palabra
+  const speakBrowserDialogueLine = useCallback((
+    index: number,
+    cleanText: string,
+    speakerName: string,
+    startWordIdx: number = 0
+  ) => {
     if (!('speechSynthesis' in window)) return;
     if (currentUtteranceRef.current) {
       currentUtteranceRef.current.onstart = null;
       currentUtteranceRef.current.onend = null;
       currentUtteranceRef.current.onerror = null;
+      currentUtteranceRef.current.onboundary = null;
     }
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    const rawWords = cleanText.split(/\s+/).filter(Boolean);
+    const safeWordIdx = Math.max(0, Math.min(rawWords.length - 1, startWordIdx));
+    const textToSpeak = rawWords.slice(safeWordIdx).join(' ');
+
+    if (!textToSpeak.trim()) {
+      advanceToNextLine(index);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
     currentUtteranceRef.current = utterance;
 
     const { voice, pitch, rateFactor } = getSpeakerAcoustics(speakerName, cleanText);
@@ -285,6 +403,18 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     utterance.onstart = () => {
       setIsAudioActive(true);
+    };
+
+    // Seguimiento sincronizado palabra por palabra en el navegador
+    utterance.onboundary = (e) => {
+      if (e.name === 'word') {
+        const textSoFar = textToSpeak.slice(0, e.charIndex);
+        const spokenWordCount = textSoFar.trim() ? textSoFar.trim().split(/\s+/).length : 0;
+        const currentWord = Math.min(rawWords.length - 1, safeWordIdx + spokenWordCount);
+        setCurrentWordIndexInSegment(currentWord);
+        const baseGlobal = segmentStartGlobalIndices[index] || 0;
+        setCurrentGlobalWordIndex(baseGlobal + currentWord);
+      }
     };
 
     utterance.onend = () => {
@@ -315,26 +445,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       window.speechSynthesis.resume();
     }
     window.speechSynthesis.speak(utterance);
-  }, [getSpeakerAcoustics, advanceToNextLine]);
+  }, [getSpeakerAcoustics, advanceToNextLine, segmentStartGlobalIndices]);
 
   // Reproducir vocalmente una línea del diálogo con soporte para Gemini Flash Audio TTS y Fallback
-  const speakDialogueLine = useCallback(async (index: number) => {
+  const speakDialogueLine = useCallback(async (index: number, startWordIdx: number = 0) => {
     if (!podcast || !podcast.dialogue || !podcast.dialogue[index]) return;
 
     stopCurrentAudio();
-
-    if (isMutedRef.current) {
-      const textLength = podcast.dialogue[index].text.length;
-      const durationMs = Math.max(2500, Math.min(8000, (textLength / 18) * 1000 / playbackSpeedRef.current));
-      setIsAudioActive(true);
-      const timer = setTimeout(() => {
-        setIsAudioActive(false);
-        if (isPlayingRef.current && !isManualInterruptionRef.current) {
-          advanceToNextLine(index);
-        }
-      }, durationMs);
-      return () => clearTimeout(timer);
-    }
 
     const item = podcast.dialogue[index];
     const cleanText = item.text
@@ -346,6 +463,25 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (!cleanText) {
       advanceToNextLine(index);
       return;
+    }
+
+    const rawWords = cleanText.split(/\s+/).filter(Boolean);
+    const safeWordIdx = Math.max(0, Math.min(rawWords.length - 1, startWordIdx));
+    setCurrentWordIndexInSegment(safeWordIdx);
+    const baseGlobal = segmentStartGlobalIndices[index] || 0;
+    setCurrentGlobalWordIndex(baseGlobal + safeWordIdx);
+
+    if (isMutedRef.current) {
+      const remainingWords = rawWords.slice(safeWordIdx);
+      const durationMs = Math.max(1500, Math.min(8000, (remainingWords.length * 400) / playbackSpeedRef.current));
+      setIsAudioActive(true);
+      const timer = setTimeout(() => {
+        setIsAudioActive(false);
+        if (isPlayingRef.current && !isManualInterruptionRef.current) {
+          advanceToNextLine(index);
+        }
+      }, durationMs);
+      return () => clearTimeout(timer);
     }
 
     // Ruta 1: Motor Neuronal Gemini Flash Audio
@@ -381,8 +517,30 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         audio.playbackRate = playbackSpeedRef.current;
         audio.muted = isMutedRef.current;
 
+        // Si se especificó una palabra inicial dentro del segmento, saltar a ese punto exacto
+        const setAudioTimeFromWord = () => {
+          if (audio && audio.duration && safeWordIdx > 0) {
+            audio.currentTime = (safeWordIdx / rawWords.length) * audio.duration;
+          }
+        };
+
+        audio.onloadedmetadata = setAudioTimeFromWord;
+        if (audio.readyState >= 1) {
+          setAudioTimeFromWord();
+        }
+
         audio.onplay = () => {
           setIsAudioActive(true);
+        };
+
+        // Seguimiento continuo palabra por palabra con el reloj de audio
+        audio.ontimeupdate = () => {
+          if (audio && audio.duration && rawWords.length > 0) {
+            const ratio = Math.max(0, Math.min(0.999, audio.currentTime / audio.duration));
+            const currentW = Math.floor(ratio * rawWords.length);
+            setCurrentWordIndexInSegment(currentW);
+            setCurrentGlobalWordIndex(baseGlobal + currentW);
+          }
         };
 
         audio.onended = () => {
@@ -397,9 +555,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         };
 
         audio.onerror = (err) => {
-          console.warn('[GeminiAudio] Error en reproducción de audio, conmutando a voz local:', err);
+          console.warn('[GeminiAudio] Error en audio, conmutando a voz local:', err);
           setIsAudioActive(false);
-          speakBrowserDialogueLine(index, cleanText, item.speaker);
+          speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
         };
 
         await audio.play();
@@ -407,19 +565,19 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       } catch (err) {
         console.warn('[GeminiAudio] Fallo síntesis Gemini, conmutando a voz local:', err);
         setIsSynthesizing(false);
-        speakBrowserDialogueLine(index, cleanText, item.speaker);
+        speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
         return;
       }
     }
 
     // Ruta 2: Motor del Navegador (SpeechSynthesis)
-    speakBrowserDialogueLine(index, cleanText, item.speaker);
-  }, [podcast, sofiaVoice, mateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine]);
+    speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
+  }, [podcast, sofiaVoice, mateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine, segmentStartGlobalIndices]);
 
   // Sincronización del ciclo de vida de reproducción
   useEffect(() => {
     if (isPlaying) {
-      speakDialogueLine(currentLineIndex);
+      speakDialogueLine(currentLineIndex, currentWordIndexRef.current);
     } else {
       stopCurrentAudio();
     }
@@ -439,7 +597,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       stopCurrentAudio();
       setTimeout(() => {
         isManualInterruptionRef.current = false;
-        speakDialogueLine(currentLineIndexRef.current);
+        speakDialogueLine(currentLineIndexRef.current, currentWordIndexRef.current);
       }, 50);
     } else {
       setTimeout(() => {
@@ -448,22 +606,44 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
   };
 
-  // Adelantar o atrasar en la línea de tiempo a un segmento específico
-  const handleSeek = (targetIndex: number) => {
-    if (!podcast?.dialogue) return;
-    const safeIdx = Math.max(0, Math.min(podcast.dialogue.length - 1, targetIndex));
+  // Navegar a una palabra global específica en el podcast
+  const seekToGlobalWord = useCallback((targetGlobalIndex: number) => {
+    if (allWords.length === 0) return;
+    const safeGlobal = Math.max(0, Math.min(allWords.length - 1, targetGlobalIndex));
+    const target = allWords[safeGlobal];
+    if (!target) return;
+
     isManualInterruptionRef.current = true;
     stopCurrentAudio();
 
-    setCurrentLineIndex(safeIdx);
-    currentLineIndexRef.current = safeIdx;
+    setCurrentGlobalWordIndex(safeGlobal);
+    setCurrentWordIndexInSegment(target.wordIndexInSegment);
+
+    const targetSegIdx = target.segmentIndex;
+    setCurrentLineIndex(targetSegIdx);
+    currentLineIndexRef.current = targetSegIdx;
 
     setTimeout(() => {
       isManualInterruptionRef.current = false;
       if (isPlayingRef.current) {
-        speakDialogueLine(safeIdx);
+        speakDialogueLine(targetSegIdx, target.wordIndexInSegment);
       }
     }, 60);
+  }, [allWords, stopCurrentAudio, speakDialogueLine]);
+
+  // Avanzar o retroceder palabra por palabra
+  const handleStepWord = useCallback((direction: -1 | 1) => {
+    if (allWords.length === 0) return;
+    const nextGlobal = Math.max(0, Math.min(allWords.length - 1, currentGlobalWordIndexRef.current + direction));
+    seekToGlobalWord(nextGlobal);
+  }, [allWords.length, seekToGlobalWord]);
+
+  // Adelantar o atrasar a un segmento completo
+  const handleSeek = (targetIndex: number) => {
+    if (!podcast?.dialogue) return;
+    const safeIdx = Math.max(0, Math.min(podcast.dialogue.length - 1, targetIndex));
+    const targetGlobal = segmentStartGlobalIndices[safeIdx] || 0;
+    seekToGlobalWord(targetGlobal);
   };
 
   const handleSkipBackward = () => {
@@ -588,7 +768,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     );
   }
 
-  const currentItem = podcast.dialogue[currentLineIndex] || podcast.dialogue[0];
+  if (!currentItem) return null;
   const speakerAcoustics = getSpeakerAcoustics(currentItem.speaker, currentItem.text);
 
   return (
@@ -760,86 +940,147 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   </span>
                 </div>
               </div>
-              <p className="text-sm sm:text-base text-slate-100 font-medium leading-relaxed">
-                "{currentItem.text}"
-              </p>
+              <div className="text-sm sm:text-base text-slate-100 font-medium leading-relaxed flex flex-wrap gap-x-1.5 gap-y-1 select-none">
+                {currentSegmentWords.map((word, wIdx) => {
+                  const isCurrent = wIdx === currentWordIndexInSegment;
+                  const isPast = wIdx < currentWordIndexInSegment;
+                  return (
+                    <span
+                      key={wIdx}
+                      onClick={() => {
+                        const baseGlobal = segmentStartGlobalIndices[currentLineIndex] || 0;
+                        seekToGlobalWord(baseGlobal + wIdx);
+                      }}
+                      className={`px-1 py-0.5 rounded-lg cursor-pointer transition-all duration-150 ${
+                        isCurrent
+                          ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md shadow-amber-500/40 scale-105 ring-2 ring-amber-300/60'
+                          : isPast
+                          ? 'text-slate-200 hover:text-white'
+                          : 'text-slate-400/80 hover:text-white hover:bg-thea-surface'
+                      }`}
+                      title={`Saltar a la palabra "${word}"`}
+                    >
+                      {word}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* ── LÍNEA DE TIEMPO INTERACTIVA (SCRUBBER) ── */}
+            {/* ── LÍNEA DE TIEMPO INTERACTIVA (SCRUBBER PALABRA POR PALABRA) ── */}
             <div className="max-w-2xl mx-auto mb-6 px-2 relative z-10">
               <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-                <span className="font-semibold text-amber-400">{currentItem.time}</span>
-                <span className="text-[11px] text-slate-500 font-sans">
-                  Segmento {currentLineIndex + 1} de {podcast.dialogue.length}
-                </span>
+                <span className="font-semibold text-amber-400">{currentTimeDisplay}</span>
+                <div className="flex items-center gap-1.5 text-[11px] font-sans">
+                  <span className="text-slate-300 font-medium">
+                    Segmento {currentLineIndex + 1}/{podcast.dialogue.length}
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-amber-300 font-semibold">
+                    Palabra {Math.min(currentSegmentWords.length, currentWordIndexInSegment + 1)} de {currentSegmentWords.length}
+                  </span>
+                  <span className="text-slate-600 hidden sm:inline">•</span>
+                  <span className="text-slate-500 text-[10px] hidden sm:inline">
+                    ({currentGlobalWordIndex + 1} de {allWords.length} totales)
+                  </span>
+                </div>
                 <span>{podcast.duration}</span>
               </div>
 
-              {/* Slider de tiempo interactivo */}
+              {/* Slider interactivo con resolución exacta palabra por palabra */}
               <div className="relative flex items-center group">
                 <input
                   type="range"
                   min={0}
-                  max={Math.max(0, podcast.dialogue.length - 1)}
-                  value={currentLineIndex}
-                  onChange={(e) => handleSeek(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 focus:outline-none transition-all group-hover:h-2.5"
-                  title="Arrastra para adelantar o atrasar el podcast"
+                  max={Math.max(1, allWords.length - 1)}
+                  value={currentGlobalWordIndex}
+                  onChange={(e) => seekToGlobalWord(Number(e.target.value))}
+                  className="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 focus:outline-none transition-all group-hover:h-3"
+                  title="Arrastra para navegar con precisión palabra por palabra en el episodio"
                 />
               </div>
             </div>
 
-            {/* Playback Controls */}
-            <div className="flex items-center justify-center gap-3 sm:gap-4 relative z-10 flex-wrap">
+            {/* Controles de Reproducción y Navegación */}
+            <div className="flex items-center justify-center gap-2 sm:gap-3 relative z-10 flex-wrap">
+              {/* Reiniciar */}
               <button
                 type="button"
                 onClick={handleRestart}
-                className="p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="p-2.5 sm:p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white transition-colors cursor-pointer"
                 title="Reiniciar podcast desde el principio"
               >
-                <RotateCcw className="w-5 h-5" />
+                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
+              {/* Segmento Anterior */}
               <button
                 type="button"
                 onClick={handleSkipBackward}
                 disabled={currentLineIndex === 0}
-                className="p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                className="p-2.5 sm:p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
                 title="Atrasar al segmento anterior"
               >
-                <SkipBack className="w-5 h-5" />
+                <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
+              {/* Retroceder 1 Palabra */}
+              <button
+                type="button"
+                onClick={() => handleStepWord(-1)}
+                disabled={currentGlobalWordIndex === 0}
+                className="px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs"
+                title="Retroceder 1 palabra"
+              >
+                <ChevronLeft className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Palabra</span>
+              </button>
+
+              {/* Play / Pausa */}
               <button
                 type="button"
                 onClick={handleTogglePlay}
-                className="w-16 h-16 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-amber-500 hover:scale-105 transition-all shadow-xl shadow-violet-900/40 flex items-center justify-center text-white font-bold cursor-pointer"
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-amber-500 hover:scale-105 transition-all shadow-xl shadow-violet-900/40 flex items-center justify-center text-white font-bold cursor-pointer"
                 title={isPlaying ? 'Pausar' : 'Reproducir'}
               >
-                {isPlaying ? <Pause className="w-7 h-7 fill-white" /> : <Play className="w-7 h-7 fill-white ml-0.5" />}
+                {isPlaying ? <Pause className="w-6 h-6 sm:w-7 sm:h-7 fill-white" /> : <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-white ml-0.5" />}
               </button>
 
+              {/* Adelantar 1 Palabra */}
+              <button
+                type="button"
+                onClick={() => handleStepWord(1)}
+                disabled={currentGlobalWordIndex >= allWords.length - 1}
+                className="px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs"
+                title="Adelantar 1 palabra"
+              >
+                <span className="hidden sm:inline">Palabra</span>
+                <ChevronRight className="w-4 h-4 text-amber-400" />
+              </button>
+
+              {/* Segmento Siguiente */}
               <button
                 type="button"
                 onClick={handleSkipForward}
                 disabled={currentLineIndex >= podcast.dialogue.length - 1}
-                className="p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                className="p-2.5 sm:p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
                 title="Adelantar al siguiente segmento"
               >
-                <SkipForward className="w-5 h-5" />
+                <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
+              {/* Mute */}
               <button
                 type="button"
                 onClick={handleToggleMute}
-                className={`p-3 rounded-2xl border transition-colors cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-2xl border transition-colors cursor-pointer ${
                   isMuted
                     ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
                     : 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-white'
                 }`}
                 title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
               >
-                {isMuted ? <VolumeX className="w-5 h-5 text-rose-400" /> : <Volume2 className="w-5 h-5" />}
+                {isMuted ? <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" /> : <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
 
               {/* Speed Controller */}
