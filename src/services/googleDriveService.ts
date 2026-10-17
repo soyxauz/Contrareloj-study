@@ -1,6 +1,7 @@
 import type { StudyKit, DocumentAsset, User } from '../types';
 import { authService } from './authService';
 import { getAllStoredAssets, saveAssetsToIndexedDB, stripHeavyAssetsForLocalStorage } from './storageService';
+import { getAISettings, saveAISettings, resetAISettingsToDefault } from './aiService';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id';
 
@@ -224,6 +225,9 @@ export const googleDriveService = {
     localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
     localStorage.removeItem(STORAGE_PROFILE_KEY);
     localStorage.removeItem(STORAGE_LAST_SYNC_KEY);
+
+    // Limpiar la API personal del almacenamiento local por privacidad al desconectar la cuenta
+    resetAISettingsToDefault();
 
     updateState({
       status: 'unlinked',
@@ -654,6 +658,19 @@ export const googleDriveService = {
         }
       }
 
+      // 4. Sincronizar ajustes de IA y API personal desde Google Drive
+      const aiSettingsFile = await this.findFileInFolder(token, rootFolderId, 'thea_ai_settings.json');
+      if (aiSettingsFile) {
+        try {
+          const remoteAISettings = await this.readJsonFromDrive(token, aiSettingsFile.id);
+          if (remoteAISettings && typeof remoteAISettings === 'object') {
+            saveAISettings(remoteAISettings);
+          }
+        } catch (aiErr) {
+          console.warn('[GoogleDriveService] Error sincronizando ajustes de IA desde Drive:', aiErr);
+        }
+      }
+
       const now = Date.now();
       localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
       updateState({
@@ -713,17 +730,39 @@ export const googleDriveService = {
         }
       }
 
+      // 4. Guardar configuración de IA y API propia en Google Drive
+      const currentAISettings = getAISettings();
+      await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', currentAISettings);
+
       const now = Date.now();
       localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
       updateState({
         status: 'synced',
         lastSyncTime: now,
-        filesSyncedCount: existingDriveAssets.length + uploadedCount + 2,
+        filesSyncedCount: existingDriveAssets.length + uploadedCount + 3,
         errorMessage: null,
       });
     } catch (err: any) {
       console.error('[GoogleDriveService] Error en pushToDrive:', err);
       updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+    }
+  },
+
+  /**
+   * Sube inmediatamente la configuración de IA y API propia a Google Drive.
+   */
+  async syncAISettingsToDrive(): Promise<boolean> {
+    const token = this.getValidAccessToken();
+    if (!token) return false;
+
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const aiSettings = getAISettings();
+      await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', aiSettings);
+      return true;
+    } catch (e) {
+      console.warn('[GoogleDriveService] Error sincronizando ajustes de IA con Drive:', e);
+      return false;
     }
   },
 };

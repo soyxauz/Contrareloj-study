@@ -29,8 +29,9 @@ export default async function handler(req: any, res: any) {
       ...(headers || {}),
     };
 
-    // Clave de API de respaldo si no viene en las cabeceras
-    if (!cleanHeaders['Authorization'] && !cleanHeaders['authorization']) {
+    // Clave de API de respaldo si no viene o viene vacia en las cabeceras
+    const authHeader = cleanHeaders['Authorization'] || cleanHeaders['authorization'];
+    if (!authHeader || authHeader.trim() === '' || authHeader.trim() === 'Bearer' || authHeader.trim() === 'Bearer null' || authHeader.trim() === 'Bearer undefined') {
       cleanHeaders['Authorization'] = 'Bearer 716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl';
     }
 

@@ -24,7 +24,8 @@ export default async (req: Request) => {
       ...(headers || {}),
     };
 
-    if (!cleanHeaders['Authorization'] && !cleanHeaders['authorization']) {
+    const authHeader = cleanHeaders['Authorization'] || cleanHeaders['authorization'];
+    if (!authHeader || authHeader.trim() === '' || authHeader.trim() === 'Bearer' || authHeader.trim() === 'Bearer null' || authHeader.trim() === 'Bearer undefined') {
       cleanHeaders['Authorization'] = 'Bearer 716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl';
     }
 

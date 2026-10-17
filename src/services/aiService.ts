@@ -156,6 +156,19 @@ export function saveAISettings(settings: AISettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
+export function resetAISettingsToDefault(): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_AI_SETTINGS));
+}
+
+export function hasPersonalApiKey(): boolean {
+  const current = getAISettings();
+  return Boolean(
+    current.apiKey &&
+    current.apiKey.trim() !== '' &&
+    current.apiKey.trim() !== DEFAULT_AI_SETTINGS.apiKey
+  );
+}
+
 /**
  * Cliente de red inteligente con enrutamiento por proxy local anti-CORS.
  * Si el navegador bloquea la llamada directa por CORS o puertos locales,
@@ -246,10 +259,13 @@ export async function testAIConnection(override?: AISettings): Promise<{
     };
   }
 
-  if (!isLocal && !settings.apiKey.trim()) {
+  const hasKey = Boolean(settings.apiKey && settings.apiKey.trim().length > 0);
+  const isDefaultServer = cleanBase.includes('ollama.com') || cleanBase === DEFAULT_AI_SETTINGS.baseUrl;
+
+  if (!isLocal && !hasKey && !isDefaultServer) {
     return {
       success: false,
-      message: 'Por favor ingresa tu API Key para probar la conexión con este proveedor.',
+      message: 'Para usar este proveedor externo ingresa tu API Key. Si deseas usar el motor de IA sin clave personal, selecciona Ollama Cloud (Gemma 4).',
     };
   }
 
@@ -257,20 +273,23 @@ export async function testAIConnection(override?: AISettings): Promise<{
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(settings.timeoutMs, 8000));
 
+    const effectiveKey = hasKey ? settings.apiKey.trim() : DEFAULT_AI_SETTINGS.apiKey;
+    const effectiveBase = (hasKey || isLocal) ? cleanBase : DEFAULT_AI_SETTINGS.baseUrl;
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (settings.apiKey.trim()) {
-      headers['Authorization'] = `Bearer ${settings.apiKey.trim()}`;
+    if (effectiveKey) {
+      headers['Authorization'] = `Bearer ${effectiveKey}`;
     }
 
-    let res = await fetchWithProxyFallback(`${cleanBase}/models`, {
+    let res = await fetchWithProxyFallback(`${effectiveBase}/models`, {
       method: 'GET',
       headers,
       signal: controller.signal,
     }).catch(async () => {
       // Si falla /models, probar /api/tags de Ollama
-      return await fetchWithProxyFallback(`${cleanBase.replace(/\/v1$/, '')}/api/tags`, {
+      return await fetchWithProxyFallback(`${effectiveBase.replace(/\/v1$/, '')}/api/tags`, {
         signal: controller.signal,
       });
     });
@@ -395,13 +414,15 @@ export async function queryAICompletion(
     );
   }
 
-  if (!isLocal && !settings.apiKey.trim()) {
-    throw new Error(
-      `Falta la clave de API (API Key) para el proveedor configurado (${cleanBase}). Abre "Configurar IA" e ingresa tu clave.`
-    );
-  }
+  const hasPersonalKey = Boolean(settings.apiKey && settings.apiKey.trim().length > 0);
 
-  const url = `${cleanBase}/chat/completions`;
+  // Si el usuario no ha ingresado clave de API personal ni es servidor local,
+  // se enruta automáticamente hacia el servicio serverless de la app sin arrojar error ni bloquear la experiencia.
+  const targetBase = (hasPersonalKey || isLocal) ? cleanBase : DEFAULT_AI_SETTINGS.baseUrl;
+  const targetModel = hasPersonalKey ? (settings.model || 'gemma4:31b') : DEFAULT_AI_SETTINGS.model;
+  const targetKey = (hasPersonalKey || isLocal) ? settings.apiKey.trim() : DEFAULT_AI_SETTINGS.apiKey;
+
+  const url = `${targetBase}/chat/completions`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
@@ -409,12 +430,12 @@ export async function queryAICompletion(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (settings.apiKey.trim()) {
-    headers['Authorization'] = `Bearer ${settings.apiKey.trim()}`;
+  if (targetKey) {
+    headers['Authorization'] = `Bearer ${targetKey}`;
   }
 
   const body: Record<string, unknown> = {
-    model: settings.model || 'llama-3.3-70b-versatile',
+    model: targetModel,
     messages,
     temperature: 0.3,
   };

@@ -20,8 +20,10 @@ import {
   RefreshCw,
   Cpu,
   ExternalLink,
-  Key
+  Key,
+  Cloud
 } from 'lucide-react';
+import { googleDriveService } from '../services/googleDriveService';
 
 interface AISettingsModalProps {
   isOpen: boolean;
@@ -82,6 +84,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   const handleSave = () => {
     saveAISettings(settings);
+    // Si Google Drive está conectado, respaldar la API personal inmediatamente en la nube
+    if (googleDriveService.getValidAccessToken()) {
+      googleDriveService.syncAISettingsToDrive().catch(err => {
+        console.warn('[AISettingsModal] Error al respaldar API en Google Drive:', err);
+      });
+    }
     setIsSaved(true);
     if (onSettingsSaved) onSettingsSaved();
     setTimeout(() => {
@@ -344,6 +352,19 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <div className="mt-1.5 text-[11px]">
+                {settings.apiKey && settings.apiKey.trim().length > 0 ? (
+                  <span className="text-violet-300 flex items-center gap-1 font-medium">
+                    <Key className="w-3 h-3 text-amber-400" />
+                    API personal configurada: Se usarán tus credenciales privadas.
+                  </span>
+                ) : (
+                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    Modo estándar: Contrareloj Study usa la IA del servidor sin exigir clave personal.
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Model Name */}
@@ -404,6 +425,25 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Estado de Respaldo en Google Drive */}
+          <div className="pt-1">
+            {googleDriveService.getValidAccessToken() ? (
+              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
+                <Cloud className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="leading-snug">
+                  Google Drive conectado: Tu API personal y modelo se sincronizan y respaldan automáticamente en la nube.
+                </span>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-thea-surface border border-thea-border text-slate-400 text-xs flex items-center gap-2.5">
+                <Cloud className="w-4 h-4 text-slate-500 shrink-0" />
+                <span className="leading-snug">
+                  Conecta Google Drive para respaldar tu API personal y sincronizarla en todos tus dispositivos.
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Modal Actions */}

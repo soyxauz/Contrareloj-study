@@ -468,7 +468,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             Las evaluaciones de Contrareloj Study son generadas de forma exclusivamente coherente por IA, sin utilizar preguntas mecánicas ni distractores sintéticos al azar.
           </p>
           <div className="p-3 bg-violet-950/30 border border-violet-500/30 rounded-xl text-xs text-violet-200 max-w-md mx-auto">
-            Haz clic en <strong>&quot;Configurar IA&quot;</strong> para seleccionar tu proveedor (Google Gemini, Groq gratuito, OpenAI, DeepSeek, OpenRouter u Ollama local) e ingresar tu clave de API.
+            Puedes reintentar con el motor del servidor o pulsar en <strong>&quot;Configurar IA&quot;</strong> si deseas utilizar tu propia clave de API personal (Google Gemini, Groq, OpenAI, DeepSeek u Ollama local).
           </div>
         </div>
 

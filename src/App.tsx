@@ -5,6 +5,7 @@ import { BookOpen } from 'lucide-react';
 import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
 import { googleDriveService } from './services/googleDriveService';
+import { resetAISettingsToDefault } from './services/aiService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
@@ -198,6 +199,7 @@ export const App: React.FC = () => {
   const handleLogout = () => {
     googleDriveService.disconnect();
     authService.logout();
+    resetAISettingsToDefault();
     setCurrentUser(null);
     const guestKits = authService.getUserKits(null);
     const clean = guestKits.filter(k => !isCorruptedKit(k));
