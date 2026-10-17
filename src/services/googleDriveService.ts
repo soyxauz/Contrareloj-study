@@ -243,6 +243,8 @@ function ensureGsiLoaded(): Promise<void> {
   });
 }
 
+const inFlightAssetUploads = new Set<string>();
+
 export const googleDriveService = {
   /**
    * Suscribe un callback a las actualizaciones de estado de sincronización.
@@ -779,7 +781,64 @@ export const googleDriveService = {
   },
 
   /**
-   * Sube una imagen individual a la subcarpeta 'assets/' de Drive.
+   * Sube una imagen individual a la subcarpeta 'assets/' de Drive de forma directa sin búsquedas redundantes.
+   */
+  async uploadAssetDirectly(token: string, assetsFolderId: string, asset: DocumentAsset): Promise<string | null> {
+    if (!asset.id || !asset.dataUrl) return null;
+
+    if (inFlightAssetUploads.has(asset.id)) {
+      return null;
+    }
+    inFlightAssetUploads.add(asset.id);
+
+    try {
+      const blob = dataUrlToBlob(asset.dataUrl);
+      const extension = blob.type.includes('png') ? 'png' : 'jpg';
+      const fileName = `${asset.id}.${extension}`;
+
+      const metadata = {
+        name: fileName,
+        parents: [assetsFolderId],
+        mimeType: blob.type,
+      };
+
+      const boundary = '-------thea_boundary_asset_part';
+      const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${blob.type}\r\n\r\n`;
+      const footerPart = `\r\n--${boundary}--`;
+
+      const fullBlob = new Blob([metadataPart, blob, footerPart], {
+        type: `multipart/related; boundary=${boundary}`,
+      });
+
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: fullBlob,
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          this.clearAccessToken();
+          throw new Error('TOKEN_EXPIRED_401');
+        }
+        console.warn(`[GoogleDriveService] No se pudo subir activo directo ${asset.id} (${res.status})`);
+        return null;
+      }
+
+      const fileData = await res.json();
+      return fileData.id;
+    } catch (err) {
+      console.warn(`[GoogleDriveService] Error en subida directa de activo ${asset.id}:`, err);
+      return null;
+    } finally {
+      inFlightAssetUploads.delete(asset.id);
+    }
+  },
+
+  /**
+   * Sube una imagen individual a la subcarpeta 'assets/' de Drive comprobando primero si existe.
    */
   async uploadAssetFile(token: string, assetsFolderId: string, asset: DocumentAsset): Promise<string | null> {
     if (!asset.id || !asset.dataUrl) return null;
@@ -793,39 +852,7 @@ export const googleDriveService = {
       return existing.id;
     }
 
-    const metadata = {
-      name: fileName,
-      parents: [assetsFolderId],
-      mimeType: blob.type,
-    };
-
-    const boundary = '-------thea_boundary_asset_part';
-    const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${blob.type}\r\n\r\n`;
-    const footerPart = `\r\n--${boundary}--`;
-
-    const fullBlob = new Blob([metadataPart, blob, footerPart], {
-      type: `multipart/related; boundary=${boundary}`,
-    });
-
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: fullBlob,
-    });
-
-    if (!res.ok) {
-      if (res.status === 401) {
-        this.clearAccessToken();
-        throw new Error('TOKEN_EXPIRED_401');
-      }
-      console.warn(`[GoogleDriveService] No se pudo subir activo ${asset.id} (${res.status})`);
-      return null;
-    }
-
-    const fileData = await res.json();
-    return fileData.id;
+    return this.uploadAssetDirectly(token, assetsFolderId, asset);
   },
 
   /**
@@ -1146,16 +1173,10 @@ export const googleDriveService = {
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
 
-      // 1. Guardar base de usuarios
+      // 1. Guardar base de usuarios, kits y progreso en paralelo
       const localUsers = authService.getRawStoredUsers();
-      await this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers);
-
-      // 2. Guardar kits (versión aligerada para no inflar el JSON)
       const lightweightKits = stripHeavyAssetsForLocalStorage(kits);
       const userKitsFileName = `thea_kits_${userId}.json`;
-      await this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits);
-
-      // 2.5 Guardar progreso y memoria de Smart Study de todos los libros (nivel, respuestas, historial)
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
       const userProgressPayload = {
@@ -1166,30 +1187,37 @@ export const googleDriveService = {
         revealedQuestions: userRevealed,
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
-      await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);
 
-      // 3. Subir activos visuales a subcarpeta 'assets/' individualmente
+      await Promise.all([
+        this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers),
+        this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits),
+        this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
+      ]);
+
+      // 2. Subir activos visuales a subcarpeta 'assets/' concurrentemente en lotes de 6
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
       const existingDriveAssets = await this.listFilesInFolder(token, assetsFolderId);
       const driveAssetNames = new Set(existingDriveAssets.map(f => f.name));
 
       const allLocalAssets = await getAllStoredAssets();
-      let uploadedCount = 0;
-
-      for (let i = 0; i < allLocalAssets.length; i++) {
-        const asset = allLocalAssets[i];
-        if (!asset.id || !asset.dataUrl) continue;
-
+      const assetsToUpload = allLocalAssets.filter(asset => {
+        if (!asset.id || !asset.dataUrl) return false;
         const isPng = asset.dataUrl.includes('image/png');
         const expectedName = `${asset.id}.${isPng ? 'png' : 'jpg'}`;
+        return !driveAssetNames.has(expectedName);
+      });
 
-        if (!driveAssetNames.has(expectedName)) {
-          await this.uploadAssetFile(token, assetsFolderId, asset);
-          uploadedCount++;
-        }
+      let uploadedCount = 0;
+      const BATCH_SIZE = 6;
+      for (let i = 0; i < assetsToUpload.length; i += BATCH_SIZE) {
+        const batch = assetsToUpload.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(asset => this.uploadAssetDirectly(token, assetsFolderId, asset))
+        );
+        uploadedCount += batch.length;
       }
 
-      // 4. Guardar configuración de IA y API propia en Google Drive solo si tiene clave
+      // 3. Guardar configuración de IA y API propia en Google Drive solo si tiene clave
       const currentAISettings = getAISettings();
       if (currentAISettings.apiKey && currentAISettings.apiKey.trim().length > 0) {
         await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', currentAISettings);
@@ -1218,6 +1246,133 @@ export const googleDriveService = {
         });
       } else {
         updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+      }
+    }
+  },
+
+  /**
+   * Sube un kit recién creado y todas sus imágenes asociadas a Google Drive de forma inmediata y ultra rápida,
+   * sin esperar el debounce y con subidas concurrentes en paralelo (lotes de 6 simultáneos).
+   */
+  async pushKitImmediately(userId: string, newKit: StudyKit, allKits: StudyKit[]): Promise<void> {
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) return;
+
+    try {
+      updateState({ status: 'syncing', errorMessage: null });
+
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
+
+      // 1. Guardar de inmediato los JSONs fundamentales en paralelo
+      const lightweightKits = stripHeavyAssetsForLocalStorage(allKits);
+      const userKitsFileName = `thea_kits_${userId}.json`;
+      const localUsers = authService.getRawStoredUsers();
+
+      const userSessions = authService.getAllSmartStudySessions(userId);
+      const userRevealed = authService.getAllRevealedQuestionIds(userId);
+      const userProgressPayload = {
+        version: 1,
+        updatedAt: Date.now(),
+        userId,
+        sessions: userSessions,
+        revealedQuestions: userRevealed,
+      };
+      const userProgressFileName = `thea_progress_${userId}.json`;
+
+      const jsonUploadPromises = [
+        this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers),
+        this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits),
+        this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
+      ];
+
+      // 2. Extraer todos los activos de este kit y de IndexedDB
+      const kitAssets: DocumentAsset[] = [];
+      const seenIds = new Set<string>();
+
+      const collectAsset = (a?: DocumentAsset | null) => {
+        if (a && a.id && a.dataUrl && !seenIds.has(a.id)) {
+          seenIds.add(a.id);
+          kitAssets.push(a);
+        }
+      };
+
+      if (Array.isArray(newKit.assets)) {
+        for (const a of newKit.assets) collectAsset(a);
+      }
+      if (Array.isArray(newKit.questions)) {
+        for (const q of newKit.questions) collectAsset(q.sourceAsset);
+      }
+      if (Array.isArray(newKit.flashcards)) {
+        for (const f of newKit.flashcards) collectAsset(f.sourceAsset);
+      }
+      if (Array.isArray((newKit as any).smartStudyQuestions)) {
+        for (const q of (newKit as any).smartStudyQuestions) collectAsset(q.sourceAsset);
+      }
+
+      // Sumar activos almacenados en IndexedDB
+      const localStored = await getAllStoredAssets();
+      for (const a of localStored) {
+        collectAsset(a);
+      }
+
+      // 3. Consultar una sola vez los archivos ya existentes en la carpeta assets/ de Drive
+      const [existingDriveAssets] = await Promise.all([
+        this.listFilesInFolder(token, assetsFolderId),
+        Promise.all(jsonUploadPromises),
+      ]);
+
+      const driveAssetNames = new Set(existingDriveAssets.map(f => f.name));
+
+      // Filtrar los activos que aún no existen en Drive
+      const pendingAssets = kitAssets.filter(asset => {
+        if (!asset.id || !asset.dataUrl) return false;
+        const isPng = asset.dataUrl.includes('image/png');
+        const expectedName = `${asset.id}.${isPng ? 'png' : 'jpg'}`;
+        return !driveAssetNames.has(expectedName);
+      });
+
+      // 4. Subir imágenes en paralelo en lotes concurrentes de 6
+      const BATCH_SIZE = 6;
+      let uploadedCount = 0;
+      for (let i = 0; i < pendingAssets.length; i += BATCH_SIZE) {
+        const batch = pendingAssets.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(asset => this.uploadAssetDirectly(token, assetsFolderId, asset))
+        );
+        uploadedCount += batch.length;
+      }
+
+      const now = Date.now();
+      localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      updateState({
+        status: 'synced',
+        lastSyncTime: now,
+        filesSyncedCount: existingDriveAssets.length + uploadedCount + 3,
+        errorMessage: null,
+      });
+      console.log(`[GoogleDriveService] Kit '${newKit.title}' sincronizado de inmediato. ${uploadedCount} imágenes subidas a Drive.`);
+    } catch (err: any) {
+      console.error('[GoogleDriveService] Error en pushKitImmediately:', err);
+      const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        const refreshedToken = await this.attemptSilentTokenRefresh();
+        if (refreshedToken) {
+          return this.pushKitImmediately(userId, newKit, allKits);
+        }
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+        });
+      } else {
+        updateState({
+          status: 'error',
+          errorMessage: err.message || 'Error al respaldar kit en Google Drive',
+        });
       }
     }
   },

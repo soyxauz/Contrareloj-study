@@ -60,6 +60,7 @@ const SUGGESTED_TOPICS = [
 ];
 
 import { getStoredCustomMaterias } from '../services/materiaService';
+import { saveAssetsToIndexedDB } from '../services/storageService';
 
 const DEFAULT_FOCUS_AREAS = [
   'General',
@@ -263,6 +264,13 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
       if (activeTab === 'topic' && topicFocus) {
         processed.kit.category = topicFocus;
+      }
+
+      // Persistir inmediatamente los activos en IndexedDB sin esperar a que el usuario cambie de pantalla
+      if (processed.kit.assets && processed.kit.assets.length > 0) {
+        saveAssetsToIndexedDB(processed.kit.assets).catch((err) => {
+          console.warn('[CreateStudyKitView] Error al persistir activos en IndexedDB:', err);
+        });
       }
 
       setResult(processed);

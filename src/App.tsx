@@ -176,7 +176,7 @@ export const App: React.FC = () => {
     }
   }, [currentUser?.id]);
 
-  // Respaldo en segundo plano hacia Google Drive con debounce de 2.5s
+  // Respaldo en segundo plano hacia Google Drive con debounce de 800ms
   useEffect(() => {
     if (isLoggingOutRef.current) return;
     if (!currentUser || !googleDriveService.getValidAccessToken()) return;
@@ -184,7 +184,7 @@ export const App: React.FC = () => {
       googleDriveService.pushToDrive(currentUser.id, kits).catch((err) => {
         console.warn('[App] Error en sincronización en segundo plano con Google Drive:', err);
       });
-    }, 2500);
+    }, 800);
 
     return () => clearTimeout(timer);
   }, [kits, currentUser]);
@@ -387,6 +387,11 @@ export const App: React.FC = () => {
       authService.saveUserKits(currentUser ? currentUser.id : null, updated);
     } catch (e) {
       console.error('Error al guardar Study Kits:', e);
+    }
+    if (currentUser) {
+      googleDriveService.pushKitImmediately(currentUser.id, newKit, updated).catch((err) => {
+        console.warn('[App] Error en pushKitImmediately:', err);
+      });
     }
     setCurrentMode('smart-study');
   };
