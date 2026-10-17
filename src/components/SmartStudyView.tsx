@@ -2914,43 +2914,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   <span className="text-[10px] text-amber-300/80 block mt-1">Opciones Similares</span>
                 </button>
               </div>
-
-              {/* Informative Callout based on Level */}
-              {targetLevel === 3 && (
-                <div className="mt-3 p-3.5 rounded-2xl bg-amber-950/30 border border-amber-500/40 text-xs text-amber-200 space-y-1.5 animate-fadeIn">
-                  <div className="font-bold flex items-center gap-1.5 text-amber-300">
-                    <Award className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>Modo Opciones Similares Activo</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-amber-200/90">
-                    Las 4 opciones de respuesta tendrán longitud, estructura sintáctica y terminología técnica sumamente similares. Los 3 distractores se basarán en diferencias sutiles del documento para exigir discriminación fina sin pistas superficiales.
-                  </p>
-                </div>
-              )}
-
-              {targetLevel === 2 && (
-                <div className="mt-3 p-3.5 rounded-2xl bg-blue-950/30 border border-blue-500/40 text-xs text-blue-200 space-y-1.5 animate-fadeIn">
-                  <div className="font-bold flex items-center gap-1.5 text-blue-300">
-                    <Target className="w-4 h-4 text-blue-400 shrink-0" />
-                    <span>Escenarios Prácticos y Relaciones</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-blue-200/90">
-                    Preguntas basadas en viñetas de casos, problemas aplicados y concatenación de causas o consecuencias extraídas del material.
-                  </p>
-                </div>
-              )}
-
-              {targetLevel === 1 && (
-                <div className="mt-3 p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 text-xs text-emerald-200 space-y-1.5 animate-fadeIn">
-                  <div className="font-bold flex items-center gap-1.5 text-emerald-300">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Comprensión Directa y Definiciones</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-emerald-200/90">
-                    Preguntas dirigidas a evaluar la comprensión de conceptos nucleares, definiciones y vocabulario técnico esencial.
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* 2. Cuadro de Texto de Tema Concreto */}
