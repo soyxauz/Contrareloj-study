@@ -414,7 +414,8 @@ async function fetchGeminiAudioPcmChunk(
   apiKey: string
 ): Promise<AudioChunkResult> {
   const modelsToTry = [
-    'gemini-3.8-flash',
+    'gemini-3.8-flash-tts',
+    'gemini-3.8-flash-lite-tts',
     'gemini-3.1-flash-tts-preview',
   ];
   let lastError: Error | null = null;
@@ -423,21 +424,9 @@ async function fetchGeminiAudioPcmChunk(
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const payload = {
-      systemInstruction: {
-        parts: [
-          {
-            text: 'Eres un locutor profesional en un podcast educativo de alta fidelidad. Tu única misión es leer en voz alta de manera textual, completa, fluida y exacta todo el texto proporcionado, desde la primera hasta la última palabra. No omitas ningún fragmento, no resumas, no cortes oraciones y no agregues comentarios propios. Mantén una entonación humana, expresiva, cálida y adecuada al contexto del tema.',
-          },
-        ],
-      },
       contents: [
         {
-          role: 'user',
-          parts: [
-            {
-              text: `Lee en voz alta exactamente y por completo el siguiente parlamento:\n\n${chunkText}`,
-            },
-          ],
+          parts: [{ text: chunkText }],
         },
       ],
       generationConfig: {
@@ -475,6 +464,16 @@ async function fetchGeminiAudioPcmChunk(
               data: payload,
             }),
           });
+        }
+
+        if (response.status === 403) {
+          const errBody = await response.text();
+          const isBlocked = errBody.includes('API_KEY_SERVICE_BLOCKED') || errBody.includes('blocked') || errBody.includes('PERMISSION_DENIED');
+          const message = isBlocked
+            ? 'API_KEY_SERVICE_BLOCKED: La API Generative Language está deshabilitada o restringida en Google Cloud para esta clave.'
+            : `HTTP 403 en ${model}: Acceso denegado a la API de Gemini.`;
+          console.warn(`[GeminiAudio] Error de permisos en ${model}:`, message);
+          throw new Error(message);
         }
 
         if (response.status === 429 || response.status === 503 || response.status === 500) {
@@ -547,6 +546,9 @@ async function fetchGeminiAudioPcmChunk(
       } catch (err: unknown) {
         lastError = err instanceof Error ? err : new Error(String(err));
         console.warn(`[GeminiAudio] Fallo al generar fragmento con ${model}:`, lastError.message);
+        if (lastError.message.includes('API_KEY_SERVICE_BLOCKED')) {
+          throw lastError;
+        }
         break;
       }
     }

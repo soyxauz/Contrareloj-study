@@ -48,6 +48,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     message: string;
     models?: string[];
   } | null>(null);
+  const [isGeminiTesting, setIsGeminiTesting] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{
+    success: boolean;
+    errorType?: 'BLOCKED' | 'QUOTA' | 'OTHER';
+    message: string;
+  } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama');
   const isLocalHost = typeof window !== 'undefined' &&
@@ -129,6 +135,74 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       return () => clearTimeout(timer);
     }
   }, [settings.apiKey, settings.baseUrl, settings.model, isOpen]);
+
+  // Validación automática de la clave de Google Gemini para Podcast
+  useEffect(() => {
+    if (!isOpen) return;
+    const cleanKey = settings.geminiApiKey?.trim() || '';
+    if (!cleanKey) {
+      setGeminiTestResult(null);
+      setIsGeminiTesting(false);
+      return;
+    }
+
+    if (cleanKey.length < 8) return;
+
+    const timer = setTimeout(async () => {
+      setIsGeminiTesting(true);
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`;
+        let res: Response;
+        try {
+          res = await fetch(url);
+        } catch {
+          res = await fetch('/api/ai-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, method: 'GET' }),
+          });
+        }
+
+        if (res.ok) {
+          setGeminiTestResult({
+            success: true,
+            message: 'Clave de Google Gemini verificada y activa para voces neuronales con emociones (200 OK).',
+          });
+        } else {
+          const body = await res.text();
+          if (res.status === 403 || body.includes('API_KEY_SERVICE_BLOCKED') || body.includes('PERMISSION_DENIED')) {
+            setGeminiTestResult({
+              success: false,
+              errorType: 'BLOCKED',
+              message: 'Servicio bloqueado en Google Cloud. La API Generative Language está restringida o no está habilitada para esta clave. Te recomendamos crear una clave gratuita directamente en Google AI Studio sin restricciones.',
+            });
+          } else if (res.status === 429 || body.includes('RESOURCE_EXHAUSTED')) {
+            setGeminiTestResult({
+              success: false,
+              errorType: 'QUOTA',
+              message: 'Límite de cuota alcanzado o no disponible en este momento para esta clave de Google.',
+            });
+          } else {
+            setGeminiTestResult({
+              success: false,
+              errorType: 'OTHER',
+              message: `Error al validar clave de Gemini (HTTP ${res.status}).`,
+            });
+          }
+        }
+      } catch (err: unknown) {
+        setGeminiTestResult({
+          success: false,
+          errorType: 'OTHER',
+          message: 'Error de conexión al comprobar la clave de Gemini.',
+        });
+      } finally {
+        setIsGeminiTesting(false);
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, settings.geminiApiKey]);
 
   if (!isOpen) return null;
 
@@ -496,10 +570,39 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 </button>
               </div>
               <div className="mt-1.5 text-[11px]">
-                {settings.geminiApiKey && settings.geminiApiKey.trim().length > 0 ? (
-                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    Clave de Gemini activa para voces con emociones humanas en el Review Podcast.
+                {isGeminiTesting ? (
+                  <span className="text-amber-300 flex items-center gap-1.5 font-medium animate-pulse">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
+                    Comprobando clave de Google Gemini...
+                  </span>
+                ) : geminiTestResult ? (
+                  geminiTestResult.success ? (
+                    <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      {geminiTestResult.message}
+                    </span>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/35 text-rose-300 flex flex-col gap-1.5">
+                      <span className="flex items-start gap-1.5 font-medium leading-relaxed">
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                        {geminiTestResult.message}
+                      </span>
+                      {geminiTestResult.errorType === 'BLOCKED' && (
+                        <a
+                          href="https://aistudio.google.com/app/apikey"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] underline font-bold text-amber-300 hover:text-white flex items-center gap-1 ml-5 cursor-pointer"
+                        >
+                          Crear clave gratuita en Google AI Studio (sin restricciones) <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  )
+                ) : settings.geminiApiKey && settings.geminiApiKey.trim().length > 0 ? (
+                  <span className="text-amber-400 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    Comprobando clave de Gemini...
                   </span>
                 ) : (
                   <span className="text-slate-400 flex items-center gap-1 text-[10px]">

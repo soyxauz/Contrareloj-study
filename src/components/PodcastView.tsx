@@ -814,12 +814,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           }
           console.warn('[GeminiAudio] Error en reproducción de audio Gemini:', err);
           setIsAudioActive(false);
-          // Si el motor es Gemini, reintentar la reproducción con Gemini tras breve pausa; NUNCA conmutar a voz del navegador
-          setTimeout(() => {
-            if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-              speakDialogueLine(index, safeWordIdx);
-            }
-          }, 1200);
+          setIsSynthesizing(false);
+          setSynthesisError('Error al reproducir audio de Gemini. Conmutando a voz local...');
+          speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
         };
 
         if (!isMountedRef.current || !isPlayingRef.current || isManualInterruptionRef.current) {
@@ -857,19 +854,18 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         console.warn('[GeminiAudio] Error en síntesis de voz neuronal:', err);
         setIsAudioActive(false);
 
-        if (synthesisRetryCountRef.current < 2) {
-          synthesisRetryCountRef.current += 1;
-          setTimeout(() => {
-            if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-              speakDialogueLine(index, safeWordIdx);
-            }
-          }, 3500);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes('API_KEY_SERVICE_BLOCKED') || errMsg.includes('PERMISSION_DENIED') || errMsg.includes('403')) {
+          setSynthesisError('La clave de Gemini tiene el servicio bloqueado en Google Cloud. Genera una gratis en Google AI Studio (aistudio.google.com/app/apikey). Reproduciendo con voz local...');
+        } else if (errMsg.includes('429') || errMsg.includes('Cuota') || errMsg.includes('quota')) {
+          setSynthesisError('Límite de cuota de Gemini alcanzado en Google. Reproduciendo con voz local optimizada...');
         } else {
-          synthesisRetryCountRef.current = 0;
-          setIsPlaying(false);
-          isPlayingRef.current = false;
-          setSynthesisError('La cuota de Google Gemini está ocupada temporalmente (límite de peticiones por minuto). Espera unos segundos y vuelve a presionar Play.');
+          setSynthesisError('Voz neuronal de Gemini no disponible. Reproduciendo con voz local...');
         }
+
+        synthesisRetryCountRef.current = 0;
+        // Garantizar que SIEMPRE suene el audio sin congelar la interfaz
+        speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
         return;
       }
     }
@@ -1384,18 +1380,39 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
             {/* Alerta visible si la cuota de la API de Gemini está temporalmente ocupada */}
             {synthesisError && (
-              <div className="mb-4 max-w-2xl mx-auto px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex items-center justify-between shadow-lg animate-fadeIn">
-                <span className="flex-1 mr-3 leading-relaxed font-medium">{synthesisError}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSynthesisError(null);
-                    handleTogglePlay();
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all shrink-0 cursor-pointer text-xs"
-                >
-                  Reintentar
-                </button>
+              <div className="mb-4 max-w-2xl mx-auto px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
+                <span className="flex-1 leading-relaxed font-medium">
+                  {synthesisError}{' '}
+                  {synthesisError.includes('aistudio.google.com') && (
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-bold text-amber-200 hover:text-white"
+                    >
+                      Crear clave en AI Studio
+                    </a>
+                  )}
+                </span>
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowVoiceModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-thea-surfaceLight border border-amber-500/40 text-amber-300 hover:text-white font-semibold transition-all cursor-pointer text-xs"
+                  >
+                    Ajustes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSynthesisError(null);
+                      handleTogglePlay();
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all cursor-pointer text-xs"
+                  >
+                    Reintentar
+                  </button>
+                </div>
               </div>
             )}
 
