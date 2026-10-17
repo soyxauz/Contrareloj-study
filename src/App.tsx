@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
-import { DEFAULT_STUDY_KITS } from './data/defaultKits';
 import { BookOpen, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
 import { hydrateKitAssets } from './services/storageService';
@@ -424,13 +423,42 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleResetDefaults = () => {
-    if (window.confirm('¿Deseas restablecer los Study Kits a los valores iniciales predeterminados?')) {
-      const initial = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
-      setKits(initial);
-      setCurrentKit(initial[0]);
-      authService.saveUserKits(currentUser ? currentUser.id : null, initial);
-      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, initial[0].id);
+  const handleDeleteKitsBatch = (kitIds: string[]) => {
+    const idSet = new Set(kitIds);
+    const updated = kits.filter(k => !idSet.has(k.id));
+    setKits(updated);
+    try {
+      authService.saveUserKits(currentUser ? currentUser.id : null, updated);
+    } catch (e) {
+      console.error('Error al guardar Study Kits tras eliminar en lote:', e);
+    }
+    if (currentKit && idSet.has(currentKit.id)) {
+      if (updated.length > 0) {
+        handleSelectKit(updated[0]);
+      } else {
+        setCurrentKit(null);
+        localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
+        setCurrentMode('home');
+      }
+    }
+  };
+
+  const handleChangeCategoryBatch = (kitIds: string[], newCategory: string) => {
+    const idSet = new Set(kitIds);
+    const updated = kits.map(k => {
+      if (idSet.has(k.id)) {
+        return { ...k, category: newCategory };
+      }
+      return k;
+    });
+    setKits(updated);
+    if (currentKit && idSet.has(currentKit.id)) {
+      setCurrentKit(prev => (prev ? { ...prev, category: newCategory } : prev));
+    }
+    try {
+      authService.saveUserKits(currentUser ? currentUser.id : null, updated);
+    } catch (e) {
+      console.error('Error al guardar Study Kits tras cambiar materia en lote:', e);
     }
   };
 
@@ -481,7 +509,8 @@ export const App: React.FC = () => {
             onNavigate={handleNavigate}
             onDeleteKit={handleDeleteKit}
             onUpdateKit={handleUpdateKit}
-            onResetDefaults={handleResetDefaults}
+            onDeleteKitsBatch={handleDeleteKitsBatch}
+            onChangeCategoryBatch={handleChangeCategoryBatch}
             userId={currentUser?.id || null}
             onOpenAISettings={() => setShowAIModal(true)}
             onOpenAuth={() => setShowAuthModal(true)}

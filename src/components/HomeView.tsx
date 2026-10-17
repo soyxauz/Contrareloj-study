@@ -19,7 +19,6 @@ import {
   Upload,
   Globe,
   Trash2,
-  RotateCcw,
   Microscope,
   Binary,
   Compass,
@@ -41,6 +40,8 @@ import {
   FolderEdit,
   FolderInput,
   Check,
+  CheckSquare,
+  AlertTriangle,
   Edit3,
   Hospital,
   Lock,
@@ -115,10 +116,11 @@ interface HomeViewProps {
   onNavigate: (mode: StudyMode, initialTab?: InputTab) => void;
   onDeleteKit?: (kitId: string) => void;
   onUpdateKit?: (kit: StudyKit) => void;
-  onResetDefaults?: () => void;
   userId?: string | null;
   onOpenAISettings?: () => void;
   onOpenAuth?: () => void;
+  onDeleteKitsBatch?: (kitIds: string[]) => void;
+  onChangeCategoryBatch?: (kitIds: string[], newCategory: string) => void;
 }
 
 const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.ReactNode; gradient: string }[] = [
@@ -151,10 +153,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onNavigate,
   onDeleteKit,
   onUpdateKit,
-  onResetDefaults,
   userId = null,
   onOpenAISettings,
   onOpenAuth,
+  onDeleteKitsBatch,
+  onChangeCategoryBatch,
 }) => {
   const [isAIActive, setIsAIActive] = React.useState<boolean>(isAIWorking);
 
@@ -176,6 +179,75 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [reassignKitModal, setReassignKitModal] = React.useState<StudyKit | null>(null);
   const [kitMenuOpenId, setKitMenuOpenId] = React.useState<string | null>(null);
 
+  // Estados y funciones de Selección y Operaciones en Lote
+  const [isSelectionMode, setIsSelectionMode] = React.useState<boolean>(false);
+  const [selectedKitIds, setSelectedKitIds] = React.useState<Set<string>>(new Set());
+  const [showBatchMateriaModal, setShowBatchMateriaModal] = React.useState<boolean>(false);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = React.useState<boolean>(false);
+  const [batchSelectedMateria, setBatchSelectedMateria] = React.useState<string>('');
+  const [batchNewMateriaName, setBatchNewMateriaName] = React.useState<string>('');
+
+  const toggleKitSelection = (kitId: string) => {
+    setSelectedKitIds(prev => {
+      const next = new Set(prev);
+      if (next.has(kitId)) {
+        next.delete(kitId);
+      } else {
+        next.add(kitId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedKitIds.size === filteredKits.length && filteredKits.length > 0) {
+      setSelectedKitIds(new Set());
+    } else {
+      setSelectedKitIds(new Set(filteredKits.map(k => k.id)));
+    }
+  };
+
+  const handleConfirmBatchDelete = () => {
+    if (selectedKitIds.size === 0) return;
+    const ids = Array.from(selectedKitIds);
+    if (onDeleteKitsBatch) {
+      onDeleteKitsBatch(ids);
+    } else if (onDeleteKit) {
+      ids.forEach(id => onDeleteKit(id));
+    }
+    setSelectedKitIds(new Set());
+    setIsSelectionMode(false);
+    setShowBatchDeleteModal(false);
+  };
+
+  const handleConfirmBatchMateria = () => {
+    const targetMateria = (batchNewMateriaName.trim() || batchSelectedMateria).trim();
+    if (!targetMateria || selectedKitIds.size === 0) return;
+
+    if (batchNewMateriaName.trim()) {
+      addCustomMateria(targetMateria);
+      setMateriaVersion(v => v + 1);
+    }
+
+    const ids = Array.from(selectedKitIds);
+    if (onChangeCategoryBatch) {
+      onChangeCategoryBatch(ids, targetMateria);
+    } else if (onUpdateKit) {
+      const idSet = new Set(ids);
+      kits.forEach(k => {
+        if (idSet.has(k.id)) {
+          onUpdateKit({ ...k, category: targetMateria });
+        }
+      });
+    }
+
+    setSelectedKitIds(new Set());
+    setIsSelectionMode(false);
+    setShowBatchMateriaModal(false);
+    setBatchNewMateriaName('');
+    setBatchSelectedMateria('');
+  };
+
   const [selectedActionForKit, setSelectedActionForKit] = React.useState<{
     id: StudyMode;
     label: string;
@@ -192,6 +264,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
         setKitMenuOpenId(null);
         setShowMateriaManagerModal(false);
         setReassignKitModal(null);
+        setShowBatchMateriaModal(false);
+        setShowBatchDeleteModal(false);
+        setIsSelectionMode(false);
+        setSelectedKitIds(new Set());
       }
     };
     const handleClickOutside = () => {
@@ -457,15 +533,27 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <span>Gestionar Materias</span>
             </button>
 
-            {onResetDefaults && (
+            {/* Botón Seleccionar / Cancelar Selección */}
+            {kits.length > 0 && (
               <button
                 type="button"
-                onClick={onResetDefaults}
-                className="text-xs text-slate-500 hover:text-rose-400 flex items-center gap-1 transition-colors cursor-pointer"
-                title="Restablecer kits de fábrica"
+                onClick={() => {
+                  if (isSelectionMode) {
+                    setIsSelectionMode(false);
+                    setSelectedKitIds(new Set());
+                  } else {
+                    setIsSelectionMode(true);
+                  }
+                }}
+                className={`text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer font-medium ${
+                  isSelectionMode
+                    ? 'bg-violet-600/30 border-violet-500 text-violet-200'
+                    : 'text-slate-400 hover:text-white border-slate-700/60 bg-thea-surface hover:bg-thea-surfaceLight'
+                }`}
+                title={isSelectionMode ? 'Salir del modo selección' : 'Seleccionar libros para cambiarlos de materia o eliminarlos'}
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Restablecer
+                <CheckSquare className="w-3.5 h-3.5 text-violet-400" />
+                <span>{isSelectionMode ? 'Cancelar selección' : 'Seleccionar'}</span>
               </button>
             )}
             <button
@@ -593,18 +681,28 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 ? Math.max(6, smartStudyPct)
                 : (kStats.level > 1 ? 6 : 0);
 
+              const isKitSelected = selectedKitIds.has(kit.id);
+
               return (
                 <div
                   key={kit.id}
                   onClick={() => {
-                    onSelectKit(kit);
-                    onNavigate('smart-study');
+                    if (isSelectionMode) {
+                      toggleKitSelection(kit.id);
+                    } else {
+                      onSelectKit(kit);
+                      onNavigate('smart-study');
+                    }
                   }}
                   style={{
                     backgroundColor: mTheme.cardBgHex,
                   }}
-                  className={`group relative text-left p-5 sm:p-6 rounded-3xl border border-white/10 hover:border-white/25 transition-all duration-200 hover:scale-[1.015] cursor-pointer shadow-lg overflow-hidden flex flex-col justify-between min-h-[185px] ${
-                    isActive ? 'ring-2 ring-white/30 shadow-2xl' : ''
+                  className={`group relative text-left p-5 sm:p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.015] cursor-pointer shadow-lg overflow-hidden flex flex-col justify-between min-h-[185px] ${
+                    isSelectionMode && isKitSelected
+                      ? 'ring-2 ring-violet-500 border-violet-400 shadow-2xl scale-[1.01]'
+                      : isActive
+                      ? 'ring-2 ring-white/30 shadow-2xl border-white/10'
+                      : 'border-white/10 hover:border-white/25'
                   }`}
                 >
                   {/* Marca de agua ilustrativa interactiva con animación hover pop-up y rotación dinámica */}
@@ -617,21 +715,38 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                   {/* Top Area: Título y Menú de tres puntos */}
                   <div className="flex items-start justify-between gap-3 relative z-10">
-                    <div className="max-w-[85%]">
-                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className="inline-block text-[10px] font-bold tracking-wider text-white/60 uppercase">
-                          {kit.category || 'General'}
-                        </span>
-                        {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/15">
-                            <Globe className="w-2.5 h-2.5 opacity-70" />
-                            <span>ES (orig. {kit.sourceLanguage})</span>
+                    <div className="flex items-start gap-2.5 max-w-[85%]">
+                      {isSelectionMode && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleKitSelection(kit.id);
+                          }}
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 mt-0.5 ${
+                            isKitSelected
+                              ? 'bg-violet-600 border-violet-400 text-white shadow-md'
+                              : 'bg-black/50 border-white/30 text-transparent hover:border-white/70'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <span className="inline-block text-[10px] font-bold tracking-wider text-white/60 uppercase">
+                            {kit.category || 'General'}
                           </span>
-                        )}
+                          {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/15">
+                              <Globe className="w-2.5 h-2.5 opacity-70" />
+                              <span>ES (orig. {kit.sourceLanguage})</span>
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-bold text-white text-base sm:text-lg leading-tight line-clamp-2">
+                          {kit.title}
+                        </h3>
                       </div>
-                      <h3 className="font-bold text-white text-base sm:text-lg leading-tight line-clamp-2">
-                        {kit.title}
-                      </h3>
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
@@ -641,13 +756,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         </span>
                       )}
 
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setKitMenuOpenId(isMenuOpen ? null : kit.id);
-                          }}
+                      {!isSelectionMode && (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setKitMenuOpenId(isMenuOpen ? null : kit.id);
+                            }}
                           title="Opciones de este Study Kit"
                           className={`p-2 sm:p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-colors cursor-pointer ${
                             isMenuOpen ? 'bg-white/20 text-white' : ''
@@ -692,6 +808,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           </div>
                         )}
                       </div>
+                    )}
                     </div>
                   </div>
 
@@ -929,6 +1046,280 @@ export const HomeView: React.FC<HomeViewProps> = ({
             setReassignKitModal(null);
           }}
         />,
+        document.body
+      )}
+
+      {/* ── Barra Flotante de Acciones en Lote (Portal) ── */}
+      {isSelectionMode && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl bg-[#12151f]/95 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl p-3 sm:p-4 flex items-center justify-between gap-3 animate-slideUp">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-8 h-8 rounded-xl bg-violet-600/25 border border-violet-500/40 flex items-center justify-center text-violet-300 font-bold text-xs shrink-0">
+              {selectedKitIds.size}
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-bold text-white whitespace-nowrap">
+                {selectedKitIds.size} {selectedKitIds.size === 1 ? 'libro seleccionado' : 'libros seleccionados'}
+              </p>
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="text-[11px] text-violet-400 hover:text-violet-300 font-semibold underline underline-offset-2 transition-colors cursor-pointer"
+              >
+                {selectedKitIds.size === filteredKits.length && filteredKits.length > 0
+                  ? 'Deseleccionar todos'
+                  : `Seleccionar todos (${filteredKits.length})`}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Cambiar Materia en Lote */}
+            <button
+              type="button"
+              disabled={selectedKitIds.size === 0}
+              onClick={() => {
+                setBatchSelectedMateria('');
+                setBatchNewMateriaName('');
+                setShowBatchMateriaModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 text-white font-semibold text-xs transition-all shadow-md cursor-pointer"
+              title="Cambiar materia de los libros seleccionados"
+            >
+              <FolderInput className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cambiar Materia</span>
+              <span className="sm:hidden">Materia</span>
+            </button>
+
+            {/* Eliminar en Lote */}
+            <button
+              type="button"
+              disabled={selectedKitIds.size === 0}
+              onClick={() => setShowBatchDeleteModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white disabled:opacity-40 disabled:hover:bg-rose-600/20 disabled:hover:text-rose-300 font-semibold text-xs transition-all cursor-pointer"
+              title="Eliminar libros seleccionados"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Eliminar</span>
+            </button>
+
+            {/* Salir de selección */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsSelectionMode(false);
+                setSelectedKitIds(new Set());
+              }}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Cerrar modo selección"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Modal de Cambio de Materia en Lote (Portal) ── */}
+      {showBatchMateriaModal && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setShowBatchMateriaModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-[#0f1117] border border-slate-800 shadow-2xl flex flex-col overflow-hidden text-slate-100"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#131620]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <FolderInput className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    Cambiar Materia en Lote
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Asignando a {selectedKitIds.size} {selectedKitIds.size === 1 ? 'libro seleccionado' : 'libros seleccionados'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBatchMateriaModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-2">
+                  Selecciona una materia existente:
+                </label>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 scrollbar-none">
+                  {availableMateriasList.map(materia => {
+                    const mTheme = materiaThemeMap.get(materia.name.toLowerCase()) || getMateriaTheme(materia.name, kits);
+                    const isChosen = batchSelectedMateria.trim().toLowerCase() === materia.name.trim().toLowerCase() && !batchNewMateriaName.trim();
+                    return (
+                      <button
+                        key={materia.name}
+                        type="button"
+                        onClick={() => {
+                          setBatchSelectedMateria(materia.name);
+                          setBatchNewMateriaName('');
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                          isChosen
+                            ? 'ring-2 ring-violet-500 shadow-md bg-violet-600/30 border-violet-500 text-white'
+                            : `${mTheme.chipInactiveClass} hover:border-white/30`
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: mTheme.hex }} />
+                        <span>{materia.name}</span>
+                        <span className="text-[10px] opacity-70">({materia.count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  O escribe una nueva materia:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Farmacología, Cardiología, Genética..."
+                  value={batchNewMateriaName}
+                  onChange={(e) => {
+                    setBatchNewMateriaName(e.target.value);
+                    if (e.target.value.trim()) {
+                      setBatchSelectedMateria('');
+                    }
+                  }}
+                  className="w-full bg-[#0c0e14] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              {/* Vista previa de libros afectados */}
+              <div>
+                <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">
+                  Libros seleccionados ({selectedKitIds.size}):
+                </span>
+                <div className="bg-[#0c0e14] border border-slate-800 rounded-xl p-2.5 max-h-28 overflow-y-auto space-y-1 scrollbar-none">
+                  {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
+                    <div key={k.id} className="text-[11px] text-slate-300 flex items-center gap-2 truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                      <span className="truncate">{k.title}</span>
+                      <span className="text-[10px] text-slate-500 shrink-0 ml-auto">({k.category || 'General'})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 sm:p-4 border-t border-slate-800 bg-[#131620] flex items-center justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowBatchMateriaModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!batchSelectedMateria.trim() && !batchNewMateriaName.trim()}
+                onClick={handleConfirmBatchMateria}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 text-white transition-all shadow-md shadow-violet-900/30 cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Aplicar a {selectedKitIds.size} {selectedKitIds.size === 1 ? 'libro' : 'libros'}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Modal de Confirmación de Eliminación en Lote (Portal) ── */}
+      {showBatchDeleteModal && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setShowBatchDeleteModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-[#0f1117] border border-rose-500/40 shadow-2xl flex flex-col overflow-hidden text-slate-100"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#131620]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    ¿Eliminar {selectedKitIds.size} {selectedKitIds.size === 1 ? 'Study Kit' : 'Study Kits'}?
+                  </h3>
+                  <p className="text-xs text-rose-300/80">
+                    Esta acción es irreversible
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBatchDeleteModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-5 space-y-3">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Se eliminarán permanentemente los siguientes {selectedKitIds.size} libros, incluyendo todas sus preguntas, resúmenes, fichas y progreso registrado:
+              </p>
+
+              {/* Lista previa de libros a eliminar */}
+              <div className="bg-[#0c0e14] border border-slate-800 rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1.5 scrollbar-none">
+                {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
+                  <div key={k.id} className="text-xs text-slate-300 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                    <span className="truncate">{k.title}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 sm:p-4 border-t border-slate-800 bg-[#131620] flex items-center justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowBatchDeleteModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBatchDelete}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md shadow-rose-950/40 cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Eliminar {selectedKitIds.size} {selectedKitIds.size === 1 ? 'libro' : 'libros'}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
         document.body
       )}
 

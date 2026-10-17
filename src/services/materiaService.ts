@@ -324,19 +324,20 @@ export function getMateriaTheme(categoryName: string | undefined, kits?: StudyKi
 /**
  * Guarda una nueva asignación o edición de materia
  */
-export function addCustomMateria(name: string, colorId: string): CustomMateria {
+export function addCustomMateria(name: string, colorId?: string): CustomMateria {
   const trimmed = name.trim();
+  const assignedColor = (colorId && colorId in OPAQUE_DARK_PALETTES) ? colorId : getDistinctColorForCategory(trimmed, []);
   const current = getStoredCustomMaterias();
   const existing = current.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
   if (existing) {
-    existing.colorId = colorId;
+    existing.colorId = assignedColor;
     saveCustomMaterias(current);
     return existing;
   }
   const newMateria: CustomMateria = {
     id: 'mat-' + Date.now().toString(36),
     name: trimmed,
-    colorId: colorId in OPAQUE_DARK_PALETTES ? colorId : 'slate',
+    colorId: assignedColor,
   };
   const updated = [...current, newMateria];
   saveCustomMaterias(updated);
