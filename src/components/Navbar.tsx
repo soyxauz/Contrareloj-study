@@ -73,25 +73,25 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-thea-bg/85 border-b border-thea-border">
       {/* Top Brand & Status Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Left Side: Logo & Kit Selector */}
-        <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-5 min-w-0 shrink-0">
           {/* Logo — goes to Home */}
-          <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-amber-400 p-[2px] flex items-center justify-center shadow-lg shadow-violet-900/30">
-              <div className="w-full h-full bg-thea-bg rounded-[10px] flex items-center justify-center font-bold text-lg text-white">
+          <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-amber-400 p-[2px] flex items-center justify-center shadow-lg shadow-violet-900/30 shrink-0">
+              <div className="w-full h-full bg-thea-bg rounded-[9px] sm:rounded-[10px] flex items-center justify-center font-bold text-base sm:text-lg text-white">
                 C
               </div>
             </div>
-            <div className="flex items-center">
-              <span className="text-xl font-bold tracking-tight text-white">Contrareloj</span>
-              <span className="ml-1 text-base font-semibold text-violet-400">Study</span>
+            <div className="flex items-center whitespace-nowrap">
+              <span className="text-lg sm:text-xl font-bold tracking-tight text-white">Contrareloj</span>
+              <span className="ml-1 text-sm sm:text-base font-semibold text-violet-400">Study</span>
             </div>
           </div>
         </div>
 
         {/* Right Badges & Controls with separated logical sections */}
-        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* Group 1: Navigation Actions (Desktop only, mobile uses bottom bar) */}
           <div className="hidden md:flex items-center gap-2">
             {/* Create Kit Button */}
@@ -115,33 +115,30 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`p-2 rounded-xl border transition-colors ${
                 currentMode === 'home'
                   ? 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-900/30'
-                  : 'bg-thea-surface border-thea-border text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
+                  : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
               }`}
             >
               <Home className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Subtle Divider */}
+          {/* Subtle Divider (Desktop only) */}
           <div className="hidden md:block h-5 w-px bg-thea-border/80" />
 
           {/* Group 2: Status & Streaks */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {/* Streak indicator real */}
             <div
               title={`Racha de estudio: ${realStreak} ${realStreak === 1 ? 'día consecutivo' : 'días consecutivos'}`}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-thea-surface border border-thea-border text-xs text-orange-400 font-semibold"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-thea-surface border border-thea-border text-xs text-orange-400 font-semibold shrink-0"
             >
               <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-orange-500 text-orange-500" />
               <span>{realStreak}</span>
             </div>
           </div>
 
-          {/* Subtle Divider */}
-          <div className="hidden sm:block h-5 w-px bg-thea-border/80" />
-
           {/* Group 3: Cloud & AI Engine */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {/* Google Drive Cloud Sync */}
             <button
               onClick={onOpenGoogleDrive}
@@ -150,7 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? `Google Drive sincronizado (${driveState.userEmail})`
                   : 'Conectar Google Drive para respaldo en la nube'
               }
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold shadow-sm cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-xl border transition-all text-xs font-semibold shadow-sm cursor-pointer shrink-0 ${
                 driveState.status === 'syncing'
                   ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
                   : driveState.userEmail
@@ -169,7 +166,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
               <span className="hidden sm:inline">Drive</span>
               {driveState.userEmail && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400" />
               )}
             </button>
 
@@ -185,11 +182,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* Subtle Divider */}
-          <div className="h-5 w-px bg-thea-border/80" />
-
-          {/* Group 4: User Profile & Inspector */}
-          <div className="flex items-center gap-2">
+          {/* Group 4: User Profile & Inspector (Desktop only, mobile uses bottom navigation bar) */}
+          <div className="hidden md:flex items-center gap-2">
+            {/* Subtle Divider */}
+            <div className="h-5 w-px bg-thea-border/80 mr-1" />
             {currentUser ? (
               <div className="flex items-center gap-1.5">
                 <div

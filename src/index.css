@@ -121,3 +121,13 @@ html {
   flex-direction: column;
 }
 
+/* Ocultar barra de desplazamiento manteniendo funcionalidad táctil */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+

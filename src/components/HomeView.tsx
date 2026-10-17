@@ -302,20 +302,30 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {/* Source chips */}
-        <div className="relative z-10 flex flex-wrap items-center gap-2 mt-4">
-          <span className="text-xs text-slate-400 font-medium mr-1">Acepta:</span>
-          {INPUT_SOURCES.map(src => (
-            <button
-              key={src.label}
-              type="button"
-              onClick={() => onNavigate('create', src.tab)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-thea-bg/80 border border-thea-border/80 text-slate-300 text-xs font-medium cursor-pointer transition-all shadow-sm active:scale-95 group ${src.hoverStyle}`}
-              title={`Hacer clic para crear con ${src.label}`}
-            >
-              <span className="transition-transform group-hover:scale-110">{src.icon}</span>
-              <span>{src.label}</span>
-            </button>
-          ))}
+        <div className="relative z-10 mt-5 pt-3 border-t border-thea-border/40">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-slate-400 font-semibold tracking-wide uppercase flex items-center gap-1.5">
+              <span>Acepta:</span>
+            </span>
+            <span className="text-[11px] text-slate-500 hidden sm:inline">
+              Desliza o haz clic para empezar
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none touch-pan-x">
+            {INPUT_SOURCES.map(src => (
+              <button
+                key={src.label}
+                type="button"
+                onClick={() => onNavigate('create', src.tab)}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-thea-bg/90 border border-thea-border/80 text-slate-200 text-xs font-medium cursor-pointer transition-all shadow-sm active:scale-95 group shrink-0 ${src.hoverStyle}`}
+                title={`Hacer clic para crear con ${src.label}`}
+              >
+                <span className="transition-transform group-hover:scale-110 shrink-0">{src.icon}</span>
+                <span className="whitespace-nowrap font-medium">{src.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
