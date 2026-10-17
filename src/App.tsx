@@ -172,6 +172,30 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [kits, currentUser]);
 
+  // Respaldo en segundo plano del progreso de Smart Study hacia Google Drive en tiempo real
+  useEffect(() => {
+    if (!currentUser) return;
+    let debounceTimer: any = null;
+
+    const handleSessionSaved = () => {
+      if (isLoggingOutRef.current) return;
+      if (!googleDriveService.getValidAccessToken()) return;
+
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        googleDriveService.pushProgressToDrive(currentUser.id).catch((err) => {
+          console.warn('[App] Error al sincronizar progreso de Smart Study en Google Drive:', err);
+        });
+      }, 2500);
+    };
+
+    window.addEventListener('thea_session_saved', handleSessionSaved);
+    return () => {
+      clearTimeout(debounceTimer);
+      window.removeEventListener('thea_session_saved', handleSessionSaved);
+    };
+  }, [currentUser]);
+
   // Sync Current Kit ID to LocalStorage
   useEffect(() => {
     if (currentKit && !isCorruptedKit(currentKit)) {

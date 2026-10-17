@@ -931,6 +931,27 @@ export const googleDriveService = {
         }
       }
 
+      // 2.5 Sincronizar progreso y memoria de Smart Study de todos los libros (nivel, respuestas, historial)
+      const userProgressFileName = `thea_progress_${userId}.json`;
+      let progressFile = await this.findFileInFolder(token, rootFolderId, userProgressFileName);
+      if (!progressFile) {
+        progressFile = await this.findFileInFolder(token, rootFolderId, 'thea_progress.json');
+      }
+
+      if (progressFile) {
+        try {
+          const cloudProgress = await this.readJsonFromDrive(token, progressFile.id);
+          if (cloudProgress?.sessions && typeof cloudProgress.sessions === 'object') {
+            authService.saveAllSmartStudySessions(userId, cloudProgress.sessions, cloudProgress.revealedQuestions);
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
+            }
+          }
+        } catch (e) {
+          console.warn('[GoogleDriveService] Error leyendo progreso de Smart Study de Drive:', e);
+        }
+      }
+
       // 3. Sincronizar activos visuales desde subcarpeta 'assets/'
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
       const driveAssetFiles = await this.listFilesInFolder(token, assetsFolderId);
@@ -1075,6 +1096,19 @@ export const googleDriveService = {
       const userKitsFileName = `thea_kits_${userId}.json`;
       await this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits);
 
+      // 2.5 Guardar progreso y memoria de Smart Study de todos los libros (nivel, respuestas, historial)
+      const userSessions = authService.getAllSmartStudySessions(userId);
+      const userRevealed = authService.getAllRevealedQuestionIds(userId);
+      const userProgressPayload = {
+        version: 1,
+        updatedAt: Date.now(),
+        userId,
+        sessions: userSessions,
+        revealedQuestions: userRevealed,
+      };
+      const userProgressFileName = `thea_progress_${userId}.json`;
+      await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);
+
       // 3. Subir activos visuales a subcarpeta 'assets/' individualmente
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
       const existingDriveAssets = await this.listFilesInFolder(token, assetsFolderId);
@@ -1168,6 +1202,42 @@ export const googleDriveService = {
         });
       }
       return false;
+    }
+  },
+
+  /**
+   * Sincroniza únicamente el progreso de estudio hacia Google Drive en segundo plano (nivel, respuestas e historial).
+   */
+  async pushProgressToDrive(userId: string): Promise<void> {
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) return;
+
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const userSessions = authService.getAllSmartStudySessions(userId);
+      const userRevealed = authService.getAllRevealedQuestionIds(userId);
+      const userProgressPayload = {
+        version: 1,
+        updatedAt: Date.now(),
+        userId,
+        sessions: userSessions,
+        revealedQuestions: userRevealed,
+      };
+      const userProgressFileName = `thea_progress_${userId}.json`;
+      await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);
+    } catch (e: any) {
+      console.warn('[GoogleDriveService] Error en pushProgressToDrive:', e);
+      const is401 = e?.message?.includes('401') || e?.message?.includes('TOKEN_EXPIRED') || e?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        const refreshedToken = await this.attemptSilentTokenRefresh();
+        if (refreshedToken) {
+          return this.pushProgressToDrive(userId);
+        }
+      }
     }
   },
 };

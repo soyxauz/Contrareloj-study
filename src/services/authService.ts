@@ -206,6 +206,7 @@ export const authService = {
 
     // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
     persistSessionRecord(newUser.id);
+    this.migrateGuestProgressToUser(newUser.id);
 
     const { passwordHash: _, ...safeUser } = newUser;
     return { success: true, user: safeUser };
@@ -230,6 +231,7 @@ export const authService = {
 
     // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
     persistSessionRecord(user.id);
+    this.migrateGuestProgressToUser(user.id);
     const { passwordHash: _, ...safeUser } = user;
     return { success: true, user: safeUser };
   },
@@ -276,6 +278,7 @@ export const authService = {
 
       // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
       persistSessionRecord(existing.id);
+      this.migrateGuestProgressToUser(existing.id);
       const { passwordHash: _, ...safeUser } = existing;
       return { success: true, user: safeUser };
     } catch (e: any) {
@@ -375,11 +378,23 @@ export const authService = {
 
   /**
    * Obtiene la sesión de Smart Study guardada (memoria total en tiempo real).
+   * Cuenta con fallback transparente a la sesión de invitado si el usuario no tenía progreso previo en este kit.
    */
   getSmartStudySession(userId: string | null, kitId: string): SmartStudySessionState | null {
     try {
-      const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
-      const raw = localStorage.getItem(key);
+      const userKey = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
+      let raw = localStorage.getItem(userKey);
+      if (!raw && userId && userId !== 'guest') {
+        const guestKey = `thea_ss_mem_guest_${kitId}`;
+        const guestRaw = localStorage.getItem(guestKey);
+        if (guestRaw) {
+          raw = guestRaw;
+          localStorage.setItem(userKey, guestRaw);
+          try {
+            saveSessionItem(userKey, JSON.parse(guestRaw)).catch(() => {});
+          } catch {}
+        }
+      }
       if (!raw) return null;
       return JSON.parse(raw);
     } catch (e) {
@@ -389,14 +404,201 @@ export const authService = {
   },
 
   /**
-   * Guarda el instante exacto de la sesión de Smart Study.
+   * Guarda el instante exacto de la sesión de Smart Study en LocalStorage e IndexedDB,
+   * emitiendo un evento en vivo para que HomeView y Google Drive sincronicen de inmediato.
    */
   saveSmartStudySession(userId: string | null, kitId: string, state: SmartStudySessionState): void {
     try {
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
       localStorage.setItem(key, JSON.stringify(state));
+      saveSessionItem(key, state).catch(() => {});
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thea_session_saved', {
+          detail: { userId, kitId, state }
+        }));
+      }
     } catch (e) {
       console.error('Error al guardar memoria de Smart Study', e);
+    }
+  },
+
+  /**
+   * Obtiene un mapa de todas las sesiones de Smart Study para un usuario dado.
+   */
+  getAllSmartStudySessions(userId: string | null): Record<string, SmartStudySessionState> {
+    const result: Record<string, SmartStudySessionState> = {};
+    if (typeof localStorage === 'undefined') return result;
+
+    const prefix = `thea_ss_mem_${userId || 'guest'}_`;
+    const guestPrefix = 'thea_ss_mem_guest_';
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+
+      if (key.startsWith(prefix)) {
+        const kitId = key.substring(prefix.length);
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            result[kitId] = JSON.parse(raw);
+          }
+        } catch {}
+      } else if (userId && userId !== 'guest' && key.startsWith(guestPrefix)) {
+        const kitId = key.substring(guestPrefix.length);
+        if (!result[kitId]) {
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              result[kitId] = JSON.parse(raw);
+            }
+          } catch {}
+        }
+      }
+    }
+    return result;
+  },
+
+  /**
+   * Obtiene todos los conjuntos de preguntas reveladas del usuario.
+   */
+  getAllRevealedQuestionIds(userId: string | null): Record<string, string[]> {
+    const result: Record<string, string[]> = {};
+    if (typeof localStorage === 'undefined') return result;
+
+    const prefix = `thea_revealed_q_${userId || 'guest'}_`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        const kitId = key.substring(prefix.length);
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            result[kitId] = JSON.parse(raw);
+          }
+        } catch {}
+      }
+    }
+    return result;
+  },
+
+  /**
+   * Fusiona una sesión entrante (ej. descargada de Google Drive) con la sesión local
+   * aplicando el criterio: prevalece el progreso más avanzado (mayor nivel y mayor cantidad de aciertos).
+   */
+  mergeSmartStudySession(userId: string | null, kitId: string, incomingSession: SmartStudySessionState): void {
+    if (!incomingSession) return;
+    const currentSession = this.getSmartStudySession(userId, kitId);
+
+    if (!currentSession) {
+      this.saveSmartStudySession(userId, kitId, incomingSession);
+      return;
+    }
+
+    const localLevel = currentSession.level || 1;
+    const incomingLevel = incomingSession.level || 1;
+
+    const localCorrect = (currentSession.levelCorrectCounts && currentSession.levelCorrectCounts[localLevel]) ?? currentSession.levelCorrectCount ?? 0;
+    const incomingCorrect = (incomingSession.levelCorrectCounts && incomingSession.levelCorrectCounts[incomingLevel]) ?? incomingSession.levelCorrectCount ?? 0;
+
+    const localAnswered = currentSession.questionsAnsweredTotal || (currentSession.history ? currentSession.history.length : 0);
+    const incomingAnswered = incomingSession.questionsAnsweredTotal || (incomingSession.history ? incomingSession.history.length : 0);
+
+    let isIncomingBetter = false;
+
+    if (incomingLevel > localLevel) {
+      isIncomingBetter = true;
+    } else if (incomingLevel === localLevel) {
+      if (incomingCorrect > localCorrect) {
+        isIncomingBetter = true;
+      } else if (incomingCorrect === localCorrect) {
+        if (incomingAnswered > localAnswered) {
+          isIncomingBetter = true;
+        } else if (incomingAnswered === localAnswered) {
+          isIncomingBetter = (incomingSession.lastUpdated || 0) > (currentSession.lastUpdated || 0);
+        }
+      }
+    }
+
+    const baseSession = isIncomingBetter ? incomingSession : currentSession;
+    const otherSession = isIncomingBetter ? currentSession : incomingSession;
+
+    const mergedRevealed = Array.from(new Set([
+      ...(baseSession.revealedQuestionIds || []),
+      ...(otherSession.revealedQuestionIds || []),
+    ]));
+
+    const existingHistKeys = new Set((baseSession.history || []).map((h: any) => `${h.questionId || ''}_${h.timestamp || ''}`));
+    const mergedHistory = [...(baseSession.history || [])];
+    for (const h of (otherSession.history || [])) {
+      const key = `${h.questionId || ''}_${h.timestamp || ''}`;
+      if (!existingHistKeys.has(key)) {
+        mergedHistory.push(h);
+        existingHistKeys.add(key);
+      }
+    }
+
+    const mergedSession: SmartStudySessionState = {
+      ...baseSession,
+      revealedQuestionIds: mergedRevealed,
+      history: mergedHistory.slice(0, 50),
+      questionsAnsweredTotal: Math.max(baseSession.questionsAnsweredTotal || 0, otherSession.questionsAnsweredTotal || 0, mergedHistory.length),
+      lastUpdated: Math.max(baseSession.lastUpdated || 0, otherSession.lastUpdated || 0, Date.now()),
+    };
+
+    this.saveSmartStudySession(userId, kitId, mergedSession);
+  },
+
+  /**
+   * Guarda y fusiona en lote las sesiones de estudio y preguntas reveladas recibidas desde Google Drive.
+   */
+  saveAllSmartStudySessions(userId: string | null, sessions: Record<string, SmartStudySessionState>, revealedQuestions?: Record<string, string[]>): void {
+    if (!sessions || typeof sessions !== 'object') return;
+
+    for (const [kitId, session] of Object.entries(sessions)) {
+      if (session && typeof session === 'object') {
+        this.mergeSmartStudySession(userId, kitId, session);
+      }
+    }
+
+    if (revealedQuestions && typeof revealedQuestions === 'object') {
+      for (const [kitId, ids] of Object.entries(revealedQuestions)) {
+        if (Array.isArray(ids)) {
+          const current = this.getRevealedQuestionIds(userId, kitId);
+          const union = Array.from(new Set([...current, ...ids]));
+          const key = `thea_revealed_q_${userId || 'guest'}_${kitId}`;
+          try {
+            localStorage.setItem(key, JSON.stringify(union));
+            saveSessionItem(key, union).catch(() => {});
+          } catch {}
+        }
+      }
+    }
+  },
+
+  /**
+   * Migra el progreso acumulado en modo invitado hacia una cuenta de usuario recién conectada.
+   */
+  migrateGuestProgressToUser(userId: string): void {
+    if (!userId || userId === 'guest') return;
+    const guestSessions = this.getAllSmartStudySessions('guest');
+    const guestRevealed = this.getAllRevealedQuestionIds('guest');
+
+    for (const [kitId, session] of Object.entries(guestSessions)) {
+      this.mergeSmartStudySession(userId, kitId, session);
+    }
+
+    for (const [kitId, ids] of Object.entries(guestRevealed)) {
+      if (Array.isArray(ids)) {
+        const current = this.getRevealedQuestionIds(userId, kitId);
+        const union = Array.from(new Set([...current, ...ids]));
+        const key = `thea_revealed_q_${userId}_${kitId}`;
+        try {
+          localStorage.setItem(key, JSON.stringify(union));
+          saveSessionItem(key, union).catch(() => {});
+        } catch {}
+      }
     }
   },
 
@@ -407,6 +609,7 @@ export const authService = {
     try {
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
       localStorage.removeItem(key);
+      removeSessionItem(key).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -445,6 +648,7 @@ export const authService = {
       }
       const key = `thea_revealed_q_${userId || 'guest'}_${kitId}`;
       localStorage.setItem(key, JSON.stringify(current));
+      saveSessionItem(key, current).catch(() => {});
 
       // Actualizar también la sesión activa para consistencia inmediata
       const session = this.getSmartStudySession(userId, kitId);

@@ -267,10 +267,25 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   };
 
+  const [statsVersion, setStatsVersion] = React.useState(0);
+
+  // Escuchar eventos de actualización y sincronización de progreso en tiempo real
+  React.useEffect(() => {
+    const handleProgressUpdate = () => {
+      setStatsVersion(v => v + 1);
+    };
+    window.addEventListener('thea_session_saved', handleProgressUpdate);
+    window.addEventListener('thea_progress_synced', handleProgressUpdate);
+    return () => {
+      window.removeEventListener('thea_session_saved', handleProgressUpdate);
+      window.removeEventListener('thea_progress_synced', handleProgressUpdate);
+    };
+  }, []);
+
   // Métricas reales consolidadas de todos los libros
   const globalStats = React.useMemo(() => {
     return getGlobalRealStats(kits, userId);
-  }, [kits, userId]);
+  }, [kits, userId, statsVersion]);
 
   // Mapa indexado de estadísticas reales por kit para consulta O(1)
   const bookStatsMap = React.useMemo(() => {
