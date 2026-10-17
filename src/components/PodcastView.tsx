@@ -11,8 +11,20 @@ import {
   VolumeX,
   SkipBack,
   SkipForward,
+  Settings2,
+  Key,
+  Check,
+  ExternalLink,
+  X,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
+import {
+  GEMINI_VOICES,
+  getGeminiAudioApiKey,
+  setGeminiAudioApiKey,
+  synthesizeGeminiSpeech,
+  prefetchGeminiSpeech,
+} from '../services/geminiAudioService';
 
 interface PodcastViewProps {
   kit: StudyKit;
@@ -29,12 +41,26 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
+  // Motor de voz neuronal con emociones Gemini Flash
+  const [voiceEngine, setVoiceEngine] = useState<'gemini' | 'browser'>(() => {
+    return getGeminiAudioApiKey() ? 'gemini' : 'browser';
+  });
+  const [sofiaVoice, setSofiaVoice] = useState<string>('Aoede');
+  const [mateoVoice, setMateoVoice] = useState<string>('Puck');
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => getGeminiAudioApiKey());
+  const [keySavedFeedback, setKeySavedFeedback] = useState(false);
+  const [isTestingVoice, setIsTestingVoice] = useState(false);
+
   const isPlayingRef = useRef(isPlaying);
   const currentLineIndexRef = useRef(currentLineIndex);
   const playbackSpeedRef = useRef(playbackSpeed);
   const isMutedRef = useRef(isMuted);
   const isManualInterruptionRef = useRef(false);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const voiceEngineRef = useRef(voiceEngine);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -51,6 +77,36 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
+
+  useEffect(() => {
+    voiceEngineRef.current = voiceEngine;
+  }, [voiceEngine]);
+
+  // Detener de forma limpia y unificada cualquier reproducción (HTML5 Audio o SpeechSynthesis)
+  const stopCurrentAudio = useCallback(() => {
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current.currentTime = 0;
+      audioPlayerRef.current.onended = null;
+      audioPlayerRef.current.onerror = null;
+    }
+    if (currentUtteranceRef.current) {
+      currentUtteranceRef.current.onstart = null;
+      currentUtteranceRef.current.onend = null;
+      currentUtteranceRef.current.onerror = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsAudioActive(false);
+    setIsSynthesizing(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopCurrentAudio();
+    };
+  }, [stopCurrentAudio]);
 
   const podcast = kit.podcast;
 
@@ -202,12 +258,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
   }, [podcast?.dialogue]);
 
-  // Reproducir vocalmente una línea del diálogo
-  const speakDialogueLine = useCallback((index: number) => {
+  // Reproducir vocalmente mediante el motor del navegador (fallback local)
+  const speakBrowserDialogueLine = useCallback((index: number, cleanText: string, speakerName: string) => {
     if (!('speechSynthesis' in window)) return;
-    if (!podcast || !podcast.dialogue || !podcast.dialogue[index]) return;
-
-    // Desactivar callbacks previos para evitar disparos accidentales
     if (currentUtteranceRef.current) {
       currentUtteranceRef.current.onstart = null;
       currentUtteranceRef.current.onend = null;
@@ -215,8 +268,62 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
     window.speechSynthesis.cancel();
 
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    currentUtteranceRef.current = utterance;
+
+    const { voice, pitch, rateFactor } = getSpeakerAcoustics(speakerName, cleanText);
+
+    if (voice) {
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+    } else {
+      utterance.lang = 'es-ES';
+    }
+
+    utterance.pitch = pitch;
+    utterance.rate = Math.max(0.6, Math.min(2.5, playbackSpeedRef.current * rateFactor));
+
+    utterance.onstart = () => {
+      setIsAudioActive(true);
+    };
+
+    utterance.onend = () => {
+      setIsAudioActive(false);
+      if (isPlayingRef.current && !isManualInterruptionRef.current) {
+        setTimeout(() => {
+          if (isPlayingRef.current && !isManualInterruptionRef.current) {
+            advanceToNextLine(index);
+          }
+        }, 250);
+      }
+    };
+
+    utterance.onerror = (e) => {
+      setIsAudioActive(false);
+      if (e.error === 'interrupted' || e.error === 'canceled' || isManualInterruptionRef.current) return;
+      console.warn('[Podcast TTS] Error en síntesis de voz local:', e);
+      if (isPlayingRef.current && !isManualInterruptionRef.current) {
+        setTimeout(() => {
+          if (isPlayingRef.current && !isManualInterruptionRef.current) {
+            advanceToNextLine(index);
+          }
+        }, 600);
+      }
+    };
+
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+    window.speechSynthesis.speak(utterance);
+  }, [getSpeakerAcoustics, advanceToNextLine]);
+
+  // Reproducir vocalmente una línea del diálogo con soporte para Gemini Flash Audio TTS y Fallback
+  const speakDialogueLine = useCallback(async (index: number) => {
+    if (!podcast || !podcast.dialogue || !podcast.dialogue[index]) return;
+
+    stopCurrentAudio();
+
     if (isMutedRef.current) {
-      // Modo silencioso: avance temporal calculado según la extensión del texto
       const textLength = podcast.dialogue[index].text.length;
       const durationMs = Math.max(2500, Math.min(8000, (textLength / 18) * 1000 / playbackSpeedRef.current));
       setIsAudioActive(true);
@@ -241,68 +348,82 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    currentUtteranceRef.current = utterance;
+    // Ruta 1: Motor Neuronal Gemini Flash Audio
+    const hasGeminiKey = Boolean(getGeminiAudioApiKey());
+    if (voiceEngineRef.current === 'gemini' && hasGeminiKey) {
+      const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(item.speaker);
+      const targetVoice = isFemale ? sofiaVoice : mateoVoice;
 
-    const { voice, pitch, rateFactor } = getSpeakerAcoustics(item.speaker, cleanText);
+      try {
+        setIsSynthesizing(true);
+        const audioUrl = await synthesizeGeminiSpeech(cleanText, targetVoice);
+        setIsSynthesizing(false);
 
-    if (voice) {
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
-    } else {
-      utterance.lang = 'es-ES';
+        if (!isPlayingRef.current || isManualInterruptionRef.current) {
+          return;
+        }
+
+        // Pre-cargar en segundo plano el siguiente turno de diálogo para cero latencia
+        if (podcast.dialogue[index + 1]) {
+          const nextItem = podcast.dialogue[index + 1];
+          const nextIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(nextItem.speaker);
+          const nextVoice = nextIsFemale ? sofiaVoice : mateoVoice;
+          prefetchGeminiSpeech(nextItem.text, nextVoice);
+        }
+
+        let audio = audioPlayerRef.current;
+        if (!audio) {
+          audio = new Audio();
+          audioPlayerRef.current = audio;
+        }
+
+        audio.src = audioUrl;
+        audio.playbackRate = playbackSpeedRef.current;
+        audio.muted = isMutedRef.current;
+
+        audio.onplay = () => {
+          setIsAudioActive(true);
+        };
+
+        audio.onended = () => {
+          setIsAudioActive(false);
+          if (isPlayingRef.current && !isManualInterruptionRef.current) {
+            setTimeout(() => {
+              if (isPlayingRef.current && !isManualInterruptionRef.current) {
+                advanceToNextLine(index);
+              }
+            }, 250);
+          }
+        };
+
+        audio.onerror = (err) => {
+          console.warn('[GeminiAudio] Error en reproducción de audio, conmutando a voz local:', err);
+          setIsAudioActive(false);
+          speakBrowserDialogueLine(index, cleanText, item.speaker);
+        };
+
+        await audio.play();
+        return;
+      } catch (err) {
+        console.warn('[GeminiAudio] Fallo síntesis Gemini, conmutando a voz local:', err);
+        setIsSynthesizing(false);
+        speakBrowserDialogueLine(index, cleanText, item.speaker);
+        return;
+      }
     }
 
-    utterance.pitch = pitch;
-    utterance.rate = Math.max(0.6, Math.min(2.5, playbackSpeedRef.current * rateFactor));
-
-    utterance.onstart = () => {
-      setIsAudioActive(true);
-    };
-
-    utterance.onend = () => {
-      setIsAudioActive(false);
-      if (isPlayingRef.current && !isManualInterruptionRef.current) {
-        // Pausa conversacional natural de 250ms entre locutores
-        setTimeout(() => {
-          if (isPlayingRef.current && !isManualInterruptionRef.current) {
-            advanceToNextLine(index);
-          }
-        }, 250);
-      }
-    };
-
-    utterance.onerror = (e) => {
-      setIsAudioActive(false);
-      if (e.error === 'interrupted' || e.error === 'canceled' || isManualInterruptionRef.current) return;
-      console.warn('[Podcast TTS] Error en síntesis de voz:', e);
-      if (isPlayingRef.current && !isManualInterruptionRef.current) {
-        setTimeout(() => {
-          if (isPlayingRef.current && !isManualInterruptionRef.current) {
-            advanceToNextLine(index);
-          }
-        }, 600);
-      }
-    };
-
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-
-    window.speechSynthesis.speak(utterance);
-  }, [podcast, getSpeakerAcoustics, advanceToNextLine]);
+    // Ruta 2: Motor del Navegador (SpeechSynthesis)
+    speakBrowserDialogueLine(index, cleanText, item.speaker);
+  }, [podcast, sofiaVoice, mateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine]);
 
   // Sincronización del ciclo de vida de reproducción
   useEffect(() => {
     if (isPlaying) {
       speakDialogueLine(currentLineIndex);
     } else {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      setIsAudioActive(false);
+      stopCurrentAudio();
     }
-  }, [isPlaying, currentLineIndex, speakDialogueLine]);
+  }, [isPlaying, currentLineIndex, speakDialogueLine, stopCurrentAudio]);
 
   // Cambio de velocidad sin reiniciar el guion
   const handleSpeedChange = (newSpeed: number) => {
@@ -310,10 +431,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     setPlaybackSpeed(newSpeed);
     playbackSpeedRef.current = newSpeed;
 
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.playbackRate = newSpeed;
+    }
+
     if (isPlaying) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopCurrentAudio();
       setTimeout(() => {
         isManualInterruptionRef.current = false;
         speakDialogueLine(currentLineIndexRef.current);
@@ -330,10 +453,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (!podcast?.dialogue) return;
     const safeIdx = Math.max(0, Math.min(podcast.dialogue.length - 1, targetIndex));
     isManualInterruptionRef.current = true;
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopCurrentAudio();
 
     setCurrentLineIndex(safeIdx);
     currentLineIndexRef.current = safeIdx;
@@ -356,7 +476,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   // Temporizador anti-congelamiento de SpeechSynthesis en Chromium
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || voiceEngineRef.current === 'gemini') return;
     const interval = setInterval(() => {
       if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
         window.speechSynthesis.pause();
@@ -371,10 +491,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (isPlaying) {
       setIsPlaying(false);
       isManualInterruptionRef.current = true;
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      setIsAudioActive(false);
+      stopCurrentAudio();
       setTimeout(() => {
         isManualInterruptionRef.current = false;
       }, 50);
@@ -389,9 +506,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   // Reiniciar episodio desde el principio
   const handleRestart = () => {
     isManualInterruptionRef.current = true;
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopCurrentAudio();
     setCurrentLineIndex(0);
     currentLineIndexRef.current = 0;
 
@@ -408,11 +523,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const handleToggleMute = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.muted = nextMuted;
+    }
     if (isPlaying) {
       if (nextMuted) {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-        }
+        stopCurrentAudio();
       } else {
         speakDialogueLine(currentLineIndex);
       }
@@ -492,23 +608,61 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           </h1>
         </div>
 
-        <div className="flex items-center gap-1 bg-thea-surface border border-thea-border rounded-xl p-1 text-xs">
-          <button
-            onClick={() => setActiveTab('player')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
-              activeTab === 'player' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Reproductor
-          </button>
-          <button
-            onClick={() => setActiveTab('transcript')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
-              activeTab === 'transcript' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Transcripción
-          </button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Selector de Motor de Voz */}
+          <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                const hasKey = Boolean(getGeminiAudioApiKey());
+                if (!hasKey && voiceEngine === 'browser') {
+                  setShowVoiceModal(true);
+                } else {
+                  const nextEngine = voiceEngine === 'gemini' ? 'browser' : 'gemini';
+                  setVoiceEngine(nextEngine);
+                  stopCurrentAudio();
+                }
+              }}
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                voiceEngine === 'gemini'
+                  ? 'bg-gradient-to-r from-amber-500/25 to-violet-600/30 border border-amber-500/40 text-amber-300'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title={voiceEngine === 'gemini' ? 'Voz neuronal con emociones de Gemini activa' : 'Voz local del sistema activa'}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>{voiceEngine === 'gemini' ? 'Voz Emocional Gemini' : 'Voz del Sistema'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowVoiceModal(true)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+              title="Ajustes de Voces y API Key de Gemini"
+            >
+              <Settings2 className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Selector de Pestañas */}
+          <div className="flex items-center gap-1 bg-thea-surface border border-thea-border rounded-xl p-1 text-xs">
+            <button
+              onClick={() => setActiveTab('player')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                activeTab === 'player' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Reproductor
+            </button>
+            <button
+              onClick={() => setActiveTab('transcript')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                activeTab === 'transcript' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Transcripción
+            </button>
+          </div>
         </div>
       </div>
 
@@ -584,9 +738,23 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   {currentItem.speaker}
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-950/70 border border-violet-500/30 text-violet-300">
-                    {speakerAcoustics.voiceName.split('-')[0].trim()}
-                  </span>
+                  {voiceEngine === 'gemini' ? (
+                    isSynthesizing ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-1 animate-pulse">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Sintetizando voz emocional...
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-violet-600/25 border border-amber-500/35 text-amber-300 flex items-center gap-1 font-medium">
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        Gemini Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? sofiaVoice : mateoVoice})
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-950/70 border border-violet-500/30 text-violet-300">
+                      {speakerAcoustics.voiceName.split('-')[0].trim()}
+                    </span>
+                  )}
                   <span className="text-[11px] text-slate-500 font-mono">
                     {currentItem.time}
                   </span>
@@ -722,6 +890,213 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <p className="text-sm text-slate-300">{item.text}</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Configuración de Voces Gemini con Emociones */}
+      {showVoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl relative text-left">
+            <div className="flex items-center justify-between pb-4 border-b border-thea-border mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-violet-600/30 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Voces Neuronales con Emociones</h3>
+                  <p className="text-xs text-slate-400">Google Gemini Flash Audio TTS (100% Gratuito)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVoiceModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Selector de Voz para Sofía */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                  Voz para Sofía (Host Principal)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {GEMINI_VOICES.filter(v => v.gender === 'female').map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setSofiaVoice(v.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        sofiaVoice === v.id
+                          ? 'border-amber-400 bg-amber-500/10 shadow-md ring-1 ring-amber-400/40'
+                          : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
+                      }`}
+                    >
+                      <div className="font-bold text-sm text-white flex items-center justify-between">
+                        <span>{v.name}</span>
+                        {sofiaVoice === v.id && <Check className="w-4 h-4 text-amber-400" />}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">{v.tone}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selector de Voz para Mateo */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                  Voz para Mateo (Co-Host Analítico)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {GEMINI_VOICES.filter(v => v.gender === 'male').map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setMateoVoice(v.id)}
+                      className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                        mateoVoice === v.id
+                          ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                          : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
+                      }`}
+                    >
+                      <div className="font-bold text-xs text-white flex items-center justify-between">
+                        <span>{v.name}</span>
+                        {mateoVoice === v.id && <Check className="w-3.5 h-3.5 text-violet-400" />}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{v.tone}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input API Key de Google Gemini */}
+              <div className="pt-2 border-t border-thea-border">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-amber-400" />
+                    API Key de Google Gemini
+                  </label>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline"
+                  >
+                    Obtener clave gratis <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={geminiKeyInput}
+                    onChange={(e) => setGeminiKeyInput(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="flex-1 bg-thea-bg border border-thea-border rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeminiAudioApiKey(geminiKeyInput.trim());
+                      setKeySavedFeedback(true);
+                      setTimeout(() => setKeySavedFeedback(false), 2000);
+                      if (geminiKeyInput.trim()) {
+                        setVoiceEngine('gemini');
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all cursor-pointer shrink-0"
+                  >
+                    {keySavedFeedback ? '¡Guardada!' : 'Guardar'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Las claves de Google AI Studio cuentan con nivel gratuito sin tarjeta de crédito.
+                </p>
+              </div>
+
+              {/* Botones de Acción */}
+              <div className="flex items-center justify-between pt-3 border-t border-thea-border">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isTestingVoice || !geminiKeyInput.trim()}
+                    onClick={async () => {
+                      try {
+                        setIsTestingVoice(true);
+                        stopCurrentAudio();
+                        const testUrl = await synthesizeGeminiSpeech(
+                          '¡Hola! Soy Sofía en Contrareloj Study. ¡Me alegra mucho que estemos repasando juntos hoy!',
+                          sofiaVoice,
+                          geminiKeyInput.trim()
+                        );
+                        let audio = audioPlayerRef.current;
+                        if (!audio) {
+                          audio = new Audio();
+                          audioPlayerRef.current = audio;
+                        }
+                        audio.src = testUrl;
+                        audio.playbackRate = 1;
+                        audio.onended = () => setIsTestingVoice(false);
+                        audio.onerror = () => setIsTestingVoice(false);
+                        await audio.play();
+                      } catch (err: unknown) {
+                        setIsTestingVoice(false);
+                        const msg = err instanceof Error ? err.message : String(err);
+                        alert('Fallo al probar la voz: ' + (msg || 'Revisa tu clave de Gemini'));
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-amber-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
+                    <span>Probar Sofía</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isTestingVoice || !geminiKeyInput.trim()}
+                    onClick={async () => {
+                      try {
+                        setIsTestingVoice(true);
+                        stopCurrentAudio();
+                        const testUrl = await synthesizeGeminiSpeech(
+                          '¡Y yo soy Mateo! Vamos a profundizar en cada concepto para que apruebes con la máxima nota.',
+                          mateoVoice,
+                          geminiKeyInput.trim()
+                        );
+                        let audio = audioPlayerRef.current;
+                        if (!audio) {
+                          audio = new Audio();
+                          audioPlayerRef.current = audio;
+                        }
+                        audio.src = testUrl;
+                        audio.playbackRate = 1;
+                        audio.onended = () => setIsTestingVoice(false);
+                        audio.onerror = () => setIsTestingVoice(false);
+                        await audio.play();
+                      } catch (err: unknown) {
+                        setIsTestingVoice(false);
+                        const msg = err instanceof Error ? err.message : String(err);
+                        alert('Fallo al probar la voz: ' + (msg || 'Revisa tu clave de Gemini'));
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-violet-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-400" />}
+                    <span>Probar Mateo</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowVoiceModal(false)}
+                  className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

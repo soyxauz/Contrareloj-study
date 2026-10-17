@@ -9,6 +9,7 @@ export interface AISettings {
   model: string;
   timeoutMs: number;
   verified?: boolean;
+  geminiApiKey?: string;
 }
 
 export interface AIPreset {
