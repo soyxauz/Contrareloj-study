@@ -80,7 +80,17 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     }
   };
 
+  const hasToken = Boolean(googleDriveService.getValidAccessToken());
+  const isConnected = !!syncState.userEmail;
+  const isExpired = isConnected && (!hasToken || syncState.status === 'needs_reauth');
+
   const handleManualSync = async () => {
+    // Si el token expiro o se requiere reautenticacion, iniciar flujo OAuth de Google directamente
+    if (!googleDriveService.getValidAccessToken() || syncState.status === 'needs_reauth') {
+      await handleConnect();
+      return;
+    }
+
     const effectiveUserId = currentUser?.id || (syncState.userEmail ? `usr_g_${syncState.userEmail}` : 'guest');
     setIsProcessing(true);
     setNoticeMessage(null);
@@ -110,8 +120,6 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       setNoticeMessage('Google Drive desvinculado.');
     }
   };
-
-  const isConnected = !!syncState.userEmail;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
@@ -159,6 +167,13 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           </div>
         )}
 
+        {isExpired && !syncState.errorMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span className="flex-1">Tu sesión de Google Drive ha expirado. Haz clic en &quot;Reconectar y Sincronizar&quot; para renovar el acceso.</span>
+          </div>
+        )}
+
         {/* Connection State Card */}
         {isConnected ? (
           <div className="bg-thea-surfaceLight/80 border border-thea-border rounded-2xl p-4 mb-5 space-y-3">
@@ -178,9 +193,14 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                 <div>
                   <div className="text-sm font-bold text-white flex items-center gap-1.5">
                     <span>{syncState.userName || 'Usuario de Google'}</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className={`w-2 h-2 rounded-full ${isExpired ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
                   </div>
-                  <div className="text-xs text-slate-400">{syncState.userEmail}</div>
+                  <div className="text-xs text-slate-400 flex items-center gap-2">
+                    <span>{syncState.userEmail}</span>
+                    {isExpired && (
+                      <span className="text-[10px] text-amber-400 font-semibold">(Sesión expirada)</span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
@@ -214,10 +234,18 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
             <button
               onClick={handleManualSync}
               disabled={isProcessing}
-              className="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-semibold text-xs shadow-md shadow-emerald-900/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
+              className={`w-full mt-2 py-2.5 px-4 rounded-xl ${
+                isExpired
+                  ? 'bg-gradient-to-r from-violet-600 via-indigo-600 to-emerald-600 hover:from-violet-500 hover:to-emerald-500'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
+              } disabled:opacity-50 text-white font-semibold text-xs shadow-md shadow-emerald-900/30 flex items-center justify-center gap-2 cursor-pointer transition-all`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
-              <span>{isProcessing ? 'Sincronizando con Google Drive...' : 'Sincronizar Ahora'}</span>
+              <span>
+                {isProcessing
+                  ? (isExpired ? 'Reconectando con Google...' : 'Sincronizando con Google Drive...')
+                  : (isExpired ? 'Reconectar y Sincronizar' : 'Sincronizar Ahora')}
+              </span>
             </button>
           </div>
         ) : (

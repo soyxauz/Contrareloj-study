@@ -126,16 +126,6 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Limpiar únicamente la clave de prueba obsoleta si aún estuviera en caché
-      if (parsed.apiKey === '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl') {
-        parsed.apiKey = '';
-        parsed.verified = false;
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        } catch {
-          // ignore
-        }
-      }
       return { ...DEFAULT_AI_SETTINGS, ...parsed };
     } catch {
       // fallback
@@ -163,8 +153,7 @@ export function hasPersonalApiKey(): boolean {
   const current = getAISettings();
   return Boolean(
     current.apiKey &&
-    current.apiKey.trim().length > 0 &&
-    current.apiKey.trim() !== '716a4f5985e54bc8830fac7e2835578a.x9f9A2l0bgRf4WjF86KPWfHl'
+    current.apiKey.trim().length > 0
   );
 }
 

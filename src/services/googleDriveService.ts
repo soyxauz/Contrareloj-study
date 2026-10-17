@@ -3,7 +3,7 @@ import { authService } from './authService';
 import { getAllStoredAssets, saveAssetsToIndexedDB, stripHeavyAssetsForLocalStorage } from './storageService';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
 
-export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id';
+export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
 
 export interface DriveSyncState {
   status: DriveSyncStatus;
@@ -210,6 +210,14 @@ export const googleDriveService = {
   },
 
   /**
+   * Limpia el token de acceso local cuando Google reporta que expiró o fue revocado (401).
+   */
+  clearAccessToken(): void {
+    localStorage.removeItem(STORAGE_TOKEN_KEY);
+    localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
+  },
+
+  /**
    * Desconecta la cuenta de Google y remueve los tokens locales.
    */
   disconnect(): void {
@@ -331,7 +339,19 @@ export const googleDriveService = {
         token = await this.requestGoogleAccess();
       }
 
-      const profile = await this.fetchUserProfile(token);
+      let profile;
+      try {
+        profile = await this.fetchUserProfile(token);
+      } catch (profErr: any) {
+        if (profErr?.message?.includes('401') || profErr?.status === 401) {
+          this.clearAccessToken();
+          token = await this.requestGoogleAccess();
+          profile = await this.fetchUserProfile(token);
+        } else {
+          throw profErr;
+        }
+      }
+
       const authRes = await authService.loginWithGoogle(profile);
 
       if (!authRes.success || !authRes.user) {
@@ -347,7 +367,16 @@ export const googleDriveService = {
       };
     } catch (err: any) {
       if (err?.message !== 'CLIENT_ID_MISSING') {
-        updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+        const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
+        if (is401) {
+          this.clearAccessToken();
+          updateState({
+            status: 'needs_reauth',
+            errorMessage: 'Sesión de Google Drive expirada. Haz clic en Reconectar Cuenta.',
+          });
+        } else {
+          updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+        }
       }
       throw err;
     }
@@ -393,6 +422,10 @@ export const googleDriveService = {
     });
 
     if (!createRes.ok) {
+      if (createRes.status === 401) {
+        this.clearAccessToken();
+        throw new Error('TOKEN_EXPIRED_401');
+      }
       throw new Error(`No se pudo crear la carpeta '${folderName}' en Google Drive (${createRes.status})`);
     }
 
@@ -409,6 +442,11 @@ export const googleDriveService = {
     const res = await fetch(searchUrl, {
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    if (res.status === 401) {
+      this.clearAccessToken();
+      throw new Error('TOKEN_EXPIRED_401');
+    }
 
     if (!res.ok) return null;
     const data = await res.json();
@@ -438,6 +476,10 @@ export const googleDriveService = {
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          this.clearAccessToken();
+          throw new Error('TOKEN_EXPIRED_401');
+        }
         throw new Error(`Error al actualizar ${fileName} en Drive (${res.status})`);
       }
       return existing.id;
@@ -490,6 +532,10 @@ export const googleDriveService = {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        this.clearAccessToken();
+        throw new Error('TOKEN_EXPIRED_401');
+      }
       throw new Error(`Error al leer archivo de Drive (${res.status})`);
     }
 
@@ -534,6 +580,10 @@ export const googleDriveService = {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        this.clearAccessToken();
+        throw new Error('TOKEN_EXPIRED_401');
+      }
       console.warn(`[GoogleDriveService] No se pudo subir activo ${asset.id} (${res.status})`);
       return null;
     }
@@ -552,6 +602,10 @@ export const googleDriveService = {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        this.clearAccessToken();
+        throw new Error('TOKEN_EXPIRED_401');
+      }
       throw new Error(`Error al descargar activo ${fileId}`);
     }
 
@@ -569,6 +623,11 @@ export const googleDriveService = {
       headers: { Authorization: `Bearer ${token}` },
     });
 
+    if (res.status === 401) {
+      this.clearAccessToken();
+      throw new Error('TOKEN_EXPIRED_401');
+    }
+
     if (!res.ok) return [];
     const data = await res.json();
     return data.files || [];
@@ -579,7 +638,16 @@ export const googleDriveService = {
    */
   async pullFromDrive(userId: string): Promise<StudyKit[] | null> {
     const token = this.getValidAccessToken();
-    if (!token) return null;
+    if (!token) {
+      const hasEmail = Boolean(localStorage.getItem(STORAGE_PROFILE_KEY));
+      if (hasEmail) {
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive ha expirado. Reconecta tu cuenta para sincronizar.',
+        });
+      }
+      return null;
+    }
 
     updateState({ status: 'syncing', errorMessage: null });
 
@@ -727,7 +795,16 @@ export const googleDriveService = {
       return pulledKits;
     } catch (err: any) {
       console.error('[GoogleDriveService] Error en pullFromDrive:', err);
-      updateState({ status: 'error', errorMessage: err?.message || 'Error al descargar datos de Drive.' });
+      const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive ha expirado. Haz clic en Reconectar Cuenta.',
+        });
+      } else {
+        updateState({ status: 'error', errorMessage: err?.message || 'Error al descargar datos de Drive.' });
+      }
       return null;
     }
   },
@@ -737,7 +814,16 @@ export const googleDriveService = {
    */
   async pushToDrive(userId: string, kits: StudyKit[]): Promise<void> {
     const token = this.getValidAccessToken();
-    if (!token) return;
+    if (!token) {
+      const hasEmail = Boolean(localStorage.getItem(STORAGE_PROFILE_KEY));
+      if (hasEmail) {
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive ha expirado. Reconecta tu cuenta para sincronizar.',
+        });
+      }
+      return;
+    }
 
     updateState({ status: 'syncing', errorMessage: null });
 
@@ -790,7 +876,16 @@ export const googleDriveService = {
       });
     } catch (err: any) {
       console.error('[GoogleDriveService] Error en pushToDrive:', err);
-      updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+      const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive ha expirado. Haz clic en Reconectar Cuenta.',
+        });
+      } else {
+        updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+      }
     }
   },
 
@@ -799,15 +894,32 @@ export const googleDriveService = {
    */
   async syncAISettingsToDrive(overrideSettings?: AISettings): Promise<boolean> {
     const token = this.getValidAccessToken();
-    if (!token) return false;
+    if (!token) {
+      const hasEmail = Boolean(localStorage.getItem(STORAGE_PROFILE_KEY));
+      if (hasEmail) {
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive ha expirado. Reconecta tu cuenta.',
+        });
+      }
+      return false;
+    }
 
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const aiSettings = overrideSettings || getAISettings();
       await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', aiSettings);
       return true;
-    } catch (e) {
+    } catch (e: any) {
       console.warn('[GoogleDriveService] Error sincronizando ajustes de IA con Drive:', e);
+      const is401 = e?.message?.includes('401') || e?.message?.includes('TOKEN_EXPIRED') || e?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive ha expirado. Haz clic en Reconectar Cuenta.',
+        });
+      }
       return false;
     }
   },

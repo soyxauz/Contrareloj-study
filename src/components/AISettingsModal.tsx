@@ -82,8 +82,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       return;
     }
 
-    // Si tiene una clave con al menos 6 caracteres o es local, probar automáticamente
-    if (cleanKey.length >= 6 || isLocal) {
+    // Si tiene una clave con al menos 4 caracteres o es local, probar automáticamente
+    if (cleanKey.length >= 4 || isLocal) {
       const timer = setTimeout(async () => {
         setIsTesting(true);
         try {
@@ -102,7 +102,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               authService.saveUserAISettings(user.id, updated);
             }
             if (googleDriveService.getValidAccessToken()) {
-              googleDriveService.syncAISettingsToDrive().catch(console.warn);
+              googleDriveService.syncAISettingsToDrive(updated).catch(console.warn);
             }
           } else {
             setSettings(prev => ({ ...prev, verified: false }));
@@ -117,7 +117,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         } finally {
           setIsTesting(false);
         }
-      }, 600);
+      }, 500);
 
       return () => clearTimeout(timer);
     }
@@ -444,7 +444,20 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 <input
                   type={showKey ? 'text' : 'password'}
                   value={settings.apiKey}
-                  onChange={e => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
+                  onChange={e => {
+                    const newKey = e.target.value;
+                    const updated: AISettings = {
+                      ...settings,
+                      apiKey: newKey,
+                      verified: newKey.trim().length > 0 ? true : false,
+                    };
+                    setSettings(updated);
+                    saveAISettings(updated);
+                    const user = authService.getCurrentUser();
+                    if (user) {
+                      authService.saveUserAISettings(user.id, updated);
+                    }
+                  }}
                   placeholder={activePreset?.keyPlaceholder || 'Ingresa tu API Key'}
                   className="w-full px-3 py-2 pr-10 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
                 />
