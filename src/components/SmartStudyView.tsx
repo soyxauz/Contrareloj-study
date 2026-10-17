@@ -230,7 +230,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
   const [targetLevel, setTargetLevel] = useState<1 | 2 | 3>(3);
   const [targetTopic, setTargetTopic] = useState('');
-  const [targetCount, setTargetCount] = useState<number>(5);
+  const targetCount = 5;
   const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
   const [targetSuccessNotice, setTargetSuccessNotice] = useState('');
   const [targetErrorNotice, setTargetErrorNotice] = useState('');
@@ -2975,29 +2975,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </p>
             </div>
 
-            {/* 3. Cantidad de preguntas */}
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                Cantidad de Preguntas a Generar
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[3, 5, 10].map(cnt => (
-                  <button
-                    key={cnt}
-                    type="button"
-                    onClick={() => setTargetCount(cnt)}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                      targetCount === cnt
-                        ? 'bg-violet-600 border-violet-500 text-white shadow-md'
-                        : 'bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {cnt} preguntas
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Acciones Rápidas de Sesión */}
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
@@ -3092,7 +3069,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               {isGeneratingTargeted ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-amber-200" />
-                  <span>Generando {targetCount} Preguntas...</span>
+                  <span>Generando Preguntas con IA...</span>
                 </>
               ) : (
                 <>
