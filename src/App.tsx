@@ -130,6 +130,18 @@ export const App: React.FC = () => {
     setCurrentMode(mode);
   };
 
+  // Detención inmediata de podcast al salir de la pestaña o cambiar de sección en la app
+  useEffect(() => {
+    if (currentMode !== 'podcast') {
+      window.dispatchEvent(new CustomEvent('thea_podcast_stop_request'));
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch (_) {}
+      }
+    }
+  }, [currentMode]);
+
   // Ajustes de plataforma permanentemente desbloqueados
   useEffect(() => {
     const permanentSettings: DeveloperSettings = {
