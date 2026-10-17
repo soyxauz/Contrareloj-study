@@ -609,16 +609,42 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         };
 
         audio.onerror = (err) => {
+          if (isManualInterruptionRef.current || isScrubbingRef.current || !isPlayingRef.current) {
+            setIsAudioActive(false);
+            return;
+          }
           console.warn('[GeminiAudio] Error en audio, conmutando a voz local:', err);
           setIsAudioActive(false);
           speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
         };
 
-        await audio.play();
+        try {
+          await audio.play();
+        } catch (playErr: unknown) {
+          const isAbort =
+            playErr instanceof Error &&
+            (playErr.name === 'AbortError' ||
+              playErr.message.includes('interrupted') ||
+              playErr.message.includes('pause'));
+          if (isAbort || isManualInterruptionRef.current || isScrubbingRef.current || !isPlayingRef.current) {
+            setIsAudioActive(false);
+            return;
+          }
+          throw playErr;
+        }
         return;
-      } catch (err) {
-        console.warn('[GeminiAudio] Fallo síntesis Gemini, conmutando a voz local:', err);
+      } catch (err: unknown) {
         setIsSynthesizing(false);
+        const isAbort =
+          err instanceof Error &&
+          (err.name === 'AbortError' ||
+            err.message.includes('interrupted') ||
+            err.message.includes('pause'));
+        if (isAbort || isManualInterruptionRef.current || isScrubbingRef.current || !isPlayingRef.current) {
+          setIsAudioActive(false);
+          return;
+        }
+        console.warn('[GeminiAudio] Fallo síntesis Gemini, conmutando a voz local:', err);
         speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
         return;
       }
@@ -732,6 +758,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   // Control de arrastre interactivo del scrubber
   const handleScrubStart = useCallback(() => {
+    isManualInterruptionRef.current = true;
     isScrubbingRef.current = true;
     setIsScrubbing(true);
     wasPlayingBeforeScrubRef.current = isPlayingRef.current;
@@ -741,7 +768,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       audioPlayerRef.current.pause();
     }
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.pause();
+      window.speechSynthesis.cancel();
     }
     setIsAudioActive(false);
   }, []);

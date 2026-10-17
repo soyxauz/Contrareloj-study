@@ -348,11 +348,9 @@ export async function synthesizeGeminiSpeech(
   const requestPromise = (async () => {
     // Modelos oficiales recomendados por Google AI Studio para TTS y audio multimodal
     const modelsToTry = [
-      'gemini-3.8-flash-tts',
-      'gemini-3.8-flash-lite-tts',
-      'gemini-3.8-flash',
-      'gemini-2.0-flash-exp',
       'gemini-2.0-flash',
+      'gemini-2.0-flash-exp',
+      'gemini-2.5-flash',
     ];
     let lastError: Error | null = null;
 
