@@ -1,19 +1,117 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { StudyKit, DocumentAsset } from '../types';
 import {
   Image as ImageIcon,
   ZoomIn,
-  Table as TableIcon
+  Table as TableIcon,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
+import { getAssetsMap } from '../services/storageService';
+import { googleDriveService } from '../services/googleDriveService';
 
 interface ImagesGalleryViewProps {
   kit: StudyKit;
+  onUpdateKit?: (updatedKit: StudyKit) => void;
 }
 
-export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => {
-  const assets: DocumentAsset[] = kit.assets || [];
+export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpdateKit }) => {
+  const [assets, setAssets] = useState<DocumentAsset[]>(() => kit.assets || []);
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
+  const [loadingAssetIds, setLoadingAssetIds] = useState<Set<string>>(new Set());
+  const [isHydrating, setIsHydrating] = useState(false);
+
+  // Mantener activos sincronizados cuando cambia el kit
+  useEffect(() => {
+    setAssets(kit.assets || []);
+  }, [kit.id, kit.assets]);
+
+  // Carga e hidratación proactiva e inmediata de activos faltantes
+  const loadMissingAssets = async () => {
+    const currentList = kit.assets || [];
+    const missing = currentList.filter(a => !a.dataUrl && a.id);
+    if (missing.length === 0) return;
+
+    const missingIds = missing.map(a => a.id);
+    setLoadingAssetIds(new Set(missingIds));
+    setIsHydrating(true);
+
+    try {
+      // 1. Consultar IndexedDB local primero
+      const localMap = await getAssetsMap(missingIds);
+      let updatedAssets = currentList.map(a => {
+        if (!a.dataUrl && localMap.has(a.id)) {
+          return { ...a, dataUrl: localMap.get(a.id)!.dataUrl };
+        }
+        return a;
+      });
+
+      // Actualizar vista con lo disponible en memoria/IndexedDB
+      setAssets(updatedAssets);
+
+      const stillMissing = updatedAssets.filter(a => !a.dataUrl && a.id);
+      const stillMissingIds = stillMissing.map(a => a.id);
+      setLoadingAssetIds(new Set(stillMissingIds));
+
+      // 2. Si todavía faltan imágenes, descargarlas de forma prioritaria desde Google Drive
+      if (stillMissingIds.length > 0) {
+        const driveMap = await googleDriveService.prioritizeAssetsDownload(stillMissingIds);
+        if (driveMap.size > 0) {
+          updatedAssets = updatedAssets.map(a => {
+            if (!a.dataUrl && driveMap.has(a.id)) {
+              return { ...a, dataUrl: driveMap.get(a.id)!.dataUrl };
+            }
+            return a;
+          });
+          setAssets(updatedAssets);
+        }
+      }
+
+      // 3. Notificar al componente padre si se restauraron activos para actualizar currentKit
+      const anyRestored = updatedAssets.some((a, idx) => a.dataUrl && !currentList[idx]?.dataUrl);
+      if (anyRestored && onUpdateKit) {
+        onUpdateKit({
+          ...kit,
+          assets: updatedAssets,
+        });
+      }
+    } catch (err) {
+      console.warn('[ImagesGalleryView] Error al cargar activos faltantes:', err);
+    } finally {
+      setLoadingAssetIds(new Set());
+      setIsHydrating(false);
+    }
+  };
+
+  // Ejecutar carga inmediata al montar la vista o cambiar de kit
+  useEffect(() => {
+    loadMissingAssets();
+  }, [kit.id]);
+
+  // Reaccionar inmediatamente cuando la sincronización en segundo plano guarda nuevas imágenes
+  useEffect(() => {
+    const handleAssetsSynced = async () => {
+      const missing = assets.filter(a => !a.dataUrl && a.id);
+      if (missing.length === 0) return;
+      const localMap = await getAssetsMap(missing.map(a => a.id));
+      if (localMap.size > 0) {
+        setAssets(prev =>
+          prev.map(a => {
+            if (!a.dataUrl && localMap.has(a.id)) {
+              return { ...a, dataUrl: localMap.get(a.id)!.dataUrl };
+            }
+            return a;
+          })
+        );
+      }
+    };
+
+    window.addEventListener('thea_assets_synced', handleAssetsSynced);
+    return () => {
+      window.removeEventListener('thea_assets_synced', handleAssetsSynced);
+    };
+  }, [assets]);
 
   const currentIndex = selectedAsset
     ? assets.findIndex((a) => a.id === selectedAsset.id || a.dataUrl === selectedAsset.dataUrl)
@@ -39,7 +137,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
       {/* View Header */}
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-thea-border/60">
         <div>
-          <div className="flex items-center gap-2.5 mb-1.5">
+          <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
             <div className="w-9 h-9 rounded-xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-400">
               <ImageIcon className="w-5 h-5" />
             </div>
@@ -49,6 +147,24 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                 {assets.length} {assets.length === 1 ? 'activo extraído' : 'activos extraídos'}
               </span>
             </h1>
+
+            {isHydrating && (
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1.5 animate-pulse">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Cargando imágenes de Google Drive...</span>
+              </span>
+            )}
+
+            {!isHydrating && assets.some(a => !a.dataUrl) && (
+              <button
+                type="button"
+                onClick={loadMissingAssets}
+                className="text-xs px-2.5 py-0.5 rounded-full bg-violet-600/30 hover:bg-violet-600 text-violet-200 border border-violet-500/40 font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Cargar imágenes faltantes</span>
+              </button>
+            )}
           </div>
           <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
             Todas las figuras, diagramas, esquemas y tablas extraídos de &quot;{kit.title}&quot;.
@@ -78,11 +194,18 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
           {assets.map((asset, index) => {
             const isImage = asset.type === 'image';
             const pageInfo = asset.pageOrSlide ? `Pág. / Diapositiva ${asset.pageOrSlide}` : `Elemento #${index + 1}`;
+            const isAssetLoading = loadingAssetIds.has(asset.id) || (isHydrating && !asset.dataUrl);
 
             return (
               <div
                 key={asset.id || `asset-${index}`}
-                onClick={() => setSelectedAsset(asset)}
+                onClick={() => {
+                  if (asset.dataUrl) {
+                    setSelectedAsset(asset);
+                  } else {
+                    loadMissingAssets();
+                  }
+                }}
                 className="group bg-thea-surface border border-thea-border rounded-2xl overflow-hidden hover:border-violet-500/50 hover:shadow-xl hover:shadow-violet-950/20 transition-all cursor-pointer flex flex-col"
               >
                 {/* Image Box */}
@@ -94,19 +217,37 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                       className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
                       loading="lazy"
                     />
+                  ) : isAssetLoading ? (
+                    <div className="flex flex-col items-center justify-center gap-2 p-4 text-violet-400 animate-pulse">
+                      <Loader2 className="w-6 h-6 animate-spin text-violet-400" />
+                      <span className="text-[10px] font-medium text-slate-300">Cargando desde Drive...</span>
+                    </div>
                   ) : (
-                    <div className="text-slate-500 flex flex-col items-center gap-1">
-                      <ImageIcon className="w-8 h-8" />
+                    <div className="text-slate-500 flex flex-col items-center gap-1.5 p-2 text-center">
+                      <ImageIcon className="w-7 h-7 opacity-40" />
                       <span className="text-[10px]">Sin previsualización</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          loadMissingAssets();
+                        }}
+                        className="text-[9px] px-2 py-0.5 rounded bg-violet-600/30 text-violet-300 hover:bg-violet-600 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        <span>Cargar</span>
+                      </button>
                     </div>
                   )}
 
                   {/* Hover Overlay with Zoom Icon */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-9 h-9 rounded-full bg-violet-600/90 text-white flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
-                      <ZoomIn className="w-4 h-4" />
+                  {asset.dataUrl && (
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-full bg-violet-600/90 text-white flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                        <ZoomIn className="w-4 h-4" />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Page/Slide Badge */}
                   <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-slate-200">
@@ -126,8 +267,17 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                     {asset.caption || `Figura ${index + 1} extraída del material`}
                   </p>
                   <span className="text-[10px] text-violet-400 mt-2 font-semibold flex items-center gap-1">
-                    <ZoomIn className="w-3 h-3" />
-                    <span>Clic para ampliar</span>
+                    {asset.dataUrl ? (
+                      <>
+                        <ZoomIn className="w-3 h-3" />
+                        <span>Clic para ampliar</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Clic para cargar</span>
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
@@ -137,7 +287,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
       )}
 
       {/* Modal de Zoom Centrado */}
-      {selectedAsset && (
+      {selectedAsset && selectedAsset.dataUrl && (
         <ImageZoomModal
           isOpen={Boolean(selectedAsset)}
           onClose={() => setSelectedAsset(null)}

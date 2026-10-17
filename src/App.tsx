@@ -109,6 +109,24 @@ export const App: React.FC = () => {
     if (initialTab) {
       setCreateInitialTab(initialTab);
     }
+    handleSelectMode(mode);
+  };
+
+  const handleSelectMode = (mode: StudyMode) => {
+    if (mode === 'images' && currentKit) {
+      const hasMissing =
+        currentKit.assets?.some(a => !a.dataUrl) ||
+        currentKit.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
+
+      if (hasMissing) {
+        hydrateKitAssets(currentKit)
+          .then(hydrated => {
+            setCurrentKit(hydrated);
+            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : k)));
+          })
+          .catch(() => {});
+      }
+    }
     setCurrentMode(mode);
   };
 
@@ -427,7 +445,7 @@ export const App: React.FC = () => {
         currentKit={currentKit}
         onSelectKit={handleSelectKit}
         currentMode={currentMode}
-        onSelectMode={setCurrentMode}
+        onSelectMode={handleSelectMode}
         onOpenAISettings={() => setShowAIModal(true)}
         onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
         showModeTabs={showModeTabs}
@@ -494,7 +512,7 @@ export const App: React.FC = () => {
               <StudyGuideView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />
             )}
             {currentMode === 'images' && (
-              <ImagesGalleryView key={currentKit.id} kit={currentKit} />
+              <ImagesGalleryView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />
             )}
             {currentMode === 'podcast' && (
               <PodcastView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />

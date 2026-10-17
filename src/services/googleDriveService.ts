@@ -923,6 +923,66 @@ export const googleDriveService = {
   },
 
   /**
+   * Descarga de forma prioritaria los activos de un kit específico desde Google Drive si faltan localmente.
+   */
+  async prioritizeAssetsDownload(assetIds: string[]): Promise<Map<string, DocumentAsset>> {
+    const result = new Map<string, DocumentAsset>();
+    if (!assetIds || assetIds.length === 0) return result;
+
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) return result;
+
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
+      const driveAssetFiles = await this.listFilesInFolder(token, assetsFolderId);
+
+      const targetSet = new Set(assetIds);
+      const filesToDownload = driveAssetFiles.filter(f => {
+        const rawId = f.name.replace(/\.[^/.]+$/, '');
+        return targetSet.has(rawId);
+      });
+
+      if (filesToDownload.length === 0) return result;
+
+      const downloaded = await Promise.all(
+        filesToDownload.map(async (file): Promise<DocumentAsset | null> => {
+          const rawId = file.name.replace(/\.[^/.]+$/, '');
+          try {
+            const dataUrl = await this.downloadAssetDataUrl(token, file.id);
+            return {
+              id: rawId,
+              type: 'image',
+              dataUrl,
+            };
+          } catch (e) {
+            console.warn(`[GoogleDriveService] Error descargando activo prioritario ${file.name}:`, e);
+            return null;
+          }
+        })
+      );
+
+      const valid = downloaded.filter((a): a is DocumentAsset => a !== null);
+      if (valid.length > 0) {
+        await saveAssetsToIndexedDB(valid);
+        for (const a of valid) {
+          result.set(a.id, a);
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('thea_assets_synced'));
+        }
+      }
+    } catch (err) {
+      console.warn('[GoogleDriveService] Error en prioritizeAssetsDownload:', err);
+    }
+
+    return result;
+  },
+
+  /**
    * Descarga el estado completo guardado en Google Drive y lo restaura localmente con consultas paralelas ultra rápidas.
    */
   async pullFromDrive(userId: string): Promise<StudyKit[] | null> {
