@@ -1,4 +1,4 @@
-import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk } from '../types';
+import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation } from '../types';
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 
 export interface AISettings {
@@ -2474,6 +2474,358 @@ ${sampleText}`;
     };
   }
 }
+
+/**
+ * ── EVALUACIÓN SEMÁNTICA DE RESPUESTAS ABIERTAS CORTAS CON IA ─────────────────
+ * Compara conceptualmente la respuesta del estudiante con la respuesta esperada (0-100%),
+ * identificando aciertos, puntos clave cubiertos y omitidos, con retroalimentación pedagógica.
+ */
+export async function evaluateShortAnswer(
+  userAnswer: string,
+  idealAnswer: string,
+  questionText: string,
+  rubric?: string,
+  acceptableAnswers?: string[]
+): Promise<ShortAnswerEvaluation> {
+  const trimmedUser = (userAnswer || '').trim();
+  const trimmedIdeal = (idealAnswer || '').trim();
+
+  if (!trimmedUser) {
+    return {
+      similarity: 0,
+      isCorrect: false,
+      score: 0,
+      feedback: 'No se ingresó ninguna respuesta.',
+      keyPointsCovered: [],
+      keyPointsMissed: ['Respuesta en blanco'],
+    };
+  }
+
+  // Comprobación rápida de coincidencia idéntica o sinónimo directo
+  const normalizeText = (t: string) =>
+    t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const normUser = normalizeText(trimmedUser);
+  const normIdeal = normalizeText(trimmedIdeal);
+
+  if (normUser === normIdeal || (acceptableAnswers && acceptableAnswers.some(a => normalizeText(a) === normUser))) {
+    return {
+      similarity: 100,
+      isCorrect: true,
+      score: 1.0,
+      feedback: 'Coincidencia conceptual exacta con la respuesta modelo.',
+      keyPointsCovered: ['Definición precisa y concordante al 100%'],
+      keyPointsMissed: [],
+    };
+  }
+
+  const systemPrompt = `Eres un catedrático universitario y evaluador académico riguroso de Contrareloj Study.
+Tu cometido es analizar una respuesta abierta formulada por un alumno y contrastarla con la respuesta modelo del profesor para cuantificar su similitud conceptual y exactitud técnica (0% a 100%).
+
+CRITERIOS DE CALIFICACIÓN:
+1. "similarity": Entero de 0 a 100.
+   - 90-100: Excelente. Expresa el núcleo conceptual con precisión académica y terminología técnica exacta (aun con redacción propia).
+   - 70-89: Aprobado / Sólido. Refleja los principios centrales y la deducción fundamental, con detalles secundarios omitidos.
+   - 50-69: Parcialmente correcto. Captura nociones generales pero carece de precisión, rigor o elementos nucleares.
+   - Menos de 50: Incorrecto, confuso, tangencial o conceptualmente erróneo.
+2. "isCorrect": true si la similitud es >= 65, false en caso contrario.
+3. "score": Decimal entre 0 y 1 proporcional a la similitud (ej: 0.82).
+4. "feedback": 1 o 2 oraciones analíticas y constructivas en español explicando aciertos y omisiones.
+5. "keyPointsCovered": Array de conceptos o nociones que el alumno SÍ expresó correctamente.
+6. "keyPointsMissed": Array de conceptos indispensables que FALTARON o estuvieron imprecisos.
+
+FORMATO DE SALIDA (EXCLUSIVAMENTE OBJETO JSON VÁLIDO):
+{
+  "similarity": 85,
+  "isCorrect": true,
+  "score": 0.85,
+  "feedback": "Comprende correctamente el mecanismo fisiopatológico principal.",
+  "keyPointsCovered": ["Identificación del receptor", "Bloqueo competitivo"],
+  "keyPointsMissed": ["Aclaración de la reversibilidad del enlace"]
+}`;
+
+  const userPrompt = `PREGUNTA ACADÉMICA:
+${questionText}
+
+RESPUESTA MODELO / IDEAL DEL PROFESOR:
+${trimmedIdeal}
+${rubric ? `RÚBRICA DE EVALUACIÓN:\n${rubric}` : ''}
+${acceptableAnswers && acceptableAnswers.length > 0 ? `RESPUESTAS ALTERNATIVAS VÁLIDAS:\n- ${acceptableAnswers.join('\n- ')}` : ''}
+
+RESPUESTA ENVIADA POR EL ESTUDIANTE:
+"${trimmedUser}"
+
+Genera tu evaluación académica en formato JSON:`;
+
+  try {
+    const rawResponse = await queryAICompletion(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      true
+    );
+
+    const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
+    const firstBrace = cleanOutput.indexOf('{');
+    const lastBrace = cleanOutput.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
+      const parsed = JSON.parse(jsonSnippet);
+      const sim = Math.min(100, Math.max(0, Math.round(Number(parsed.similarity) || 0)));
+      return {
+        similarity: sim,
+        isCorrect: typeof parsed.isCorrect === 'boolean' ? parsed.isCorrect : sim >= 65,
+        score: typeof parsed.score === 'number' ? parsed.score : Math.round(sim) / 100,
+        feedback: String(parsed.feedback || '').trim() || (sim >= 65 ? 'Respuesta conceptualmente acertada.' : 'Respuesta incompleta respecto a la solución esperada.'),
+        keyPointsCovered: Array.isArray(parsed.keyPointsCovered) ? parsed.keyPointsCovered.map(String) : [],
+        keyPointsMissed: Array.isArray(parsed.keyPointsMissed) ? parsed.keyPointsMissed.map(String) : [],
+      };
+    }
+  } catch (err) {
+    console.warn('[evaluateShortAnswer] Fallback heurístico de similitud:', err);
+  }
+
+  // Heurística de respaldo (Token overlap / Jaccard + penalización)
+  const tokenize = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !['para', 'como', 'sobre', 'entre', 'desde', 'hacia', 'este', 'esta', 'los', 'las', 'del', 'una', 'con', 'que', 'por'].includes(w));
+
+  const userTokens = new Set(tokenize(trimmedUser));
+  const idealTokens = tokenize(trimmedIdeal);
+
+  if (idealTokens.length === 0) {
+    return {
+      similarity: 70,
+      isCorrect: true,
+      score: 0.7,
+      feedback: 'Respuesta registrada satisfactoriamente.',
+      keyPointsCovered: ['Argumentación presentada'],
+      keyPointsMissed: [],
+    };
+  }
+
+  let matches = 0;
+  for (const t of idealTokens) {
+    if (userTokens.has(t)) matches++;
+  }
+
+  const rawSim = Math.min(100, Math.round((matches / idealTokens.length) * 100));
+  const fallbackSim = Math.max(rawSim, trimmedUser.length > 25 ? 45 : 20);
+  const isCorrect = fallbackSim >= 65;
+
+  return {
+    similarity: fallbackSim,
+    isCorrect,
+    score: Math.round(fallbackSim) / 100,
+    feedback: isCorrect
+      ? 'La argumentación incluye la mayoría de los términos nucleares del texto.'
+      : 'La respuesta omite conceptos y terminología indispensable presente en la solución modelo.',
+    keyPointsCovered: Array.from(userTokens).slice(0, 3),
+    keyPointsMissed: idealTokens.filter(t => !userTokens.has(t)).slice(0, 3),
+  };
+}
+
+/**
+ * ── GENERADOR DE EXÁMENES ACADÉMICOS ESPECIALIZADOS ──────────────────────────
+ * Redacta un examen universitario riguroso ajustado a la rama de conocimiento
+ * del documento, con soporte estricto de preguntas abiertas cortas y opción múltiple.
+ */
+export async function generateSpecializedExamQuestions(
+  rawText: string,
+  count: number = 10,
+  discipline?: string,
+  customInstructions?: string,
+  formatPreference: 'all' | 'multiple-choice' | 'short-answer' = 'all',
+  chunks?: DocumentChunk[]
+): Promise<Question[]> {
+  const effectiveDiscipline = (discipline || 'General').trim();
+  let relevantChunks: DocumentChunk[] = [];
+
+  if (chunks && chunks.length > 0) {
+    relevantChunks = chunks.slice(0, Math.min(chunks.length, 12));
+  }
+
+  let sourceRepresentation = '';
+  if (relevantChunks.length > 0) {
+    sourceRepresentation = relevantChunks
+      .map(c => `[SECCIÓN ACADÉMICA: ${c.heading || 'Documento'} | Pág: ${c.pageOrSlide || 1}]\n${c.text}`)
+      .join('\n\n---\n\n');
+  } else {
+    sourceRepresentation = rawText.slice(0, 9000);
+  }
+
+  const formatInstruction =
+    formatPreference === 'short-answer'
+      ? 'Genera EXCLUSIVAMENTE preguntas con respuestas abiertas cortas ("short-answer").'
+      : formatPreference === 'multiple-choice'
+      ? 'Genera EXCLUSIVAMENTE preguntas de opción múltiple rigurosa ("multiple-choice") con 4 alternativas.'
+      : 'Genera un formato MIXTO balanceado: 50% de preguntas de opción múltiple ("multiple-choice") y 50% de preguntas abiertas cortas ("short-answer").';
+
+  const systemPrompt = `Eres el Catedrático y Diseñador Principal de Evaluaciones Universitarias de Contrareloj Study.
+Tu objetivo es elaborar un examen formal, de alto rigor analítico y adaptado con absoluta fidelidad a la disciplina académica: "${effectiveDiscipline}".
+
+DIRECTRICES DE EXCELENCIA ACADÉMICA:
+1. DISCIPLINA "${effectiveDiscipline.toUpperCase()}":
+   - Las preguntas deben reflejar el estilo de exámenes de grado, certificaciones profesionales o tribunales académicos de esta rama.
+   - Prohibido hacer preguntas triviales, de simple memorización de fechas secundarias o de descarte obvio.
+   - Plantea problemas analíticos, diagnósticos diferenciales, deducción de causas y consecuencias, o interpretación rigurosa de preceptos y principios descritos en el material.
+2. FORMATOS PERMITIDOS:
+   ${formatInstruction}
+3. REGLAS PARA PREGUNTAS DE OPCIÓN MÚLTIPLE ("multiple-choice"):
+   - 4 alternativas plausibles (A, B, C, D) con longitud similar y lenguaje técnico idéntico.
+   - Distractores fundados en confusiones conceptuales típicas de la disciplina en este texto.
+4. REGLAS PARA PREGUNTAS ABIERTAS CORTAS ("short-answer"):
+   - Enunciados precisos que pidan definir, contrastar, justificar un mecanismo o dictaminar un supuesto en 2 a 4 líneas.
+   - "idealAnswer": La respuesta modelo concisa, exacta y completa redactada en español formal universitario.
+   - "keyPoints": Array con 2 a 4 conceptos o términos clave indispensables que el estudiante debe incluir.
+   - "rubric": Criterio breve de evaluación pedagógica.
+   - "acceptableAnswers": 2 a 3 variantes sinónimas o redacciones alternativas igualmente válidas.
+5. TODA PREGUNTA debe incluir una explicación exhaustiva fundamentada en la información del documento.
+6. TODO EL CONTENIDO DEBE ESTAR 100% EN ESPAÑOL ACADÉMICO.
+
+FORMATO DE SALIDA (ESTRICTAMENTE JSON VÁLIDO):
+{
+  "disciplina": "${effectiveDiscipline}",
+  "preguntas": [
+    {
+      "id": 1,
+      "tipo": "multiple-choice | short-answer",
+      "dificultad": "hard | medium",
+      "tema": "Subtema específico",
+      "pregunta": "¿Enunciado de la pregunta académica rigurosa?",
+      "opciones": ["Alternativa A", "Alternativa B", "Alternativa C", "Alternativa D"],
+      "indice_correcto": 0,
+      "respuesta_ideal": "Respuesta modelo exacta esperada (requerida para short-answer)",
+      "puntos_clave": ["concepto clave 1", "término 2"],
+      "rubrica": "Criterio de evaluación de la respuesta abierta",
+      "respuestas_aceptables": ["Variante válida 1", "Variante válida 2"],
+      "explicacion": "Explicación académica rigurosa del porqué de la respuesta correcta."
+    }
+  ]
+}`;
+
+  const userPrompt = `MATERIAL DE ESTUDIO BASE:
+${sourceRepresentation}
+
+PARÁMETROS DEL EXAMEN:
+- Rama académica: ${effectiveDiscipline}
+- Cantidad de preguntas: ${count}
+- Preferencia de formato: ${formatPreference}
+${customInstructions ? `- INSTRUCCIONES ESPECÍFICAS DEL DOCENTE/ALUMNO: "${customInstructions}"` : ''}
+
+Redacta las ${count} preguntas en formato JSON estricto:`;
+
+  try {
+    const rawResponse = await queryAICompletion(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      true
+    );
+
+    const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
+    const firstBrace = cleanOutput.indexOf('{');
+    const lastBrace = cleanOutput.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonSnippet);
+      } catch {
+        const sanitized = jsonSnippet.replace(/,\s*([}\]])/g, '$1');
+        parsed = JSON.parse(sanitized);
+      }
+
+      if (parsed && Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
+        return parsed.preguntas.map((p: any, idx: number): Question => {
+          const rawType = String(p.tipo || '').toLowerCase();
+          const isShort = rawType.includes('short') || rawType.includes('abierta') || formatPreference === 'short-answer';
+          const type: Question['type'] = isShort ? 'short-answer' : 'multiple-choice';
+
+          const opts = Array.isArray(p.opciones) && p.opciones.length >= 2
+            ? p.opciones.map(String)
+            : ['Opción A fundamentada', 'Opción B plausible', 'Opción C alternativa', 'Opción D alternativa'];
+
+          const correctIdx = typeof p.indice_correcto === 'number'
+            ? Math.max(0, Math.min(opts.length - 1, p.indice_correcto))
+            : 0;
+
+          const idealAnswer = String(p.respuesta_ideal || p.idealAnswer || opts[correctIdx] || '').trim();
+
+          return {
+            id: `spec-exam-${Date.now()}-${idx + 1}`,
+            type,
+            question: String(p.pregunta || `Pregunta de examen ${idx + 1}`).trim(),
+            difficulty: (p.dificultad === 'easy' ? 'easy' : p.dificultad === 'medium' ? 'medium' : 'hard') as 'easy' | 'medium' | 'hard',
+            topic: String(p.tema || effectiveDiscipline).trim(),
+            explanation: String(p.explicacion || 'Fundamentado en el marco teórico del documento.').trim(),
+            options: isShort ? undefined : opts,
+            correctIndex: isShort ? undefined : correctIdx,
+            idealAnswer: idealAnswer || undefined,
+            keyPoints: Array.isArray(p.puntos_clave) ? p.puntos_clave.map(String) : undefined,
+            rubric: p.rubrica ? String(p.rubrica) : undefined,
+            acceptableAnswers: Array.isArray(p.respuestas_aceptables) ? p.respuestas_aceptables.map(String) : undefined,
+          };
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[generateSpecializedExamQuestions] Fallback a preguntas adaptadas del material:', err);
+  }
+
+  // Fallback disciplinar inteligente si falla el endpoint de IA
+  const fallbackList: Question[] = [];
+  const sampleSentences = rawText
+    .split(/\.\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 40 && s.length < 220);
+
+  for (let i = 0; i < count; i++) {
+    const isShort = formatPreference === 'short-answer' || (formatPreference === 'all' && i % 2 === 1);
+    const sentence = sampleSentences[i % Math.max(1, sampleSentences.length)] || `Principio fundamental de ${effectiveDiscipline}`;
+
+    if (isShort) {
+      fallbackList.push({
+        id: `spec-exam-fallback-${i + 1}`,
+        type: 'short-answer',
+        question: `Explica y fundamenta según el texto el siguiente postulado de ${effectiveDiscipline}: "${sentence.slice(0, 100)}..."`,
+        difficulty: 'hard',
+        topic: effectiveDiscipline,
+        explanation: `La resolución académica se basa en el principio expuesto: "${sentence}".`,
+        idealAnswer: sentence,
+        keyPoints: sentence.split(' ').filter(w => w.length > 5).slice(0, 3),
+        rubric: 'El estudiante debe resumir el núcleo del concepto y su aplicación analítica.',
+        acceptableAnswers: [sentence.toLowerCase()],
+      });
+    } else {
+      fallbackList.push({
+        id: `spec-exam-fallback-${i + 1}`,
+        type: 'multiple-choice',
+        question: `Respecto a los contenidos de ${effectiveDiscipline}, ¿cuál de los siguientes enunciados se deduce rigurosamente del texto?`,
+        difficulty: 'hard',
+        topic: effectiveDiscipline,
+        explanation: `El documento establece textualmente: "${sentence}".`,
+        options: [
+          sentence,
+          `Inversión conceptual contradictoria sobre ${effectiveDiscipline}.`,
+          `Interpretación tangencial no sostenida por la bibliografía base.`,
+          `Afirmación genérica que altera el orden de causalidad descrito.`
+        ],
+        correctIndex: 0,
+      });
+    }
+  }
+
+  return fallbackList;
+}
+
 
 
 

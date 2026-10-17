@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import type { StudyKit, Question, StudyMode, DocumentAsset } from '../types';
+import type { StudyKit, Question, StudyMode, DocumentAsset, ShortAnswerEvaluation, SmartStudyTypeFilters } from '../types';
 import { authService } from '../services/authService';
 import {
   CheckCircle2,
@@ -37,6 +37,8 @@ import {
   ChevronDown,
   ChevronUp,
   ZoomIn,
+  CheckCheck,
+  Send,
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import confetti from 'canvas-confetti';
@@ -44,6 +46,7 @@ import {
   generateAIPedagogicalQuestions,
   generateSocraticReformulatedQuestion,
   generateTargetedPedagogicalQuestions,
+  evaluateShortAnswer,
   parseCorrectIndex,
   parseCorrectIndices,
   enforceQuestionLengthLimit,
@@ -235,6 +238,40 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [targetSuccessNotice, setTargetSuccessNotice] = useState('');
   const [targetErrorNotice, setTargetErrorNotice] = useState('');
 
+  // ── Filtros de Tipos de Pregunta (Tuerca) ──────────────────────────────
+  const [typeFilters, setTypeFilters] = useState<SmartStudyTypeFilters>(() => {
+    try {
+      const saved = localStorage.getItem(`thea_study_type_filters_${kit.id}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      multipleChoice: true,
+      shortAnswer: true,
+      trueFalse: true,
+      practical: true,
+    };
+  });
+
+  const toggleTypeFilter = (key: keyof SmartStudyTypeFilters) => {
+    setTypeFilters(prev => {
+      const activeCount = Object.values(prev).filter(Boolean).length;
+      if (prev[key] && activeCount <= 1) {
+        return prev;
+      }
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(`thea_study_type_filters_${kit.id}`, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // ── Respuestas Abiertas Cortas (Short Answer) ──────────────────────────
+  const [shortAnswerInput, setShortAnswerInput] = useState<string>('');
+  const [isEvaluatingShortAnswer, setIsEvaluatingShortAnswer] = useState<boolean>(false);
+  const [shortAnswerEvalResult, setShortAnswerEvalResult] = useState<ShortAnswerEvaluation | null>(null);
+  const [isManuallyOverridden, setIsManuallyOverridden] = useState<boolean>(false);
+
   // ── Feedback y Navegación de Explicación ─────────────────────────────────
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
   const explanationRef = useRef<HTMLDivElement>(null);
@@ -391,6 +428,59 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   );
   const completedSocraticIdsRef = useRef<Set<string>>(new Set());
 
+  // Categorización y adaptación de preguntas para distribución proporcional
+  const getCategoryForQuestion = useCallback((q: Question): keyof SmartStudyTypeFilters => {
+    const t = q.type || 'multiple-choice';
+    if (t === 'short-answer') return 'shortAnswer';
+    if (t === 'true-false') return 'trueFalse';
+    if (t === 'matching' || t === 'drag-drop' || t === 'image-labeling') return 'practical';
+    return 'multipleChoice';
+  }, []);
+
+  const adaptQuestionToCategory = useCallback((baseQ: Question, targetCat: keyof SmartStudyTypeFilters): Question => {
+    if (!baseQ) return baseQ;
+    if (getCategoryForQuestion(baseQ) === targetCat) return baseQ;
+
+    if (targetCat === 'shortAnswer') {
+      const correctOpt = baseQ.options && baseQ.correctIndex !== undefined
+        ? baseQ.options[baseQ.correctIndex]
+        : undefined;
+      return {
+        ...baseQ,
+        id: baseQ.id.startsWith('sa-') ? baseQ.id : `sa-${baseQ.id}`,
+        type: 'short-answer',
+        idealAnswer: baseQ.idealAnswer || correctOpt || baseQ.explanation,
+        keyPoints: baseQ.keyPoints || (correctOpt ? correctOpt.split(' ').filter(w => w.length > 4) : undefined),
+        rubric: baseQ.rubric || 'Respuesta concisa que sintetice con exactitud el concepto evaluado.',
+        acceptableAnswers: baseQ.acceptableAnswers || (correctOpt ? [correctOpt] : undefined),
+      };
+    }
+
+    if (targetCat === 'trueFalse') {
+      return {
+        ...baseQ,
+        id: baseQ.id.startsWith('tf-') ? baseQ.id : `tf-${baseQ.id}`,
+        type: 'true-false',
+        options: ['Verdadero', 'Falso'],
+        correctIndex: 0,
+      };
+    }
+
+    if (targetCat === 'multipleChoice') {
+      return {
+        ...baseQ,
+        id: baseQ.id.startsWith('mc-') ? baseQ.id : `mc-${baseQ.id}`,
+        type: 'multiple-choice',
+        options: baseQ.options && baseQ.options.length >= 2
+          ? baseQ.options
+          : ['Opción A fundamentada', 'Opción B plausible', 'Opción C alternativa', 'Opción D alternativa'],
+        correctIndex: baseQ.correctIndex ?? 0,
+      };
+    }
+
+    return baseQ;
+  }, [getCategoryForQuestion]);
+
   // Helper determinista para resolver la siguiente pregunta al avanzar sin repeticiones inmediatas
   const resolveNextQuestion = useCallback((
     targetLevel: 1 | 2 | 3,
@@ -414,6 +504,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       return socraticTarget.reformulatedQuestion;
     }
 
+    // Distribución estrictamente proporcional entre los formatos activos en los interruptores (tuerca)
+    const activeCategories: (keyof SmartStudyTypeFilters)[] = (
+      ['multipleChoice', 'shortAnswer', 'trueFalse', 'practical'] as (keyof SmartStudyTypeFilters)[]
+    ).filter(cat => typeFilters[cat]);
+    const safeActiveCategories = activeCategories.length > 0 ? activeCategories : (['multipleChoice'] as (keyof SmartStudyTypeFilters)[]);
+    const targetCat = safeActiveCategories[targetIndex % safeActiveCategories.length];
+
     const targetDiff = targetLevel === 1 ? 'easy' : targetLevel === 2 ? 'medium' : 'hard';
     const levelQuestions = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
     const pool = levelQuestions.length > 0 ? levelQuestions : kit.questions;
@@ -422,34 +519,46 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const currentPos = pool.findIndex(q => q.id === excludeQuestionId);
     const baseIndex = currentPos >= 0 ? currentPos : 0;
 
-    // Prioridad 1: Buscar hacia adelante la siguiente pregunta no respondida de este nivel
+    // Prioridad 1: Buscar hacia adelante la siguiente pregunta no respondida de este nivel que coincida con el tipo
+    for (let i = 1; i <= pool.length; i++) {
+      const candidate = pool[(baseIndex + i) % pool.length];
+      if (
+        candidate.id !== excludeQuestionId &&
+        !answeredQuestionIdsRef.current.has(candidate.id) &&
+        getCategoryForQuestion(candidate) === targetCat
+      ) {
+        return candidate;
+      }
+    }
+
+    // Prioridad 2: Buscar cualquier no respondida y adaptarla al formato proporcional seleccionado
     for (let i = 1; i <= pool.length; i++) {
       const candidate = pool[(baseIndex + i) % pool.length];
       if (candidate.id !== excludeQuestionId && !answeredQuestionIdsRef.current.has(candidate.id)) {
-        return candidate;
+        return adaptQuestionToCategory(candidate, targetCat);
       }
     }
 
-    // Prioridad 2: Si ya se respondieron todas las del nivel, avanzar a la siguiente del pool distinta a la actual
+    // Prioridad 3: Si ya se respondieron todas las del nivel, avanzar a la siguiente del pool y adaptarla
     for (let i = 1; i <= pool.length; i++) {
       const candidate = pool[(baseIndex + i) % pool.length];
       if (candidate.id !== excludeQuestionId) {
-        return candidate;
+        return adaptQuestionToCategory(candidate, targetCat);
       }
     }
 
-    // Prioridad 3: Si este pool solo tiene 1 pregunta, avanzar en el kit completo a una pregunta distinta
+    // Prioridad 4: En kit general
     const currentKitPos = kit.questions.findIndex(q => q.id === excludeQuestionId);
     const baseKitIndex = currentKitPos >= 0 ? currentKitPos : 0;
     for (let i = 1; i <= kit.questions.length; i++) {
       const candidate = kit.questions[(baseKitIndex + i) % kit.questions.length];
       if (candidate.id !== excludeQuestionId) {
-        return candidate;
+        return adaptQuestionToCategory(candidate, targetCat);
       }
     }
 
-    return kit.questions[0];
-  }, [kit.questions, socraticProfile]);
+    return adaptQuestionToCategory(kit.questions[0], targetCat);
+  }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory]);
 
   // Pregunta activa fijada en estado: NUNCA cambia por efectos secundarios en segundo plano
   const [currentQuestion, setCurrentQuestion] = useState<Question>(() => {
@@ -461,7 +570,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const targetDiff = initialLevel === 1 ? 'easy' : initialLevel === 2 ? 'medium' : 'hard';
     const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
     const finalPool = pool.length > 0 ? pool : kit.questions;
-    return finalPool[initialIndex % finalPool.length] || kit.questions[0];
+    const activeCategories: (keyof SmartStudyTypeFilters)[] = (
+      ['multipleChoice', 'shortAnswer', 'trueFalse', 'practical'] as (keyof SmartStudyTypeFilters)[]
+    ).filter(cat => typeFilters[cat]);
+    const safeActiveCategories = activeCategories.length > 0 ? activeCategories : (['multipleChoice'] as (keyof SmartStudyTypeFilters)[]);
+    const targetCat = safeActiveCategories[initialIndex % safeActiveCategories.length];
+    const raw = finalPool[initialIndex % finalPool.length] || kit.questions[0];
+    return adaptQuestionToCategory(raw, targetCat);
   });
 
   const currentQ: Question = currentQuestion;
@@ -656,6 +771,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setPlacedImageLabels({});
     setActiveLabelChip(null);
     setImageLabelChecked(false);
+    setShortAnswerInput('');
+    setShortAnswerEvalResult(null);
+    setIsManuallyOverridden(false);
 
     if (effectiveBlanksCorrect.length > 0) {
       setPlacedChips(new Array(effectiveBlanksCorrect.length).fill(null));
@@ -891,6 +1009,78 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
   };
 
+  // ── Manejadores de Preguntas Abiertas Cortas (Short Answer) ───────────────
+  const handleSubmitShortAnswer = async () => {
+    if (isAnswered || !shortAnswerInput.trim() || isEvaluatingShortAnswer) return;
+    setIsEvaluatingShortAnswer(true);
+
+    try {
+      const ideal =
+        currentQ.idealAnswer ||
+        (currentQ.options ? currentQ.options[currentQ.correctIndex ?? 0] : currentQ.explanation) ||
+        'Respuesta modelo del profesor';
+
+      const evalResult = await evaluateShortAnswer(
+        shortAnswerInput,
+        ideal,
+        currentQ.question,
+        currentQ.rubric,
+        currentQ.acceptableAnswers
+      );
+      setShortAnswerEvalResult(evalResult);
+
+      if (evalResult.isCorrect) {
+        confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
+      }
+
+      markQuestionResult(evalResult.isCorrect, shortAnswerInput.trim(), ideal);
+    } catch (err) {
+      console.warn('[handleSubmitShortAnswer] Error evaluando respuesta con IA:', err);
+      markQuestionResult(true, shortAnswerInput.trim(), currentQ.idealAnswer || currentQ.explanation);
+    } finally {
+      setIsEvaluatingShortAnswer(false);
+    }
+  };
+
+  // ── "¡Tenía razón!" (Thea iWasRight Override) ────────────────────────────
+  const handleIWasRight = () => {
+    if (!isAnswered || isCurrentCorrect) return;
+
+    setIsCurrentCorrect(true);
+    setIsManuallyOverridden(true);
+
+    // Actualizar el historial para que quede registrada como correcta
+    setHistory(prev =>
+      prev.map(item =>
+        item.questionId === currentQ.id ? { ...item, isCorrect: true } : item
+      )
+    );
+
+    // Remover de la cola de fallos de refuerzo
+    setErrorQueue(prev => prev.filter(q => q.id !== currentQ.id));
+
+    // Si no está en refuerzo y no estaba revelada, sumar avance
+    if (!isReinforcementMode && !isCurrentQRevealed) {
+      const prevCount = levelCorrectCounts[level] ?? levelCorrectCount ?? 0;
+      const newCount = Math.min(levelTarget, prevCount + 1);
+      setLevelCorrectCounts(prev => ({
+        ...prev,
+        [level]: newCount,
+      }));
+      setLevelCorrectCount(newCount);
+
+      if (newCount >= levelTarget) {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+        });
+      }
+    } else if (isReinforcementMode) {
+      setTotalErrorsReinforced(prev => prev + 1);
+    }
+  };
+
   // 1. Multiple Choice & True/False Selection
   const handleSelectSingleOption = (index: number) => {
     if (isAnswered) return;
@@ -1062,7 +1252,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (isAnswered) return;
 
     let correctAns = 'Respuesta correcta';
-    if (qType === 'true-false') {
+    if (qType === 'short-answer') {
+      correctAns = currentQ.idealAnswer || currentQ.explanation;
+    } else if (qType === 'true-false') {
       correctAns = safeCorrectIndex === 0 ? 'Verdadero' : 'Falso';
     } else if (qType === 'multi-select') {
       correctAns = safeCorrectIndices.map(i => safeOptions[i] || `Opción ${i + 1}`).join(' • ');
@@ -1209,6 +1401,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setPlacedImageLabels({});
     setActiveLabelChip(null);
     setImageLabelChecked(false);
+    setShortAnswerInput('');
+    setShortAnswerEvalResult(null);
+    setIsManuallyOverridden(false);
     setIsAnswered(false);
     setIsCurrentCorrect(null);
     setFeedbackGiven(null);
@@ -1249,6 +1444,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setPlacedImageLabels({});
     setActiveLabelChip(null);
     setImageLabelChecked(false);
+    setShortAnswerInput('');
+    setShortAnswerEvalResult(null);
+    setIsManuallyOverridden(false);
     setIsAnswered(false);
     setIsCurrentCorrect(null);
     setFeedbackGiven(null);
@@ -2485,6 +2683,108 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
         )}
 
+        {/* 7. SHORT ANSWER (PREGUNTAS ABIERTAS CORTAS) RENDERER */}
+        {qType === 'short-answer' && (
+          <div className="space-y-4 mb-6 sm:mb-8">
+            <div className="p-5 rounded-3xl bg-thea-surfaceLight/60 border border-thea-border space-y-3.5 shadow-md">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Escribe tu respuesta analítica / técnica:
+                </label>
+                <span className="text-[11px] font-semibold text-violet-300 bg-violet-950/60 px-2.5 py-0.5 rounded-full border border-violet-500/30">
+                  Respuesta Abierta Corta
+                </span>
+              </div>
+              <textarea
+                rows={3}
+                disabled={isAnswered || isEvaluatingShortAnswer}
+                value={shortAnswerInput}
+                onChange={e => setShortAnswerInput(e.target.value)}
+                placeholder="Escribe una respuesta fundamentada de 1 a 4 líneas. La IA evaluará la similitud conceptual y los puntos clave con la respuesta modelo..."
+                className="w-full bg-thea-bg border border-thea-border rounded-2xl p-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all resize-y disabled:opacity-60"
+              />
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>{shortAnswerInput.trim().split(/\s+/).filter(Boolean).length} palabras</span>
+                {!isAnswered && (
+                  <button
+                    type="button"
+                    disabled={!shortAnswerInput.trim() || isEvaluatingShortAnswer}
+                    onClick={handleSubmitShortAnswer}
+                    className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                  >
+                    {isEvaluatingShortAnswer ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                        <span>Evaluando con IA...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>Comprobar Respuesta</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Desglose de Evaluación de IA */}
+            {isAnswered && shortAnswerEvalResult && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-violet-950/20 border border-violet-500/30 text-xs space-y-3 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-200">Similitud Conceptual con el Modelo:</span>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-extrabold border ${
+                      shortAnswerEvalResult.similarity >= 65
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}
+                  >
+                    {shortAnswerEvalResult.similarity}% de coincidencia
+                  </span>
+                </div>
+                <p className="text-violet-200 leading-relaxed">
+                  <strong className="text-white">Diagnóstico de la IA:</strong> {shortAnswerEvalResult.feedback}
+                </p>
+                <div className="p-3 rounded-xl bg-thea-surface border border-thea-border space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 block">
+                    Respuesta modelo de referencia:
+                  </span>
+                  <span className="text-slate-200 font-medium">
+                    {currentQ.idealAnswer || currentQ.explanation}
+                  </span>
+                </div>
+                {shortAnswerEvalResult.keyPointsCovered.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400">Puntos cubiertos:</span>
+                    {shortAnswerEvalResult.keyPointsCovered.map((kp, kIdx) => (
+                      <span
+                        key={kIdx}
+                        className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]"
+                      >
+                        {kp}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {shortAnswerEvalResult.keyPointsMissed.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400">Puntos que faltaron:</span>
+                    {shortAnswerEvalResult.keyPointsMissed.map((kp, kIdx) => (
+                      <span
+                        key={kIdx}
+                        className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border-rose-500/30 text-[10px]"
+                      >
+                        {kp}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── ESTADO INMEDIATO DE LA RESPUESTA (CORRECTA / INCORRECTA) ─── */}
         {isAnswered && (
           <div className={`p-4 sm:p-5 rounded-2xl mb-6 flex items-center justify-between gap-3 border shadow-lg animate-feedbackPop ${
@@ -2500,7 +2800,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </div>
               <div>
                 <p className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2 flex-wrap">
-                  <span>{isCurrentCorrect ? '¡Respuesta Correcta!' : 'Respuesta Incorrecta'}</span>
+                  <span>
+                    {isManuallyOverridden
+                      ? '¡Respuesta Reclasificada! (¡Tenía razón!)'
+                      : isCurrentCorrect
+                      ? '¡Respuesta Correcta!'
+                      : 'Respuesta Incorrecta'}
+                  </span>
                   {isCurrentCorrect && isCurrentQRevealed && (
                     <span className="text-[11px] font-bold text-amber-300 bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-500/40">
                       (No suma avance: revelada en banco)
@@ -2513,9 +2819,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                         ? 'Has respondido correctamente. Esta pregunta fue revelada previamente en el Banco de Preguntas, por lo que no suma porcentaje al avance.'
                         : qType === 'matching'
                         ? `Has emparejado todos los conceptos con exactitud: ${correctMatchingFormula}.`
+                        : qType === 'short-answer'
+                        ? 'Tu respuesta coincide conceptualmente con la solución esperada.'
                         : 'Has identificado con exactitud el concepto del texto.')
                     : (qType === 'matching'
                         ? `Los emparejamientos correctos eran: ${correctMatchingFormula}`
+                        : qType === 'short-answer'
+                        ? `La respuesta esperada era: ${currentQ.idealAnswer || currentQ.explanation}`
                         : `La respuesta correcta es: ${
                             qType === 'true-false'
                               ? (safeCorrectIndex === 0 ? 'Verdadero' : 'Falso')
@@ -2528,26 +2838,40 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowJustification(prev => !prev);
-                if (!showJustification) {
-                  setTimeout(() => {
-                    explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                  }, 50);
-                }
-              }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 ${
-                showJustification
-                  ? 'bg-violet-600 hover:bg-violet-500 text-white ring-2 ring-violet-400/50 shadow-violet-900/40'
-                  : 'bg-black/50 hover:bg-black/70 border border-white/20 text-white hover:border-violet-400'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-amber-300" />
-              <span>{showJustification ? 'Ocultar Justificación' : 'Justificación'}</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showJustification ? 'rotate-180' : ''}`} />
-            </button>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {!isCurrentCorrect && (
+                <button
+                  type="button"
+                  onClick={handleIWasRight}
+                  className="px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300"
+                  title="Si consideras que tu respuesta era válida o la IA fue demasiado estricta, haz clic para marcarla como correcta"
+                >
+                  <CheckCheck className="w-3.5 h-3.5 text-amber-300" />
+                  <span>¡Tenía razón!</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowJustification(prev => !prev);
+                  if (!showJustification) {
+                    setTimeout(() => {
+                      explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 50);
+                  }
+                }}
+                className={`px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 ${
+                  showJustification
+                    ? 'bg-violet-600 hover:bg-violet-500 text-white ring-2 ring-violet-400/50 shadow-violet-900/40'
+                    : 'bg-black/50 hover:bg-black/70 border border-white/20 text-white hover:border-violet-400'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-300" />
+                <span>{showJustification ? 'Ocultar Justificación' : 'Justificación'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showJustification ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -2936,6 +3260,107 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
                 Indica sobre qué sección, concepto o capítulo específico del archivo deseas enfocar las preguntas. Si lo dejas en blanco, se evaluará el contenido general de mayor relevancia.
               </p>
+            </div>
+
+            {/* 3. Selección de Tipos de Preguntas con Interruptores (Switches) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Tipos de Preguntas en Sesión
+                </label>
+                <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                  Proporcional
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Selecciona con los interruptores qué formatos de pregunta deseas incluir. El simulador distribuirá equitativamente la cantidad de preguntas entre las opciones activas.
+              </p>
+
+              <div className="space-y-2.5 bg-thea-surfaceLight/60 p-3.5 rounded-2xl border border-thea-border">
+                {/* Switch 1: Opción Múltiple */}
+                <div className="flex items-center justify-between py-1 border-b border-thea-border/40 pb-2">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Opción Múltiple</span>
+                    <span className="text-[10px] text-slate-400 block">4 alternativas con distractores de discriminación fina</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleTypeFilter('multipleChoice')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      typeFilters.multipleChoice ? 'bg-violet-600' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        typeFilters.multipleChoice ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Switch 2: Preguntas Abiertas Cortas */}
+                <div className="flex items-center justify-between py-1 border-b border-thea-border/40 pb-2">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Preguntas Abiertas Cortas</span>
+                    <span className="text-[10px] text-slate-400 block">Escribe tu respuesta y la IA evalúa la similitud conceptual</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleTypeFilter('shortAnswer')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      typeFilters.shortAnswer ? 'bg-violet-600' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        typeFilters.shortAnswer ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Switch 3: Verdadero o Falso */}
+                <div className="flex items-center justify-between py-1 border-b border-thea-border/40 pb-2">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Verdadero o Falso</span>
+                    <span className="text-[10px] text-slate-400 block">Juicio rápido sobre postulados nucleares del texto</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleTypeFilter('trueFalse')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      typeFilters.trueFalse ? 'bg-violet-600' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        typeFilters.trueFalse ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Switch 4: Ejercicios Prácticos */}
+                <div className="flex items-center justify-between py-1">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Ejercicios Prácticos</span>
+                    <span className="text-[10px] text-slate-400 block">Emparejamiento, arrastre en oraciones y rotulación</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleTypeFilter('practical')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      typeFilters.practical ? 'bg-violet-600' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        typeFilters.practical ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Acciones Rápidas de Sesión */}

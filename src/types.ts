@@ -6,7 +6,8 @@ export type QuestionType =
   | 'matching'
   | 'drag-drop'
   | 'true-false'
-  | 'image-labeling';
+  | 'image-labeling'
+  | 'short-answer';
 
 export interface ImageLabelHotspot {
   id: string;
@@ -76,6 +77,12 @@ export interface Question {
   imageWordBank?: string[];
   diagramTitle?: string;
 
+  // Short Answer & Open-ended Questions
+  idealAnswer?: string;
+  keyPoints?: string[];
+  rubric?: string;
+  acceptableAnswers?: string[];
+
   // RAG Evidence & Multimodal Traceability
   sourceChunkId?: string;
   sourceChunkText?: string;
@@ -87,6 +94,22 @@ export interface Question {
   reformedConcept?: string;
   originalFailedQuestionId?: string;
   socraticAngle?: string;
+}
+
+export interface ShortAnswerEvaluation {
+  similarity: number; // 0 a 100%
+  isCorrect: boolean;
+  score: number; // 0 a 1
+  feedback: string;
+  keyPointsCovered: string[];
+  keyPointsMissed: string[];
+}
+
+export interface SmartStudyTypeFilters {
+  multipleChoice: boolean;
+  shortAnswer: boolean;
+  trueFalse: boolean;
+  practical: boolean;
 }
 
 export interface Flashcard {
