@@ -573,9 +573,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               const kStats = bookStatsMap.get(kit.id) || getBookRealStats(kit, userId);
               const mTheme = materiaThemeMap.get((kit.category || 'General').toLowerCase()) || getMateriaTheme(kit.category, kits);
               const isMenuOpen = kitMenuOpenId === kit.id;
-              const progressPercent = kStats.questionsAnswered > 0
-                ? Math.min(100, Math.round((kStats.questionsAnswered / (kStats.totalQuestions || 1)) * 100))
-                : 5; // Indicador inicial como en la referencia
+              const smartStudyPct = kStats.smartStudyProgressPercent ?? 0;
+              const progressPercent = smartStudyPct > 0
+                ? Math.max(6, smartStudyPct)
+                : (kStats.level > 1 ? 6 : 0);
 
               return (
                 <div
@@ -675,11 +676,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <div className="mt-5 relative z-10 space-y-2">
                     {/* Estadísticas del kit */}
                     <div className="flex items-center gap-3 text-xs text-white/85 font-medium flex-wrap">
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
                         <Brain className="w-3.5 h-3.5 text-white/70" />
-                        {kStats.questionsAnswered > 0
-                          ? `${kStats.questionsAnswered}/${kStats.totalQuestions} resp. (${kStats.accuracy}%)`
-                          : `${kStats.totalQuestions} preguntas`}
+                        {kStats.levelCorrectCount > 0 || kStats.level > 1
+                          ? `Nivel ${kStats.level}: ${kStats.levelCorrectCount}/${kStats.levelTarget} (${smartStudyPct}%)`
+                          : (kStats.questionsAnswered > 0
+                              ? `Nivel 1: 0/${kStats.levelTarget} (0%)`
+                              : `Nivel 1: 0%`)}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <Layers className="w-3.5 h-3.5 text-white/70" />

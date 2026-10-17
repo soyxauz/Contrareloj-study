@@ -24,6 +24,9 @@ export interface BookStats {
   accuracy: number; // 0.0 to 100.0
   level: 1 | 2 | 3;
   levelName: string;
+  levelCorrectCount: number;
+  levelTarget: number;
+  smartStudyProgressPercent: number;
   errorsReinforced: number;
   flashcardsTotal: number;
   flashcardsMastered: number;
@@ -148,6 +151,12 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     2: 'Nivel 2: Razonamiento & Análisis',
     3: 'Nivel 3: Casos Prácticos & Síntesis'
   };
+
+  const levelTarget = 25;
+  const levelCorrectCount = (session?.levelCorrectCounts && typeof session.levelCorrectCounts[level] === 'number')
+    ? session.levelCorrectCounts[level]
+    : (typeof session?.levelCorrectCount === 'number' ? session.levelCorrectCount : 0);
+  const smartStudyProgressPercent = Math.min(100, Math.round((levelCorrectCount / levelTarget) * 100));
 
   const flashcardsTotal = kit.flashcards ? kit.flashcards.length : 0;
   const flashcardsMastered = kit.flashcards ? kit.flashcards.filter(f => f.mastery === 'mastered').length : 0;
@@ -279,6 +288,9 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     accuracy,
     level,
     levelName: levelNames[level],
+    levelCorrectCount,
+    levelTarget,
+    smartStudyProgressPercent,
     errorsReinforced: session?.totalErrorsReinforced || 0,
     flashcardsTotal,
     flashcardsMastered,
