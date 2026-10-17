@@ -205,23 +205,39 @@ export const App: React.FC = () => {
     }
   }, [currentKit]);
 
-  // Hidratar activos desde IndexedDB si algun dataUrl fue aligerado de LocalStorage
+  // Hidratar activos desde IndexedDB si algun dataUrl fue aligerado de LocalStorage o descargado desde Drive
   useEffect(() => {
-    if (!currentKit) return;
-    const hasStrippedAssets =
-      currentKit.assets?.some(a => !a.dataUrl) ||
-      currentKit.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
+    const checkAndHydrate = (kitToHydrate: StudyKit | null) => {
+      if (!kitToHydrate) return;
+      const hasStrippedAssets =
+        kitToHydrate.assets?.some(a => !a.dataUrl) ||
+        kitToHydrate.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
 
-    if (hasStrippedAssets) {
-      hydrateKitAssets(currentKit)
-        .then(hydrated => {
-          setCurrentKit(hydrated);
-          setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : k)));
-        })
-        .catch(err => {
-          console.warn('[App] Error al hidratar activos desde IndexedDB:', err);
-        });
-    }
+      if (hasStrippedAssets) {
+        hydrateKitAssets(kitToHydrate)
+          .then(hydrated => {
+            setCurrentKit(hydrated);
+            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : k)));
+          })
+          .catch(err => {
+            console.warn('[App] Error al hidratar activos desde IndexedDB:', err);
+          });
+      }
+    };
+
+    checkAndHydrate(currentKit);
+
+    const handleAssetsSynced = () => {
+      setCurrentKit(prev => {
+        checkAndHydrate(prev);
+        return prev;
+      });
+    };
+
+    window.addEventListener('thea_assets_synced', handleAssetsSynced);
+    return () => {
+      window.removeEventListener('thea_assets_synced', handleAssetsSynced);
+    };
   }, [currentKit?.id]);
 
   // Safety check: ensure currentKit is never corrupted

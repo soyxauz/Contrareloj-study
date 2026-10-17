@@ -912,6 +912,9 @@ export const googleDriveService = {
         const validAssets = downloadedBatch.filter((a): a is DocumentAsset => a !== null);
         if (validAssets.length > 0) {
           await saveAssetsToIndexedDB(validAssets);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('thea_assets_synced'));
+          }
         }
       }
     } catch (e) {
