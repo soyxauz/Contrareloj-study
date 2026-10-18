@@ -190,6 +190,11 @@ export function getPodcastSettings(): PodcastSettings {
     console.warn('[GeminiAudio] Error al leer ajustes de podcast locales:', e);
   }
 
+  // Si el ajuste almacenado era 'gemini', migrar automáticamente a 'edge' (Azure Neural)
+  if (settings.voiceEngine === 'gemini') {
+    settings.voiceEngine = 'edge';
+  }
+
   // Si no tiene apiKey pero existe en AISettings o standalone, integrarla
   const currentKey = getGeminiAudioApiKey();
   if (!settings.geminiApiKey && currentKey) {

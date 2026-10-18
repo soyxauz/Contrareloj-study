@@ -16,7 +16,6 @@ import {
   Settings2,
   Check,
   X,
-  ExternalLink,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
 
@@ -35,11 +34,6 @@ function formatSeconds(totalSecs: number): string {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 import {
-  GEMINI_VOICES,
-  getGeminiAudioApiKey,
-  synthesizeGeminiSpeech,
-  prefetchGeminiSpeech,
-  preloadEntirePodcast,
   getPodcastSettings,
   savePodcastSettings,
 } from '../services/geminiAudioService';
@@ -90,14 +84,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  // Motor de voz: 'gemini' (Flash Audio AI) | 'edge' (Natural HD / Local) | 'browser' (Local)
-  const [voiceEngine, setVoiceEngine] = useState<'gemini' | 'edge' | 'browser'>(() => {
+  // Motor de voz: 'edge' (Azure Neural Oficial) | 'browser' (Voz Local)
+  const [voiceEngine, setVoiceEngine] = useState<'edge' | 'browser'>(() => {
     const ps = getPodcastSettings();
-    if (ps.voiceEngine) return ps.voiceEngine;
-    return getGeminiAudioApiKey() ? 'gemini' : 'edge';
+    return ps.voiceEngine === 'browser' ? 'browser' : 'edge';
   });
-  const [sofiaVoice, setSofiaVoice] = useState<string>(() => getPodcastSettings().sofiaVoice || 'Aoede');
-  const [mateoVoice, setMateoVoice] = useState<string>(() => getPodcastSettings().mateoVoice || 'Puck');
   const [edgeSofiaVoice, setEdgeSofiaVoice] = useState<string>(() => getPodcastSettings().edgeSofiaVoice || 'es-ES-ElviraNeural');
   const [edgeMateoVoice, setEdgeMateoVoice] = useState<string>(() => getPodcastSettings().edgeMateoVoice || 'es-ES-AlvaroNeural');
   const [localSofiaVoice, setLocalSofiaVoice] = useState<string>(() => getPodcastSettings().localSofiaVoice || '');
@@ -106,7 +97,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [orientationInput, setOrientationInput] = useState<string>(() => getPodcastSettings().orientation || '');
   const [orientationSavedFeedback, setOrientationSavedFeedback] = useState(false);
-  const [noKeyWarning, setNoKeyWarning] = useState(false);
   const [isTestingVoice, setIsTestingVoice] = useState(false);
   const [synthesisError, setSynthesisError] = useState<string | null>(null);
 
@@ -191,9 +181,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         setPlaybackSpeed(fresh.playbackSpeed);
         playbackSpeedRef.current = fresh.playbackSpeed;
       }
-      if (fresh.voiceEngine) setVoiceEngine(fresh.voiceEngine);
-      if (fresh.sofiaVoice) setSofiaVoice(fresh.sofiaVoice);
-      if (fresh.mateoVoice) setMateoVoice(fresh.mateoVoice);
+      if (fresh.voiceEngine) {
+        setVoiceEngine(fresh.voiceEngine === 'browser' ? 'browser' : 'edge');
+      }
       if (fresh.edgeSofiaVoice) setEdgeSofiaVoice(fresh.edgeSofiaVoice);
       if (fresh.edgeMateoVoice) setEdgeMateoVoice(fresh.edgeMateoVoice);
       if (fresh.localSofiaVoice !== undefined) setLocalSofiaVoice(fresh.localSofiaVoice);
@@ -341,31 +331,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         .catch((err) => {
           console.warn('[PodcastView] Error en precarga inicial Azure Neural Turno 0:', err);
         });
-    } else if (voiceEngine === 'gemini' && getGeminiAudioApiKey()) {
-      const voice = isFemale ? sofiaVoice : mateoVoice;
-      synthesizeGeminiSpeech(firstItem.text, voice, 'high')
-        .then((url) => {
-          if (isMountedRef.current) {
-            const firstAudio = new Audio();
-            firstAudio.preload = 'auto';
-            firstAudio.src = url;
-            firstAudio.load();
-            preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
-
-            // Una vez que el turno 0 esté listo, precargar con baja prioridad el turno 1
-            if (podcast.dialogue[1]) {
-              const secondItem = podcast.dialogue[1];
-              const secondIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(secondItem.speaker);
-              const secondVoice = secondIsFemale ? sofiaVoice : mateoVoice;
-              prefetchGeminiSpeech(secondItem.text, secondVoice, undefined, 'normal');
-            }
-          }
-        })
-        .catch((err) => {
-          console.warn('[PodcastView] Error en precarga inicial Gemini Turno 0:', err);
-        });
     }
-  }, [podcast?.dialogue, voiceEngine, edgeSofiaVoice, edgeMateoVoice, sofiaVoice, mateoVoice]);
+  }, [podcast?.dialogue, voiceEngine, edgeSofiaVoice, edgeMateoVoice]);
 
   // Mapeo exhaustivo de todas las palabras del podcast para scrubber palabra por palabra
   const allWords = useMemo(() => {
@@ -607,8 +574,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       // Deslizar ventana de precarga para los próximos turnos de diálogo
       if (voiceEngineRef.current === 'edge') {
         preloadEntireAzurePodcast(podcast.dialogue, edgeSofiaVoice, edgeMateoVoice, nextSeg);
-      } else if (voiceEngineRef.current === 'gemini') {
-        preloadEntirePodcast(podcast.dialogue, sofiaVoice, mateoVoice, nextSeg);
       }
 
       speakDialogueLineRef.current?.(nextSeg, 0);
@@ -618,7 +583,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       setIsAudioActive(false);
       setWordPosition(0, 0, 0);
     }
-  }, [podcast?.dialogue, segmentStartGlobalIndices, setWordPosition, edgeSofiaVoice, edgeMateoVoice, sofiaVoice, mateoVoice]);
+  }, [podcast?.dialogue, segmentStartGlobalIndices, setWordPosition, edgeSofiaVoice, edgeMateoVoice]);
 
   // Reproducir vocalmente mediante el motor del navegador (fallback local) con inicio por palabra
   const speakBrowserDialogueLine = useCallback((
@@ -708,7 +673,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     window.speechSynthesis.speak(utterance);
   }, [getSpeakerAcoustics, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
 
-  // Reproducir vocalmente una línea del diálogo con soporte para Gemini Flash Audio TTS y Fallback
+  // Reproducir vocalmente una línea del diálogo con soporte para Azure Neural TTS y Fallback local
   const speakDialogueLine = useCallback(async (index: number, startWordIdx: number = 0) => {
     if (!isMountedRef.current || isManualInterruptionRef.current) return;
     if (!podcast || !podcast.dialogue || !podcast.dialogue[index]) return;
@@ -755,24 +720,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       return () => clearTimeout(timer);
     }
 
-    // Ruta 1: Motor Neuronal Azure (Edge Neural TTS) o Gemini Flash Audio
-    if (voiceEngineRef.current === 'edge' || voiceEngineRef.current === 'gemini') {
-      const isEdge = voiceEngineRef.current === 'edge';
+    // Ruta 1: Motor Neuronal Azure (Edge Neural TTS)
+    if (voiceEngineRef.current === 'edge') {
       const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(item.speaker);
-      const targetVoice = isEdge
-        ? (isFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural'))
-        : (isFemale ? sofiaVoice : mateoVoice);
-
-      if (!isEdge) {
-        const hasGeminiKey = Boolean(getGeminiAudioApiKey());
-        if (!hasGeminiKey) {
-          setIsPlaying(false);
-          isPlayingRef.current = false;
-          setShowVoiceModal(true);
-          setNoKeyWarning(true);
-          return;
-        }
-      }
+      const targetVoice = isFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural');
 
       try {
         let audio: HTMLAudioElement;
@@ -785,11 +736,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           preloadedNextAudioRef.current = null;
         } else {
           setIsSynthesizing(true);
-          if (isEdge) {
-            audioUrl = await synthesizeAzureEdgeSpeech(cleanText, targetVoice);
-          } else {
-            audioUrl = await synthesizeGeminiSpeech(cleanText, targetVoice, 'high');
-          }
+          audioUrl = await synthesizeAzureEdgeSpeech(cleanText, targetVoice);
           setIsSynthesizing(false);
 
           if (!isMountedRef.current || !isPlayingRef.current || isManualInterruptionRef.current) {
@@ -817,39 +764,21 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             .replace(/[$]/g, '')
             .trim();
           const nextIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(nextItem.speaker);
-          const nextVoice = isEdge
-            ? (nextIsFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural'))
-            : (nextIsFemale ? sofiaVoice : mateoVoice);
+          const nextVoice = nextIsFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural');
 
-          if (isEdge) {
-            synthesizeAzureEdgeSpeech(nextClean, nextVoice)
-              .then((nextUrl) => {
-                if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-                  const nextAudio = new Audio();
-                  nextAudio.preload = 'auto';
-                  nextAudio.src = nextUrl;
-                  nextAudio.load();
-                  preloadedNextAudioRef.current = { index: nextIdx, audio: nextAudio };
-                }
-              })
-              .catch((err) => {
-                console.warn('[AzureEdgeTTS] Error en pre-carga silenciosa del siguiente parlamento:', err);
-              });
-          } else {
-            synthesizeGeminiSpeech(nextClean, nextVoice, 'normal')
-              .then((nextUrl) => {
-                if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-                  const nextAudio = new Audio();
-                  nextAudio.preload = 'auto';
-                  nextAudio.src = nextUrl;
-                  nextAudio.load();
-                  preloadedNextAudioRef.current = { index: nextIdx, audio: nextAudio };
-                }
-              })
-              .catch((err) => {
-                console.warn('[GeminiAudio] Error en pre-carga silenciosa del siguiente parlamento:', err);
-              });
-          }
+          synthesizeAzureEdgeSpeech(nextClean, nextVoice)
+            .then((nextUrl) => {
+              if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
+                const nextAudio = new Audio();
+                nextAudio.preload = 'auto';
+                nextAudio.src = nextUrl;
+                nextAudio.load();
+                preloadedNextAudioRef.current = { index: nextIdx, audio: nextAudio };
+              }
+            })
+            .catch((err) => {
+              console.warn('[AzureEdgeTTS] Error en pre-carga silenciosa del siguiente parlamento:', err);
+            });
         }
 
         // Si se especificó una palabra inicial dentro del segmento, saltar a ese punto exacto
@@ -953,17 +882,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         console.warn('[NeuralTTS] Error en síntesis de voz neuronal:', err);
         setIsAudioActive(false);
 
-        const errMsg = err instanceof Error ? err.message : String(err);
-        if (isEdge) {
-          setSynthesisError('Error al sintetizar con voz Azure Neural. Conmutando a voz local...');
-        } else if (errMsg.includes('API_KEY_SERVICE_BLOCKED') || errMsg.includes('PERMISSION_DENIED') || errMsg.includes('403')) {
-          setSynthesisError('La clave de Gemini tiene el servicio bloqueado en Google Cloud. Genera una gratis en Google AI Studio (aistudio.google.com/app/apikey). Reproduciendo con voz local...');
-        } else if (errMsg.includes('429') || errMsg.includes('Cuota') || errMsg.includes('quota')) {
-          setSynthesisError('Límite de cuota de Gemini alcanzado en Google. Reproduciendo con voz local optimizada...');
-        } else {
-          setSynthesisError('Voz neuronal no disponible. Reproduciendo con voz local...');
-        }
-
+        setSynthesisError('Error al sintetizar con voz Azure Neural. Conmutando a voz local...');
         synthesisRetryCountRef.current = 0;
         // Garantizar que SIEMPRE suene el audio sin congelar la interfaz
         speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
@@ -973,7 +892,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Ruta 2: Motor del Navegador (SpeechSynthesis)
     speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
-  }, [podcast, sofiaVoice, mateoVoice, edgeSofiaVoice, edgeMateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
+  }, [podcast, edgeSofiaVoice, edgeMateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
 
   // Mantener referencia mutable siempre actualizada
   speakDialogueLineRef.current = speakDialogueLine;
@@ -1004,12 +923,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   };
 
   // Cambiar motor de voz de forma dinámica y reactiva
-  const handleSwitchEngine = (newEngine: 'gemini' | 'edge' | 'browser') => {
-    if (newEngine === 'gemini' && !getGeminiAudioApiKey()) {
-      setShowVoiceModal(true);
-      setNoKeyWarning(true);
-      return;
-    }
+  const handleSwitchEngine = (newEngine: 'edge' | 'browser') => {
     setVoiceEngine(newEngine);
     voiceEngineRef.current = newEngine;
     stopCurrentAudio();
@@ -1126,31 +1040,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         const msg = err instanceof Error ? err.message : String(err);
         alert('Fallo al probar la voz de Azure Neural: ' + (msg || 'Error de conexión'));
       }
-    } else if (voiceEngine === 'gemini') {
-      const activeKey = getGeminiAudioApiKey();
-      if (!activeKey) {
-        setIsTestingVoice(false);
-        setNoKeyWarning(true);
-        return;
-      }
-      try {
-        const voice = isSofia ? sofiaVoice : mateoVoice;
-        const testUrl = await synthesizeGeminiSpeech(text, voice, activeKey);
-        let audio = audioPlayerRef.current;
-        if (!audio) {
-          audio = new Audio();
-          audioPlayerRef.current = audio;
-        }
-        audio.src = testUrl;
-        audio.playbackRate = 1;
-        audio.onended = () => setIsTestingVoice(false);
-        audio.onerror = () => setIsTestingVoice(false);
-        await audio.play();
-      } catch (err: unknown) {
-        setIsTestingVoice(false);
-        const msg = err instanceof Error ? err.message : String(err);
-        alert('Fallo al probar la voz de Gemini: ' + (msg || 'Revisa tu clave en Ajustes de IA'));
-      }
     } else {
       if (!('speechSynthesis' in window)) {
         setIsTestingVoice(false);
@@ -1190,7 +1079,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Si estamos en el mismo segmento ya cargado y tenemos audio HTML5 ya disponible con duración
     const audio = audioPlayerRef.current;
-    if ((voiceEngineRef.current === 'gemini' || voiceEngineRef.current === 'edge') && audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
+    if (voiceEngineRef.current === 'edge' && audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
       const segmentWords = podcast?.dialogue[target.segmentIndex]
         ? podcast.dialogue[target.segmentIndex].text.replace(/[*_#`~[\]]/g, '').trim().split(/\s+/).filter(Boolean)
         : [];
@@ -1339,7 +1228,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   // Temporizador anti-congelamiento de SpeechSynthesis en Chromium
   useEffect(() => {
-    if (!isPlaying || voiceEngineRef.current === 'gemini') return;
+    if (!isPlaying || voiceEngineRef.current !== 'browser') return;
     const interval = setInterval(() => {
       if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
         window.speechSynthesis.pause();
@@ -1452,26 +1341,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               }
             })
             .catch(() => {});
-        } else if (voiceEngine === 'gemini' && getGeminiAudioApiKey()) {
-          const voice = isFemale ? sofiaVoice : mateoVoice;
-          synthesizeGeminiSpeech(firstItem.text, voice, 'high')
-            .then((url) => {
-              if (isMountedRef.current) {
-                const firstAudio = new Audio();
-                firstAudio.preload = 'auto';
-                firstAudio.src = url;
-                firstAudio.load();
-                preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
-
-                if (generated.dialogue[1]) {
-                  const secondItem = generated.dialogue[1];
-                  const secondIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(secondItem.speaker);
-                  const secondVoice = secondIsFemale ? sofiaVoice : mateoVoice;
-                  prefetchGeminiSpeech(secondItem.text, secondVoice, undefined, 'normal');
-                }
-              }
-            })
-            .catch(() => {});
         }
       }
     } catch (e) {
@@ -1520,7 +1389,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     stopCurrentAudio(true);
     setIsTestingVoice(false);
     setShowVoiceModal(false);
-    setNoKeyWarning(false);
     const updated = savePodcastSettings({ orientation: orientationInput.trim() });
     if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
       googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
@@ -1548,7 +1416,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Selector de Motor de Voz Dinámico (Azure Neural vs Gemini vs Sistema) */}
+          {/* Selector de Motor de Voz Dinámico (Azure Neural vs Sistema) */}
           <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-1 text-xs gap-1">
             <button
               type="button"
@@ -1562,20 +1430,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             >
               <Headphones className="w-3.5 h-3.5 text-emerald-400" />
               <span>Azure Neural (Gratis)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSwitchEngine('gemini')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                voiceEngine === 'gemini'
-                  ? 'bg-gradient-to-r from-amber-500/25 to-violet-600/30 border border-amber-500/40 text-amber-300 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Voz IA Gemini: Estudio con emociones y prosodia humana de Google Flash Audio"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Voz IA Gemini</span>
             </button>
 
             <button
@@ -1688,21 +1542,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               ))}
             </div>
 
-            {/* Alerta visible si la cuota de la API de Gemini está temporalmente ocupada */}
+            {/* Alerta visible si la síntesis de voz experimenta un error */}
             {synthesisError && (
               <div className="mb-4 max-w-2xl mx-auto px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
                 <span className="flex-1 leading-relaxed font-medium">
-                  {synthesisError}{' '}
-                  {synthesisError.includes('aistudio.google.com') && (
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline font-bold text-amber-200 hover:text-white"
-                    >
-                      Crear clave en AI Studio
-                    </a>
-                  )}
+                  {synthesisError}
                 </span>
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                   <button
@@ -1734,16 +1578,16 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   {currentItem.speaker}
                 </span>
                 <div className="flex items-center gap-2">
-                  {voiceEngine === 'gemini' ? (
+                  {voiceEngine === 'edge' ? (
                     isSynthesizing ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-1 animate-pulse">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center gap-1 animate-pulse">
                         <Loader2 className="w-3 h-3 animate-spin" />
-                        Sintetizando voz emocional...
+                        Sintetizando voz neuronal...
                       </span>
                     ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-violet-600/25 border border-amber-500/35 text-amber-300 flex items-center gap-1 font-medium">
-                        <Sparkles className="w-3 h-3 text-amber-400" />
-                        Gemini Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? sofiaVoice : mateoVoice})
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-600/25 border border-cyan-500/35 text-cyan-300 flex items-center gap-1 font-medium">
+                        <Headphones className="w-3 h-3 text-cyan-400" />
+                        Azure Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})
                       </span>
                     )
                   ) : (
@@ -1955,8 +1799,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         </div>
       )}
 
-      {/* Modal de Configuración de Voces Gemini con Emociones */}
-      {/* Modal de Configuración de Voces (Edge Natural HD, Gemini y Local) */}
+      {/* Modal de Configuración de Voces (Azure Neural y Local) */}
       {showVoiceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-7 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative text-left">
@@ -1965,11 +1808,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${
                   voiceEngine === 'edge'
                     ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                    : voiceEngine === 'gemini'
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
                     : 'bg-violet-600/20 border-violet-500/40 text-violet-400'
                 }`}>
-                  {voiceEngine === 'edge' ? <Headphones className="w-5 h-5" /> : voiceEngine === 'gemini' ? <Sparkles className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                  {voiceEngine === 'edge' ? <Headphones className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">Configuración de Voces y Locutores</h3>
@@ -1986,11 +1827,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             </div>
 
             {/* Pestañas de Selección de Motor de Síntesis */}
-            <div className="grid grid-cols-3 gap-2 p-1.5 bg-thea-surfaceLight/80 border border-thea-border rounded-2xl mb-4">
+            <div className="grid grid-cols-2 gap-2 p-1.5 bg-thea-surfaceLight/80 border border-thea-border rounded-2xl mb-4">
               <button
                 type="button"
                 onClick={() => handleSwitchEngine('edge')}
-                className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   voiceEngine === 'edge'
                     ? 'bg-emerald-500/25 border border-emerald-500/50 text-emerald-300 shadow-md'
                     : 'text-slate-400 hover:text-white'
@@ -1999,30 +1840,14 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <Headphones className="w-4 h-4 text-emerald-400 shrink-0" />
                 <div className="text-left">
                   <div className="font-bold">Azure Neural</div>
-                  <div className="text-[10px] font-normal text-emerald-400/90">Voces Oficiales • Gratis</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchEngine('gemini')}
-                className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  voiceEngine === 'gemini'
-                    ? 'bg-gradient-to-r from-amber-500/25 to-violet-600/30 border border-amber-500/50 text-amber-300 shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                <div className="text-left">
-                  <div className="font-bold">Gemini Flash</div>
-                  <div className="text-[10px] font-normal text-amber-400/90">Emociones IA Google</div>
+                  <div className="text-[10px] font-normal text-emerald-400/90">Voces Oficiales • 100% Gratis</div>
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleSwitchEngine('browser')}
-                className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   voiceEngine === 'browser'
                     ? 'bg-violet-600/25 border border-violet-500/50 text-violet-300 shadow-md'
                     : 'text-slate-400 hover:text-white'
@@ -2434,127 +2259,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 );
               })()}
 
-              {/* VISTA 2: GEMINI FLASH AUDIO (EMOCIONES Y PROSODIA IA) */}
-              {voiceEngine === 'gemini' && (
-                <div className="space-y-4">
-                  {/* Diagnóstico de Clave y Solución de Google Cloud */}
-                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-amber-400" />
-                        Estado del Motor Gemini Flash Audio
-                      </span>
-                      {getGeminiAudioApiKey() ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-mono">
-                          Clave configurada
-                        </span>
-                      ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono">
-                          Sin clave registrada
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-slate-300 leading-relaxed text-[11px]">
-                      Google Gemini Flash sintetiza locución humana de estudio con inflexiones emotivas. Si no suena audio o salta a voz local, se debe a que la API generativa no está activada en tu proyecto de Google Cloud o tu clave requiere permisos de Generative Language.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <a
-                        href="https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=747271305155"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer"
-                      >
-                        <span>Habilitar API en tu Proyecto Google Cloud</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-xl bg-thea-surfaceLight hover:bg-thea-surface border border-thea-border text-slate-200 hover:text-white font-semibold text-xs transition-all flex items-center gap-1 cursor-pointer"
-                      >
-                        <span>Obtener clave gratis en Google AI Studio</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* Selector de Voz Gemini para Sofía */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>Voz para Sofía (Host Principal)</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold lowercase">
-                        femenina • estudio ia
-                      </span>
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {GEMINI_VOICES.filter(v => v.gender === 'female').map((v) => (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => {
-                            setSofiaVoice(v.id);
-                            const updated = savePodcastSettings({ sofiaVoice: v.id });
-                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                            }
-                          }}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                            sofiaVoice === v.id
-                              ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div className="font-bold text-sm text-white flex items-center justify-between">
-                            <span>{v.name}</span>
-                            {sofiaVoice === v.id && <Check className="w-4 h-4 text-amber-400" />}
-                          </div>
-                          <p className="text-[11px] text-slate-400 mt-1">{v.tone}</p>
-                          <span className="text-[10px] text-amber-400/90 block mt-1">{v.roleHint}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Selector de Voz Gemini para Mateo */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>Voz para Mateo (Co-Host Analítico)</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/30 font-semibold lowercase">
-                        masculina • estudio ia
-                      </span>
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {GEMINI_VOICES.filter(v => v.gender === 'male').map((v) => (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => {
-                            setMateoVoice(v.id);
-                            const updated = savePodcastSettings({ mateoVoice: v.id });
-                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                            }
-                          }}
-                          className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                            mateoVoice === v.id
-                              ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div className="font-bold text-xs text-white flex items-center justify-between">
-                            <span>{v.name}</span>
-                            {mateoVoice === v.id && <Check className="w-3.5 h-3.5 text-violet-400" />}
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-1">{v.tone}</p>
-                          <span className="text-[9px] text-violet-400/90 block mt-1">{v.roleHint}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Cuadro de Orientación y Enfoque del Podcast */}
               <div className="pt-2 border-t border-thea-border">
                 <div className="flex items-center justify-between mb-1.5">
@@ -2627,18 +2331,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
               {/* Botones de Acción y Prueba de Voces */}
               <div className="pt-3 border-t border-thea-border">
-                {noKeyWarning && (
-                  <div className="mb-2.5 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
-                    <span>Para probar voces de Gemini, ingresa tu API Key en los Ajustes de IA (icono de engranaje).</span>
-                    <button
-                      type="button"
-                      onClick={() => setNoKeyWarning(false)}
-                      className="text-amber-400 hover:text-white ml-2 text-xs font-bold underline cursor-pointer"
-                    >
-                      Entendido
-                    </button>
-                  </div>
-                )}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <button
