@@ -16,6 +16,7 @@ import {
   Settings2,
   Check,
   X,
+  ExternalLink,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
 
@@ -35,8 +36,6 @@ function formatSeconds(totalSecs: number): string {
 }
 import {
   GEMINI_VOICES,
-  EDGE_VOICES,
-  type EdgeVoiceOption,
   getGeminiAudioApiKey,
   synthesizeGeminiSpeech,
   prefetchGeminiSpeech,
@@ -84,7 +83,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  // Motor de voz neuronal con emociones: 'edge' (Natural HD) | 'gemini' (Flash Audio) | 'browser' (Local)
+  // Motor de voz: 'gemini' (Flash Audio AI) | 'edge' (Natural HD / Local) | 'browser' (Local)
   const [voiceEngine, setVoiceEngine] = useState<'gemini' | 'edge' | 'browser'>(() => {
     const ps = getPodcastSettings();
     if (ps.voiceEngine) return ps.voiceEngine;
@@ -94,6 +93,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [mateoVoice, setMateoVoice] = useState<string>(() => getPodcastSettings().mateoVoice || 'Puck');
   const [edgeSofiaVoice, setEdgeSofiaVoice] = useState<string>(() => getPodcastSettings().edgeSofiaVoice || 'es-ES-ElviraNeural');
   const [edgeMateoVoice, setEdgeMateoVoice] = useState<string>(() => getPodcastSettings().edgeMateoVoice || 'es-ES-AlvaroNeural');
+  const [localSofiaVoice, setLocalSofiaVoice] = useState<string>(() => getPodcastSettings().localSofiaVoice || '');
+  const [localMateoVoice, setLocalMateoVoice] = useState<string>(() => getPodcastSettings().localMateoVoice || '');
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [orientationInput, setOrientationInput] = useState<string>(() => getPodcastSettings().orientation || '');
@@ -188,6 +189,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       if (fresh.mateoVoice) setMateoVoice(fresh.mateoVoice);
       if (fresh.edgeSofiaVoice) setEdgeSofiaVoice(fresh.edgeSofiaVoice);
       if (fresh.edgeMateoVoice) setEdgeMateoVoice(fresh.edgeMateoVoice);
+      if (fresh.localSofiaVoice !== undefined) setLocalSofiaVoice(fresh.localSofiaVoice);
+      if (fresh.localMateoVoice !== undefined) setLocalMateoVoice(fresh.localMateoVoice);
       if (fresh.orientation !== undefined) setOrientationInput(fresh.orientation);
     };
 
@@ -409,8 +412,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     populateVoices();
     window.speechSynthesis.onvoiceschanged = populateVoices;
+    const timer1 = setTimeout(populateVoices, 200);
+    const timer2 = setTimeout(populateVoices, 800);
 
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -453,131 +460,108 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
   }, []);
 
-  // Seleccionar la voz y modulación acústica adecuada con emotividad y máxima naturalidad
+  // Seleccionar la voz y modulación acústica adecuada con emotividad y máxima diferenciación
   const getSpeakerAcoustics = useCallback((speakerName: string, text: string = '') => {
     const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(speakerName);
     const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
     const candidateVoices = esVoices.length > 0 ? esVoices : voices;
 
-    // Priorizar voces neuronales/naturales de alta definición (Microsoft Natural, Google, Apple)
-    const naturalVoices = candidateVoices.filter(v =>
-      /natural|online|google|neural|multilingual|premium/i.test(v.name)
-    );
-
-    let selectedVoice: SpeechSynthesisVoice | undefined;
-
-    // Detección de expresividad y emociones a partir del texto
     const isQuestion = text.includes('?');
     const isExclamatory = text.includes('!');
 
     const normalizeStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    // ── Motor Edge / Natural HD (Estudio Humano 100% Gratuito) ──
-    if (voiceEngineRef.current === 'edge') {
-      const targetEdgeId = isFemale ? edgeSofiaVoice : edgeMateoVoice;
-      const baseName = normalizeStr(targetEdgeId.replace(/^es-[A-Z]{2}-/, '').replace('Neural', ''));
+    const femaleKeywords = [
+      'helena', 'elena', 'laura', 'elvira', 'dalia', 'salome', 'paloma',
+      'sabina', 'monica', 'lucia', 'marta', 'victoria', 'female', 'mujer',
+      'zira', 'maria', 'conchita', 'penelope', 'sofia', 'carmen'
+    ];
+    const maleKeywords = [
+      'pablo', 'alvaro', 'jorge', 'gonzalo', 'alonso', 'carlos', 'diego',
+      'david', 'raul', 'enrique', 'miguel', 'manuel', 'antonio', 'male', 'hombre'
+    ];
 
-      // 1. Buscar coincidencia exacta por nombre en las voces disponibles (ej. 'elvira', 'alvaro', 'dalia')
-      selectedVoice = candidateVoices.find(v => normalizeStr(v.name).includes(baseName));
-
-      // 2. Si no existe esa voz específica, buscar cualquier voz natural femenina o masculina en español
-      if (!selectedVoice) {
-        if (isFemale) {
-          const femaleKeywords = ['elvira', 'dalia', 'salome', 'paloma', 'elena', 'monica', 'victoria', 'female', 'mujer', 'zira', 'sabina', 'paulina'];
-          selectedVoice = naturalVoices.find(v => femaleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
-          if (!selectedVoice && naturalVoices.length > 0) {
-            selectedVoice = naturalVoices[0];
-          }
-          if (!selectedVoice) {
-            selectedVoice = candidateVoices.find(v => femaleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
-          }
-        } else {
-          const maleKeywords = ['alvaro', 'jorge', 'gonzalo', 'alonso', 'pablo', 'carlos', 'diego', 'david', 'male', 'hombre', 'enrique', 'raul', 'miguel'];
-          selectedVoice = naturalVoices.find(v => maleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
-          if (!selectedVoice && naturalVoices.length > 1) {
-            selectedVoice = naturalVoices[naturalVoices.length - 1];
-          }
-          if (!selectedVoice) {
-            selectedVoice = candidateVoices.find(v => maleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
-          }
-        }
-      }
-
-      if (!selectedVoice) {
-        selectedVoice = isFemale ? candidateVoices[0] : (candidateVoices[candidateVoices.length - 1] || candidateVoices[0]);
-      }
-
-      const basePitch = isFemale ? 1.02 : 0.96;
-      const pitchMod = isQuestion ? 0.05 : isExclamatory ? 0.03 : 0;
-      const rateMod = isExclamatory ? 1.03 : 1.0;
-
-      const edgeObj = EDGE_VOICES.find(e => e.id === targetEdgeId);
-      const displayName = edgeObj ? `${edgeObj.name} (${edgeObj.country})` : (selectedVoice?.name || 'Voz Edge Natural');
-
-      return {
-        voice: selectedVoice,
-        pitch: basePitch + pitchMod,
-        rateFactor: rateMod,
-        voiceName: displayName,
-      };
-    }
-
-    // ── Motor Navegador Estándar (o Fallback local) ──
     if (isFemale) {
-      const femaleKeywords = [
-        'elena', 'elvira', 'dalia', 'paulina', 'sabina', 'monica', 'helena',
-        'lucia', 'laura', 'marta', 'victoria', 'female', 'mujer', 'zira',
-        'maria', 'conchita', 'penelope'
-      ];
-      selectedVoice = naturalVoices.find(v => femaleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
+      let selectedVoice: SpeechSynthesisVoice | undefined;
+
+      // 1. Si el usuario seleccionó una voz local específica para Sofía
+      if (localSofiaVoice) {
+        selectedVoice = candidateVoices.find(v => v.name === localSofiaVoice);
+      }
+
+      // 2. Si se había seleccionado una voz de Edge que esté presente en el navegador
+      if (!selectedVoice && edgeSofiaVoice) {
+        const edgeBase = normalizeStr(edgeSofiaVoice.replace(/^es-[A-Z]{2}-/, '').replace('Neural', ''));
+        selectedVoice = candidateVoices.find(v => normalizeStr(v.name).includes(edgeBase));
+      }
+
+      // 3. Buscar cualquier voz femenina identificada por palabras clave
       if (!selectedVoice) {
         selectedVoice = candidateVoices.find(v => femaleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
       }
-      if (!selectedVoice && naturalVoices.length > 0) {
-        selectedVoice = naturalVoices[0];
-      }
+
+      // 4. Si aún no hay match, tomar la primera voz disponible
       if (!selectedVoice && candidateVoices.length > 0) {
         selectedVoice = candidateVoices[0];
       }
 
-      const basePitch = 1.08;
+      // Modulación acústica femenina: tono alto, brillante y vivaz (pitch 1.25)
+      const basePitch = 1.25;
       const pitchMod = isQuestion ? 0.05 : isExclamatory ? 0.04 : 0;
-      const rateMod = isExclamatory ? 1.04 : 1.01;
+      const rateMod = isExclamatory ? 1.05 : 1.02;
 
       return {
         voice: selectedVoice,
-        pitch: Math.min(1.4, basePitch + pitchMod),
+        pitch: Math.min(1.6, basePitch + pitchMod),
         rateFactor: rateMod,
-        voiceName: selectedVoice?.name || 'Voz Femenina Estándar',
+        voiceName: selectedVoice?.name ? `${selectedVoice.name.replace(/^(Microsoft|Google)\s*/i, '').split('-')[0].trim()} (Sofía)` : 'Voz Femenina (Sofía)',
       };
     } else {
-      const maleKeywords = [
-        'jorge', 'alvaro', 'pablo', 'carlos', 'diego', 'enrique', 'raul',
-        'david', 'male', 'hombre', 'miguel', 'manuel', 'antonio'
-      ];
-      selectedVoice = naturalVoices.find(v => maleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
+      let selectedVoice: SpeechSynthesisVoice | undefined;
+
+      // 1. Si el usuario seleccionó una voz local específica para Mateo
+      if (localMateoVoice) {
+        selectedVoice = candidateVoices.find(v => v.name === localMateoVoice);
+      }
+
+      // 2. Si se había seleccionado una voz de Edge que esté presente en el navegador
+      if (!selectedVoice && edgeMateoVoice) {
+        const edgeBase = normalizeStr(edgeMateoVoice.replace(/^es-[A-Z]{2}-/, '').replace('Neural', ''));
+        selectedVoice = candidateVoices.find(v => normalizeStr(v.name).includes(edgeBase));
+      }
+
+      // 3. Buscar cualquier voz masculina identificada por palabras clave
       if (!selectedVoice) {
         selectedVoice = candidateVoices.find(v => maleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
       }
-      if (!selectedVoice && naturalVoices.length > 1) {
-        selectedVoice = naturalVoices[naturalVoices.length - 1];
-      }
+
+      // 4. Si no hay voz masculina dedicada pero hay más de una voz en el sistema, usar una voz diferente a la de Sofía
       if (!selectedVoice && candidateVoices.length > 1) {
-        selectedVoice = candidateVoices[candidateVoices.length - 1];
+        const sofiaVoiceMatch = localSofiaVoice
+          ? candidateVoices.find(v => v.name === localSofiaVoice)
+          : candidateVoices.find(v => femaleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
+        const alternative = candidateVoices.find(v => v !== sofiaVoiceMatch);
+        if (alternative) selectedVoice = alternative;
       }
 
-      const basePitch = 0.93;
-      const pitchMod = isQuestion ? 0.05 : isExclamatory ? 0.03 : 0;
-      const rateMod = isExclamatory ? 1.03 : 0.98;
+      // 5. Fallback a la primera voz disponible
+      if (!selectedVoice && candidateVoices.length > 0) {
+        selectedVoice = candidateVoices[0];
+      }
+
+      // Modulación acústica masculina: tono grave, barítono profundo (pitch 0.68)
+      const basePitch = 0.68;
+      const pitchMod = isQuestion ? 0.04 : isExclamatory ? 0.03 : 0;
+      const rateMod = isExclamatory ? 0.98 : 0.93;
 
       return {
         voice: selectedVoice,
-        pitch: Math.max(0.7, basePitch + pitchMod),
+        pitch: Math.max(0.55, basePitch + pitchMod),
         rateFactor: rateMod,
-        voiceName: selectedVoice?.name || 'Voz Masculina Estándar',
+        voiceName: selectedVoice?.name ? `${selectedVoice.name.replace(/^(Microsoft|Google)\s*/i, '').split('-')[0].trim()} (Mateo)` : 'Voz Masculina (Mateo)',
       };
     }
-  }, [voices, edgeSofiaVoice, edgeMateoVoice]);
+  }, [voices, localSofiaVoice, localMateoVoice, edgeSofiaVoice, edgeMateoVoice]);
 
   // Avanzar a la siguiente intervención de diálogo
   const advanceToNextLine = useCallback((fromIndex: number) => {
@@ -979,26 +963,46 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
   };
 
-  // Preescucha rápida de una voz Edge específica desde su tarjeta
-  const previewEdgeVoiceSample = (e: React.MouseEvent, voiceOpt: EdgeVoiceOption) => {
+  // Preescucha de una voz con su modulación correspondiente (Sofía: aguda 1.25x / Mateo: grave 0.68x)
+  const previewLocalVoice = (e: React.MouseEvent, voice: SpeechSynthesisVoice, gender: 'female' | 'male') => {
     e.stopPropagation();
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     stopCurrentAudio();
-    const sampleText = `Hola, soy la voz de ${voiceOpt.name.replace(' Neural', '')} para tus repasos en Contrareloj.`;
+    const isSofia = gender === 'female';
+    const cleanName = voice.name.replace(/^(Microsoft|Google)\s*/i, '').split('-')[0].trim();
+    const sampleText = isSofia
+      ? `¡Hola! Soy Sofía con la voz de ${cleanName}. Vamos a repasar juntos hoy.`
+      : `¡Y yo soy Mateo con la voz de ${cleanName}! Profundizaremos en cada concepto.`;
     const utt = new SpeechSynthesisUtterance(sampleText);
-    const normalizeStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const baseName = normalizeStr(voiceOpt.name.replace(' Neural', ''));
-    const candidateVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
-    const pool = candidateVoices.length > 0 ? candidateVoices : voices;
-    const match = pool.find(v => normalizeStr(v.name).includes(baseName));
-    if (match) {
-      utt.voice = match;
-      utt.lang = match.lang;
+    utt.voice = voice;
+    utt.lang = voice.lang;
+    utt.pitch = isSofia ? 1.25 : 0.68;
+    utt.rate = isSofia ? 1.05 : 0.93;
+    window.speechSynthesis.speak(utt);
+  };
+
+  // Preescucha para la asignación automática inteligente
+  const previewAutomaticLocalSample = (e: React.MouseEvent, gender: 'female' | 'male') => {
+    e.stopPropagation();
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    stopCurrentAudio();
+    const isSofia = gender === 'female';
+    const speakerName = isSofia ? 'Sofía' : 'Mateo';
+    const acoustics = getSpeakerAcoustics(speakerName, isSofia ? '¡Hola!' : '¡Y yo soy Mateo!');
+    const sampleText = isSofia
+      ? '¡Hola! Soy Sofía con modulación automática inteligente. ¡Vamos a repasar juntos hoy!'
+      : '¡Y yo soy Mateo con modulación automática inteligente! Profundizaremos en cada concepto.';
+    const utt = new SpeechSynthesisUtterance(sampleText);
+    if (acoustics.voice) {
+      utt.voice = acoustics.voice;
+      utt.lang = acoustics.voice.lang;
     } else {
       utt.lang = 'es-ES';
     }
-    utt.pitch = voiceOpt.gender === 'female' ? 1.02 : 0.96;
+    utt.pitch = acoustics.pitch;
+    utt.rate = acoustics.rateFactor;
     window.speechSynthesis.speak(utt);
   };
 
@@ -1412,55 +1416,41 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Selector de Motor de Voz Dinámico (3 Vías) */}
+          {/* Selector de Motor de Voz Dinámico (Voz del Sistema vs Voz IA Gemini) */}
           <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-1 text-xs gap-1">
             <button
               type="button"
-              onClick={() => handleSwitchEngine('edge')}
-              className={`px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                voiceEngine === 'edge'
+              onClick={() => handleSwitchEngine('browser')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                voiceEngine !== 'gemini'
                   ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Edge / Natural HD: Voces naturales de estudio humano en español (100% gratis, sin claves ni límites)"
+              title="Voz del Sistema: Doble locutor garantizado (Sofía 1.25x aguda / Mateo 0.68x grave), 100% gratis y sin claves"
             >
               <Headphones className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Natural HD</span>
+              <span>Voz del Sistema (Gratis)</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleSwitchEngine('gemini')}
-              className={`px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 voiceEngine === 'gemini'
                   ? 'bg-gradient-to-r from-amber-500/25 to-violet-600/30 border border-amber-500/40 text-amber-300 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Gemini Neural: Voces con prosodia y emociones (requiere API key gratuita de Google AI Studio)"
+              title="Voz IA Gemini: Estudio con emociones y prosodia humana de Google Flash Audio"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Gemini</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSwitchEngine('browser')}
-              className={`px-2 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 cursor-pointer ${
-                voiceEngine === 'browser'
-                  ? 'bg-violet-600/30 border border-violet-500/40 text-violet-300'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Voz Local: Síntesis estándar nativa del navegador"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-violet-400" />
-              <span className="hidden sm:inline">Local</span>
+              <span>Voz IA Gemini</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowVoiceModal(true)}
               className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-thea-surfaceLight transition-colors cursor-pointer ml-0.5"
-              title="Ajustes de Voces, Locutores y Enfoque"
+              title="Configuración de Voces, Locutores y Enfoque"
             >
               <Settings2 className="w-4 h-4" />
             </button>
@@ -1610,14 +1600,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                         Gemini Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? sofiaVoice : mateoVoice})
                       </span>
                     )
-                  ) : voiceEngine === 'edge' ? (
+                  ) : (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1 font-medium">
                       <Headphones className="w-3 h-3 text-emerald-400" />
-                      Natural HD ({speakerAcoustics.voiceName.split('(')[0].trim()})
-                    </span>
-                  ) : (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-950/70 border border-violet-500/30 text-violet-300">
-                      {speakerAcoustics.voiceName.split('-')[0].trim()}
+                      {speakerAcoustics.voiceName}
                     </span>
                   )}
                   <span className="text-[11px] text-slate-500 font-mono">
@@ -1854,200 +1840,349 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             </div>
 
             {/* Pestañas de Selección de Motor de Síntesis */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-thea-surfaceLight/80 border border-thea-border rounded-2xl mb-4">
+            <div className="grid grid-cols-2 gap-2 p-1.5 bg-thea-surfaceLight/80 border border-thea-border rounded-2xl mb-4">
               <button
                 type="button"
-                onClick={() => handleSwitchEngine('edge')}
-                className={`py-2 px-2 rounded-xl font-bold text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
-                  voiceEngine === 'edge'
+                onClick={() => handleSwitchEngine('browser')}
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  voiceEngine !== 'gemini'
                     ? 'bg-emerald-500/25 border border-emerald-500/50 text-emerald-300 shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Headphones className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="text-center sm:text-left">
-                  Natural HD
-                  <span className="block text-[9px] font-normal text-emerald-400/90">100% Gratis • Sin API</span>
-                </span>
+                <div className="text-left">
+                  <div className="font-bold">Voces del Sistema</div>
+                  <div className="text-[10px] font-normal text-emerald-400/90">100% Gratis • Sin límites ni claves</div>
+                </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleSwitchEngine('gemini')}
-                className={`py-2 px-2 rounded-xl font-bold text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   voiceEngine === 'gemini'
                     ? 'bg-gradient-to-r from-amber-500/25 to-violet-600/30 border border-amber-500/50 text-amber-300 shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-center sm:text-left">
-                  Gemini Flash
-                  <span className="block text-[9px] font-normal text-amber-400/90">Emociones con IA</span>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchEngine('browser')}
-                className={`py-2 px-2 rounded-xl font-bold text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
-                  voiceEngine === 'browser'
-                    ? 'bg-violet-600/25 border border-violet-500/50 text-violet-300 shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Volume2 className="w-4 h-4 text-violet-400 shrink-0" />
-                <span className="text-center sm:text-left">
-                  Voz Local
-                  <span className="block text-[9px] font-normal text-violet-400/90">Navegador nativo</span>
-                </span>
+                <div className="text-left">
+                  <div className="font-bold">Gemini Flash Audio</div>
+                  <div className="text-[10px] font-normal text-amber-400/90">Emociones y prosodia con IA</div>
+                </div>
               </button>
             </div>
 
             <div className="space-y-4">
-              {/* VISTA MOTOR 1: EDGE / NATURAL HD */}
-              {voiceEngine === 'edge' && (
-                <div className="space-y-4">
-                  <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
-                    <span className="leading-relaxed">
-                      Voces neuronales de alta definición de estudio en español. 100% gratuitas, sin límites de uso ni necesidad de claves de API.
-                    </span>
-                  </div>
+              {/* VISTA 1: VOCES DEL SISTEMA (100% GRATIS) */}
+              {voiceEngine !== 'gemini' && (() => {
+                const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
+                const candidateVoices = esVoices.length > 0 ? esVoices : voices;
 
-                  {/* Selector de Voz Edge para Sofía */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>Voz para Sofía (Host Principal)</span>
-                      <span className="text-[11px] text-emerald-400 font-semibold lowercase">Femenina</span>
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {EDGE_VOICES.filter(v => v.gender === 'female').map((v) => {
-                        const isSelected = edgeSofiaVoice === v.id;
-                        return (
-                          <div
-                            key={v.id}
+                return (
+                  <div className="space-y-4">
+                    {/* Banner informativo de diferenciación acústica */}
+                    <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between text-emerald-300 font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <Headphones className="w-4 h-4 text-emerald-400" />
+                          Síntesis Vocal Local ({candidateVoices.length} voces disponibles)
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                          Ilimitado
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        THEA modula automáticamente los registros: Sofía en tono agudo vivaz (1.25x) y Mateo en barítono grave (0.68x). Puedes seleccionar una voz instalada específica para cada uno o usar la asignación automática recomendada.
+                      </p>
+                    </div>
+
+                    {/* Selector de Voz Local para Sofía */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>Voz para Sofía (Host Principal)</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold lowercase">
+                            femenina • pitch 1.25
+                          </span>
+                        </label>
+                        {localSofiaVoice && (
+                          <button
+                            type="button"
                             onClick={() => {
-                              setEdgeSofiaVoice(v.id);
-                              const updated = savePodcastSettings({ edgeSofiaVoice: v.id });
+                              setLocalSofiaVoice('');
+                              const updated = savePodcastSettings({ localSofiaVoice: '' });
                               if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
                                 googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                               }
                             }}
-                            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                              isSelected
-                                ? 'border-emerald-400 bg-emerald-500/15 shadow-md ring-1 ring-emerald-400/40'
-                                : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                            }`}
+                            className="text-[11px] text-slate-400 hover:text-amber-300 underline cursor-pointer"
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-sm text-white">{v.name}</span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-300">
-                                  {v.country}
-                                </span>
-                              </div>
-                              {isSelected && <Check className="w-4 h-4 text-emerald-400" />}
-                            </div>
-                            <p className="text-[11px] text-slate-400 mb-2">{v.tone}</p>
-                            <div className="flex justify-end">
-                              <button
-                                type="button"
-                                onClick={(e) => previewEdgeVoiceSample(e, v)}
-                                className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-emerald-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                                title={`Escuchar muestra de ${v.name}`}
-                              >
-                                <Volume2 className="w-3 h-3 text-emerald-400" />
-                                <span>Escuchar</span>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                            Restablecer a automática
+                          </button>
+                        )}
+                      </div>
 
-                  {/* Selector de Voz Edge para Mateo */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>Voz para Mateo (Co-Host Analítico)</span>
-                      <span className="text-[11px] text-emerald-400 font-semibold lowercase">Masculina</span>
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {EDGE_VOICES.filter(v => v.gender === 'male').map((v) => {
-                        const isSelected = edgeMateoVoice === v.id;
-                        return (
-                          <div
-                            key={v.id}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                        {/* Opción Automática */}
+                        <div
+                          onClick={() => {
+                            setLocalSofiaVoice('');
+                            const updated = savePodcastSettings({ localSofiaVoice: '' });
+                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                            }
+                          }}
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                            !localSofiaVoice
+                              ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-sm text-white">Automática Inteligente</span>
+                            {!localSofiaVoice && <Check className="w-4 h-4 text-amber-400" />}
+                          </div>
+                          <p className="text-[11px] text-slate-400 mb-2">
+                            Asignación óptima detectada (Helena / Laura / etc.) con modulación femenina 1.25x.
+                          </p>
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={(e) => previewAutomaticLocalSample(e, 'female')}
+                              className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Escuchar muestra automática de Sofía"
+                            >
+                              <Volume2 className="w-3 h-3 text-amber-400" />
+                              <span>Escuchar</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Lista de voces detectadas en el sistema */}
+                        {candidateVoices.map((v) => {
+                          const isSelected = localSofiaVoice === v.name;
+                          const cleanName = v.name
+                            .replace(/^(Microsoft|Google|Apple)\s*/i, '')
+                            .replace(/\s*-\s*(Spanish|español|Spain|Mexico|United States).*$/i, '')
+                            .trim() || v.name;
+                          return (
+                            <div
+                              key={`sofia-${v.name}`}
+                              onClick={() => {
+                                setLocalSofiaVoice(v.name);
+                                const updated = savePodcastSettings({ localSofiaVoice: v.name });
+                                if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                                  googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                                }
+                              }}
+                              className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                isSelected
+                                  ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                                  : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-sm text-white">{cleanName}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-400 font-mono">
+                                    {v.lang}
+                                  </span>
+                                </div>
+                                {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                              </div>
+                              <p className="text-[11px] text-slate-400 mb-2 truncate" title={v.name}>
+                                {v.name}
+                              </p>
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={(e) => previewLocalVoice(e, v, 'female')}
+                                  className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                                  title={`Escuchar a Sofía con la voz de ${cleanName}`}
+                                >
+                                  <Volume2 className="w-3 h-3 text-amber-400" />
+                                  <span>Escuchar</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Selector de Voz Local para Mateo */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>Voz para Mateo (Co-Host Analítico)</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/30 font-semibold lowercase">
+                            masculina • pitch 0.68
+                          </span>
+                        </label>
+                        {localMateoVoice && (
+                          <button
+                            type="button"
                             onClick={() => {
-                              setEdgeMateoVoice(v.id);
-                              const updated = savePodcastSettings({ edgeMateoVoice: v.id });
+                              setLocalMateoVoice('');
+                              const updated = savePodcastSettings({ localMateoVoice: '' });
                               if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
                                 googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                               }
                             }}
-                            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                              isSelected
-                                ? 'border-emerald-400 bg-emerald-500/15 shadow-md ring-1 ring-emerald-400/40'
-                                : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                            }`}
+                            className="text-[11px] text-slate-400 hover:text-violet-300 underline cursor-pointer"
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-sm text-white">{v.name}</span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-300">
-                                  {v.country}
-                                </span>
-                              </div>
-                              {isSelected && <Check className="w-4 h-4 text-emerald-400" />}
-                            </div>
-                            <p className="text-[11px] text-slate-400 mb-2">{v.tone}</p>
-                            <div className="flex justify-end">
-                              <button
-                                type="button"
-                                onClick={(e) => previewEdgeVoiceSample(e, v)}
-                                className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-emerald-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                                title={`Escuchar muestra de ${v.name}`}
-                              >
-                                <Volume2 className="w-3 h-3 text-emerald-400" />
-                                <span>Escuchar</span>
-                              </button>
-                            </div>
+                            Restablecer a automática
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                        {/* Opción Automática */}
+                        <div
+                          onClick={() => {
+                            setLocalMateoVoice('');
+                            const updated = savePodcastSettings({ localMateoVoice: '' });
+                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                            }
+                          }}
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                            !localMateoVoice
+                              ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-sm text-white">Automática Inteligente</span>
+                            {!localMateoVoice && <Check className="w-4 h-4 text-violet-400" />}
                           </div>
-                        );
-                      })}
+                          <p className="text-[11px] text-slate-400 mb-2">
+                            Asignación masculina (Pablo / etc.) o barítono grave modulado a 0.68x.
+                          </p>
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={(e) => previewAutomaticLocalSample(e, 'male')}
+                              className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Escuchar muestra automática de Mateo"
+                            >
+                              <Volume2 className="w-3 h-3 text-violet-400" />
+                              <span>Escuchar</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Lista de voces detectadas en el sistema */}
+                        {candidateVoices.map((v) => {
+                          const isSelected = localMateoVoice === v.name;
+                          const cleanName = v.name
+                            .replace(/^(Microsoft|Google|Apple)\s*/i, '')
+                            .replace(/\s*-\s*(Spanish|español|Spain|Mexico|United States).*$/i, '')
+                            .trim() || v.name;
+                          return (
+                            <div
+                              key={`mateo-${v.name}`}
+                              onClick={() => {
+                                setLocalMateoVoice(v.name);
+                                const updated = savePodcastSettings({ localMateoVoice: v.name });
+                                if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+                                  googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
+                                }
+                              }}
+                              className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                isSelected
+                                  ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                                  : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-sm text-white">{cleanName}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-400 font-mono">
+                                    {v.lang}
+                                  </span>
+                                </div>
+                                {isSelected && <Check className="w-4 h-4 text-violet-400" />}
+                              </div>
+                              <p className="text-[11px] text-slate-400 mb-2 truncate" title={v.name}>
+                                {v.name}
+                              </p>
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={(e) => previewLocalVoice(e, v, 'male')}
+                                  className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                                  title={`Escuchar a Mateo con la voz de ${cleanName}`}
+                                >
+                                  <Volume2 className="w-3 h-3 text-violet-400" />
+                                  <span>Escuchar</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
-              {/* VISTA MOTOR 2: GEMINI FLASH AUDIO */}
+              {/* VISTA 2: GEMINI FLASH AUDIO (EMOCIONES Y PROSODIA IA) */}
               {voiceEngine === 'gemini' && (
                 <div className="space-y-4">
-                  {/* Diagnóstico de API Key */}
-                  {!getGeminiAudioApiKey() ? (
-                    <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <span>Para usar Gemini Flash Audio, genera una clave gratuita en Google AI Studio y regístrala en Ajustes de IA.</span>
+                  {/* Diagnóstico de Clave y Solución de Google Cloud */}
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        Estado del Motor Gemini Flash Audio
+                      </span>
+                      {getGeminiAudioApiKey() ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-mono">
+                          Clave configurada
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono">
+                          Sin clave registrada
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-slate-300 leading-relaxed text-[11px]">
+                      Google Gemini Flash sintetiza locución humana de estudio con inflexiones emotivas. Si no suena audio o salta a voz local, se debe a que la API generativa no está activada en tu proyecto de Google Cloud o tu clave requiere permisos de Generative Language.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <a
+                        href="https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=747271305155"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Habilitar API en tu Proyecto Google Cloud</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
                       <a
                         href="https://aistudio.google.com/app/apikey"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all text-center shrink-0"
+                        className="px-3 py-1.5 rounded-xl bg-thea-surfaceLight hover:bg-thea-surface border border-thea-border text-slate-200 hover:text-white font-semibold text-xs transition-all flex items-center gap-1 cursor-pointer"
                       >
-                        Crear clave gratis
+                        <span>Obtener clave gratis en Google AI Studio</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
-                  ) : (
-                    <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
-                      <span>Clave de Gemini configurada. Si alcanzas el límite de cuota de Google, el reproductor conmuta automáticamente a Natural HD.</span>
-                    </div>
-                  )}
+                  </div>
 
-                  {/* Selector de Voz para Sofía */}
+                  {/* Selector de Voz Gemini para Sofía */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                      Voz para Sofía (Host Principal)
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+                      <span>Voz para Sofía (Host Principal)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold lowercase">
+                        femenina • estudio ia
+                      </span>
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {GEMINI_VOICES.filter(v => v.gender === 'female').map((v) => (
                         <button
                           key={v.id}
@@ -2061,7 +2196,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                           }}
                           className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                             sofiaVoice === v.id
-                              ? 'border-amber-400 bg-amber-500/10 shadow-md ring-1 ring-amber-400/40'
+                              ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
                               : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                           }`}
                         >
@@ -2070,17 +2205,21 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                             {sofiaVoice === v.id && <Check className="w-4 h-4 text-amber-400" />}
                           </div>
                           <p className="text-[11px] text-slate-400 mt-1">{v.tone}</p>
+                          <span className="text-[10px] text-amber-400/90 block mt-1">{v.roleHint}</span>
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  {/* Selector de Voz para Mateo */}
+                  {/* Selector de Voz Gemini para Mateo */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                      Voz para Mateo (Co-Host Analítico)
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+                      <span>Voz para Mateo (Co-Host Analítico)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/30 font-semibold lowercase">
+                        masculina • estudio ia
+                      </span>
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {GEMINI_VOICES.filter(v => v.gender === 'male').map((v) => (
                         <button
                           key={v.id}
@@ -2102,21 +2241,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                             <span>{v.name}</span>
                             {mateoVoice === v.id && <Check className="w-3.5 h-3.5 text-violet-400" />}
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{v.tone}</p>
+                          <p className="text-[10px] text-slate-400 mt-1">{v.tone}</p>
+                          <span className="text-[9px] text-violet-400/90 block mt-1">{v.roleHint}</span>
                         </button>
                       ))}
                     </div>
                   </div>
-                </div>
-              )}
-
-              {/* VISTA MOTOR 3: LOCAL DEL NAVEGADOR */}
-              {voiceEngine === 'browser' && (
-                <div className="p-4 rounded-2xl bg-thea-surfaceLight border border-thea-border text-xs text-slate-300 space-y-2">
-                  <p className="font-semibold text-white">Síntesis Vocal Nativa del Sistema Operativo</p>
-                  <p className="leading-relaxed">
-                    Utiliza el motor SpeechSynthesis integrado en tu dispositivo ({voices.filter(v => v.lang.toLowerCase().startsWith('es')).length} voces en español detectadas).
-                  </p>
                 </div>
               )}
 

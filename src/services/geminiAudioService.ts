@@ -163,6 +163,8 @@ export const DEFAULT_PODCAST_SETTINGS: PodcastSettings = {
   mateoVoice: 'Puck',
   edgeSofiaVoice: 'es-ES-ElviraNeural',
   edgeMateoVoice: 'es-ES-AlvaroNeural',
+  localSofiaVoice: '',
+  localMateoVoice: '',
   playbackSpeed: 1,
   geminiApiKey: '',
   orientation: '',
