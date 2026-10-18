@@ -15,6 +15,7 @@ export interface AISettings {
   grokApiKey?: string;
   grokBaseUrl?: string;
   grokModel?: string;
+  ollamaApiKey?: string;
 }
 
 export interface AIPreset {
@@ -91,12 +92,14 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 
 export function getAISettings(): AISettings {
   const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+  const ollamaKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_api_key') || '' : '';
+  const groqKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_api_key') || '' : '';
+
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
 
       // Si thea_ai_settings apunta a localhost:11434 o llama3.2, migrar a Ollama Cloud
-      // preservando la API key que el usuario haya ingresado
       if (
         parsed.baseUrl?.includes('11434') ||
         parsed.baseUrl?.includes('localhost') ||
@@ -107,35 +110,41 @@ export function getAISettings(): AISettings {
         if (parsed.model === 'llama3.2' || !parsed.model) {
           parsed.model = DEFAULT_AI_SETTINGS.model;
         }
-        delete parsed.grokApiKey;
-        delete parsed.grokBaseUrl;
-        delete parsed.grokModel;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       }
 
-      // Auto-reparación: si thea_ai_settings fue contaminado con xAI o Grok, purgar y restaurar a Ollama Cloud
-      if (
-        parsed.baseUrl?.includes('api.x.ai') ||
-        parsed.baseUrl?.includes('grok.com') ||
-        parsed.apiKey?.startsWith('grok_') ||
-        parsed.apiKey?.startsWith('xai-')
-      ) {
+      // Si apunta a api.x.ai o grok.com, migrar a Ollama Cloud
+      if (parsed.baseUrl?.includes('api.x.ai') || parsed.baseUrl?.includes('grok.com')) {
         parsed.baseUrl = DEFAULT_AI_SETTINGS.baseUrl;
         parsed.provider = DEFAULT_AI_SETTINGS.provider;
-        parsed.apiKey = '';
         parsed.model = DEFAULT_AI_SETTINGS.model;
-        parsed.verified = false;
-        delete parsed.grokApiKey;
-        delete parsed.grokBaseUrl;
-        delete parsed.grokModel;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       }
 
-      const hasKey = Boolean(parsed.apiKey && parsed.apiKey.trim().length > 0);
+      const isOllamaCloud = Boolean(parsed.baseUrl?.includes('ollama.com'));
+      const isGroq = Boolean(parsed.baseUrl?.includes('api.groq.com'));
+
+      // Resolver la apiKey estrictamente según el proveedor activo para aislar completamente las claves
+      let activeKey = parsed.apiKey || '';
+      if (isOllamaCloud) {
+        // En Ollama Cloud, nunca aceptar una clave ajena (grok_ o gsk_)
+        if (activeKey.startsWith('grok_') || activeKey.startsWith('gsk_') || !activeKey) {
+          activeKey = ollamaKey || parsed.ollamaApiKey || '';
+        }
+      } else if (isGroq) {
+        // En Groq Cloud, priorizar la clave gsk_
+        if (!activeKey.startsWith('gsk_') || !activeKey) {
+          activeKey = groqKey || parsed.groqApiKey || '';
+        }
+      }
+
+      const hasKey = Boolean(activeKey && activeKey.trim().length > 0);
       const isLocal = Boolean(parsed.baseUrl?.includes('localhost') || parsed.baseUrl?.includes('127.0.0.1'));
+
       return {
         ...DEFAULT_AI_SETTINGS,
         ...parsed,
+        apiKey: activeKey,
+        ollamaApiKey: ollamaKey || parsed.ollamaApiKey || '',
+        groqApiKey: groqKey || parsed.groqApiKey || '',
         enabled: true,
         verified: hasKey || isLocal ? true : Boolean(parsed.verified),
       };
@@ -143,7 +152,13 @@ export function getAISettings(): AISettings {
       // fallback
     }
   }
-  return DEFAULT_AI_SETTINGS;
+
+  return {
+    ...DEFAULT_AI_SETTINGS,
+    apiKey: ollamaKey,
+    ollamaApiKey: ollamaKey,
+    groqApiKey: groqKey,
+  };
 }
 
 export function saveAISettings(settings: AISettings): void {
@@ -151,6 +166,44 @@ export function saveAISettings(settings: AISettings): void {
   delete cleanSettings.grokApiKey;
   delete cleanSettings.grokBaseUrl;
   delete cleanSettings.grokModel;
+
+  const isOllama = Boolean(cleanSettings.baseUrl?.includes('ollama.com'));
+  const isGroq = Boolean(cleanSettings.baseUrl?.includes('api.groq.com'));
+
+  // Asegurar persistencia independiente de ambas claves sin sobrescribirse
+  if (typeof localStorage !== 'undefined') {
+    if (!cleanSettings.ollamaApiKey) {
+      cleanSettings.ollamaApiKey = localStorage.getItem('thea_ollama_api_key') || '';
+    }
+    if (!cleanSettings.groqApiKey) {
+      cleanSettings.groqApiKey = localStorage.getItem('thea_groq_api_key') || '';
+    }
+  }
+
+  if (isOllama) {
+    const key = cleanSettings.apiKey?.trim() || '';
+    if (!key.startsWith('grok_') && !key.startsWith('gsk_')) {
+      cleanSettings.ollamaApiKey = key;
+      if (typeof localStorage !== 'undefined') {
+        if (key) {
+          localStorage.setItem('thea_ollama_api_key', key);
+        } else {
+          localStorage.removeItem('thea_ollama_api_key');
+        }
+      }
+    }
+  } else if (isGroq) {
+    const key = cleanSettings.apiKey?.trim() || '';
+    cleanSettings.groqApiKey = key;
+    if (typeof localStorage !== 'undefined') {
+      if (key) {
+        localStorage.setItem('thea_groq_api_key', key);
+      } else {
+        localStorage.removeItem('thea_groq_api_key');
+      }
+    }
+  }
+
   const isLocal = Boolean(cleanSettings.baseUrl?.includes('localhost') || cleanSettings.baseUrl?.includes('127.0.0.1'));
   const enforced = {
     ...cleanSettings,
@@ -236,14 +289,46 @@ export function saveGrokModel(model: string): void {
   saveGrokSettings({ model: model.trim() || 'grok-2-mini' });
 }
 
-export function getGroqApiKey(): string {
-  const current = getAISettings();
-  if (current.groqApiKey && current.groqApiKey.trim().length > 0) {
-    return current.groqApiKey.trim();
+export function getOllamaApiKey(): string {
+  if (typeof localStorage !== 'undefined') {
+    const direct = localStorage.getItem('thea_ollama_api_key');
+    if (direct && direct.trim().length > 0) return direct.trim();
   }
+  const current = getAISettings();
+  if (current.ollamaApiKey && current.ollamaApiKey.trim().length > 0) {
+    return current.ollamaApiKey.trim();
+  }
+  if (current.apiKey && current.baseUrl?.includes('ollama.com') && !current.apiKey.startsWith('gsk_') && !current.apiKey.startsWith('grok_')) {
+    return current.apiKey.trim();
+  }
+  return '';
+}
+
+export function saveOllamaApiKey(key: string): void {
+  const cleanKey = key.trim();
+  if (typeof localStorage !== 'undefined') {
+    if (cleanKey) {
+      localStorage.setItem('thea_ollama_api_key', cleanKey);
+    } else {
+      localStorage.removeItem('thea_ollama_api_key');
+    }
+  }
+  const current = getAISettings();
+  saveAISettings({
+    ...current,
+    ollamaApiKey: cleanKey,
+    ...(current.baseUrl?.includes('ollama.com') ? { apiKey: cleanKey } : {}),
+  });
+}
+
+export function getGroqApiKey(): string {
   if (typeof localStorage !== 'undefined') {
     const direct = localStorage.getItem('thea_groq_api_key');
     if (direct && direct.trim().length > 0) return direct.trim();
+  }
+  const current = getAISettings();
+  if (current.groqApiKey && current.groqApiKey.trim().length > 0) {
+    return current.groqApiKey.trim();
   }
   if (current.apiKey && (current.apiKey.startsWith('gsk_') || current.baseUrl?.includes('api.groq.com'))) {
     return current.apiKey.trim();
@@ -254,12 +339,17 @@ export function getGroqApiKey(): string {
 export function saveGroqApiKey(key: string): void {
   const cleanKey = key.trim();
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('thea_groq_api_key', cleanKey);
+    if (cleanKey) {
+      localStorage.setItem('thea_groq_api_key', cleanKey);
+    } else {
+      localStorage.removeItem('thea_groq_api_key');
+    }
   }
   const current = getAISettings();
   saveAISettings({
     ...current,
     groqApiKey: cleanKey,
+    ...(current.baseUrl?.includes('api.groq.com') ? { apiKey: cleanKey } : {}),
   });
 }
 
