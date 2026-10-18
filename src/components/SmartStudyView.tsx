@@ -2411,6 +2411,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
           )}
 
+          {/* Badge de advertencia para preguntas de detección de concepto falso / impostor */}
+          {(qType === 'multiple-choice' || qType === 'multi-select') &&
+            /\b(falsa|falso|falsas|incorrecta|incorrecto|incorrectas|equivocado|equivocada|equivocados|excepto|no corresponde|no pertenecen|no pertenece)\b/i.test(currentQ.question) && (
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-bold mb-4 animate-fadeIn">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>Atención: Selecciona el concepto EQUIVOCADO o la afirmación FALSA</span>
+            </div>
+          )}
+
           {/* Question Title */}
           <QuestionPrompt
             as="h2"

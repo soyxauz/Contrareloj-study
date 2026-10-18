@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import type { StudyKit, Flashcard } from '../types';
 import {
   Layers,
-  Gamepad2,
   Sparkles,
   Loader2,
   Type,
@@ -16,11 +15,15 @@ import {
   Target,
   HelpCircle,
   BookOpen,
-  Timer,
   Trophy,
-  Flame,
   RotateCcw,
   ArrowLeft,
+  ArrowRight,
+  Lock,
+  Unlock,
+  Star,
+  Award,
+  Check,
 } from 'lucide-react';
 import {
   generateAIFlashcards,
@@ -28,6 +31,185 @@ import {
   generateTargetedAIFlashcards,
 } from '../services/aiService';
 import { FormattedText } from './FormattedText';
+
+interface GuessWhoClue {
+  level: number;
+  title: string;
+  badge: string;
+  text: string;
+  unlockedScore: number;
+  stars: number;
+}
+
+interface GuessWhoCase {
+  id: string;
+  targetTerm: string;
+  fullDefinition: string;
+  clues: GuessWhoClue[];
+  options: string[];
+}
+
+interface CaseHistoryItem {
+  term: string;
+  score: number;
+  stars: number;
+  cluesUsed: number;
+  mistakes: number;
+}
+
+const maskTermInText = (text: string, term: string): string => {
+  if (!text || !term) return text;
+  const escaped = term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let masked = text.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '[Entidad Oculta]');
+
+  const stopWords = new Set([
+    'para', 'como', 'entre', 'sobre', 'desde', 'hacia', 'hasta', 'segun', 'donde', 'quien', 'cada',
+    'este', 'esta', 'estos', 'estas', 'aquel', 'aquella', 'con', 'sin', 'por', 'del', 'los', 'las', 'una', 'uno'
+  ]);
+  const words = term.split(/[\s,.-]+/).filter(w => w.length > 4 && !stopWords.has(w.toLowerCase()));
+  if (words.length > 1) {
+    words.forEach(w => {
+      const escW = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      masked = masked.replace(new RegExp(`\\b${escW}\\b`, 'gi'), '[***]');
+    });
+  }
+  return masked;
+};
+
+const buildGuessWhoCases = (
+  deck: Flashcard[],
+  kitTitle: string,
+  kitCategory?: string,
+  questions?: Array<{ question: string; answer?: string; options?: string[]; topic?: string }>
+): GuessWhoCase[] => {
+  if (!deck || deck.length === 0) return [];
+
+  // Barajar el mazo y seleccionar hasta 5 tarjetas representativas
+  const candidates = [...deck].sort(() => Math.random() - 0.5).slice(0, Math.min(5, deck.length));
+
+  return candidates.map((card, idx) => {
+    const rawDef = (card.definition || '').trim();
+    const maskedDef = maskTermInText(rawDef, card.term);
+
+    // Dividir la definición en oraciones limpias
+    const sentences = rawDef
+      .split(/(?<=[.?!;])\s+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 6);
+
+    const maskedSentences = sentences.map(s => maskTermInText(s, card.term));
+    const categoryName = kitCategory || kitTitle || 'Dominio de Estudio';
+
+    // Pista 1: Localización / Generalidad / Contexto disciplinar (100 pts, 3 estrellas)
+    const clue1Text = `Pertenece al ámbito de "${categoryName}". Constituye un elemento o principio nuclear en la comprensión y dominio de este tema.`;
+
+    // Pista 2: Mecanismo / Fisiopatología / Causa (75 pts, 2 estrellas)
+    let clue2Text = '';
+    if (maskedSentences.length >= 2) {
+      clue2Text = `Mecanismo o base funcional: ${maskedSentences[0]}`;
+    } else {
+      const words = maskedDef.split(' ');
+      if (words.length > 6) {
+        const half = Math.ceil(words.length / 2);
+        clue2Text = `Mecanismo o principio activo: ${words.slice(0, half).join(' ')}...`;
+      } else {
+        clue2Text = `Mecanismo operativo: Opera como factor determinante en la estructura conceptual de ${categoryName}.`;
+      }
+    }
+
+    // Pista 3: Signo patognomónico / Hallazgo característico (50 pts, 1 estrella)
+    let clue3Text = '';
+    if (maskedSentences.length >= 3) {
+      clue3Text = `Signo patognomónico o rasgo distintivo: ${maskedSentences[1]}`;
+    } else if (maskedSentences.length === 2) {
+      clue3Text = `Hallazgo o criterio específico: ${maskedSentences[1]}`;
+    } else {
+      const words = maskedDef.split(' ');
+      if (words.length > 6) {
+        const half = Math.ceil(words.length / 2);
+        clue3Text = `Criterio distintivo: ...${words.slice(half).join(' ')}`;
+      } else {
+        clue3Text = `Hallazgo distintivo: Posee características propias y relaciones normativas que la diferencian de conceptos similares.`;
+      }
+    }
+
+    // Pista 4: Tratamiento / Dato definitorio / Aplicación (25 pts, 1 estrella)
+    const clue4Text = `Dato definitorio esencial: ${maskedDef}`;
+
+    const clues: GuessWhoClue[] = [
+      {
+        level: 1,
+        title: 'Pista 1: Contexto y Dominio',
+        badge: 'Generalidad',
+        text: clue1Text,
+        unlockedScore: 100,
+        stars: 3,
+      },
+      {
+        level: 2,
+        title: 'Pista 2: Mecanismo o Causa',
+        badge: 'Funcionamiento',
+        text: clue2Text,
+        unlockedScore: 75,
+        stars: 2,
+      },
+      {
+        level: 3,
+        title: 'Pista 3: Signo Patognomónico',
+        badge: 'Rasgo Clave',
+        text: clue3Text,
+        unlockedScore: 50,
+        stars: 1,
+      },
+      {
+        level: 4,
+        title: 'Pista 4: Definición Reveladora',
+        badge: 'Definición',
+        text: clue4Text,
+        unlockedScore: 25,
+        stars: 1,
+      },
+    ];
+
+    // Distractores para las 4 opciones
+    const otherCards = deck.filter(c => c.id !== card.id && c.term.trim() !== card.term.trim());
+    const shuffledOthers = otherCards.sort(() => Math.random() - 0.5).map(c => c.term);
+    const distractors: string[] = [];
+
+    for (const term of shuffledOthers) {
+      if (distractors.length < 3 && !distractors.includes(term)) {
+        distractors.push(term);
+      }
+    }
+
+    if (distractors.length < 3 && questions) {
+      for (const q of questions) {
+        if (q.topic && q.topic !== card.term && !distractors.includes(q.topic)) {
+          distractors.push(q.topic);
+          if (distractors.length === 3) break;
+        }
+      }
+    }
+
+    const fallbacks = ['Concepto Complementario A', 'Concepto Complementario B', 'Concepto Complementario C'];
+    while (distractors.length < 3) {
+      const fb = fallbacks[distractors.length];
+      if (!distractors.includes(fb) && fb !== card.term) {
+        distractors.push(fb);
+      }
+    }
+
+    const options = [card.term, ...distractors].sort(() => Math.random() - 0.5);
+
+    return {
+      id: card.id || `guess-case-${idx}`,
+      targetTerm: card.term,
+      fullDefinition: card.definition,
+      clues,
+      options,
+    };
+  });
+};
 
 interface FlashcardsViewProps {
   kit: StudyKit;
@@ -39,7 +221,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
   const [archivedCards, setArchivedCards] = useState<Flashcard[]>(kit.archivedFlashcards || []);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [gameMode, setGameMode] = useState<'study' | 'matching'>('study');
+  const [gameMode, setGameMode] = useState<'study' | 'guess-who'>('study');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAddingMore, setIsAddingMore] = useState(false);
   const [isSwappingMastered, setIsSwappingMastered] = useState(false);
@@ -53,29 +235,19 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
   const [targetCount, setTargetCount] = useState<number>(10);
   const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
 
-  // Term Matching Game State (Modo Dinámico sin Scroll estilo Duolingo/Quizlet)
-  const [matchDeck, setMatchDeck] = useState<Flashcard[]>([]);
-  const [activeTerms, setActiveTerms] = useState<{ id: string; term: string }[]>([]);
-  const [activeDefs, setActiveDefs] = useState<{ id: string; definition: string }[]>([]);
-  const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
-  const [selectedDef, setSelectedDef] = useState<string | null>(null);
-  const [matchedIds, setMatchedIds] = useState<string[]>([]);
-  const [wrongPair, setWrongPair] = useState<{ termId: string; defId: string } | null>(null);
-  const [correctPair, setCorrectPair] = useState<string | null>(null);
-  const [timerSeconds, setTimerSeconds] = useState<number>(0);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
-  const [streak, setStreak] = useState<number>(0);
-  const [bestStreak, setBestStreak] = useState<number>(0);
-  const [mistakesCount, setMistakesCount] = useState<number>(0);
-  const [isGameComplete, setIsGameComplete] = useState<boolean>(false);
-  const [bestTime, setBestTime] = useState<number | null>(() => {
-    try {
-      const saved = localStorage.getItem(`thea_match_best_${kit.id}`);
-      return saved ? parseFloat(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  // Estados del juego Adivina Quien / Pistas Progresivas
+  const [guessWhoCases, setGuessWhoCases] = useState<GuessWhoCase[]>([]);
+  const [currentCaseIdx, setCurrentCaseIdx] = useState<number>(0);
+  const [revealedCluesCount, setRevealedCluesCount] = useState<number>(1);
+  const [selectedGuessOption, setSelectedGuessOption] = useState<string | null>(null);
+  const [wrongOptions, setWrongOptions] = useState<string[]>([]);
+  const [isCaseSolved, setIsCaseSolved] = useState<boolean>(false);
+  const [caseScoreEarned, setCaseScoreEarned] = useState<number>(0);
+  const [caseStarsEarned, setCaseStarsEarned] = useState<number>(0);
+  const [totalScore, setTotalScore] = useState<number>(0);
+  const [totalStars, setTotalStars] = useState<number>(0);
+  const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
+  const [casesHistory, setCasesHistory] = useState<CaseHistoryItem[]>([]);
 
   const showNotification = (msg: string) => {
     setStatusNotification(msg);
@@ -305,150 +477,95 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
     }
   };
 
-  // Cronómetro de alta precisión en segundos con decimales
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isTimerRunning && !isGameComplete && gameMode === 'matching') {
-      const startMs = Date.now() - timerSeconds * 1000;
-      interval = setInterval(() => {
-        setTimerSeconds(+((Date.now() - startMs) / 1000).toFixed(1));
-      }, 100);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isTimerRunning, isGameComplete, gameMode]);
-
-  const formatMatchTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    const tenths = Math.floor((secs % 1) * 10);
-    return `${m > 0 ? `${m}m ` : ''}${s < 10 && m > 0 ? '0' : ''}${s}.${tenths}s`;
-  };
-
-  // Inicializar o reiniciar partida de Match (4 pares activos a la vez)
-  const startNewMatchGame = () => {
+  // Inicializar o reiniciar partida de Adivina Quien (hasta 5 casos progresivos)
+  const startNewGuessWhoGame = () => {
     if (cards.length === 0) return;
-    const shuffled = [...cards].sort(() => Math.random() - 0.5);
-    setMatchDeck(shuffled);
-    const initialBatch = shuffled.slice(0, Math.min(4, shuffled.length));
-
-    const terms = [...initialBatch]
-      .map(c => ({ id: c.id, term: c.term }))
-      .sort(() => Math.random() - 0.5);
-
-    const defs = [...initialBatch]
-      .map(c => ({ id: c.id, definition: c.definition }))
-      .sort(() => Math.random() - 0.5);
-
-    setActiveTerms(terms);
-    setActiveDefs(defs);
-    setMatchedIds([]);
-    setSelectedTerm(null);
-    setSelectedDef(null);
-    setWrongPair(null);
-    setCorrectPair(null);
-    setTimerSeconds(0);
-    setIsTimerRunning(true);
-    setStreak(0);
-    setBestStreak(0);
-    setMistakesCount(0);
-    setIsGameComplete(false);
+    const cases = buildGuessWhoCases(cards, kit.title, kit.category, kit.questions);
+    setGuessWhoCases(cases);
+    setCurrentCaseIdx(0);
+    setRevealedCluesCount(1);
+    setSelectedGuessOption(null);
+    setWrongOptions([]);
+    setIsCaseSolved(false);
+    setCaseScoreEarned(0);
+    setCaseStarsEarned(0);
+    setTotalScore(0);
+    setTotalStars(0);
+    setIsGameFinished(false);
+    setCasesHistory([]);
   };
 
-  // Auto-iniciar si entra a matching y no hay tarjetas activas
+  // Auto-iniciar si entra al modo Adivina Quien y no hay casos cargados
   useEffect(() => {
-    if (gameMode === 'matching' && activeTerms.length === 0 && cards.length > 0 && !isGameComplete) {
-      startNewMatchGame();
+    if (gameMode === 'guess-who' && guessWhoCases.length === 0 && cards.length > 0 && !isGameFinished) {
+      startNewGuessWhoGame();
     }
   }, [gameMode, cards.length]);
 
-  const handleTermClick = (id: string) => {
-    if (isGameComplete || correctPair || wrongPair) return;
-    if (selectedTerm === id) {
-      setSelectedTerm(null);
-      return;
-    }
-    setSelectedTerm(id);
-    if (selectedDef) {
-      evaluateMatch(id, selectedDef);
-    }
+  // Revelar la siguiente pista disponible
+  const handleRevealNextClue = () => {
+    if (isCaseSolved || revealedCluesCount >= 4) return;
+    setRevealedCluesCount(prev => Math.min(4, prev + 1));
+    playAudioFeedback('correct');
   };
 
-  const handleDefClick = (id: string) => {
-    if (isGameComplete || correctPair || wrongPair) return;
-    if (selectedDef === id) {
-      setSelectedDef(null);
-      return;
-    }
-    setSelectedDef(id);
-    if (selectedTerm) {
-      evaluateMatch(selectedTerm, id);
-    }
-  };
+  // Seleccionar una opción candidata
+  const handleSelectGuessOption = (option: string) => {
+    if (isCaseSolved || wrongOptions.includes(option)) return;
+    const currentCase = guessWhoCases[currentCaseIdx];
+    if (!currentCase) return;
 
-  const evaluateMatch = (termId: string, defId: string) => {
-    if (termId === defId) {
-      // Par correcto: feedback visual y sonoro inmediato
-      setCorrectPair(termId);
+    if (option === currentCase.targetTerm) {
+      // Deducción correcta
+      const baseScores = [100, 75, 50, 25];
+      const baseStars = [3, 2, 1, 1];
+      const clueIdx = Math.max(0, Math.min(3, revealedCluesCount - 1));
+      const baseScore = baseScores[clueIdx];
+      const stars = baseStars[clueIdx];
+
+      // Penalización de 10 pts por cada intento fallido previo en este caso
+      const penalty = wrongOptions.length * 10;
+      const finalScore = Math.max(10, baseScore - penalty);
+
+      setIsCaseSolved(true);
+      setSelectedGuessOption(option);
+      setCaseScoreEarned(finalScore);
+      setCaseStarsEarned(stars);
+      setTotalScore(prev => prev + finalScore);
+      setTotalStars(prev => prev + stars);
+
+      setCasesHistory(prev => [
+        ...prev,
+        {
+          term: currentCase.targetTerm,
+          score: finalScore,
+          stars,
+          cluesUsed: revealedCluesCount,
+          mistakes: wrongOptions.length,
+        },
+      ]);
+
       playAudioFeedback('correct');
-      setStreak(prev => {
-        const next = prev + 1;
-        setBestStreak(b => Math.max(b, next));
-        return next;
-      });
-
-      setTimeout(() => {
-        const nextMatched = [...matchedIds, termId];
-        setMatchedIds(nextMatched);
-
-        const isFinished = nextMatched.length === cards.length;
-        if (isFinished) {
-          setIsTimerRunning(false);
-          setIsGameComplete(true);
-          playAudioFeedback('victory');
-
-          try {
-            const savedBest = localStorage.getItem(`thea_match_best_${kit.id}`);
-            const currentBest = savedBest ? parseFloat(savedBest) : null;
-            if (!currentBest || timerSeconds < currentBest) {
-              localStorage.setItem(`thea_match_best_${kit.id}`, timerSeconds.toString());
-              setBestTime(timerSeconds);
-            }
-          } catch {
-            // Manejo silencioso de localStorage
-          }
-        } else {
-          // Reposición sin mover los demás elementos
-          const currentlyActiveIds = new Set(activeTerms.map(t => t.id));
-          const matchedSet = new Set(nextMatched);
-          const nextCard = matchDeck.find(c => !currentlyActiveIds.has(c.id) && !matchedSet.has(c.id));
-
-          if (nextCard) {
-            setActiveTerms(prev => prev.map(t => t.id === termId ? { id: nextCard.id, term: nextCard.term } : t));
-            setActiveDefs(prev => prev.map(d => d.id === termId ? { id: nextCard.id, definition: nextCard.definition } : d));
-          } else {
-            setActiveTerms(prev => prev.filter(t => t.id !== termId));
-            setActiveDefs(prev => prev.filter(d => d.id !== termId));
-          }
-        }
-
-        setSelectedTerm(null);
-        setSelectedDef(null);
-        setCorrectPair(null);
-      }, 320);
     } else {
-      // Par incorrecto: shake y penalización
-      setWrongPair({ termId, defId });
+      // Deducción errónea: penalización visual y sonora, deshabilita la opción
+      setWrongOptions(prev => [...prev, option]);
       playAudioFeedback('wrong');
-      setStreak(0);
-      setMistakesCount(m => m + 1);
+    }
+  };
 
-      setTimeout(() => {
-        setSelectedTerm(null);
-        setSelectedDef(null);
-        setWrongPair(null);
-      }, 450);
+  // Avanzar al siguiente caso o finalizar partida
+  const handleNextCase = () => {
+    if (currentCaseIdx + 1 < guessWhoCases.length) {
+      setCurrentCaseIdx(prev => prev + 1);
+      setRevealedCluesCount(1);
+      setSelectedGuessOption(null);
+      setWrongOptions([]);
+      setIsCaseSolved(false);
+      setCaseScoreEarned(0);
+      setCaseStarsEarned(0);
+    } else {
+      setIsGameFinished(true);
+      playAudioFeedback('victory');
     }
   };
 
@@ -465,18 +582,17 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
     huge: 'text-2xl sm:text-3xl md:text-4xl font-semibold leading-relaxed text-slate-50',
   }[textSize];
 
-  if (gameMode === 'matching') {
+  if (gameMode === 'guess-who') {
+    const currentCase = guessWhoCases[currentCaseIdx];
+
     return (
       <div className="max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 h-[calc(100vh-4.5rem)] max-h-[860px] flex flex-col justify-between select-none overflow-hidden animate-fadeIn relative">
-        {/* Cabecera del Juego: Botón Salir, Título, Cronómetro, Racha, Récord y Reiniciar */}
+        {/* Cabecera del Juego: Botón Salir, Título, Contador de Casos, Marcador y Reiniciar */}
         <div className="flex items-center justify-between gap-2 sm:gap-4 shrink-0 pb-2 border-b border-thea-border/80">
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={() => {
-                setGameMode('study');
-                setIsTimerRunning(false);
-              }}
+              onClick={() => setGameMode('study')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
               title="Volver a la vista de estudio de Flashcards"
             >
@@ -485,49 +601,39 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
             </button>
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-1.5">
-                <Gamepad2 className="w-5 h-5 text-amber-400" />
-                <span>Match Contrareloj</span>
+                <HelpCircle className="w-5 h-5 text-amber-400" />
+                <span>Adivina Quién • Pistas Progresivas</span>
               </h2>
             </div>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Cronómetro Digital */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#20183d] border border-violet-500/40 text-violet-200 font-mono text-xs sm:text-sm font-extrabold shadow-inner">
-              <Timer className="w-4 h-4 text-violet-400" />
-              <span>{formatMatchTime(timerSeconds)}</span>
-            </div>
-
-            {/* Racha de Aciertos */}
-            <div
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-extrabold transition-all ${
-                streak > 1
-                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 ring-1 ring-amber-400/40 animate-pulse'
-                  : 'bg-thea-surface border-thea-border text-slate-400'
-              }`}
-              title="Racha de emparejamientos seguidos sin fallos"
-            >
-              <Flame className={`w-3.5 h-3.5 ${streak > 1 ? 'fill-amber-400 text-amber-400' : 'text-slate-500'}`} />
-              <span>{streak}x</span>
-            </div>
-
-            {/* Mejor Récord */}
-            {bestTime !== null && (
-              <div
-                className="hidden md:flex items-center gap-1 text-xs font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2.5 py-1.5 rounded-xl"
-                title="Tu mejor récord personal en este kit"
-              >
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                <span>{formatMatchTime(bestTime)}</span>
+            {/* Indicador de Caso */}
+            {guessWhoCases.length > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#20183d] border border-violet-500/40 text-violet-200 font-mono text-xs font-extrabold shadow-inner">
+                <Layers className="w-3.5 h-3.5 text-violet-400" />
+                <span>Caso {currentCaseIdx + 1} de {guessWhoCases.length}</span>
               </div>
             )}
+
+            {/* Puntuación Acumulada */}
+            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-extrabold shadow-sm">
+              <Award className="w-3.5 h-3.5 text-amber-400" />
+              <span>{totalScore} pts</span>
+            </div>
+
+            {/* Estrellas Acumuladas */}
+            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-300 text-xs font-extrabold shadow-sm">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span>{totalStars}</span>
+            </div>
 
             {/* Reiniciar Partida */}
             <button
               type="button"
-              onClick={startNewMatchGame}
+              onClick={startNewGuessWhoGame}
               className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border hover:border-violet-500/40 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1"
-              title="Reiniciar y barajar de nuevo"
+              title="Reiniciar y barajar nuevos casos"
             >
               <RotateCcw className="w-3.5 h-3.5 text-slate-400 hover:rotate-180 transition-transform" />
               <span className="hidden lg:inline">Reiniciar</span>
@@ -535,30 +641,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
           </div>
         </div>
 
-        {/* Barra de Progreso del Mazo */}
-        <div className="shrink-0 my-1.5">
-          <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-1 px-0.5">
-            <span>Progreso del Mazo</span>
-            <span className="text-violet-300">
-              {matchedIds.length} / {cards.length} pares completados ({cards.length > 0 ? Math.round((matchedIds.length / cards.length) * 100) : 0}%)
-            </span>
-          </div>
-          <div className="w-full h-1.5 rounded-full bg-[#1b1435] overflow-hidden border border-violet-900/30">
-            <div
-              className="h-full bg-gradient-to-r from-violet-600 via-indigo-500 to-emerald-400 transition-all duration-300 rounded-full"
-              style={{ width: `${cards.length > 0 ? Math.min(100, Math.round((matchedIds.length / cards.length) * 100)) : 0}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Tablero de Juego (2 Columnas Simétricas ajustadas a la altura de la ventana, sin scroll) */}
         {cards.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3">
             <div className="w-14 h-14 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-300">
               <Layers className="w-7 h-7" />
             </div>
             <h3 className="text-base font-bold text-white">No hay tarjetas disponibles</h3>
-            <p className="text-xs text-slate-400 max-w-sm">Genera tarjetas primero en el Modo Flashcards para poder jugar a emparejar conceptos.</p>
+            <p className="text-xs text-slate-400 max-w-sm">Genera tarjetas primero en el Modo Flashcards para poder jugar a Adivina Quién con pistas progresivas.</p>
             <button
               type="button"
               onClick={() => setGameMode('study')}
@@ -567,175 +656,313 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
               Ir a Modo Flashcards
             </button>
           </div>
-        ) : (
-          <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5 sm:gap-4 my-1.5">
-            {/* Columna Izquierda: Conceptos */}
-            <div className="flex flex-col h-full min-h-0">
-              <div className="flex items-center justify-between pb-1 px-1 shrink-0">
-                <span className="text-[11px] sm:text-xs font-bold text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-violet-400" />
-                  Conceptos ({activeTerms.length})
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium">Toca para seleccionar</span>
-              </div>
-              <div className="flex-1 min-h-0 grid grid-rows-4 gap-2 sm:gap-2.5 h-[calc(100%-1.75rem)]">
-                {activeTerms.map(item => {
-                  const isSelected = selectedTerm === item.id;
-                  const isWrong = wrongPair?.termId === item.id;
-                  const isCorrect = correctPair === item.id;
-
-                  let cardStyle = 'border-thea-border/80 bg-[#181138]/85 hover:border-violet-500/60 hover:bg-[#20174a] text-slate-200';
-                  if (isSelected) cardStyle = 'border-amber-400 bg-amber-400/20 text-amber-200 ring-2 ring-amber-400/60 shadow-lg shadow-amber-500/20 scale-[1.01]';
-                  if (isCorrect) cardStyle = 'border-emerald-400 bg-emerald-950/80 text-emerald-200 ring-2 ring-emerald-400 scale-[1.02] animate-cardCorrect';
-                  if (isWrong) cardStyle = 'border-rose-500 bg-rose-950/80 text-rose-200 ring-2 ring-rose-500 animate-cardError';
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={Boolean(correctPair)}
-                      onClick={() => handleTermClick(item.id)}
-                      className={`w-full h-full min-h-0 p-2 sm:p-3 rounded-2xl border transition-all duration-150 flex items-center justify-center text-center cursor-pointer select-none shadow-sm ${cardStyle}`}
-                    >
-                      <span className="font-extrabold text-xs sm:text-sm md:text-base leading-snug line-clamp-3 sm:line-clamp-4">
-                        <FormattedText text={item.term} inlineOnly={true} />
-                      </span>
-                    </button>
-                  );
-                })}
-                {/* Slots vacíos de soporte para mantener cuadrícula fija cuando se agota la baraja */}
-                {Array.from({ length: Math.max(0, 4 - activeTerms.length) }).map((_, i) => (
-                  <div
-                    key={`placeholder-term-${i}`}
-                    className="w-full h-full min-h-0 rounded-2xl border border-dashed border-violet-900/20 bg-violet-950/5 opacity-20 pointer-events-none"
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Columna Derecha: Definiciones */}
-            <div className="flex flex-col h-full min-h-0">
-              <div className="flex items-center justify-between pb-1 px-1 shrink-0">
-                <span className="text-[11px] sm:text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Target className="w-3.5 h-3.5 text-purple-400" />
-                  Definiciones ({activeDefs.length})
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium">Empareja el concepto</span>
-              </div>
-              <div className="flex-1 min-h-0 grid grid-rows-4 gap-2 sm:gap-2.5 h-[calc(100%-1.75rem)]">
-                {activeDefs.map(item => {
-                  const isSelected = selectedDef === item.id;
-                  const isWrong = wrongPair?.defId === item.id;
-                  const isCorrect = correctPair === item.id;
-
-                  let cardStyle = 'border-thea-border/80 bg-[#181138]/85 hover:border-purple-500/60 hover:bg-[#20174a] text-slate-200';
-                  if (isSelected) cardStyle = 'border-amber-400 bg-amber-400/20 text-amber-200 ring-2 ring-amber-400/60 shadow-lg shadow-amber-500/20 scale-[1.01]';
-                  if (isCorrect) cardStyle = 'border-emerald-400 bg-emerald-950/80 text-emerald-200 ring-2 ring-emerald-400 scale-[1.02] animate-cardCorrect';
-                  if (isWrong) cardStyle = 'border-rose-500 bg-rose-950/80 text-rose-200 ring-2 ring-rose-500 animate-cardError';
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={Boolean(correctPair)}
-                      onClick={() => handleDefClick(item.id)}
-                      title={item.definition}
-                      className={`w-full h-full min-h-0 p-2 sm:p-3 rounded-2xl border transition-all duration-150 flex items-center justify-center text-center cursor-pointer select-none shadow-sm ${cardStyle}`}
-                    >
-                      <span className="font-medium text-[11px] sm:text-xs md:text-sm leading-snug sm:leading-relaxed text-slate-200 line-clamp-4 sm:line-clamp-5">
-                        <FormattedText text={item.definition} inlineOnly={true} />
-                      </span>
-                    </button>
-                  );
-                })}
-                {/* Slots vacíos de soporte para mantener cuadrícula fija cuando se agota la baraja */}
-                {Array.from({ length: Math.max(0, 4 - activeDefs.length) }).map((_, i) => (
-                  <div
-                    key={`placeholder-def-${i}`}
-                    className="w-full h-full min-h-0 rounded-2xl border border-dashed border-purple-900/20 bg-purple-950/5 opacity-20 pointer-events-none"
-                  />
-                ))}
-              </div>
-            </div>
+        ) : !currentCase ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
           </div>
+        ) : (
+          <>
+            {/* Barra de Progreso de Casos */}
+            <div className="shrink-0 my-1">
+              <div className="flex items-center gap-1.5">
+                {guessWhoCases.map((c, idx) => {
+                  const isDone = idx < currentCaseIdx || (idx === currentCaseIdx && isCaseSolved);
+                  const isCurrent = idx === currentCaseIdx && !isCaseSolved;
+                  return (
+                    <div
+                      key={c.id}
+                      className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                        isDone
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                          : isCurrent
+                          ? 'bg-amber-400 animate-pulse'
+                          : 'bg-violet-950/60 border border-violet-900/40'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tarjeta Central: Entidad Misteriosa */}
+            <div className="shrink-0 my-1.5">
+              {!isCaseSolved ? (
+                <div className="h-24 sm:h-26 rounded-2xl border border-violet-500/40 bg-gradient-to-r from-[#19103c] via-[#21164e] to-[#160d33] p-3 sm:p-4 flex items-center justify-between shadow-lg relative overflow-hidden">
+                  <div className="flex items-center gap-3 sm:gap-4 z-10">
+                    <div className="w-12 h-12 rounded-2xl bg-violet-600/30 border border-violet-400/40 flex items-center justify-center text-violet-300 shadow-inner">
+                      <HelpCircle className="w-6 h-6 text-amber-400 animate-pulse" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-violet-300 block">
+                        Entidad Oculta • Deducción en Proceso
+                      </span>
+                      <h3 className="text-base sm:text-lg font-black text-white">
+                        ¿Quién es esta entidad misteriosa?
+                      </h3>
+                      <p className="text-[11px] text-slate-300">
+                        {wrongOptions.length > 0
+                          ? `Has tenido ${wrongOptions.length} intento(s) fallido(s) (-${wrongOptions.length * 10} pts). Puedes arriesgar otra opción o pedir más pistas.`
+                          : 'Arriesga una opción candidata o desbloquea pistas progresivas para acotar tu deducción.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="hidden sm:flex flex-col items-end z-10 shrink-0">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Recompensa actual</span>
+                    <span className="text-lg font-black text-amber-300">
+                      {currentCase.clues[revealedCluesCount - 1]?.unlockedScore || 100} pts
+                    </span>
+                    <div className="flex items-center gap-0.5 mt-0.5">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-3.5 h-3.5 ${
+                            i < (currentCase.clues[revealedCluesCount - 1]?.stars || 1)
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'text-slate-600'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-24 sm:h-26 rounded-2xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-950/90 via-[#0e2920] to-teal-950/90 p-3 sm:p-4 flex items-center justify-between shadow-[0_0_25px_rgba(52,211,153,0.3)] animate-cardCorrect">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300">
+                      <Trophy className="w-6 h-6 text-emerald-300 animate-iconPop" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-emerald-300 block">
+                        ¡Deducción Acertada!
+                      </span>
+                      <h3 className="text-lg sm:text-xl md:text-2xl font-black text-white drop-shadow">
+                        <FormattedText text={currentCase.targetTerm} inlineOnly={true} />
+                      </h3>
+                      <p className="text-[11px] text-emerald-200">
+                        Resuelto usando {revealedCluesCount} de 4 pistas {wrongOptions.length > 0 ? `con ${wrongOptions.length} fallo(s)` : 'sin fallos'}.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end shrink-0">
+                    <span className="text-base sm:text-xl font-black text-emerald-300">
+                      +{caseScoreEarned} pts
+                    </span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < caseStarsEarned ? 'fill-amber-400 text-amber-400' : 'text-slate-700'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tablero Central: Cuadrícula 2x2 de Pistas Progresivas */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 my-1.5">
+              {currentCase.clues.map((clue) => {
+                const isUnlocked = clue.level <= revealedCluesCount;
+                const isNextToUnlock = clue.level === revealedCluesCount + 1 && !isCaseSolved;
+
+                if (isUnlocked) {
+                  return (
+                    <div
+                      key={clue.level}
+                      className="h-full min-h-0 rounded-2xl border border-violet-500/40 bg-[#181138]/95 p-2.5 sm:p-3 flex flex-col justify-between shadow-sm animate-fadeIn"
+                    >
+                      <div className="flex items-center justify-between pb-1 border-b border-violet-900/40 shrink-0">
+                        <span className="text-[11px] font-extrabold text-violet-300 flex items-center gap-1.5 uppercase tracking-wide">
+                          {clue.level === 1 && <BookOpen className="w-3.5 h-3.5 text-violet-400" />}
+                          {clue.level === 2 && <Layers className="w-3.5 h-3.5 text-indigo-400" />}
+                          {clue.level === 3 && <Target className="w-3.5 h-3.5 text-amber-400" />}
+                          {clue.level === 4 && <Sparkles className="w-3.5 h-3.5 text-emerald-400" />}
+                          {clue.title}
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
+                          {clue.unlockedScore} pts ({clue.stars}★)
+                        </span>
+                      </div>
+                      <div className="flex-1 min-h-0 flex items-center pt-1.5">
+                        <p className="text-xs sm:text-[13px] leading-snug sm:leading-relaxed text-slate-200 line-clamp-4">
+                          <FormattedText text={clue.text} inlineOnly={true} />
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (isNextToUnlock) {
+                  return (
+                    <button
+                      key={clue.level}
+                      type="button"
+                      onClick={handleRevealNextClue}
+                      className="h-full min-h-0 rounded-2xl border-2 border-dashed border-violet-500/50 bg-violet-950/20 hover:bg-violet-900/30 hover:border-violet-400 p-2.5 sm:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all active:scale-[0.98] group"
+                    >
+                      <Unlock className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform mb-1" />
+                      <span className="text-xs sm:text-sm font-extrabold text-white">
+                        Desbloquear {clue.title}
+                      </span>
+                      <span className="text-[10px] text-violet-300 mt-0.5">
+                        La recompensa pasará a {clue.unlockedScore} pts ({clue.stars}★)
+                      </span>
+                    </button>
+                  );
+                }
+
+                return (
+                  <div
+                    key={clue.level}
+                    className="h-full min-h-0 rounded-2xl border border-violet-900/30 bg-[#120a2a]/50 p-2.5 sm:p-3 flex flex-col items-center justify-center text-center opacity-40 select-none"
+                  >
+                    <Lock className="w-4 h-4 text-slate-500 mb-1" />
+                    <span className="text-xs font-bold text-slate-400">{clue.title}</span>
+                    <span className="text-[10px] text-slate-500">Bloqueada ({clue.unlockedScore} pts)</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Grid 2x2 Inferior de Opciones Candidatas */}
+            <div className="shrink-0 grid grid-cols-2 gap-2 sm:gap-2.5 my-1.5">
+              {currentCase.options.map((option, idx) => {
+                const isWrong = wrongOptions.includes(option);
+                const isCorrect = isCaseSolved && option === currentCase.targetTerm;
+                const isChosenWinner = selectedGuessOption === option;
+
+                let btnStyle = 'border-thea-border/80 bg-[#181138]/90 hover:border-violet-500/60 hover:bg-[#20174a] text-slate-200 cursor-pointer active:scale-[0.99]';
+                if (isWrong) {
+                  btnStyle = 'border-rose-900/60 bg-rose-950/30 text-rose-300/60 line-through opacity-50 cursor-not-allowed';
+                }
+                if (isCorrect || isChosenWinner) {
+                  btnStyle = 'border-emerald-400 bg-emerald-950/90 text-emerald-200 ring-2 ring-emerald-400 font-extrabold shadow-md';
+                }
+
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={isCaseSolved || isWrong}
+                    onClick={() => handleSelectGuessOption(option)}
+                    className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex items-center justify-center text-center shadow-sm min-h-[50px] sm:min-h-[56px] ${btnStyle}`}
+                  >
+                    {isCorrect && <Check className="w-4 h-4 text-emerald-400 mr-1.5 shrink-0" />}
+                    <span className="text-xs sm:text-sm font-bold line-clamp-2 leading-snug">
+                      <FormattedText text={option} inlineOnly={true} />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Barra Inferior: Botón de Siguiente Caso o Guía */}
+            <div className="shrink-0 pt-1.5 border-t border-thea-border/60 flex items-center justify-between text-[11px] text-slate-400 px-1">
+              {isCaseSolved ? (
+                <button
+                  type="button"
+                  onClick={handleNextCase}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <span>
+                    {currentCaseIdx + 1 < guessWhoCases.length
+                      ? 'Continuar al Siguiente Caso'
+                      : 'Ver Resultados Finales de la Partida'}
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <div className="w-full flex items-center justify-between">
+                  <span className="truncate mr-2">
+                    Toca una opción para adivinar. Si fallas se tachará (-10 pts) y podrás seguir deduciendo.
+                  </span>
+                  <span className="shrink-0 font-bold text-slate-400">
+                    Fallos en caso: <span className={wrongOptions.length > 0 ? 'text-rose-400' : 'text-slate-400'}>{wrongOptions.length}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
-        {/* Barra Inferior: Guía y Contador de Fallos */}
-        <div className="shrink-0 pt-2 border-t border-thea-border/60 flex items-center justify-between text-[11px] text-slate-400 px-1">
-          <span className="truncate mr-2">
-            Toca un concepto y su definición. Los pares acertados desaparecen y se reponen automáticamente hasta agotar el mazo.
-          </span>
-          <span className="shrink-0 font-bold text-slate-400">
-            Fallos: <span className={mistakesCount > 0 ? 'text-rose-400' : 'text-slate-400'}>{mistakesCount}</span>
-          </span>
-        </div>
-
-        {/* Modal de Victoria (Fin del Juego) */}
-        {isGameComplete && (
+        {/* Modal de Victoria Final (5 casos completados) */}
+        {isGameFinished && (
           <div className="absolute inset-0 z-30 bg-[#0f0a21]/95 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-            <div className="max-w-md w-full bg-[#181138] border border-emerald-500/40 rounded-3xl p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden animate-feedbackPop">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center mx-auto mb-4 text-emerald-300 shadow-lg shadow-emerald-500/10">
+            <div className="max-w-md w-full bg-[#181138] border border-emerald-500/40 rounded-3xl p-6 sm:p-7 text-center shadow-2xl relative overflow-hidden animate-feedbackPop">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center mx-auto mb-3 text-emerald-300 shadow-lg shadow-emerald-500/10">
                 <Trophy className="w-8 h-8 animate-iconPop" />
               </div>
               <h3 className="text-xl sm:text-2xl font-black text-white mb-1">
-                ¡Baraja Completada!
+                ¡Partida de Deducción Completada!
               </h3>
-              <p className="text-xs sm:text-sm text-slate-300 mb-6">
-                Has emparejado todos los conceptos y definiciones con éxito.
+              <p className="text-xs sm:text-sm text-slate-300 mb-5">
+                Has resuelto los {guessWhoCases.length} casos de estudio con razonamiento progresivo.
               </p>
 
               {/* Grid de Métricas */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
+              <div className="grid grid-cols-2 gap-2.5 mb-5">
                 <div className="p-3 rounded-2xl bg-violet-950/40 border border-violet-500/30">
-                  <span className="text-[10px] uppercase font-bold text-violet-300 block mb-1">
-                    Tiempo
+                  <span className="text-[10px] uppercase font-bold text-violet-300 block mb-0.5">
+                    Puntos Obtenidos
                   </span>
-                  <span className="text-base sm:text-lg font-black text-white">
-                    {formatMatchTime(timerSeconds)}
+                  <span className="text-lg sm:text-xl font-black text-white">
+                    {totalScore} / {guessWhoCases.length * 100}
                   </span>
                 </div>
                 <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/30">
-                  <span className="text-[10px] uppercase font-bold text-amber-300 block mb-1">
-                    Mejor Racha
+                  <span className="text-[10px] uppercase font-bold text-amber-300 block mb-0.5">
+                    Estrellas Totales
                   </span>
-                  <span className="text-base sm:text-lg font-black text-amber-300 flex items-center justify-center gap-0.5">
-                    <Flame className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    {bestStreak}x
-                  </span>
-                </div>
-                <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/30">
-                  <span className="text-[10px] uppercase font-bold text-emerald-300 block mb-1">
-                    Precisión
-                  </span>
-                  <span className="text-base sm:text-lg font-black text-emerald-300">
-                    {Math.round((cards.length / Math.max(cards.length, cards.length + mistakesCount)) * 100)}%
+                  <span className="text-lg sm:text-xl font-black text-amber-300 flex items-center justify-center gap-1">
+                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    {totalStars} / {guessWhoCases.length * 3}
                   </span>
                 </div>
               </div>
 
-              {bestTime !== null && timerSeconds <= bestTime && (
-                <div className="mb-6 py-2 px-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>¡Nuevo Récord Personal!</span>
-                </div>
-              )}
+              {/* Desglose de Casos */}
+              <div className="max-h-36 overflow-y-auto pr-1 space-y-1.5 mb-5 text-left">
+                {casesHistory.map((item, i) => (
+                  <div
+                    key={i}
+                    className="p-2 rounded-xl bg-violet-950/20 border border-violet-900/30 flex items-center justify-between text-xs"
+                  >
+                    <div className="truncate mr-2">
+                      <span className="font-bold text-slate-200">#{i + 1} {item.term}</span>
+                      <span className="text-[10px] text-slate-400 block">
+                        Pistas: {item.cluesUsed} • Errores: {item.mistakes}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-bold text-emerald-300">+{item.score} pts</span>
+                      <div className="flex items-center">
+                        {Array.from({ length: item.stars }).map((_, s) => (
+                          <Star key={s} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               {/* Botones de Acción */}
-              <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex flex-col sm:flex-row gap-2.5">
                 <button
                   type="button"
-                  onClick={startNewMatchGame}
+                  onClick={startNewGuessWhoGame}
                   className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-950/40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  <span>Jugar Otra Vez</span>
+                  <span>Jugar Nueva Partida</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setGameMode('study');
-                    setIsTimerRunning(false);
-                  }}
+                  onClick={() => setGameMode('study')}
                   className="flex-1 py-3 px-4 rounded-xl bg-thea-surfaceLight hover:bg-thea-surface border border-thea-border text-slate-200 hover:text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                 >
                   <span>Volver a Flashcards</span>
@@ -764,7 +991,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
           </div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Layers className="w-6 h-6 text-violet-400" />
-            <span>Flashcards & Juegos Contrareloj Study</span>
+            <span>Flashcards & Adivina Quién</span>
           </h1>
         </div>
 
@@ -821,13 +1048,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
           <button
             type="button"
             onClick={() => {
-              setGameMode('matching');
-              startNewMatchGame();
+              setGameMode('guess-who');
+              startNewGuessWhoGame();
             }}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/40 text-xs font-bold text-violet-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
           >
-            <Gamepad2 className="w-4 h-4 text-amber-400" />
-            <span>Jugar Match</span>
+            <HelpCircle className="w-4 h-4 text-amber-400" />
+            <span>Adivina Quién</span>
           </button>
         </div>
       </div>

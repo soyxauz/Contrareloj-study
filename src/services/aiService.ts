@@ -651,11 +651,12 @@ FASE 1: ANÁLISIS DEL TEXTO Y DETECCIÓN CONCEPTUAL
 
 FASE 2: DISTRIBUCIÓN Y VARIEDAD DINÁMICA DE ESTILOS DE PREGUNTA (PROPORCIÓN REQUERIDA)
 Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosamente la siguiente proporción:
-1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote (ejemplo: 3 de cada 7 preguntas). Es el formato predominante por un margen estrecho.
+1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote (ejemplo: 3 de cada 7 preguntas).
+   * REGLA DE DETECCIÓN DEL CONCEPTO EQUIVOCADO / IMPOSTOR: En aproximadamente 1 de cada 3 preguntas de opción múltiple, el enunciado DEBE solicitar identificar cuál opción es FALSA, INCORRECTA o EL CONCEPTO EQUIVOCADO (ejemplos: '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:'). En estos casos, 3 opciones son verdaderas y la opción elegida como 'respuesta_correcta' es la afirmación que contiene el error conceptual.
 2. El 55% restante DEBE distribuirse de forma equitativa y activa entre los otros 5 formatos interactivos:
    - "matching": Emparejar conceptos (3 o 4 pares de "termino" <-> "definicion" exacta del texto).
    - "true-false": Pregunta de Verdadero o Falso enfocada en un matiz normativo, biológico, técnico o conceptual clave.
-   - "multi-select": Pregunta con selección múltiple de 2 o 3 opciones correctas sobre una lista de 4 o 5 alternativas.
+   - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas. Puede formularse tanto para seleccionar las 2 o 3 afirmaciones correctas como para SELECCIONAR TODAS LAS AFIRMACIONES FALSAS O CONCEPTOS EQUIVOCADOS (ejemplo: 'Selecciona las 2 afirmaciones que son FALSAS o incorrectas sobre...', donde las opciones marcadas en 'indices_correctos' son las que contienen los errores).
    - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
    - "image-labeling": Etiquetado de diagrama o esquema funcional descrito en el texto (ubicar partes o fases en un esquema).
 
@@ -740,8 +741,8 @@ ${sourceRepresentation}
 - Nivel de exigencia: ${difficulty.toUpperCase()}
 - COBERTURA COMPLETA OBLIGATORIA: Distribuye las preguntas de manera equilibrada a lo largo de TODAS las diapositivas/páginas presentadas (desde el inicio, pasando por el desarrollo intermedio, hasta la última diapositiva). ESTÁ PROHIBIDO concentrar las preguntas solo en las primeras 4 o 5 diapositivas.
 - PROPORCIÓN Y VARIEDAD EXACTA:
-  * Aproximadamente el 45% del lote (3 de las 7 preguntas, o 3 de las 6) DEBE ser "multiple-choice" con 4 opciones (A, B, C, D). Es el formato predominante por poco.
-  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling"). No repitas un solo formato alternativo de forma monótona.
+  * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D). Incluye preguntas donde se deba señalar la afirmación falsa o concepto equivocado ('¿Cuál es falsa?', 'Señala el concepto equivocado', 'Todas son correctas EXCEPTO:').
+  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling"). En "multi-select", formula también casos donde se deban marcar las afirmaciones falsas.
 - LÍMITES ESTRICTOS DE EXTENSIÓN: Máximo 50 palabras por enunciado estándar; únicamente si es la descripción de un caso práctico, viñeta o supuesto de hecho, el límite máximo sube a 80 palabras.
 - REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
 - TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
@@ -2018,10 +2019,10 @@ ${levelInstructions[level]}
 DIRECTRICES GENERALES DE GENERACIÓN:
 1. Fidelidad estricta al documento: Toda afirmación y justificación debe emanar del texto provisto.
 2. ROTACIÓN DE ESTILOS: Alterna estilos interactivos:
-   - "multiple-choice": 4 opciones con distractores plausibles del texto.
+   - "multiple-choice": 4 opciones con distractores plausibles del texto. Incluye preguntas donde se deba señalar la afirmación falsa o el concepto equivocado ("¿Cuál es falsa?", "Señala el concepto equivocado", "Todas excepto...").
    - "matching": Emparejar 3 o 4 conceptos específicos con sus definiciones/roles.
    - "drag-drop": Oración con huecos {0}, {1} y banco de palabras con distractores.
-   - "multi-select": 4 o 5 opciones con 2 o 3 respuestas correctas.
+   - "multi-select": 4 o 5 opciones con 2 o 3 respuestas a marcar (tanto para seleccionar las correctas como para seleccionar las afirmaciones falsas).
    - "image-labeling": Etiquetar zonas de un diagrama o esquema.
    - "true-false": Afirmación conceptual directa.
 3. EXTENSIÓN BALANCEADA: El 50% de las preguntas DEBEN tener enunciados CORTOS Y DIRECTOS (1 a 2 líneas concisas) para memorizar conceptos específicos; el otro 50% casos prácticos o de análisis.
