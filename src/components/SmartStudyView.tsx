@@ -242,11 +242,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [typeFilters, setTypeFilters] = useState<SmartStudyTypeFilters>(() => {
     try {
       const saved = localStorage.getItem(`thea_study_type_filters_${kit.id}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          multipleChoice: true,
+          trueFalse: true,
+          practical: true,
+          shortAnswer: Boolean(parsed.shortAnswer),
+        };
+      }
     } catch {}
     return {
       multipleChoice: true,
-      shortAnswer: true,
+      shortAnswer: false, // Apagada por defecto al inicio; el usuario decide si prenderla
       trueFalse: true,
       practical: true,
     };
@@ -254,11 +262,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   const toggleTypeFilter = (key: keyof SmartStudyTypeFilters) => {
     setTypeFilters(prev => {
-      const activeCount = Object.values(prev).filter(Boolean).length;
-      if (prev[key] && activeCount <= 1) {
-        return prev;
-      }
-      const next = { ...prev, [key]: !prev[key] };
+      const next: SmartStudyTypeFilters = {
+        multipleChoice: true,
+        trueFalse: true,
+        practical: true,
+        shortAnswer: key === 'shortAnswer' ? !prev.shortAnswer : prev.shortAnswer,
+      };
       try {
         localStorage.setItem(`thea_study_type_filters_${kit.id}`, JSON.stringify(next));
       } catch {}
@@ -3262,47 +3271,29 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </p>
             </div>
 
-            {/* 3. Selección de Tipos de Preguntas con Interruptores (Switches) */}
+            {/* 3. Interruptor de Preguntas Abiertas */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Tipos de Preguntas en Sesión
+                  Preguntas Abiertas
                 </label>
-                <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
-                  Proporcional
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors ${
+                  typeFilters.shortAnswer
+                    ? 'text-violet-300 bg-violet-500/20 border-violet-500/40'
+                    : 'text-slate-400 bg-slate-800/80 border-slate-700'
+                }`}>
+                  {typeFilters.shortAnswer ? 'Activadas' : 'Apagadas'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Selecciona con los interruptores qué formatos de pregunta deseas incluir. El simulador distribuirá equitativamente la cantidad de preguntas entre las opciones activas.
+                Smart Study incluye automáticamente opción múltiple, verdadero o falso y ejercicios prácticos. Activa este interruptor si deseas responder preguntas redactadas con tus propias palabras con evaluación semántica de IA.
               </p>
 
-              <div className="space-y-2.5 bg-thea-surfaceLight/60 p-3.5 rounded-2xl border border-thea-border">
-                {/* Switch 1: Opción Múltiple */}
-                <div className="flex items-center justify-between py-1 border-b border-thea-border/40 pb-2">
-                  <div>
-                    <span className="text-xs font-bold text-white block">Opción Múltiple</span>
-                    <span className="text-[10px] text-slate-400 block">4 alternativas con distractores de discriminación fina</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleTypeFilter('multipleChoice')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      typeFilters.multipleChoice ? 'bg-violet-600' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        typeFilters.multipleChoice ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Switch 2: Preguntas Abiertas Cortas */}
-                <div className="flex items-center justify-between py-1 border-b border-thea-border/40 pb-2">
-                  <div>
+              <div className="bg-thea-surfaceLight/60 p-3.5 rounded-2xl border border-thea-border">
+                <div className="flex items-center justify-between py-1">
+                  <div className="pr-3">
                     <span className="text-xs font-bold text-white block">Preguntas Abiertas Cortas</span>
-                    <span className="text-[10px] text-slate-400 block">Escribe tu respuesta y la IA evalúa la similitud conceptual</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Escribe tu respuesta y la IA evalúa la similitud conceptual</span>
                   </div>
                   <button
                     type="button"
@@ -3314,48 +3305,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     <span
                       className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
                         typeFilters.shortAnswer ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Switch 3: Verdadero o Falso */}
-                <div className="flex items-center justify-between py-1 border-b border-thea-border/40 pb-2">
-                  <div>
-                    <span className="text-xs font-bold text-white block">Verdadero o Falso</span>
-                    <span className="text-[10px] text-slate-400 block">Juicio rápido sobre postulados nucleares del texto</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleTypeFilter('trueFalse')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      typeFilters.trueFalse ? 'bg-violet-600' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        typeFilters.trueFalse ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Switch 4: Ejercicios Prácticos */}
-                <div className="flex items-center justify-between py-1">
-                  <div>
-                    <span className="text-xs font-bold text-white block">Ejercicios Prácticos</span>
-                    <span className="text-[10px] text-slate-400 block">Emparejamiento, arrastre en oraciones y rotulación</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleTypeFilter('practical')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      typeFilters.practical ? 'bg-violet-600' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        typeFilters.practical ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
                   </button>
