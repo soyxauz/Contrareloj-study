@@ -651,12 +651,12 @@ FASE 1: ANÁLISIS DEL TEXTO Y DETECCIÓN CONCEPTUAL
 
 FASE 2: DISTRIBUCIÓN Y VARIEDAD DINÁMICA DE ESTILOS DE PREGUNTA (PROPORCIÓN REQUERIDA)
 Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosamente la siguiente proporción:
-1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote (ejemplo: 3 de cada 7 preguntas).
-   * REGLA DE DETECCIÓN DEL CONCEPTO EQUIVOCADO / IMPOSTOR: En aproximadamente 1 de cada 3 preguntas de opción múltiple, el enunciado DEBE solicitar identificar cuál opción es FALSA, INCORRECTA o EL CONCEPTO EQUIVOCADO (ejemplos: '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:'). En estos casos, 3 opciones son verdaderas y la opción elegida como 'respuesta_correcta' es la afirmación que contiene el error conceptual.
+1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote.
+   * REGLA ESTRICTA DE DETECCIÓN DEL CONCEPTO EQUIVOCADO / IMPOSTOR: Al menos el 50% de las preguntas de opción múltiple (1 de cada 2) DEBEN solicitar identificar cuál opción es FALSA, INCORRECTA o EL CONCEPTO EQUIVOCADO (ejemplos: '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:'). En estos casos, 3 opciones son verdaderas y la opción elegida como 'respuesta_correcta' es la afirmación que contiene el error conceptual.
 2. El 55% restante DEBE distribuirse de forma equitativa y activa entre los otros 5 formatos interactivos:
    - "matching": Emparejar conceptos (3 o 4 pares de "termino" <-> "definicion" exacta del texto).
    - "true-false": Pregunta de Verdadero o Falso enfocada en un matiz normativo, biológico, técnico o conceptual clave.
-   - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas. Puede formularse tanto para seleccionar las 2 o 3 afirmaciones correctas como para SELECCIONAR TODAS LAS AFIRMACIONES FALSAS O CONCEPTOS EQUIVOCADOS (ejemplo: 'Selecciona las 2 afirmaciones que son FALSAS o incorrectas sobre...', donde las opciones marcadas en 'indices_correctos' son las que contienen los errores).
+   - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas. Al menos la mitad de las preguntas de selección múltiple DEBEN formularse para SELECCIONAR TODAS LAS AFIRMACIONES FALSAS O CONCEPTOS EQUIVOCADOS (ejemplo: 'Selecciona las 2 afirmaciones que son FALSAS o incorrectas sobre...', donde las opciones marcadas en 'indices_correctos' son las que contienen los errores).
    - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
    - "image-labeling": Etiquetado de diagrama o esquema funcional descrito en el texto (ubicar partes o fases en un esquema).
 
@@ -741,8 +741,8 @@ ${sourceRepresentation}
 - Nivel de exigencia: ${difficulty.toUpperCase()}
 - COBERTURA COMPLETA OBLIGATORIA: Distribuye las preguntas de manera equilibrada a lo largo de TODAS las diapositivas/páginas presentadas (desde el inicio, pasando por el desarrollo intermedio, hasta la última diapositiva). ESTÁ PROHIBIDO concentrar las preguntas solo en las primeras 4 o 5 diapositivas.
 - PROPORCIÓN Y VARIEDAD EXACTA:
-  * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D). Incluye preguntas donde se deba señalar la afirmación falsa o concepto equivocado ('¿Cuál es falsa?', 'Señala el concepto equivocado', 'Todas son correctas EXCEPTO:').
-  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling"). En "multi-select", formula también casos donde se deban marcar las afirmaciones falsas.
+  * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D). OBLIGATORIO: al menos la mitad (50%) de estas preguntas DEBEN solicitar señalar la afirmación falsa o el concepto equivocado ('¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las opciones son correctas, EXCEPTO:').
+  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling"). En "multi-select", formula también casos donde se deban marcar las afirmaciones falsas o incorrectas.
 - LÍMITES ESTRICTOS DE EXTENSIÓN: Máximo 50 palabras por enunciado estándar; únicamente si es la descripción de un caso práctico, viñeta o supuesto de hecho, el límite máximo sube a 80 palabras.
 - REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
 - TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
@@ -1434,6 +1434,151 @@ Responde ÚNICAMENTE con un JSON con la estructura:
     }
   } catch (err) {
     console.warn('[GuessWho AI] Error generando casos con IA:', err);
+  }
+
+  return [];
+}
+
+/** Genera un lote especializado enfocado al 100% en Detección de Conceptos Equivocados / Afirmaciones Falsas */
+export async function generateFalseConceptQuestions(
+  rawText: string,
+  title: string,
+  category: string,
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+  count: number = 6,
+  chunks?: DocumentChunk[]
+): Promise<Question[]> {
+  const settings = getAISettings();
+  if (!settings.enabled) return [];
+
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
+  let sourceRepresentation = '';
+  if (chunks && chunks.length > 0) {
+    let selectedChunks = chunks.slice(0, 15);
+    sourceRepresentation = selectedChunks.map(c =>
+      `[FRAGMENTO ID: ${c.id} | ${c.heading || 'Sección'} | Pág/Diapositiva: ${c.pageOrSlide || 1}]\n${c.text}`
+    ).join('\n\n---\n\n');
+  } else {
+    sourceRepresentation = rawText.slice(0, 18000);
+  }
+
+  const systemPrompt = `Eres un docente y evaluador universitario de élite en Contrareloj Study.
+Tu especialidad es la técnica pedagógica de discriminación analítica: "Detección del Concepto Equivocado, Afirmación Falsa o Elemento Impostor".
+
+${translationDirective}
+
+OBJETIVO CRÍTICO:
+Debes formular exactamente ${count} preguntas especializadas donde el estudiante deba identificar el ERROR conceptual, la afirmación FALSA o el concepto EQUIVOCADO.
+
+FORMATOS REQUERIDOS:
+1. "multiple-choice" (Aproximadamente 4 preguntas):
+   - El enunciado DEBE pedir explícitamente señalar la opción FALSA, INCORRECTA o EL CONCEPTO EQUIVOCADO (ejemplos: "¿Cuál de las siguientes afirmaciones es FALSA respecto a...", "Señala el concepto EQUIVOCADO sobre...", "Todas las siguientes afirmaciones son correctas, EXCEPTO:").
+   - 3 opciones (distractores) DEBEN ser afirmaciones rigurosamente VERDADERAS y fundamentadas en el texto.
+   - 1 opción ("respuesta_correcta") DEBE ser la afirmación FALSA o que contiene una alteración conceptual categórica (por ejemplo, invertir una vía, alterar un mecanismo, cambiar una ley o atribuir una función contraria).
+2. "multi-select" (Aproximadamente 2 preguntas):
+   - El enunciado DEBE pedir seleccionar las 2 afirmaciones que son FALSAS o incorrectas sobre el tema (ejemplo: "Selecciona las 2 afirmaciones que son FALSAS o conceptualmente incorrectas sobre...").
+   - Las opciones marcadas en "indices_correctos" DEBEN ser exactamente las que contienen los errores conceptuales.
+
+Responde ÚNICAMENTE con un JSON con la estructura:
+{
+  "preguntas": [
+    {
+      "id": 1,
+      "tipo": "multiple-choice",
+      "concepto_evaluado": "Concepto evaluado",
+      "pregunta": "¿Cuál de las siguientes afirmaciones es **FALSA** respecto a [concepto]?",
+      "opciones": {
+        "A": "Afirmación verdadera 1",
+        "B": "Afirmación FALSA que contiene el error conceptual",
+        "C": "Afirmación verdadera 2",
+        "D": "Afirmación verdadera 3"
+      },
+      "respuesta_correcta": "B",
+      "retroalimentacion": {
+        "referencia_al_texto": "Cita que desmiente la opción falsa.",
+        "explicacion_logica": "Por qué la opción B es la falsa e incorrecta.",
+        "por_que_fallan_las_otras": "Por qué las opciones A, C y D son verdaderas."
+      }
+    },
+    {
+      "id": 2,
+      "tipo": "multi-select",
+      "concepto_evaluado": "Concepto evaluado",
+      "pregunta": "Selecciona las 2 afirmaciones que son **FALSAS** o incorrectas sobre [concepto]:",
+      "opciones_multiples": ["Afirmación Verdadera 1", "Afirmación FALSA 1", "Afirmación Verdadera 2", "Afirmación FALSA 2", "Afirmación Verdadera 3"],
+      "indices_correctos": [1, 3],
+      "retroalimentacion": {
+        "referencia_al_texto": "Fundamento del texto.",
+        "explicacion_logica": "Por qué las opciones 1 y 3 son falsas.",
+        "por_que_fallan_las_otras": "Por qué las demás son correctas."
+      }
+    }
+  ]
+}`;
+
+  const userPrompt = `Material ("${title}" - ${category}) [Nivel: ${difficulty.toUpperCase()}]:\n\n${sourceRepresentation}\n\nGenera las ${count} preguntas de afirmación falsa/concepto equivocado (100% en español):`;
+
+  try {
+    const rawRes = await queryAICompletion(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      true
+    );
+
+    const match = rawRes.match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
+        return parsed.preguntas.map((p: any, idx: number): Question => {
+          const isMulti = p.tipo === 'multi-select';
+          let options: string[] = [];
+          let correctIndex: number | undefined;
+          let correctIndices: number[] | undefined;
+
+          if (isMulti) {
+            options = Array.isArray(p.opciones_multiples)
+              ? p.opciones_multiples.map(String)
+              : ['Opción 1', 'Opción 2', 'Opción 3', 'Opción 4'];
+            correctIndices = Array.isArray(p.indices_correctos) ? p.indices_correctos : [0, 1];
+          } else {
+            const optsObj = p.opciones || {};
+            options = [
+              String(optsObj.A || optsObj['a'] || 'Opción A').trim(),
+              String(optsObj.B || optsObj['b'] || 'Opción B').trim(),
+              String(optsObj.C || optsObj['c'] || 'Opción C').trim(),
+              String(optsObj.D || optsObj['d'] || 'Opción D').trim(),
+            ];
+            const letter = String(p.respuesta_correcta || 'A').trim().toUpperCase();
+            correctIndex = letter === 'B' ? 1 : letter === 'C' ? 2 : letter === 'D' ? 3 : 0;
+          }
+
+          const fb = p.retroalimentacion || {};
+          const explanation = [
+            fb.explicacion_logica,
+            fb.por_que_fallan_las_otras,
+            fb.referencia_al_texto ? `Referencia: ${fb.referencia_al_texto}` : '',
+          ].filter(Boolean).join('\n\n') || p.explicacion || 'Identificación del concepto falso o erróneo.';
+
+          return {
+            id: `q-false-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+            type: isMulti ? 'multi-select' : 'multiple-choice',
+            question: p.pregunta,
+            options,
+            correctIndex,
+            correctIndices,
+            difficulty,
+            topic: p.concepto_evaluado || title,
+            explanation,
+          };
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[False Concept Generator] Error generando preguntas de afirmación falsa:', err);
   }
 
   return [];

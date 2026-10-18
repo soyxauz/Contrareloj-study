@@ -46,6 +46,7 @@ import {
   generateAIPedagogicalQuestions,
   generateSocraticReformulatedQuestion,
   generateTargetedPedagogicalQuestions,
+  generateFalseConceptQuestions,
   evaluateShortAnswer,
   parseCorrectIndex,
   parseCorrectIndices,
@@ -672,6 +673,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   // ── Generación Continua de Preguntas IA (Prefetching predictivo mientras avanzas) ──
   const isAutoGeneratingRef = useRef(false);
 
+  // Helper para identificar preguntas de detección de concepto falso, afirmación falsa o impostor
+  const isFalseConceptQuestion = useCallback((q?: Question | null): boolean => {
+    if (!q?.question) return false;
+    return /\b(falsa|falso|falsas|incorrecta|incorrecto|incorrectas|equivocado|equivocada|equivocados|excepto|no corresponde|no pertenecen|no pertenece)\b/i.test(q.question);
+  }, []);
+
   const checkAndPrefetchQuestions = useCallback(async (activeLevel: 1 | 2 | 3, activeIndex: number) => {
     if (isAutoGeneratingRef.current) return;
 
@@ -679,18 +686,35 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const currentPool = kit.questions.filter(q => q.difficulty === targetDiff);
     const remainingAhead = currentPool.length - (activeIndex + 1);
 
-    // Si quedan 3 o menos preguntas por delante en este nivel o el banco inicial tiene menos de 8
-    if (remainingAhead <= 3 || currentPool.length < 8) {
+    // Detección de escasez de preguntas de concepto falso / afirmación falsa en el pool activo
+    const falseConceptCount = currentPool.filter(isFalseConceptQuestion).length;
+    const needsFalseConcepts = falseConceptCount < 2;
+
+    // Si quedan 3 o menos preguntas por delante en este nivel, o el banco inicial tiene menos de 8, O faltan preguntas de afirmación falsa
+    if (remainingAhead <= 3 || currentPool.length < 8 || needsFalseConcepts) {
       isAutoGeneratingRef.current = true;
       setIsGeneratingMore(true);
 
       try {
-        const generated = await generateAIPedagogicalQuestions(
-          kit.sourceText || kit.description,
-          5, // Generar tanda ágil de 5 preguntas
-          targetDiff,
-          kit.chunks
-        );
+        let generated: Question[] = [];
+        if (needsFalseConcepts) {
+          // Inyectar lote especializado de conceptos falsos/equivocados
+          generated = await generateFalseConceptQuestions(
+            kit.sourceText || kit.description,
+            kit.title,
+            kit.category,
+            targetDiff,
+            6,
+            kit.chunks
+          );
+        } else {
+          generated = await generateAIPedagogicalQuestions(
+            kit.sourceText || kit.description,
+            5,
+            targetDiff,
+            kit.chunks
+          );
+        }
 
         if (generated.length > 0 && onUpdateKit) {
           const existingIds = new Set(kit.questions.map(q => q.id));
@@ -709,7 +733,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         setIsGeneratingMore(false);
       }
     }
-  }, [kit, onUpdateKit]);
+  }, [kit, onUpdateKit, isFalseConceptQuestion]);
 
   // Disparar verificación y generación continua al cambiar de nivel o avanzar índice
   useEffect(() => {
@@ -808,6 +832,23 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Posición base de la pregunta actual para avanzar secuencialmente hacia adelante
     const currentPos = pool.findIndex(q => q.id === excludeQuestionId);
     const baseIndex = currentPos >= 0 ? currentPos : 0;
+
+    // Regla de frecuencia: 1 de cada 2 o 3 preguntas de opción múltiple (~35%-40%) prioriza conceptos falsos o equivocados
+    const shouldPreferFalseConcept = (targetCat === 'multipleChoice') && (targetIndex % 3 === 1 || targetIndex % 3 === 2);
+
+    if (shouldPreferFalseConcept) {
+      for (let i = 1; i <= pool.length; i++) {
+        const candidate = pool[(baseIndex + i) % pool.length];
+        if (
+          candidate.id !== excludeQuestionId &&
+          !answeredQuestionIdsRef.current.has(candidate.id) &&
+          getCategoryForQuestion(candidate) === targetCat &&
+          isFalseConceptQuestion(candidate)
+        ) {
+          return candidate;
+        }
+      }
+    }
 
     // Prioridad 1: Buscar hacia adelante la siguiente pregunta no respondida de este nivel que coincida con el tipo
     for (let i = 1; i <= pool.length; i++) {
@@ -2444,8 +2485,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           )}
 
           {/* Badge de advertencia para preguntas de detección de concepto falso / impostor */}
-          {(qType === 'multiple-choice' || qType === 'multi-select') &&
-            /\b(falsa|falso|falsas|incorrecta|incorrecto|incorrectas|equivocado|equivocada|equivocados|excepto|no corresponde|no pertenecen|no pertenece)\b/i.test(currentQ.question) && (
+          {(qType === 'multiple-choice' || qType === 'multi-select') && isFalseConceptQuestion(currentQ) && (
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-bold mb-4 animate-fadeIn">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
               <span>Atención: Selecciona el concepto EQUIVOCADO o la afirmación FALSA</span>
