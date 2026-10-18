@@ -229,35 +229,52 @@ export async function synthesizeAzureEdgeSpeech(
 
   const fetchPromise = (async () => {
     try {
-      const response = await fetch('/api/edge-tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: clean,
-          voice,
-          rate,
-          pitch,
-        }),
-      });
+      let lastErr: Error | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 16000);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error en Azure Neural TTS (${response.status}): ${errorText}`);
+          const response = await fetch('/api/edge-tts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text: clean,
+              voice,
+              rate,
+              pitch,
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error en Azure Neural TTS (${response.status}): ${errorText}`);
+          }
+
+          const blob = await response.blob();
+          if (!blob || blob.size === 0) {
+            throw new Error('La síntesis de Azure Neural devolvió un archivo de audio vacío');
+          }
+
+          // Persistir en IndexedDB para futuras reproducciones offline y sin latencia
+          saveAudioBlobToCache(cacheKey, blob);
+
+          const objectUrl = URL.createObjectURL(blob);
+          memoryAudioUrlCache.set(cacheKey, objectUrl);
+          return objectUrl;
+        } catch (attemptErr: unknown) {
+          lastErr = attemptErr instanceof Error ? attemptErr : new Error(String(attemptErr));
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, attempt * 450));
+          }
+        }
       }
-
-      const blob = await response.blob();
-      if (!blob || blob.size === 0) {
-        throw new Error('La síntesis de Azure Neural devolvió un archivo de audio vacío');
-      }
-
-      // Persistir en IndexedDB para futuras reproducciones offline y sin latencia
-      saveAudioBlobToCache(cacheKey, blob);
-
-      const objectUrl = URL.createObjectURL(blob);
-      memoryAudioUrlCache.set(cacheKey, objectUrl);
-      return objectUrl;
+      throw lastErr || new Error('No se pudo sintetizar voz tras 3 intentos');
     } finally {
       ongoingRequests.delete(cacheKey);
     }

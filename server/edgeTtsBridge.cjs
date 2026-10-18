@@ -93,31 +93,35 @@ function synthesizeEdgeTtsPython(text, voice = 'es-ES-ElviraNeural', rate, pitch
  */
 async function synthesizeEdgeTts(text, voice = 'es-ES-ElviraNeural', rate, pitch) {
   try {
-    const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-
-    const options = {};
-    if (rate) options.rate = rate;
-    if (pitch) options.pitch = pitch;
-
-    const { audioStream } = tts.toStream(text.trim(), options);
-    const chunks = [];
-    audioStream.on('data', chunk => chunks.push(chunk));
-
-    await new Promise((resolve, reject) => {
-      audioStream.on('end', resolve);
-      audioStream.on('error', reject);
-    });
-
-    const buffer = Buffer.concat(chunks);
-    if (buffer.length === 0) {
-      throw new Error('Buffer de audio vacío');
-    }
-    return buffer;
+    return await synthesizeEdgeTtsPython(text, voice, rate, pitch);
   } catch (err) {
-    console.warn('[EdgeTtsBridge] Fallo con msedge-tts nativo, intentando worker Python:', err.message);
-    return synthesizeEdgeTtsPython(text, voice, rate, pitch);
+    console.warn('[EdgeTtsBridge] Worker Python con error, intentando msedge-tts como respaldo:', err.message);
+    try {
+      const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+      const tts = new MsEdgeTTS();
+      await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+
+      const options = {};
+      if (rate) options.rate = rate;
+      if (pitch) options.pitch = pitch;
+
+      const { audioStream } = tts.toStream(text.trim(), options);
+      const chunks = [];
+      audioStream.on('data', chunk => chunks.push(chunk));
+
+      await new Promise((resolve, reject) => {
+        audioStream.on('end', resolve);
+        audioStream.on('error', reject);
+      });
+
+      const buffer = Buffer.concat(chunks);
+      if (buffer.length === 0) {
+        throw new Error('Buffer de audio vacío');
+      }
+      return buffer;
+    } catch (fallbackErr) {
+      throw err;
+    }
   }
 }
 

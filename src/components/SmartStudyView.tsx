@@ -60,6 +60,7 @@ import {
 } from '../engine/socraticEngine';
 import { FormattedText } from './FormattedText';
 import { QuestionPrompt } from './QuestionPrompt';
+import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 
 // ── 4-Pointed Sparkle Star for Level Indicators (Nivel 1, 2, 3) ────────────
 const SparkleStar: React.FC<{ active: boolean; levelNum: number; onClick?: () => void }> = ({
@@ -1877,20 +1878,48 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
   };
 
-  // Text-to-speech helper
-  const handleReadAloud = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
+  const activeReadAloudAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Text-to-speech helper con voz Azure Neural de alta fidelidad
+  const handleReadAloud = async (text: string) => {
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      if (activeReadAloudAudioRef.current) {
+        activeReadAloudAudioRef.current.pause();
+        activeReadAloudAudioRef.current = null;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       setIsSpeaking(false);
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'es-ES';
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+
     setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+    try {
+      const url = await synthesizeAzureEdgeSpeech(text, 'es-ES-ElviraNeural');
+      const audio = new Audio(url);
+      activeReadAloudAudioRef.current = audio;
+      audio.onended = () => {
+        setIsSpeaking(false);
+        activeReadAloudAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        activeReadAloudAudioRef.current = null;
+      };
+      await audio.play();
+    } catch (e) {
+      console.warn('[SmartStudy] Fallo en Azure Neural, usando voz local:', e);
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-ES';
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(false);
+      }
+    }
   };
 
   const levelLabels: Record<number, { title: string; badge: string; color: string; icon: React.ReactNode }> = {

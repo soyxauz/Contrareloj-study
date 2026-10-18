@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { StudyKit, DocumentAsset } from '../types';
 import {
   Sparkles,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { generateAIStudyGuide } from '../services/aiService';
 import { FormattedText } from './FormattedText';
+import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 
 interface StudyGuideViewProps {
   kit: StudyKit;
@@ -112,19 +113,49 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  const handleReadAloud = () => {
-    if (!('speechSynthesis' in window)) return;
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleReadAloud = async () => {
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current = null;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       setIsSpeaking(false);
       return;
     }
-    const cleanText = markdown.replace(/[#*`>$]/g, '');
-    const utterance = new SpeechSynthesisUtterance(cleanText.slice(0, 1000));
-    utterance.lang = 'es-ES';
-    utterance.onend = () => setIsSpeaking(false);
+
+    const cleanText = markdown.replace(/[#*`>$]/g, '').trim().slice(0, 1200);
+    if (!cleanText) return;
+
     setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+    try {
+      const url = await synthesizeAzureEdgeSpeech(cleanText, 'es-ES-ElviraNeural');
+      const audio = new Audio(url);
+      activeAudioRef.current = audio;
+      audio.onended = () => {
+        setIsSpeaking(false);
+        activeAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        activeAudioRef.current = null;
+      };
+      await audio.play();
+    } catch {
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'es-ES';
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(false);
+      }
+    }
   };
 
   return (

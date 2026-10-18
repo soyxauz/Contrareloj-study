@@ -381,7 +381,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   const podcast = kit.podcast;
 
-  // Pre-sintetizar el primer parlamento al cargar para arranque instantáneo (0ms)
+  // Pre-sintetizar proactivamente los primeros turnos al cargar para arranque instantáneo (0ms)
   useEffect(() => {
     if (!podcast?.dialogue || podcast.dialogue.length === 0) return;
     const firstItem = podcast.dialogue[0];
@@ -398,13 +398,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             firstAudio.load();
             preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
 
-            // Una vez que el turno 0 esté listo, precargar el turno 1
-            if (podcast.dialogue[1]) {
-              const secondItem = podcast.dialogue[1];
-              const secondIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(secondItem.speaker);
-              const secondVoice = secondIsFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural');
-              prefetchAzureEdgeSpeech(secondItem.text, secondVoice);
-            }
+            // Pre-cargar en paralelo los siguientes 3 turnos para reproducción continua y sin pausas
+            preloadEntireAzurePodcast(podcast.dialogue, edgeSofiaVoice, edgeMateoVoice, 1, 4);
           }
         })
         .catch((err) => {
@@ -954,11 +949,21 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             setIsAudioActive(false);
             return;
           }
-          console.warn('[AudioPlayer] Error en reproducción de audio:', err);
+          console.warn('[AudioPlayer] Error en reproducción de audio Azure Neural:', err);
           setIsAudioActive(false);
           setIsSynthesizing(false);
-          setSynthesisError('Error al reproducir audio. Conmutando a voz local...');
-          speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
+          if (synthesisRetryCountRef.current < 2) {
+            synthesisRetryCountRef.current += 1;
+            setSynthesisError('Reintentando conexión con Azure Neural...');
+            setTimeout(() => {
+              if (isMountedRef.current && isPlayingRef.current) {
+                speakDialogueLine(index, safeWordIdx);
+              }
+            }, 800);
+          } else {
+            setSynthesisError('Conexión con Azure Neural inestable. Haz clic en Reproducir para reintentar.');
+            setIsPlaying(false);
+          }
         };
 
         if (!isMountedRef.current || !isPlayingRef.current || isManualInterruptionRef.current) {
@@ -996,15 +1001,23 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         console.warn('[NeuralTTS] Error en síntesis de voz neuronal:', err);
         setIsAudioActive(false);
 
-        setSynthesisError('Error al sintetizar con voz Azure Neural. Conmutando a voz local...');
-        synthesisRetryCountRef.current = 0;
-        // Garantizar que SIEMPRE suene el audio sin congelar la interfaz
-        speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
+        if (synthesisRetryCountRef.current < 2) {
+          synthesisRetryCountRef.current += 1;
+          setSynthesisError('Reintentando enlace con voz Azure Neural...');
+          setTimeout(() => {
+            if (isMountedRef.current && isPlayingRef.current) {
+              speakDialogueLine(index, safeWordIdx);
+            }
+          }, 800);
+        } else {
+          setSynthesisError('No se pudo conectar con Azure Neural. Haz clic en Reproducir para reintentar.');
+          setIsPlaying(false);
+        }
         return;
       }
     }
 
-    // Ruta 2: Motor del Navegador (SpeechSynthesis)
+    // Ruta 2: Motor del Navegador (SpeechSynthesis) solo si el usuario seleccionó expresamente 'browser'
     speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
   }, [podcast, edgeSofiaVoice, edgeMateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
 
