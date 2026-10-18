@@ -3,18 +3,19 @@ import type { StudyKit } from '../types';
 import {
   Send,
   Bot,
-  User,
   Mic,
   Volume2,
   VolumeX,
-  GraduationCap,
-  MessageSquare,
   Keyboard,
   Square,
   Zap,
   AlertTriangle,
   Check,
   RotateCcw,
+  Sparkles,
+  History,
+  X,
+  ArrowLeft,
 } from 'lucide-react';
 import { askTheaAI, getGrokApiKey, getGrokModel } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
@@ -35,7 +36,6 @@ interface Message {
 
 const VOICE = 'es-ES-ElviraNeural';
 
-// Dialectos estándar de Chromium de escritorio
 const getPreferredSpeechLang = (): string => {
   if (typeof navigator !== 'undefined' && navigator.language) {
     const nav = navigator.language.toLowerCase();
@@ -44,7 +44,6 @@ const getPreferredSpeechLang = (): string => {
   return 'es-ES';
 };
 
-// Directiva estricta para el examinador oral interactivo
 const ORAL_DIRECTIVE = `[MODO LECCIÓN ORAL: tu respuesta se leerá en voz alta de inmediato]
 Reglas obligatorias:
 1. Máximo 2 o 3 frases cortas y concisas.
@@ -60,7 +59,6 @@ const SR: any =
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     : null;
 
-/** Divide el texto en oraciones breves para sintetizar audio rápidamente */
 function splitForSpeech(text: string, max = 260): string[] {
   const clean = text.replace(/[*_#`~>|]/g, '').replace(/\s+/g, ' ').trim();
   if (!clean) return [];
@@ -104,6 +102,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [speaking, setSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(getPreferredSpeechLang);
   const [copiedBrave, setCopiedBrave] = useState(false);
 
@@ -131,14 +130,9 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioResolveRef = useRef<(() => void) | null>(null);
   const speakToken = useRef(0);
-  const endRef = useRef<HTMLDivElement>(null);
   const handleSendRef = useRef<(display: string, prompt?: string) => Promise<void>>(async () => {});
 
   const canListen = Boolean(SR);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, isTyping]);
 
   // Detección de Brave Browser
   useEffect(() => {
@@ -426,7 +420,12 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     if (listening) {
       stopListening();
     } else {
-      startListening();
+      // Si la lección aún no ha comenzado y se pulsa el micro, disparar la primera pregunta si procede
+      if (messages.length <= 1) {
+        startOralLesson();
+      } else {
+        startListening();
+      }
     }
   };
 
@@ -482,421 +481,430 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     setMessages([messages[0]]);
   };
 
-  const statusLabel = listening
-    ? 'Escuchando tu respuesta... habla ahora'
-    : speaking
-    ? 'Thea está hablando...'
-    : isTyping
-    ? 'Evaluando con IA...'
-    : '';
+  // Último mensaje de Thea para desplegar como subtítulo central en vivo
+  const latestTheaMsg = [...messages].reverse().find((m) => m.sender === 'thea');
+  const isInitialState = messages.length <= 1;
 
   return (
-    <div className="relative max-w-4xl mx-auto px-2 sm:px-4 py-3 sm:py-6 h-[calc(100vh-5.5rem)] min-h-[640px] flex flex-col">
-      {/* Fondo ambiental sutil tipo cabina oral */}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-600/15 via-thea-bg to-thea-bg blur-2xl pointer-events-none" />
+    <div className="relative max-w-4xl mx-auto px-3 sm:px-6 py-4 h-[calc(100vh-5.5rem)] min-h-[640px] flex flex-col justify-between select-none">
+      {/* Fondo ambiental dinámico con aura pulsante en el centro */}
+      <div
+        className={`absolute inset-0 -z-10 blur-3xl transition-all duration-1000 pointer-events-none ${
+          listening
+            ? 'bg-[radial-gradient(circle_at_center,_rgba(244,63,94,0.22)_0%,_rgba(15,8,30,0)_70%)]'
+            : speaking
+            ? 'bg-[radial-gradient(circle_at_center,_rgba(139,92,246,0.25)_0%,_rgba(15,8,30,0)_70%)]'
+            : isTyping
+            ? 'bg-[radial-gradient(circle_at_center,_rgba(6,182,212,0.2)_0%,_rgba(15,8,30,0)_70%)]'
+            : 'bg-[radial-gradient(circle_at_center,_rgba(124,58,237,0.15)_0%,_rgba(15,8,30,0)_70%)]'
+        }`}
+      />
 
-      {/* Contenedor Flotante Elevado */}
-      <div className="flex-1 flex flex-col bg-thea-surface/90 backdrop-blur-2xl border border-thea-border/80 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.65)] overflow-hidden relative">
-        {/* Cabecera Flotante */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-thea-border/60 bg-thea-surfaceLight/40 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-violet-900/40">
-              <Mic className="w-5 h-5 text-white animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-bold text-sm sm:text-base text-white">
-                  Lección Oral & Práctica de Voz
-                </h1>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-violet-600/25 text-violet-300 border border-violet-500/40">
-                  Modo Examen Oral
-                </span>
-                {hasGrok ? (
-                  <button
-                    type="button"
-                    onClick={onOpenAISettings}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 flex items-center gap-1 hover:bg-violet-500/30 transition-colors cursor-pointer"
-                    title={`Motor de voz activo: xAI Grok (${grokModel}). Haz clic para configurar.`}
-                  >
-                    <Zap className="w-3 h-3 text-violet-400" />
-                    <span>xAI Grok ({grokModel})</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onOpenAISettings}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 hover:text-violet-300 border border-slate-700 hover:border-violet-500/40 flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Configurar xAI Grok para respuestas ultrarrápidas de voz"
-                  >
-                    <span>Motor: Ollama Local</span>
-                    <span className="text-violet-400 underline font-semibold">+ Conectar xAI Grok</span>
-                  </button>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-400 truncate max-w-[240px] sm:max-w-md">
-                Material activo: <strong className="text-slate-300">{kit.title}</strong>
-              </p>
-            </div>
+      {/* ── BARRA SUPERIOR MINIMALISTA ── */}
+      <header className="flex items-center justify-between gap-3 px-2 py-2 shrink-0">
+        <div className="flex items-center gap-2">
+          {onNavigateToChat && (
+            <button
+              type="button"
+              onClick={onNavigateToChat}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-thea-border/80 bg-thea-surface/80 hover:bg-thea-surface text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Volver al Chat Tutor escrito"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Chat Tutor</span>
+            </button>
+          )}
+
+          <div className="hidden sm:block">
+            <span className="text-xs text-slate-400 truncate max-w-[200px] inline-block align-middle font-medium">
+              {kit.title}
+            </span>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            {/* Botón para ir al Chat Tutor de texto */}
-            {onNavigateToChat && (
-              <button
-                type="button"
-                onClick={onNavigateToChat}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-thea-border/80 bg-thea-surface hover:bg-thea-surfaceLight text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-sm"
-                title="Cambiar al Chat de dudas escritas"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Ir al Chat Tutor</span>
-              </button>
-            )}
+        {/* Acciones mínimas superiores */}
+        <div className="flex items-center gap-2">
+          {hasGrok && (
+            <button
+              type="button"
+              onClick={onOpenAISettings}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/30 flex items-center gap-1.5 hover:bg-violet-500/25 transition-colors cursor-pointer"
+              title={`Motor de voz activo: xAI Grok (${grokModel})`}
+            >
+              <Zap className="w-3 h-3 text-violet-400" />
+              <span>xAI Grok</span>
+            </button>
+          )}
 
-            {/* Alternar Voz */}
+          {/* Selector de dialecto */}
+          {canListen && (
+            <select
+              value={speechLang}
+              onChange={(e) => {
+                const l = e.target.value;
+                setSpeechLang(l);
+                speechLangRef.current = l;
+                fallbackAttemptsRef.current = 0;
+              }}
+              className="bg-thea-surface/80 border border-thea-border/70 text-slate-300 text-[11px] rounded-xl px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
+              title="Dialecto del reconocimiento de voz"
+            >
+              <option value="es-ES">es-ES</option>
+              <option value="es-419">es-419 (Latam)</option>
+              <option value="es-US">es-US</option>
+            </select>
+          )}
+
+          {/* Alternar Voz */}
+          <button
+            type="button"
+            onClick={() => {
+              if (voiceOn) stopSpeaking();
+              setVoiceOn((v) => !v);
+            }}
+            className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+              voiceOn
+                ? 'border-violet-500/50 text-violet-300 bg-violet-600/20'
+                : 'border-thea-border text-slate-400 hover:text-white'
+            }`}
+            title={voiceOn ? 'Respuesta hablada activa' : 'Activar respuesta hablada'}
+          >
+            {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
+          {/* Reiniciar lección */}
+          <button
+            type="button"
+            onClick={clearConversation}
+            className="p-1.5 rounded-xl border border-thea-border text-slate-400 hover:text-rose-400 hover:bg-thea-surface transition-colors cursor-pointer"
+            title="Reiniciar lección oral"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* Banner especial para Brave Browser si fuese necesario */}
+      {voiceError === 'brave-blocked' && (
+        <div className="my-2 px-4 py-3 bg-amber-950/85 border border-amber-500/50 rounded-2xl text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn shrink-0 shadow-lg">
+          <div className="flex-1">
+            <p className="font-bold text-amber-100 flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Brave Browser bloquea el reconocimiento de voz de Google por privacidad</span>
+            </p>
+            <p className="mt-1 text-[11px] text-amber-300/90 leading-relaxed">
+              Para activarlo: abre una pestaña, pega{' '}
+              <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-200 font-mono text-[10px]">
+                brave://settings/privacy
+              </code>{' '}
+              y activa <strong className="text-white">"Usar los servicios de Google para el reconocimiento de voz"</strong>.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => {
-                if (voiceOn) stopSpeaking();
-                setVoiceOn((v) => !v);
+                navigator.clipboard.writeText('brave://settings/privacy');
+                setCopiedBrave(true);
+                setTimeout(() => setCopiedBrave(false), 2500);
               }}
-              className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                voiceOn
-                  ? 'border-violet-500 text-violet-300 bg-violet-600/20 shadow-sm'
-                  : 'border-thea-border text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
-              }`}
-              title={voiceOn ? 'Respuesta hablada activa' : 'Activar respuesta hablada'}
+              className="px-3 py-1.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 text-amber-100 font-medium text-[11px] transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              {copiedBrave ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>¡Ruta copiada!</span>
+                </>
+              ) : (
+                <span>Copiar enlace de ajuste</span>
+              )}
             </button>
-
-            {/* Reiniciar lección oral */}
-            <button
-              type="button"
-              onClick={clearConversation}
-              className="p-2 rounded-xl border border-thea-border text-slate-400 hover:text-rose-400 hover:bg-thea-surfaceLight transition-colors cursor-pointer"
-              title="Reiniciar lección oral"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Sub-barra de controles de audio y estado */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2 bg-thea-surface/40 border-b border-thea-border/40 text-xs text-slate-400 shrink-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            {canListen && (
-              <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={handsFree}
-                  onChange={(e) => setHandsFree(e.target.checked)}
-                  className="rounded border-thea-border bg-thea-bg text-violet-600 focus:ring-0 cursor-pointer"
-                />
-                <span className="font-medium">Modo Manos Libres</span>
-              </label>
-            )}
-
-            {canListen && (
-              <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                <span className="hidden sm:inline">Idioma:</span>
-                <select
-                  value={speechLang}
-                  onChange={(e) => {
-                    const l = e.target.value;
-                    setSpeechLang(l);
-                    speechLangRef.current = l;
-                    fallbackAttemptsRef.current = 0;
-                  }}
-                  className="bg-thea-surface border border-thea-border/70 text-slate-300 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
-                  title="Dialecto del reconocimiento de voz"
-                >
-                  <option value="es-ES">Español (es-ES)</option>
-                  <option value="es-419">Español Latino (es-419)</option>
-                  <option value="es-US">Español EE.UU. (es-US)</option>
-                </select>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setShowTextInput((v) => !v)}
-              className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-            >
-              <Keyboard className="w-3.5 h-3.5" />
-              <span>{showTextInput ? 'Ocultar teclado' : 'Escribir respuesta'}</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            {statusLabel ? (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-300 animate-fadeIn">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                <span>{statusLabel}</span>
-              </span>
-            ) : speaking ? (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-violet-300">
-                <Volume2 className="w-3.5 h-3.5 animate-pulse text-violet-400" />
-                <span>Thea habla</span>
-              </span>
-            ) : !handsFree ? (
-              <span className="hidden sm:inline-block text-[11px] text-slate-400">
-                Atajo: pulsa o mantén <kbd className="px-1.5 py-0.5 rounded bg-thea-surface border border-thea-border text-slate-300 font-mono text-[10px]">Espacio</kbd>
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Banner especial para Brave Browser */}
-        {voiceError === 'brave-blocked' && (
-          <div className="px-4 py-3 bg-amber-950/80 border-b border-amber-500/50 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn shrink-0">
-            <div className="flex-1">
-              <p className="font-bold text-amber-100 flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Brave Browser bloquea el reconocimiento de voz de Google por privacidad</span>
-              </p>
-              <p className="mt-1 text-[11px] text-amber-300/90 leading-relaxed">
-                Para permitir el micrófono en Brave: abre una nueva pestaña, pega{' '}
-                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-200 font-mono text-[10px]">
-                  brave://settings/privacy
-                </code>{' '}
-                y activa la opción{' '}
-                <strong className="text-white">
-                  "Usar los servicios de Google para el reconocimiento de voz"
-                </strong>
-                .
-              </p>
-            </div>
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText('brave://settings/privacy');
-                  setCopiedBrave(true);
-                  setTimeout(() => setCopiedBrave(false), 2500);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 text-amber-100 font-medium text-[11px] transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                {copiedBrave ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>¡Ruta copiada!</span>
-                  </>
-                ) : (
-                  <span>Copiar enlace de ajuste</span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setVoiceError('')}
-                className="px-2 py-1.5 text-xs text-amber-300 hover:text-white underline cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Mensaje de aviso de error regular de micrófono */}
-        {voiceError && voiceError !== 'brave-blocked' && (
-          <div className="px-4 py-2 bg-rose-950/70 border-b border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-2 animate-fadeIn shrink-0">
-            <span>{voiceError}</span>
             <button
               type="button"
               onClick={() => setVoiceError('')}
-              className="text-xs text-rose-300 hover:text-white underline cursor-pointer"
+              className="px-2 py-1.5 text-xs text-amber-300 hover:text-white underline cursor-pointer"
             >
               Cerrar
             </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Área de mensajes de la lección oral */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 scroll-smooth">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 max-w-[88%] sm:max-w-[80%] animate-fadeIn ${
-                msg.sender === 'user' ? 'ml-auto flex-row-reverse' : ''
-              }`}
-            >
-              <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
-                  msg.sender === 'thea'
-                    ? 'bg-gradient-to-tr from-violet-600 to-indigo-600 text-white shadow-md'
-                    : 'bg-indigo-700 text-white shadow-md'
-                }`}
-              >
-                {msg.sender === 'thea' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
+      {/* ── CUERPO PRINCIPAL: INTERFAZ CENTRADA Y MINIMALISTA ── */}
+      <main className="flex-1 flex flex-col items-center justify-center text-center px-4 relative my-auto">
+        {/* Subtítulo dinámico / Pregunta actual de Thea */}
+        <div className="w-full max-w-xl mx-auto mb-8 sm:mb-12 transition-all duration-300">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-600/15 border border-violet-500/30 text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-3">
+            <Bot className="w-3.5 h-3.5 text-violet-400" />
+            <span>
+              {speaking
+                ? 'Thea está hablando...'
+                : isTyping
+                ? 'Evaluando respuesta...'
+                : isInitialState
+                ? 'Lección Oral Preparada'
+                : 'Pregunta de Examen'}
+            </span>
+          </div>
+
+          <div className="text-base sm:text-xl text-slate-100 font-medium leading-relaxed drop-shadow-sm min-h-[3rem] flex items-center justify-center">
+            {isTyping ? (
+              <div className="flex items-center gap-2 text-violet-300 text-sm animate-pulse">
+                <Sparkles className="w-4 h-4 animate-spin text-cyan-400" />
+                <span>Thea está formulando tu siguiente pregunta...</span>
               </div>
-
-              <div
-                className={`rounded-2xl p-4 shadow-sm text-xs sm:text-sm leading-relaxed ${
-                  msg.sender === 'user'
-                    ? 'bg-gradient-to-tr from-violet-600 to-indigo-600 text-white rounded-tr-none'
-                    : 'bg-thea-surfaceLight/80 border border-thea-border/70 text-slate-200 rounded-tl-none shadow-md backdrop-blur-sm'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-4 mb-1.5 text-[10px] opacity-70">
-                  <span className="font-semibold uppercase tracking-wider">
-                    {msg.sender === 'thea' ? 'Tutora Oral Thea' : 'Tu Respuesta'}
-                  </span>
-                  <span>{msg.timestamp}</span>
-                </div>
-
-                <FormattedText text={msg.text} />
-              </div>
-            </div>
-          ))}
-
-          {isTyping && (
-            <div className="flex gap-3 max-w-[80%] animate-fadeIn">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md">
-                <Bot className="w-4 h-4" />
-              </div>
-              <div className="bg-thea-surfaceLight/80 border border-thea-border/70 rounded-2xl rounded-tl-none p-3.5 flex items-center gap-2 shadow-sm">
-                <div className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" />
-                <div className="w-2 h-2 rounded-full bg-violet-400 animate-bounce [animation-delay:0.2s]" />
-                <div className="w-2 h-2 rounded-full bg-violet-400 animate-bounce [animation-delay:0.4s]" />
-                <span className="text-xs text-slate-400 ml-1">Thea está formulando tu pregunta...</span>
-              </div>
-            </div>
-          )}
-
-          <div ref={endRef} />
+            ) : latestTheaMsg ? (
+              <FormattedText text={latestTheaMsg.text} />
+            ) : (
+              <span>Pulsa el micrófono para iniciar tu lección oral.</span>
+            )}
+          </div>
         </div>
 
-        {/* Botón rápido para iniciar lección oral */}
-        {messages.length <= 1 && (
-          <div className="px-4 py-2 border-t border-thea-border/40 bg-thea-surfaceLight/20 flex gap-2 overflow-x-auto scrollbar-none shrink-0">
+        {/* ── HERO CONTROLLER: MICRÓFONO CENTRAL MINIMALISTA Y ATRACTIVO ── */}
+        <div className="relative flex items-center justify-center my-4">
+          {/* Anillos de ondas sonoras cuando está escuchando o hablando */}
+          {listening && (
+            <>
+              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-rose-500/15 animate-ping pointer-events-none duration-1000" />
+              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-rose-500/30 animate-pulse pointer-events-none" />
+              <span className="absolute w-60 h-60 sm:w-72 sm:h-72 rounded-full border border-rose-500/15 pointer-events-none" />
+            </>
+          )}
+
+          {speaking && (
+            <>
+              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-violet-500/20 animate-pulse pointer-events-none duration-700" />
+              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-violet-500/35 animate-ping pointer-events-none duration-1000" />
+            </>
+          )}
+
+          {isTyping && (
+            <span className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full border-2 border-cyan-400/40 border-t-cyan-400 animate-spin pointer-events-none" />
+          )}
+
+          {/* Botón Central Heroico */}
+          <button
+            type="button"
+            onClick={() => {
+              if (speaking) {
+                stopSpeaking();
+              } else {
+                toggleMic();
+              }
+            }}
+            disabled={!canListen}
+            className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_15px_50px_rgba(0,0,0,0.6)] ${
+              listening
+                ? 'bg-gradient-to-tr from-rose-600 via-red-600 to-rose-700 text-white ring-8 ring-rose-500/30 scale-105 shadow-[0_0_80px_rgba(244,63,94,0.45)]'
+                : speaking
+                ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-slate-950 ring-8 ring-amber-500/30 shadow-[0_0_80px_rgba(245,158,11,0.4)] active:scale-95'
+                : isTyping
+                ? 'bg-gradient-to-tr from-violet-700 via-indigo-700 to-cyan-800 text-white ring-8 ring-cyan-500/20 shadow-[0_0_60px_rgba(6,182,212,0.3)]'
+                : 'bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-800 hover:from-violet-500 hover:via-indigo-500 hover:to-purple-700 text-white ring-8 ring-violet-500/20 hover:ring-violet-500/40 active:scale-95 shadow-[0_0_70px_rgba(139,92,246,0.35)]'
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
+            title={
+              listening
+                ? 'Pulsar para detener y enviar'
+                : speaking
+                ? 'Pulsar para callar a Thea'
+                : isInitialState
+                ? 'Pulsar para empezar la lección oral'
+                : 'Pulsar para hablar (o mantén la tecla Espacio)'
+            }
+          >
+            {listening ? (
+              <>
+                <Square className="w-8 h-8 sm:w-10 sm:h-10 fill-white text-white" />
+                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
+                  Detener
+                </span>
+              </>
+            ) : speaking ? (
+              <>
+                <VolumeX className="w-8 h-8 sm:w-10 sm:h-10" />
+                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
+                  Callar
+                </span>
+              </>
+            ) : isTyping ? (
+              <>
+                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin" />
+                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
+                  Pensando
+                </span>
+              </>
+            ) : (
+              <>
+                <Mic className="w-9 h-9 sm:w-12 sm:h-12" />
+                <span className="text-[10px] sm:text-xs font-black mt-1.5 uppercase tracking-widest">
+                  {isInitialState ? 'Empezar' : 'Hablar'}
+                </span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Transcripción en tiempo real o instrucción interactiva */}
+        <div className="w-full max-w-md mx-auto mt-6 min-h-[3rem] flex flex-col items-center justify-center">
+          {input ? (
+            <p className="text-sm sm:text-base text-rose-300 font-semibold animate-pulse px-4 py-2 rounded-2xl bg-rose-950/40 border border-rose-500/30">
+              “{input}”
+            </p>
+          ) : listening ? (
+            <p className="text-xs sm:text-sm text-rose-300 font-semibold animate-pulse">
+              Escuchando tu voz... suelta Espacio o pulsa el botón para enviar
+            </p>
+          ) : speaking ? (
+            <p className="text-xs sm:text-sm text-amber-300 font-medium">
+              Thea está hablando... pulsa el botón o Espacio para interrumpir
+            </p>
+          ) : isTyping ? (
+            <p className="text-xs sm:text-sm text-cyan-300 font-medium animate-pulse">
+              Evaluando tu respuesta con IA...
+            </p>
+          ) : (
+            <p className="text-xs sm:text-sm text-slate-400 font-medium">
+              {handsFree ? (
+                <span className="text-emerald-400 font-semibold">
+                  Manos libres activo: Thea escuchará automáticamente cuando termine
+                </span>
+              ) : (
+                <span>
+                  Presiona o mantén pulsada la tecla <strong className="text-white underline decoration-violet-500 decoration-2">Espacio</strong> para responder
+                </span>
+              )}
+            </p>
+          )}
+
+          {/* Aviso normal de voz si existiera */}
+          {voiceError && voiceError !== 'brave-blocked' && (
+            <p className="text-xs text-rose-400 mt-2 bg-rose-950/60 px-3 py-1 rounded-xl border border-rose-500/30">
+              {voiceError}
+            </p>
+          )}
+        </div>
+      </main>
+
+      {/* ── BARRA INFERIOR DISCRETA CON OPCIONES SECUNDARIAS ── */}
+      <footer className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-t border-thea-border/40 text-xs text-slate-400 shrink-0">
+        <div className="flex items-center gap-2">
+          {/* Conmutador Modo Manos Libres */}
+          {canListen && (
             <button
               type="button"
-              onClick={startOralLesson}
-              disabled={isTyping}
-              className="text-xs bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold px-4 py-2 rounded-xl whitespace-nowrap transition-all disabled:opacity-40 flex items-center gap-2 cursor-pointer shadow-md shadow-violet-900/20 active:scale-95"
+              onClick={() => setHandsFree((h) => !h)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                handsFree
+                  ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300 shadow-sm'
+                  : 'bg-thea-surface/80 border-thea-border/70 text-slate-400 hover:text-white'
+              }`}
             >
-              <GraduationCap className="w-4 h-4" />
-              <span>Empezar lección oral guiada</span>
+              <span className={`w-2 h-2 rounded-full ${handsFree ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+              <span>Manos Libres: {handsFree ? 'ON' : 'OFF'}</span>
             </button>
-          </div>
-        )}
+          )}
 
-        {/* ── BOTÓN DE MICRÓFONO EN EL CENTRO (HERO CONTROLLER) ── */}
-        <div className="flex flex-col items-center justify-center pt-3 pb-4 px-4 bg-thea-surface border-t border-thea-border/60 shrink-0">
-          <div className="flex items-center justify-center gap-5 w-full max-w-lg relative">
-            {/* Botón flotante central de micrófono */}
-            <div className="relative flex items-center justify-center">
-              {listening && (
-                <>
-                  <span className="absolute w-24 h-24 rounded-full bg-rose-500/20 animate-ping pointer-events-none" />
-                  <span className="absolute w-28 h-28 rounded-full border-2 border-rose-500/30 animate-pulse pointer-events-none" />
-                </>
-              )}
+          {/* Botón para ver historial de preguntas */}
+          {messages.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setShowHistoryModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-thea-border/70 bg-thea-surface/80 hover:bg-thea-surface text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 text-violet-400" />
+              <span>Historial ({messages.length - 1})</span>
+            </button>
+          )}
+        </div>
 
+        {/* Botón para desplegar teclado discreto */}
+        <button
+          type="button"
+          onClick={() => setShowTextInput((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+        >
+          <Keyboard className="w-3.5 h-3.5" />
+          <span>{showTextInput ? 'Ocultar teclado' : 'Responder por escrito'}</span>
+        </button>
+      </footer>
+
+      {/* ── BARRA DE TEXTO DESPLEGABLE (OPCIONAL) ── */}
+      {showTextInput && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend(input);
+          }}
+          className="mt-2 flex items-center gap-2 p-2.5 bg-thea-surfaceLight/60 border border-thea-border rounded-2xl animate-fadeIn shrink-0"
+        >
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Escribe tu respuesta aquí si prefieres no usar el micrófono..."
+            className="flex-1 bg-thea-bg/90 border border-thea-border rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isTyping}
+            className="p-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold transition-all disabled:opacity-40 cursor-pointer shadow-md shadow-violet-900/20 active:scale-95"
+            title="Enviar respuesta"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+      )}
+
+      {/* ── MODAL LATERAL DE HISTORIAL DE PREGUNTAS (ON-DEMAND) ── */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-end animate-fadeIn">
+          <div className="w-full max-w-md bg-thea-surface border-l border-thea-border h-full flex flex-col shadow-2xl p-4 sm:p-6 overflow-hidden">
+            <div className="flex items-center justify-between pb-4 border-b border-thea-border/60">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-violet-400" />
+                <h3 className="font-bold text-sm text-white">Historial de la Lección Oral</h3>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  if (speaking) {
-                    stopSpeaking();
-                  } else {
-                    toggleMic();
-                  }
-                }}
-                disabled={!canListen}
-                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex flex-col items-center justify-center transition-all cursor-pointer shadow-2xl relative select-none ${
-                  listening
-                    ? 'bg-gradient-to-tr from-rose-600 to-red-600 text-white ring-4 ring-rose-500/40 scale-105 shadow-rose-900/50'
-                    : speaking
-                    ? 'bg-gradient-to-tr from-amber-500 to-orange-500 text-slate-950 ring-4 ring-amber-500/40 shadow-amber-900/40 active:scale-95'
-                    : 'bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-700 hover:from-violet-500 hover:to-indigo-500 text-white ring-4 ring-violet-500/20 hover:ring-violet-500/40 active:scale-95 shadow-violet-900/40'
-                } disabled:opacity-40 disabled:cursor-not-allowed`}
-                title={
-                  listening
-                    ? 'Pulsar para detener y enviar'
-                    : speaking
-                    ? 'Pulsar para interrumpir la voz'
-                    : 'Pulsar para hablar (o mantén la tecla Espacio)'
-                }
+                onClick={() => setShowHistoryModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               >
-                {listening ? (
-                  <>
-                    <Square className="w-6 h-6 fill-white" />
-                    <span className="text-[9px] font-bold mt-1 uppercase tracking-wider">
-                      Detener
-                    </span>
-                  </>
-                ) : speaking ? (
-                  <>
-                    <VolumeX className="w-6 h-6" />
-                    <span className="text-[9px] font-bold mt-1 uppercase tracking-wider">
-                      Callar
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-7 h-7 sm:w-8 sm:h-8" />
-                    <span className="text-[9px] font-bold mt-0.5 uppercase tracking-wider">
-                      Hablar
-                    </span>
-                  </>
-                )}
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 space-y-4">
+              {messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={`p-3 rounded-xl text-xs leading-relaxed ${
+                    m.sender === 'thea'
+                      ? 'bg-thea-surfaceLight/70 border border-thea-border/60 text-slate-200'
+                      : 'bg-violet-600/25 border border-violet-500/30 text-violet-100 ml-4'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
+                    <span>{m.sender === 'thea' ? 'Tutora Oral' : 'Tú'}</span>
+                    <span>{m.timestamp}</span>
+                  </div>
+                  <FormattedText text={m.text} />
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-thea-border/60 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(false)}
+                className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-all cursor-pointer"
+              >
+                Cerrar historial
               </button>
             </div>
           </div>
-
-          {/* Instrucción y retroalimentación interactiva del botón central */}
-          <p className="text-[11px] sm:text-xs text-slate-400 mt-2.5 font-medium text-center max-w-md">
-            {listening ? (
-              <span className="text-rose-300 font-semibold animate-pulse">
-                Escuchando tu respuesta... suelta Espacio o pulsa el botón para enviar
-              </span>
-            ) : speaking ? (
-              <span className="text-amber-300 font-medium">
-                Thea está hablando... pulsa el botón o pulsa Espacio para interrumpir
-              </span>
-            ) : handsFree ? (
-              <span className="text-slate-300 font-medium">
-                Manos libres activo: Thea escuchará automáticamente cuando termine de hablar
-              </span>
-            ) : (
-              <span>
-                Presiona o mantén <strong className="text-white underline decoration-violet-500 decoration-2">Espacio</strong> para hablar sin tocar la pantalla
-              </span>
-            )}
-          </p>
         </div>
-
-        {/* ── BARRA DE TEXTO OPCIONAL ── */}
-        {showTextInput && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend(input);
-            }}
-            className="flex items-center gap-2 p-3 bg-thea-surfaceLight/50 border-t border-thea-border/70 shrink-0"
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                listening
-                  ? 'Transcribiendo audio en tiempo real...'
-                  : 'Escribe tu respuesta oral aquí si no deseas usar micrófono...'
-              }
-              className="flex-1 bg-thea-bg/90 border border-thea-border rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isTyping}
-              className="p-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold transition-all disabled:opacity-40 cursor-pointer shadow-md shadow-violet-900/20 active:scale-95"
-              title="Enviar respuesta"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        )}
-      </div>
+      )}
     </div>
   );
 };
