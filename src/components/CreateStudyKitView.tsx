@@ -268,13 +268,14 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
       // Persistir inmediatamente los activos en IndexedDB sin esperar a que el usuario cambie de pantalla
       if (processed.kit.assets && processed.kit.assets.length > 0) {
-        saveAssetsToIndexedDB(processed.kit.assets).catch((err) => {
+        await saveAssetsToIndexedDB(processed.kit.assets).catch((err) => {
           console.warn('[CreateStudyKitView] Error al persistir activos en IndexedDB:', err);
         });
       }
 
       setResult(processed);
-      setPhase('success');
+      // Navegación directa e inmediata a Smart Study sin mostrar pantalla intermedia de éxito
+      onKitCreated(processed.kit);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ocurrió un error inesperado al procesar el contenido.';
       setErrorMessage(msg);
