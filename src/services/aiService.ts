@@ -1,4 +1,4 @@
-import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation } from '../types';
+import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions } from '../types';
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 
 export interface AISettings {
@@ -1375,32 +1375,106 @@ Incluye:
   return '';
 }
 
-/** Generación de Episodio de Podcast bajo demanda */
+/** Generación de Episodio de Podcast bajo demanda con opciones avanzadas de Formato y Duración */
 export async function generateAIPodcast(
   rawText: string,
   title: string,
   category: string,
-  orientation?: string
+  optionsOrOrientation?: string | PodcastGenerationOptions
 ): Promise<PodcastEpisode | null> {
+  const options: PodcastGenerationOptions = typeof optionsOrOrientation === 'string'
+    ? { orientation: optionsOrOrientation, format: 'detailed', duration: 'normal' }
+    : (optionsOrOrientation || { format: 'detailed', duration: 'normal' });
+
+  const selectedFormat: PodcastFormat = options.format || 'detailed';
+  const selectedDuration: PodcastDuration = options.duration || 'normal';
+  const customOrientation = options.orientation?.trim() || '';
+
   const settings = getAISettings();
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const orientationDirective = orientation?.trim()
-    ? `\nORIENTACIÓN Y ENFOQUE ESPECÍFICO DEL EPISODIO SOLICITADO:\n"${orientation.trim()}"\nDebes ajustar estrictamente el tono, estilo, nivel de rigor, ritmo, profundidad conceptual e interacciones entre los presentadores a esta orientación.\n`
+  let formatDirective = '';
+  switch (selectedFormat) {
+    case 'brief':
+      formatDirective = `FORMATO: BREVE (RESUMEN EJECUTIVO Y DIRECTO).
+- Objetivo: Un resumen breve que sirva para que el estudiante capte rápidamente las ideas principales de sus fuentes.
+- Estilo: Dinámico, ágil, sin rodeos ni preámbulos introductorios largos.
+- Foco: Definiciones fundamentales, conclusiones clave y conceptos esenciales condensados.`;
+      break;
+    case 'critique':
+      formatDirective = `FORMATO: CRÍTICA Y EVALUACIÓN EXPERTA.
+- Objetivo: Una revisión experta de las fuentes, con comentarios constructivos para ayudar al estudiante a dominar el material y evitar trampas conceptuales.
+- Estilo: Analítico, riguroso, pedagógico y mentorizador.
+- Foco: Puntos fuertes del tema, errores habituales en exámenes, malentendidos comunes y consejos prácticos para alcanzar maestría.`;
+      break;
+    case 'debate':
+      formatDirective = `FORMATO: DEBATE REFLEXIVO Y PERSPECTIVAS CONTRAPUESTAS.
+- Objetivo: Un debate reflexivo entre dos presentadores que arroja luz sobre diferentes perspectivas de las fuentes.
+- Estilo: Dialéctico, respetuoso, intelectualmente estimulante y ágil.
+- Foco: Sofia y Alex/Mateo sostienen visiones complementarias o en tensión dialéctica (ejemplo: teoría vs. aplicación práctica, método convencional vs. alternativo, ventajas vs. inconvenientes). Se retan cordialmente con preguntas incisivas y sintetizan conclusiones comunes.`;
+      break;
+    case 'detailed':
+    default:
+      formatDirective = `FORMATO: INFORMACIÓN DETALLADA (ANÁLISIS PROFUNDO).
+- Objetivo: Una animada conversación entre dos presentadores que analizan y conectan temas de las fuentes a profundidad.
+- Estilo: Conversacional, pedagógico, entusiasta y exhaustivo.
+- Foco: Desglose completo de conceptos, analogías cotidianas intuitivas, conexiones entre temas y explicación clara del 'por qué' de cada principio.`;
+      break;
+  }
+
+  let durationDirective = '';
+  let targetTurnCount = '14 a 18';
+  let defaultDurationLabel = '4:30 min';
+  switch (selectedDuration) {
+    case 'short':
+      targetTurnCount = '6 a 8';
+      defaultDurationLabel = '2:00 min';
+      durationDirective = `DURACIÓN: CORTO (-2 MINUTOS).
+- Extensión requerida: Genera exactamente entre 6 y 8 turnos de diálogo en total.
+- La duración estimada en el JSON debe ser "2:00 min".
+- Longitud de los turnos: concisos, directos al punto (1 a 2 frases por turno, aproximadamente 200 - 300 palabras en total).`;
+      break;
+    case 'long':
+      targetTurnCount = '24 a 32';
+      defaultDurationLabel = '8:30 min';
+      durationDirective = `DURACIÓN: LARGO (+8 MINUTOS SEGÚN EL CONTENIDO).
+- Extensión requerida: Genera entre 24 y 32 turnos de diálogo profundos y completos.
+- La duración estimada en el JSON debe ser "8:30 min".
+- Longitud de los turnos: explicaciones enriquecidas paso a paso (aproximadamente 1200 - 1600 palabras en total).`;
+      break;
+    case 'normal':
+    default:
+      targetTurnCount = '14 a 18';
+      defaultDurationLabel = '4:30 min';
+      durationDirective = `DURACIÓN: NORMAL (4 A 6 MINUTOS).
+- Extensión requerida: Genera entre 14 y 18 turnos de diálogo equilibrados.
+- La duración estimada en el JSON debe ser "4:30 min".
+- Longitud de los turnos: ritmo natural de podcast conversacional (aproximadamente 600 - 850 palabras en total).`;
+      break;
+  }
+
+  const orientationDirective = customOrientation
+    ? `\nORIENTACIÓN Y ENFOQUE PERSONALIZADO SOLICITADO:\n"${customOrientation}"\nAjusta estrictamente las prioridades, ejemplos y énfasis de los presentadores a esta indicación.\n`
     : '';
 
   const systemPrompt = `Eres el productor ejecutivo del podcast educativo Contrareloj Review.
 A partir del texto proporcionado, genera un episodio de repaso dinámico, entretenido y riguroso entre Sofia (Host entusiasta) y Alex (Tutor pedagógico experto).
 Deben discutir los puntos centrales del tema con naturalidad, analogías y claridad 100% en español.
+
+DIRECTRICES ESPECÍFICAS DE FORMATO Y DURACIÓN:
+${formatDirective}
+
+${durationDirective}
+
 ${orientationDirective}
 ${translationDirective}
 
 Responde ÚNICAMENTE con un JSON con la estructura:
 {
   "podcast": {
-    "title": "Repaso Express: ${title}",
-    "duration": "4:30 min",
+    "title": "Repaso: ${title}",
+    "duration": "${defaultDurationLabel}",
     "dialogue": [
       { "speaker": "Sofia", "time": "0:00", "text": "¡Bienvenidos! Hoy analizaremos los puntos clave de..." },
       { "speaker": "Alex", "time": "0:15", "text": "Exacto, Sofia. Lo fundamental que debemos comprender es..." }
@@ -1408,7 +1482,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   }
 } `;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}${orientation?.trim() ? `\n\nOrientación requerida para el podcast:\n${orientation.trim()}` : ''}\n\nGenera el podcast (diálogo 100% en español):`;
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 9000)}${customOrientation ? `\n\nOrientación requerida para el podcast:\n${customOrientation}` : ''}\n\nGenera el podcast con formato "${selectedFormat}" y duración "${selectedDuration}" (${targetTurnCount} turnos de diálogo 100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -1426,12 +1500,15 @@ Responde ÚNICAMENTE con un JSON con la estructura:
           return {
             id: `pod-ai-${Date.now()}`,
             title: parsed.podcast.title || `Repaso: ${title}`,
-            duration: parsed.podcast.duration || '4:00 min',
+            duration: parsed.podcast.duration || defaultDurationLabel,
             hosts: [
               { name: 'Sofia', role: 'Host', avatar: 'S' },
               { name: 'Alex', role: 'Tutor IA', avatar: 'A' },
             ],
             dialogue: parsed.podcast.dialogue,
+            format: selectedFormat,
+            durationMode: selectedDuration,
+            orientation: customOrientation,
           };
         }
       }

@@ -123,12 +123,24 @@ export interface Flashcard {
   sourceAsset?: DocumentAsset;
 }
 
+export type PodcastFormat = 'detailed' | 'brief' | 'critique' | 'debate';
+export type PodcastDuration = 'short' | 'normal' | 'long';
+
+export interface PodcastGenerationOptions {
+  format?: PodcastFormat;
+  duration?: PodcastDuration;
+  orientation?: string;
+}
+
 export interface PodcastEpisode {
   id: string;
   title: string;
   duration: string;
   hosts: { name: string; role: string; avatar: string }[];
   dialogue: { speaker: string; text: string; time: string }[];
+  format?: PodcastFormat;
+  durationMode?: PodcastDuration;
+  orientation?: string;
 }
 
 export interface StudyKit {

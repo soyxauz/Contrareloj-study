@@ -314,3 +314,16 @@ export function preloadEntireAzurePodcast(
     prefetchAzureEdgeSpeech(item.text, voice);
   }
 }
+
+/**
+ * Limpia la memoria y la base de datos de audio cacheado.
+ */
+export async function clearAzureAudioCache(): Promise<void> {
+  memoryAudioUrlCache.clear();
+  const db = await getAudioDatabase();
+  if (!db) return;
+  try {
+    const tx = db.transaction([STORE_NAME], 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+  } catch (_) {}
+}
