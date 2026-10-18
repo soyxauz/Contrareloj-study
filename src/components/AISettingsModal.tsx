@@ -19,14 +19,10 @@ import {
   ShieldCheck,
   RefreshCw,
   Cpu,
-  ExternalLink,
   Cloud,
-  Headphones,
-  Sparkles
 } from 'lucide-react';
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
-import { savePodcastSettings, getGeminiAudioApiKey } from '../services/geminiAudioService';
 
 interface AISettingsModalProps {
   isOpen: boolean;
@@ -41,18 +37,11 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 }) => {
   const [settings, setSettings] = useState<AISettings>(getAISettings);
   const [showKey, setShowKey] = useState(false);
-  const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
     models?: string[];
-  } | null>(null);
-  const [isGeminiTesting, setIsGeminiTesting] = useState(false);
-  const [geminiTestResult, setGeminiTestResult] = useState<{
-    success: boolean;
-    errorType?: 'BLOCKED' | 'QUOTA' | 'OTHER';
-    message: string;
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama');
@@ -62,10 +51,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const current = getAISettings();
-      const existingGeminiAudioKey = getGeminiAudioApiKey();
-      if (!current.geminiApiKey && existingGeminiAudioKey) {
-        current.geminiApiKey = existingGeminiAudioKey;
-      }
       setSettings(current);
       setTestResult(null);
       setIsSaved(false);
@@ -136,73 +121,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   }, [settings.apiKey, settings.baseUrl, settings.model, isOpen]);
 
-  // Validación automática de la clave de Google Gemini para Podcast
-  useEffect(() => {
-    if (!isOpen) return;
-    const cleanKey = settings.geminiApiKey?.trim() || '';
-    if (!cleanKey) {
-      setGeminiTestResult(null);
-      setIsGeminiTesting(false);
-      return;
-    }
 
-    if (cleanKey.length < 8) return;
-
-    const timer = setTimeout(async () => {
-      setIsGeminiTesting(true);
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`;
-        let res: Response;
-        try {
-          res = await fetch(url);
-        } catch {
-          res = await fetch('/api/ai-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, method: 'GET' }),
-          });
-        }
-
-        if (res.ok) {
-          setGeminiTestResult({
-            success: true,
-            message: 'Clave de Google Gemini verificada y activa para voces neuronales con emociones (200 OK).',
-          });
-        } else {
-          const body = await res.text();
-          if (res.status === 403 || body.includes('API_KEY_SERVICE_BLOCKED') || body.includes('PERMISSION_DENIED')) {
-            setGeminiTestResult({
-              success: false,
-              errorType: 'BLOCKED',
-              message: 'Servicio bloqueado en Google Cloud. La API Generative Language está restringida o no está habilitada para esta clave. Te recomendamos crear una clave gratuita directamente en Google AI Studio sin restricciones.',
-            });
-          } else if (res.status === 429 || body.includes('RESOURCE_EXHAUSTED')) {
-            setGeminiTestResult({
-              success: false,
-              errorType: 'QUOTA',
-              message: 'Límite de cuota alcanzado o no disponible en este momento para esta clave de Google.',
-            });
-          } else {
-            setGeminiTestResult({
-              success: false,
-              errorType: 'OTHER',
-              message: `Error al validar clave de Gemini (HTTP ${res.status}).`,
-            });
-          }
-        }
-      } catch (err: unknown) {
-        setGeminiTestResult({
-          success: false,
-          errorType: 'OTHER',
-          message: 'Error de conexión al comprobar la clave de Gemini.',
-        });
-      } finally {
-        setIsGeminiTesting(false);
-      }
-    }, 600);
-
-    return () => clearTimeout(timer);
-  }, [isOpen, settings.geminiApiKey]);
 
   if (!isOpen) return null;
 
@@ -241,8 +160,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       if (updated.apiKey.startsWith('AIzaSy') || updated.baseUrl?.includes('googleapis')) {
         updated.geminiApiKey = updated.apiKey;
         localStorage.setItem('contrareloj_gemini_api_key', updated.apiKey);
-        const podUpdated = savePodcastSettings({ geminiApiKey: updated.apiKey });
-        googleDriveService.syncPodcastSettingsToDrive(podUpdated).catch(console.warn);
       }
       saveAISettings(updated);
       const user = authService.getCurrentUser();
@@ -259,8 +176,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       if (currentSettings.apiKey.startsWith('AIzaSy') || currentSettings.baseUrl?.includes('googleapis')) {
         currentSettings.geminiApiKey = currentSettings.apiKey;
         localStorage.setItem('contrareloj_gemini_api_key', currentSettings.apiKey);
-        const podUpdated = savePodcastSettings({ geminiApiKey: currentSettings.apiKey });
-        googleDriveService.syncPodcastSettingsToDrive(podUpdated).catch(console.warn);
       }
     }
 
@@ -518,100 +433,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               </div>
             </div>
 
-            {/* API Key de Google Gemini para Podcast */}
-            <div className="pt-3 border-t border-thea-border/60">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Headphones className="w-3.5 h-3.5 text-amber-400" />
-                  API Key de Google Gemini para Podcast:
-                </label>
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline"
-                >
-                  Obtener clave gratis en AI Studio <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              <div className="relative">
-                <input
-                  type={showGeminiKey ? 'text' : 'password'}
-                  value={settings.geminiApiKey || ''}
-                  onChange={e => {
-                    const newGeminiKey = e.target.value;
-                    const updated: AISettings = {
-                      ...settings,
-                      geminiApiKey: newGeminiKey,
-                    };
-                    setSettings(updated);
-                    saveAISettings(updated);
-                    const cleanKey = newGeminiKey.trim();
-                    localStorage.setItem('contrareloj_gemini_api_key', cleanKey);
-                    const podSettings = savePodcastSettings({ geminiApiKey: cleanKey });
-                    const user = authService.getCurrentUser();
-                    if (user) {
-                      authService.saveUserAISettings(user.id, updated);
-                    }
-                    if (googleDriveService.getValidAccessToken() || googleDriveService.isLinked()) {
-                      googleDriveService.syncAISettingsToDrive(updated).catch(console.warn);
-                      googleDriveService.syncPodcastSettingsToDrive(podSettings).catch(console.warn);
-                    }
-                  }}
-                  placeholder="AIzaSy... (Para voces neuronales con emociones Sofía y Mateo)"
-                  className="w-full px-3 py-2 pr-10 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-amber-400"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowGeminiKey(!showGeminiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                >
-                  {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <div className="mt-1.5 text-[11px]">
-                {isGeminiTesting ? (
-                  <span className="text-amber-300 flex items-center gap-1.5 font-medium animate-pulse">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
-                    Comprobando clave de Google Gemini...
-                  </span>
-                ) : geminiTestResult ? (
-                  geminiTestResult.success ? (
-                    <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      {geminiTestResult.message}
-                    </span>
-                  ) : (
-                    <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/35 text-rose-300 flex flex-col gap-1.5">
-                      <span className="flex items-start gap-1.5 font-medium leading-relaxed">
-                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                        {geminiTestResult.message}
-                      </span>
-                      {geminiTestResult.errorType === 'BLOCKED' && (
-                        <a
-                          href="https://aistudio.google.com/app/apikey"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] underline font-bold text-amber-300 hover:text-white flex items-center gap-1 ml-5 cursor-pointer"
-                        >
-                          Crear clave gratuita en Google AI Studio (sin restricciones) <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                  )
-                ) : settings.geminiApiKey && settings.geminiApiKey.trim().length > 0 ? (
-                  <span className="text-amber-400 flex items-center gap-1 font-medium">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    Comprobando clave de Gemini...
-                  </span>
-                ) : (
-                  <span className="text-slate-400 flex items-center gap-1 text-[10px]">
-                    <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
-                    Utilizada por Google Gemini Flash Audio TTS para generar locución con prosodia y emociones. 100% gratuita.
-                  </span>
-                )}
-              </div>
-            </div>
+
 
             {/* Model Name */}
             <div>
