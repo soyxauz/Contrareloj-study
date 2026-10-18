@@ -43,15 +43,29 @@ const getPreferredSpeechLang = (): string => {
   return 'es-419';
 };
 
-const ORAL_DIRECTIVE = `[MODO LECCIÓN ORAL: tu respuesta se leerá en voz alta de inmediato]
+type OralMode = 'exam' | 'conversation';
+
+const TTS_RATE = '+25%';
+
+const ORAL_EXAM_DIRECTIVE = `[MODO LECCIÓN ORAL - EXAMEN RIGUROSO: tu respuesta se leerá en voz alta de inmediato]
 Reglas obligatorias:
-1. Máximo 2 o 3 frases cortas y concisas.
-2. NUNCA uses listas, viñetas, tablas, títulos markdown ni símbolos raros.
+1. Máximo 2 frases cortas y directas. Habla fluido, conciso y enérgico.
+2. NUNCA uses listas, viñetas, tablas, títulos markdown ni símbolos.
 3. Evalúa con claridad si la respuesta del estudiante fue correcta, parcial o incorrecta. Si se equivoca, dale una pista breve sin resolverlo todo.
 4. Concluye SIEMPRE formulando UNA sola pregunta de nivel examen sobre el material.
 5. Si el estudiante dice "empezar", haz la primera pregunta directamente.
 
 El estudiante responde: `;
+
+const CONVERSATION_DIRECTIVE = `[MODO CONVERSACIÓN TUTOR LIBRE: tu respuesta se leerá en voz alta de inmediato]
+Reglas obligatorias:
+1. Máximo 2 frases ágiles, conversacionales y pedagógicas. Habla de forma natural y cercana.
+2. NUNCA uses listas, viñetas, tablas, títulos markdown ni símbolos.
+3. Dialoga con el estudiante sobre los conceptos del tema. Responde sus dudas, reflexiona con él o profundiza en las ideas de forma interactiva.
+4. No actúes como examen rígido ni califiques con notas; mantén una charla socrática estimulante y fluida de dos vías.
+5. Termina con un comentario abierto o una pregunta ligera que invite a seguir charlando.
+
+El estudiante dice: `;
 
 const SR: any =
   typeof window !== 'undefined'
@@ -81,7 +95,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   onOpenAISettings,
   onNavigateToChat,
 }) => {
-
+  const [mode, setMode] = useState<OralMode>('exam');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'oral-init',
@@ -109,6 +123,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [micLevel, setMicLevel] = useState(0);
 
   // Refs de sincronización
+  const modeRef = useRef<OralMode>(mode);
   const voiceOnRef = useRef(voiceOn);
   const handsFreeRef = useRef(handsFree);
   const listeningRef = useRef(listening);
@@ -119,6 +134,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const fallbackAttemptsRef = useRef(0);
   const isBraveRef = useRef(false);
   const messagesRef = useRef(messages);
+
+  modeRef.current = mode;
 
   const isListeningDesiredRef = useRef(false);
   const transcriptBufferRef = useRef('');
@@ -163,19 +180,28 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     detectBrave();
   }, []);
 
-  // Limpieza al desmontar
+  // Limpieza al desmontar y al cambiar de pestaña / salir del módulo
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopSpeaking();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopSpeaking();
+      stopListening(false);
       isListeningDesiredRef.current = false;
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
-      speakToken.current++;
       whisperRef.current?.cancel();
+      whisperRef.current = null;
       try {
         recognitionRef.current?.abort();
       } catch {}
-      audioRef.current?.pause();
-      if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+      recognitionRef.current = null;
     };
   }, []);
 
@@ -250,10 +276,23 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   // ───────────────────────── VOZ: SALIDA (TTS) ─────────────────────────
   const stopSpeaking = () => {
     speakToken.current++;
-    audioRef.current?.pause();
-    audioResolveRef.current?.();
-    audioResolveRef.current = null;
-    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+      } catch {}
+      audioRef.current = null;
+    }
+    if (audioResolveRef.current) {
+      audioResolveRef.current();
+      audioResolveRef.current = null;
+    }
+    if (typeof speechSynthesis !== 'undefined') {
+      try {
+        speechSynthesis.cancel();
+      } catch {}
+    }
     setSpeaking(false);
   };
 
@@ -262,9 +301,18 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       const a = new Audio(url);
       audioRef.current = a;
       audioResolveRef.current = resolve;
-      a.onended = () => resolve();
-      a.onerror = () => resolve();
-      a.play().catch(() => resolve());
+      a.onended = () => {
+        if (audioRef.current === a) audioRef.current = null;
+        resolve();
+      };
+      a.onerror = () => {
+        if (audioRef.current === a) audioRef.current = null;
+        resolve();
+      };
+      a.play().catch(() => {
+        if (audioRef.current === a) audioRef.current = null;
+        resolve();
+      });
     });
 
   const speakWithBrowser = (text: string) =>
@@ -272,6 +320,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       if (typeof speechSynthesis === 'undefined') return resolve();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'es-ES';
+      u.rate = 1.25; // Sincronizado a +25% de agilidad
       u.onend = () => resolve();
       u.onerror = () => resolve();
       speechSynthesis.speak(u);
@@ -286,10 +335,10 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     try {
       for (let i = 0; i < chunks.length; i++) {
         if (token !== speakToken.current) return false;
-        if (i + 1 < chunks.length) prefetchAzureEdgeSpeech(chunks[i + 1], VOICE);
+        if (i + 1 < chunks.length) prefetchAzureEdgeSpeech(chunks[i + 1], VOICE, TTS_RATE);
         let url: string | null = null;
         try {
-          url = await synthesizeAzureEdgeSpeech(chunks[i], VOICE);
+          url = await synthesizeAzureEdgeSpeech(chunks[i], VOICE, TTS_RATE);
         } catch {
           url = null;
         }
@@ -319,7 +368,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         language: 'es',
         prompt: kit.title,                        // mejora términos técnicos
         autoStopOnSilence: true,                  // ¡Auto-detección activa para responder solo!
-        silenceMs: 1400,                          // 1.4s de silencio tras hablar activa la respuesta
+        silenceMs: 950,                           // 0.95s de silencio tras hablar activa respuesta inmediata
         onVolume: setMicLevel,
         onTranscribing: () => {
           listeningRef.current = false;
@@ -603,15 +652,17 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     setInput('');
     setIsTyping(true);
     stopSpeaking();
-    stopListening(false);
-
-    const queryForAI = promptText ?? (ORAL_DIRECTIVE + displayText);
+    const activeDirective = modeRef.current === 'exam' ? ORAL_EXAM_DIRECTIVE : CONVERSATION_DIRECTIVE;
+    const queryForAI = promptText ?? (activeDirective + displayText);
 
     let replyText: string;
     try {
       replyText = await askTheaAI(queryForAI, kit, previousHistory, 'groq');
     } catch {
-      replyText = `He analizado tu respuesta sobre "${kit.title}". ¿Podrías resumir la idea central o reformularla brevemente?`;
+      replyText =
+        modeRef.current === 'exam'
+          ? `He analizado tu respuesta sobre "${kit.title}". ¿Podrías resumir la idea central o reformularla brevemente?`
+          : `Es un punto interesante sobre "${kit.title}". ¿Cómo lo relacionarías con el concepto principal?`;
     }
 
     setMessages((prev) => [
@@ -629,13 +680,48 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   };
   handleSendRef.current = handleSend;
 
-  const startOralLesson = () => handleSend('Empezar lección oral', ORAL_DIRECTIVE + 'empezar');
+  const startOralLesson = () => {
+    if (modeRef.current === 'exam') {
+      handleSend('Empezar lección oral', ORAL_EXAM_DIRECTIVE + 'empezar');
+    } else {
+      handleSend('Iniciar conversación', CONVERSATION_DIRECTIVE + 'Hola Thea, conversemos sobre el tema.');
+    }
+  };
   startOralLessonRef.current = startOralLesson;
+
+  const handleModeChange = (newMode: OralMode) => {
+    if (newMode === mode) return;
+    stopSpeaking();
+    stopListening(false);
+    setMode(newMode);
+    modeRef.current = newMode;
+    setMessages([
+      {
+        id: `${newMode}-init-${Date.now()}`,
+        sender: 'thea',
+        text:
+          newMode === 'exam'
+            ? `Bienvenido a tu lección oral sobre "${kit.title}". Te haré preguntas habladas como en un examen real y evaluaré tus respuestas en voz alta. ¿Listo para empezar? Pulsa el micrófono o la barra espaciadora.`
+            : `Hola, conversemos libremente sobre "${kit.title}". Puedes hacerme cualquier pregunta, reflexionar en voz alta o debatir conceptos conmigo. ¿De qué te gustaría hablar primero?`,
+        timestamp: 'Ahora',
+      },
+    ]);
+  };
 
   const clearConversation = () => {
     stopSpeaking();
     stopListening(false);
-    setMessages([messages[0]]);
+    setMessages([
+      {
+        id: `${mode}-init-${Date.now()}`,
+        sender: 'thea',
+        text:
+          mode === 'exam'
+            ? `Bienvenido a tu lección oral sobre "${kit.title}". Te haré preguntas habladas como en un examen real y evaluaré tus respuestas en voz alta. ¿Listo para empezar? Pulsa el micrófono o la barra espaciadora.`
+            : `Hola, conversemos libremente sobre "${kit.title}". Puedes hacerme cualquier pregunta, reflexionar en voz alta o debatir conceptos conmigo. ¿De qué te gustaría hablar primero?`,
+        timestamp: 'Ahora',
+      },
+    ]);
   };
 
   // Último mensaje de Thea para desplegar como subtítulo central en vivo
@@ -658,12 +744,16 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       />
 
       {/* ── BARRA SUPERIOR MINIMALISTA ── */}
-      <header className="flex items-center justify-between gap-3 px-2 py-2 shrink-0">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-2 py-2 shrink-0">
         <div className="flex items-center gap-2">
           {onNavigateToChat && (
             <button
               type="button"
-              onClick={onNavigateToChat}
+              onClick={() => {
+                stopSpeaking();
+                stopListening(false);
+                onNavigateToChat();
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-thea-border/80 bg-thea-surface/80 hover:bg-thea-surface text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-95"
               title="Volver al Chat Tutor escrito"
             >
@@ -672,8 +762,34 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             </button>
           )}
 
-          <div className="hidden sm:block">
-            <span className="text-xs text-slate-400 truncate max-w-[200px] inline-block align-middle font-medium">
+          {/* Interruptor de Modo: Examen Oral vs Conversación */}
+          <div className="flex items-center p-0.5 rounded-xl bg-thea-surface/90 border border-thea-border/80 shadow-inner">
+            <button
+              type="button"
+              onClick={() => handleModeChange('exam')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                mode === 'exam'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Examen Oral
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange('conversation')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                mode === 'conversation'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Conversación
+            </button>
+          </div>
+
+          <div className="hidden lg:block">
+            <span className="text-xs text-slate-400 truncate max-w-[180px] inline-block align-middle font-medium">
               {kit.title}
             </span>
           </div>
@@ -695,11 +811,11 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
           {/* Badge Voz Salomé */}
           <div
-            title="Voz activa: Salomé Neural (Colombia) - Locución didáctica suave y clara"
+            title="Voz activa: Salomé Neural (Colombia) - Cadencia ultra rápida (+25%) y respuesta ágil"
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-violet-950/50 border border-violet-500/40 text-[11px] text-violet-200 font-medium select-none shadow-sm"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Salomé · Colombia</span>
+            <span>Salomé · +25%</span>
           </div>
 
           {/* Selector de dialecto */}
@@ -743,7 +859,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             type="button"
             onClick={clearConversation}
             className="p-1.5 rounded-xl border border-thea-border text-slate-400 hover:text-rose-400 hover:bg-thea-surface transition-colors cursor-pointer"
-            title="Reiniciar lección oral"
+            title={mode === 'exam' ? 'Reiniciar examen oral' : 'Reiniciar conversación'}
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -794,10 +910,16 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
               {speaking
                 ? 'Thea está hablando...'
                 : isTyping
-                ? 'Evaluando respuesta...'
+                ? mode === 'exam'
+                  ? 'Evaluando respuesta...'
+                  : 'Pensando respuesta...'
                 : isInitialState
-                ? 'Lección Oral Preparada'
-                : 'Pregunta de Examen'}
+                ? mode === 'exam'
+                  ? 'Lección Oral Preparada'
+                  : 'Conversación Lista'
+                : mode === 'exam'
+                ? 'Pregunta de Examen'
+                : 'Conversación con Thea'}
             </span>
           </div>
 
@@ -805,12 +927,20 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             {isTyping ? (
               <div className="flex items-center gap-2 text-violet-300 text-sm animate-pulse">
                 <Sparkles className="w-4 h-4 animate-spin text-cyan-400" />
-                <span>Thea está formulando tu siguiente pregunta...</span>
+                <span>
+                  {mode === 'exam'
+                    ? 'Thea está formulando tu siguiente pregunta...'
+                    : 'Thea está preparando su respuesta...'}
+                </span>
               </div>
             ) : latestTheaMsg ? (
               <FormattedText text={latestTheaMsg.text} />
             ) : (
-              <span>Pulsa el micrófono para iniciar tu lección oral.</span>
+              <span>
+                {mode === 'exam'
+                  ? 'Pulsa el micrófono para iniciar tu lección oral.'
+                  : 'Pulsa el micrófono para comenzar la conversación.'}
+              </span>
             )}
           </div>
         </div>
@@ -868,7 +998,9 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
                 : speaking
                 ? 'Pulsar o presionar Espacio para callar a Thea'
                 : isInitialState
-                ? 'Pulsar o presionar Espacio para empezar la lección oral'
+                ? mode === 'exam'
+                  ? 'Pulsar o presionar Espacio para empezar la lección oral'
+                  : 'Pulsar o presionar Espacio para iniciar la conversación'
                 : 'Pulsar o presionar Espacio para hablar'
             }
           >
