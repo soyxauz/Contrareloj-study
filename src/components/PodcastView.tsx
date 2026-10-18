@@ -1458,10 +1458,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   }, [isPlaying]);
 
   // Alternar reproducción
-  const handleTogglePlay = () => {
+  const handleTogglePlay = useCallback(() => {
     setSynthesisError(null);
     synthesisRetryCountRef.current = 0;
-    if (isPlaying) {
+    if (isPlayingRef.current) {
       setIsPlaying(false);
       isPlayingRef.current = false;
       isManualInterruptionRef.current = true;
@@ -1478,7 +1478,51 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       isManualInterruptionRef.current = false;
       speakDialogueLineRef.current?.(currentLineIndexRef.current, currentWordIndexRef.current);
     }
-  };
+  }, [stopCurrentAudio, playIntroChime]);
+
+  // Control de reproducción por teclado: Espacio (Play/Pausa) y Flechas (Adelantar / Retroceder 10s)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar si el usuario está interactuando con inputs, textareas, selects o elementos editables
+      const activeElement = document.activeElement;
+      const isInputFocused =
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement instanceof HTMLSelectElement ||
+        Boolean(activeElement?.getAttribute('contenteditable'));
+
+      if (isInputFocused) return;
+
+      // Ignorar si hay algún modal abierto
+      if (showVoiceModal || showConfirmReplaceModal) return;
+
+      // No ejecutar si no hay podcast o si aún se está generando
+      if (!podcast || isGenerating) return;
+
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        handleTogglePlay();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleSkipSeconds(10);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleSkipSeconds(-10);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    handleTogglePlay,
+    handleSkipSeconds,
+    showVoiceModal,
+    showConfirmReplaceModal,
+    podcast,
+    isGenerating,
+  ]);
 
   // Reiniciar episodio desde el principio
   const handleRestart = () => {
@@ -3005,7 +3049,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 onClick={() => handleSkipSeconds(-10)}
                 disabled={currentPlaybackSecs <= 0}
                 className="px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
-                title="Retroceder 10 segundos"
+                title="Retroceder 10 segundos (Flecha izquierda)"
               >
                 <ChevronLeft className="w-4 h-4 text-amber-400" />
                 <span>-10s</span>
@@ -3016,7 +3060,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 type="button"
                 onClick={handleTogglePlay}
                 className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-amber-500 hover:scale-105 transition-all shadow-xl shadow-violet-900/40 flex items-center justify-center text-white font-bold cursor-pointer"
-                title={isPlaying ? 'Pausar' : 'Reproducir'}
+                title={isPlaying ? 'Pausar (Espacio)' : 'Reproducir (Espacio)'}
               >
                 {isPlaying ? <Pause className="w-6 h-6 sm:w-7 sm:h-7 fill-white" /> : <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-white ml-0.5" />}
               </button>
@@ -3027,7 +3071,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 onClick={() => handleSkipSeconds(10)}
                 disabled={currentPlaybackSecs >= totalDurationSecs}
                 className="px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
-                title="Adelantar 10 segundos"
+                title="Adelantar 10 segundos (Flecha derecha)"
               >
                 <span>+10s</span>
                 <ChevronRight className="w-4 h-4 text-amber-400" />
