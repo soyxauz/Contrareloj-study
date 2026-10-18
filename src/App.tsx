@@ -624,7 +624,13 @@ export const App: React.FC = () => {
             {currentMode === 'podcast' && (
               <PodcastView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />
             )}
-            {currentMode === 'ask-thea' && <AskTheaView key={currentKit.id} kit={currentKit} />}
+            {currentMode === 'ask-thea' && (
+              <AskTheaView
+                key={currentKit.id}
+                kit={currentKit}
+                onOpenAISettings={() => setShowAIModal(true)}
+              />
+            )}
             {currentMode === 'tests' && <PracticeTestView key={currentKit.id} kit={currentKit} />}
             {currentMode === 'flashcards' && (
               <FlashcardsView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />

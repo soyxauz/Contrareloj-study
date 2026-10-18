@@ -13,13 +13,15 @@ import {
   MessageSquare,
   Keyboard,
   Square,
+  Zap,
 } from 'lucide-react';
-import { askTheaAI } from '../services/aiService';
+import { askTheaAI, getGroqApiKey } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { FormattedText } from './FormattedText';
 
 interface AskTheaViewProps {
   kit: StudyKit;
+  onOpenAISettings?: () => void;
 }
 
 interface Message {
@@ -72,7 +74,8 @@ function splitForSpeech(text: string, max = 260): string[] {
   return chunks;
 }
 
-export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit }) => {
+export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings }) => {
+  const hasGroq = Boolean(getGroqApiKey());
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'm1',
@@ -436,13 +439,32 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit }) => {
               <Bot className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-bold text-sm sm:text-base text-white">
                   Asistente IA Contrareloj
                 </h1>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-violet-600/20 text-violet-300 border border-violet-500/30">
                   {mode === 'oral' ? 'Lección Oral' : 'Conversación'}
                 </span>
+                {hasGroq ? (
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1"
+                    title="Acelerador Groq activo: Respuestas en tiempo real para voz y conversación"
+                  >
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    Groq Ultra-rápido
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onOpenAISettings}
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/40 flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Configurar Groq para acelerar las respuestas de voz a menos de 0.5s"
+                  >
+                    <span>Motor: Ollama Local</span>
+                    <span className="text-amber-400 underline font-semibold">+ Acelerar con Groq</span>
+                  </button>
+                )}
               </div>
               <p className="text-[11px] text-slate-400 truncate max-w-[240px] sm:max-w-md">
                 {kit.title}

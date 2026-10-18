@@ -10,6 +10,8 @@ export interface AISettings {
   timeoutMs: number;
   verified?: boolean;
   geminiApiKey?: string;
+  groqApiKey?: string;
+  groqModel?: string;
 }
 
 export interface AIPreset {
@@ -98,9 +100,36 @@ export function resetAISettingsToDefault(): void {
 export function hasPersonalApiKey(): boolean {
   const current = getAISettings();
   return Boolean(
-    current.apiKey &&
-    current.apiKey.trim().length > 0
+    (current.apiKey && current.apiKey.trim().length > 0) ||
+    (current.groqApiKey && current.groqApiKey.trim().length > 0)
   );
+}
+
+export function getGroqApiKey(): string {
+  const current = getAISettings();
+  if (current.groqApiKey && current.groqApiKey.trim().length > 0) {
+    return current.groqApiKey.trim();
+  }
+  if (typeof localStorage !== 'undefined') {
+    const direct = localStorage.getItem('thea_groq_api_key');
+    if (direct && direct.trim().length > 0) return direct.trim();
+  }
+  if (current.apiKey && (current.apiKey.startsWith('gsk_') || current.baseUrl?.includes('api.groq.com'))) {
+    return current.apiKey.trim();
+  }
+  return '';
+}
+
+export function saveGroqApiKey(key: string): void {
+  const cleanKey = key.trim();
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('thea_groq_api_key', cleanKey);
+  }
+  const current = getAISettings();
+  saveAISettings({
+    ...current,
+    groqApiKey: cleanKey,
+  });
 }
 
 /**
@@ -1822,8 +1851,24 @@ export async function askTheaAI(
   history: Array<{ sender: 'thea' | 'user'; text: string }>
 ): Promise<string> {
   const settings = getAISettings();
+  const groqKey = getGroqApiKey();
 
-  if (settings.enabled) {
+  // Enrutamiento prioritario a Groq para el módulo conversacional y lección oral (tiempo real),
+  // permitiendo que Ollama siga activo simultáneamente para el resto de la aplicación (kits, preguntas, guías)
+  let targetSettings: AISettings = settings;
+  if (groqKey) {
+    targetSettings = {
+      enabled: true,
+      provider: 'openai-compatible',
+      baseUrl: 'https://api.groq.com/openai/v1',
+      apiKey: groqKey,
+      model: settings.groqModel || 'openai/gpt-oss-120b',
+      timeoutMs: 25000,
+      verified: true,
+    };
+  }
+
+  if (targetSettings.enabled) {
     try {
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         {
@@ -1850,7 +1895,19 @@ Responde siempre de forma clara, motivadora y estructurada en español. Si el ma
 
       messages.push({ role: 'user', content: userQuery });
 
-      const reply = await queryAICompletion(messages, false);
+      let reply = '';
+      try {
+        reply = await queryAICompletion(messages, false, targetSettings);
+      } catch (primaryErr) {
+        // Si Groq falló y el proveedor general es distinto (ej. Ollama local), reintentar con el general
+        if (targetSettings !== settings) {
+          console.warn('[AskThea AI] Groq falló, reintentando con motor principal:', primaryErr);
+          reply = await queryAICompletion(messages, false, settings);
+        } else {
+          throw primaryErr;
+        }
+      }
+
       if (reply && reply.trim().length > 10) {
         return reply.trim();
       }
