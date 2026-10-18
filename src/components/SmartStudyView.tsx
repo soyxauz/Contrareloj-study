@@ -236,8 +236,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   });
   const [targetLevel, setTargetLevel] = useState<1 | 2 | 3>(() => activePracticeLevel);
   const [targetTopic, setTargetTopic] = useState('');
-  const targetCount = 5;
+  const targetCount = 10;
   const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
+  const [isSwitchingDifficulty, setIsSwitchingDifficulty] = useState(false);
+  const [switchingDiffMessage, setSwitchingDiffMessage] = useState('');
   const [targetSuccessNotice, setTargetSuccessNotice] = useState('');
   const [targetErrorNotice, setTargetErrorNotice] = useState('');
 
@@ -302,6 +304,209 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
       return next;
     });
+  };
+
+  const handleSelectDifficulty = async (selectedLvl: 1 | 2 | 3) => {
+    if (isSwitchingDifficulty || isGeneratingTargeted) return;
+
+    setTargetLevel(selectedLvl);
+    setActivePracticeLevel(selectedLvl);
+    setTargetErrorNotice('');
+    setTargetSuccessNotice('');
+
+    const targetDiff: 'easy' | 'medium' | 'hard' = selectedLvl === 1 ? 'easy' : selectedLvl === 2 ? 'medium' : 'hard';
+    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
+
+    // Si quedan menos de 7 preguntas en esta dificultad, generar tanda de 10 preguntas con IA
+    if (diffPool.length < 7) {
+      setIsSwitchingDifficulty(true);
+      setSwitchingDiffMessage(
+        `Generando tanda completa de 10 preguntas de Nivel ${selectedLvl} con IA...`
+      );
+
+      try {
+        let generated: Question[] = [];
+        if (targetTopic && targetTopic.trim()) {
+          generated = await generateTargetedPedagogicalQuestions(
+            kit.sourceText || kit.description,
+            targetTopic,
+            selectedLvl,
+            10,
+            kit.chunks
+          );
+        } else {
+          generated = await generateAIPedagogicalQuestions(
+            kit.sourceText || kit.description,
+            10,
+            targetDiff,
+            kit.chunks
+          );
+        }
+
+        if (generated && generated.length > 0) {
+          const marked = generated.map(q => ({
+            ...q,
+            difficulty: targetDiff,
+          }));
+
+          const existingIds = new Set(kit.questions.map(q => q.id));
+          const fresh = marked.filter(q => !existingIds.has(q.id));
+          const updatedKitQuestions = [...fresh, ...kit.questions];
+
+          if (onUpdateKit) {
+            onUpdateKit({
+              ...kit,
+              questions: updatedKitQuestions,
+            });
+          }
+
+          const firstQ = fresh[0] || marked[0];
+          setCurrentQuestion(firstQ);
+          lastQId.current = firstQ.id;
+
+          // Limpieza de respuestas activas
+          setSelectedOption(null);
+          setSelectedMultiIndices([]);
+          setActiveMatchingTerm(null);
+          setMatchingPairsMap({});
+          setMatchingChecked(false);
+          setPlacedChips([]);
+          setDragDropChecked(false);
+          setPlacedImageLabels({});
+          setActiveLabelChip(null);
+          setImageLabelChecked(false);
+          setShortAnswerInput('');
+          setShortAnswerEvalResult(null);
+          setIsManuallyOverridden(false);
+          setIsAnswered(false);
+          setIsCurrentCorrect(null);
+          setFeedbackGiven(null);
+          setCurrentIndex(0);
+
+          // Guardar síncronamente en memoria de sesión
+          authService.saveSmartStudySession(userId || null, kit.id, {
+            currentIndex: 0,
+            level,
+            activePracticeLevel: selectedLvl,
+            currentQuestionId: firstQ.id,
+            levelCorrectCount: currentLevelCorrect,
+            levelCorrectCounts,
+            errorQueue: [],
+            isReinforcementMode: false,
+            selectedOption: null,
+            selectedMultiIndices: [],
+            matchingPairsMap: {},
+            matchingChecked: false,
+            placedChips: [],
+            dragDropChecked: false,
+            isAnswered: false,
+            isCurrentCorrect: null,
+            activeTab,
+            history: history.slice(0, 25),
+            historyFilter,
+            historyLevelFilter,
+            questionsAnsweredTotal,
+            totalErrorsReinforced,
+            socraticProfile,
+            revealedQuestionIds,
+            lastUpdated: Date.now(),
+            shuffleSeed: 1,
+          } as any);
+
+          setTargetSuccessNotice(
+            `Se generaron ${fresh.length} preguntas de Nivel ${selectedLvl}. Pregunta activa actualizada.`
+          );
+          setTimeout(() => {
+            setShowConfigDrawer(false);
+            setTargetSuccessNotice('');
+          }, 1200);
+        } else if (diffPool.length > 0) {
+          const fallbackQ = diffPool.find(q => q.id !== currentQ.id) || diffPool[0];
+          setCurrentQuestion(fallbackQ);
+          lastQId.current = fallbackQ.id;
+          setTimeout(() => setShowConfigDrawer(false), 300);
+        }
+      } catch (err) {
+        console.error('Error al generar preguntas de dificultad:', err);
+        const msg = err instanceof Error ? err.message : 'Error al conectar con el servicio de IA.';
+        setTargetErrorNotice(msg);
+        if (diffPool.length > 0) {
+          const fallbackQ = diffPool.find(q => q.id !== currentQ.id) || diffPool[0];
+          setCurrentQuestion(fallbackQ);
+          lastQId.current = fallbackQ.id;
+        }
+      } finally {
+        setIsSwitchingDifficulty(false);
+        setSwitchingDiffMessage('');
+      }
+    } else {
+      // El banco ya tiene 7 o más preguntas en esta dificultad: cambiar la pregunta de inmediato
+      const currentIndexInPool = diffPool.findIndex(q => q.id === currentQ.id);
+      let nextQ: Question;
+      if (currentIndexInPool >= 0) {
+        // Rotar a la siguiente pregunta del banco
+        const nextIdx = (currentIndexInPool + 1) % diffPool.length;
+        nextQ = diffPool[nextIdx];
+      } else {
+        // Cambio de nivel: tomar una pregunta de este nivel distinta a la actual
+        nextQ = diffPool.find(q => q.id !== currentQ.id) || diffPool[0];
+      }
+
+      setCurrentQuestion(nextQ);
+      lastQId.current = nextQ.id;
+
+      // Limpieza de respuestas activas
+      setSelectedOption(null);
+      setSelectedMultiIndices([]);
+      setActiveMatchingTerm(null);
+      setMatchingPairsMap({});
+      setMatchingChecked(false);
+      setPlacedChips([]);
+      setDragDropChecked(false);
+      setPlacedImageLabels({});
+      setActiveLabelChip(null);
+      setImageLabelChecked(false);
+      setShortAnswerInput('');
+      setShortAnswerEvalResult(null);
+      setIsManuallyOverridden(false);
+      setIsAnswered(false);
+      setIsCurrentCorrect(null);
+      setFeedbackGiven(null);
+      setCurrentIndex(0);
+
+      // Guardar síncronamente en memoria de sesión
+      authService.saveSmartStudySession(userId || null, kit.id, {
+        currentIndex: 0,
+        level,
+        activePracticeLevel: selectedLvl,
+        currentQuestionId: nextQ.id,
+        levelCorrectCount: currentLevelCorrect,
+        levelCorrectCounts,
+        errorQueue: [],
+        isReinforcementMode: false,
+        selectedOption: null,
+        selectedMultiIndices: [],
+        matchingPairsMap: {},
+        matchingChecked: false,
+        placedChips: [],
+        dragDropChecked: false,
+        isAnswered: false,
+        isCurrentCorrect: null,
+        activeTab,
+        history: history.slice(0, 25),
+        historyFilter,
+        historyLevelFilter,
+        questionsAnsweredTotal,
+        totalErrorsReinforced,
+        socraticProfile,
+        revealedQuestionIds,
+        lastUpdated: Date.now(),
+        shuffleSeed: 1,
+      } as any);
+
+      // Cerrar el cajón para mostrar la nueva pregunta de inmediato
+      setTimeout(() => setShowConfigDrawer(false), 300);
+    }
   };
 
   const handleGenerateTargetedQuestions = async () => {
@@ -2084,7 +2289,21 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
           )}
 
-          {/* Visual Diagram/Asset if strictly necessary */}
+          {isSwitchingDifficulty ? (
+            <div className="p-10 sm:p-16 rounded-3xl bg-[#181138]/90 border border-amber-500/40 flex flex-col items-center justify-center text-center animate-fadeIn my-4 shadow-2xl">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center mb-5 shadow-lg shadow-amber-500/10">
+                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-extrabold text-white mb-2">
+                Generando preguntas de Nivel {activePracticeLevel} con IA...
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-md leading-relaxed">
+                {switchingDiffMessage || 'Ampliando el banco a un mínimo de 7 preguntas para este nivel de exigencia pedagógica.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Visual Diagram/Asset if strictly necessary */}
           {isImageStrictlyNecessary(currentQ) && currentQ.sourceAsset && (
             <div className="mb-6 p-4 rounded-2xl bg-[#181138]/80 border border-violet-500/30 overflow-hidden">
               <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
@@ -3084,8 +3303,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
           </div>
         )}
-      </div>
-    )}
+            </>
+          )}
+        </div>
+      )}
 
   {/* ── RAG EVIDENCE MODAL (CONTEXTO CERRADO) ────────────────────────── */}
   {showSourceModal && modalChunk && typeof document !== 'undefined' &&
@@ -3260,78 +3481,60 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setTargetLevel(1);
-                    setActivePracticeLevel(1);
-                    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === 'easy');
-                    if (diffPool.length > 0 && (currentQ.difficulty || 'easy') !== 'easy') {
-                      setCurrentQuestion(diffPool[0]);
-                      lastQId.current = diffPool[0].id;
-                      setSelectedOption(null);
-                      setSelectedMultiIndices([]);
-                      setIsAnswered(false);
-                      setIsCurrentCorrect(null);
-                    }
-                  }}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                  onClick={() => handleSelectDifficulty(1)}
+                  disabled={isSwitchingDifficulty || isGeneratingTargeted}
+                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer disabled:opacity-50 ${
                     targetLevel === 1
                       ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md ring-1 ring-emerald-500/40'
                       : 'bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[10px] uppercase font-bold block text-emerald-400 mb-0.5">Nivel 1</span>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] uppercase font-bold text-emerald-400">Nivel 1</span>
+                    {isSwitchingDifficulty && targetLevel === 1 && (
+                      <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                    )}
+                  </div>
                   <span className="text-xs font-bold block">Fundamentos</span>
                   <span className="text-[10px] text-slate-400 block mt-1">Retención directa</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setTargetLevel(2);
-                    setActivePracticeLevel(2);
-                    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === 'medium');
-                    if (diffPool.length > 0 && (currentQ.difficulty || 'easy') !== 'medium') {
-                      setCurrentQuestion(diffPool[0]);
-                      lastQId.current = diffPool[0].id;
-                      setSelectedOption(null);
-                      setSelectedMultiIndices([]);
-                      setIsAnswered(false);
-                      setIsCurrentCorrect(null);
-                    }
-                  }}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                  onClick={() => handleSelectDifficulty(2)}
+                  disabled={isSwitchingDifficulty || isGeneratingTargeted}
+                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer disabled:opacity-50 ${
                     targetLevel === 2
                       ? 'bg-blue-950/50 border-blue-500 text-white shadow-md ring-1 ring-blue-500/40'
                       : 'bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[10px] uppercase font-bold block text-blue-400 mb-0.5">Nivel 2</span>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] uppercase font-bold text-blue-400">Nivel 2</span>
+                    {isSwitchingDifficulty && targetLevel === 2 && (
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                    )}
+                  </div>
                   <span className="text-xs font-bold block">Aplicación</span>
                   <span className="text-[10px] text-slate-400 block mt-1">Casos y causas</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setTargetLevel(3);
-                    setActivePracticeLevel(3);
-                    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === 'hard');
-                    if (diffPool.length > 0 && (currentQ.difficulty || 'easy') !== 'hard') {
-                      setCurrentQuestion(diffPool[0]);
-                      lastQId.current = diffPool[0].id;
-                      setSelectedOption(null);
-                      setSelectedMultiIndices([]);
-                      setIsAnswered(false);
-                      setIsCurrentCorrect(null);
-                    }
-                  }}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
+                  onClick={() => handleSelectDifficulty(3)}
+                  disabled={isSwitchingDifficulty || isGeneratingTargeted}
+                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative disabled:opacity-50 ${
                     targetLevel === 3
                       ? 'bg-purple-950/60 border-amber-400 text-white shadow-md ring-1 ring-amber-400/50'
                       : 'bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[10px] uppercase font-bold block text-amber-400 mb-0.5">Nivel 3</span>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] uppercase font-bold text-amber-400">Nivel 3</span>
+                    {isSwitchingDifficulty && targetLevel === 3 && (
+                      <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                    )}
+                  </div>
                   <span className="text-xs font-bold block">Máximo</span>
                   <span className="text-[10px] text-amber-300/80 block mt-1">Opciones Similares</span>
                 </button>
