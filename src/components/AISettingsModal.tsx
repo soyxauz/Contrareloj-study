@@ -317,8 +317,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       provider: preset.provider,
       baseUrl: preset.baseUrl,
       model: preset.model,
-      // Conservar la clave si el usuario ya ingresó una, o dejar vacía sólo si es Ollama local
-      apiKey: preset.id === 'ollama-local' ? '' : prev.apiKey,
+      apiKey: prev.apiKey,
     }));
     setTestResult(null);
   };
@@ -467,9 +466,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                     <span>ollama.com/settings/keys</span>
                     <ExternalLink className="w-2.5 h-2.5" />
                   </a>
-                )}
-                {activePreset?.id === 'ollama-local' && (
-                  <span className="text-[10px] text-slate-500 italic">No requerida para Ollama local</span>
                 )}
               </div>
               <div className="relative">

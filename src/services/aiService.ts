@@ -55,29 +55,6 @@ export const AI_PRESETS: AIPreset[] = [
     badge: 'Rápido',
     freeTier: true,
   },
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    provider: 'openai-compatible',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    model: 'gemini-1.5-flash',
-    keyPlaceholder: 'AIzaSy...',
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    description: 'Endpoint oficial OpenAI de Google Gemini.',
-    badge: 'Google AI Studio',
-    freeTier: true,
-  },
-  {
-    id: 'ollama-local',
-    name: 'Ollama Local (Opcional)',
-    provider: 'ollama',
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'llama3.2',
-    keyPlaceholder: 'No requerida para Ollama local',
-    description: 'Ejecución 100% privada y offline si tienes Ollama instalado en tu PC.',
-    badge: 'Offline / Local',
-    freeTier: true,
-  },
 ];
 
 /** Modelo de respaldo para Groq cuando el principal da límite de tasa (429) o error de servidor (5xx) */
