@@ -158,7 +158,7 @@ export const EDGE_VOICES: EdgeVoiceOption[] = [
 ];
 
 export const DEFAULT_PODCAST_SETTINGS: PodcastSettings = {
-  voiceEngine: 'gemini',
+  voiceEngine: 'edge',
   sofiaVoice: 'Aoede',
   mateoVoice: 'Puck',
   edgeSofiaVoice: 'es-ES-ElviraNeural',
