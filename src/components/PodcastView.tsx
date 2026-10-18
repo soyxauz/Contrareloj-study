@@ -177,7 +177,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [selectedFormat, setSelectedFormat] = useState<PodcastFormat>('detailed');
   const [selectedDuration, setSelectedDuration] = useState<PodcastDuration>('normal');
   const [orientationInput, setOrientationInput] = useState<string>(() => getPodcastSettings().orientation || '');
-  const [orientationSavedFeedback, setOrientationSavedFeedback] = useState(false);
   const [isTestingVoice, setIsTestingVoice] = useState(false);
   const [synthesisError, setSynthesisError] = useState<string | null>(null);
 
@@ -1829,9 +1828,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                       <Headphones className="w-4 h-4 text-emerald-400" />
                       Microsoft Azure Neural Voices (Edge TTS)
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                      100% Gratis • Sin API Key
-                    </span>
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
                     Voces neuronales auténticas de Microsoft Azure con entonación natural, cadencia humana y emoción conversacional. Todo el audio se precarga automáticamente en segundo plano y se almacena en IndexedDB para respuesta a 0ms sin pausas.
@@ -2363,77 +2359,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               </div>
             )}
 
-            {/* SECCIÓN INFERIOR PARA PESTAÑAS AZURE Y BROWSER (ORIENTACIÓN + BOTONES DE PRUEBA) */}
+            {/* SECCIÓN INFERIOR PARA PESTAÑAS AZURE Y BROWSER (BOTONES DE PRUEBA) */}
             {voiceModalTab !== 'new_episode' && (
-              <>
-                <div className="pt-2 border-t border-thea-border">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      Orientación y Enfoque del Podcast
-                    </label>
-                    {orientationSavedFeedback && (
-                      <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
-                        <Check className="w-3 h-3 text-emerald-400" /> ¡Guardada y sincronizada!
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setOrientationInput('Enfoque riguroso para examen: conceptos clave, definiciones exactas, fórmulas o leyes relevantes y posibles preguntas trampa.')}
-                      className="px-2.5 py-1 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[11px] text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
-                    >
-                      Examen riguroso
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrientationInput('Debate dinámico y conversacional entre Sofía y Mateo: usan analogías de la vida real, tono entretenido y explicaciones frescas.')}
-                      className="px-2.5 py-1 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[11px] text-slate-300 hover:text-violet-300 transition-colors cursor-pointer"
-                    >
-                      Debate ameno
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrientationInput('Explicación pedagógica paso a paso desde los fundamentos básicos hasta los avanzados, ideal para aprender el tema por primera vez.')}
-                      className="px-2.5 py-1 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[11px] text-slate-300 hover:text-emerald-300 transition-colors cursor-pointer"
-                    >
-                      Explicación pedagógica
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    <textarea
-                      rows={3}
-                      value={orientationInput}
-                      onChange={(e) => setOrientationInput(e.target.value)}
-                      placeholder="Instrucciones personalizadas para el podcast (ej: enfócate en los puntos difíciles, debate las diferencias de conceptos, incluye preguntas desafiantes...)"
-                      className="w-full bg-thea-bg border border-thea-border rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed font-sans"
-                    />
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] text-slate-400">
-                        Define la directiva que la IA seguirá al generar los guiones de tus episodios.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const updated = savePodcastSettings({ orientation: orientationInput.trim() });
-                          setOrientationSavedFeedback(true);
-                          setTimeout(() => setOrientationSavedFeedback(false), 2500);
-                          if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                            await googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                          }
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all cursor-pointer shrink-0"
-                      >
-                        {orientationSavedFeedback ? '¡Guardada!' : 'Guardar Orientación'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-thea-border">
+              <div className="pt-3 border-t border-thea-border">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <button
@@ -2466,7 +2394,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                     </button>
                   </div>
                 </div>
-              </>
             )}
           </div>
         </div>
@@ -2599,11 +2526,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <Sparkles className="w-4 h-4 text-amber-400" />
                 <span>Orientación Personalizada (Opcional)</span>
               </label>
-              {orientationSavedFeedback && (
-                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" /> Guardada
-                </span>
-              )}
             </div>
 
             <div className="flex flex-wrap gap-1.5 mb-2.5">
@@ -2651,9 +2573,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-white">
                     {voiceEngine === 'edge' ? 'Azure Neural (Microsoft Edge)' : 'Voces del Navegador'}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">
-                    100% Gratis
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400">
@@ -2736,10 +2655,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Azure Neural: Voces oficiales de Microsoft Azure (Elvira y Álvaro). 100% gratis, sin claves ni límites."
+              title="Azure Neural: Voces oficiales de Microsoft Azure."
             >
               <Headphones className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Azure Neural (Gratis)</span>
+              <span>Azure Neural</span>
             </button>
 
             <button

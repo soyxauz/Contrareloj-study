@@ -31,14 +31,6 @@ export const AZURE_EDGE_VOICES: AzureEdgeVoiceOption[] = [
     roleHint: 'Predeterminada para Mateo (Co-Host Analítico)',
   },
   {
-    id: 'es-ES-AbrilNeural',
-    name: 'Abril Neural',
-    gender: 'female',
-    tone: 'Joven, dinámica y muy cercana',
-    country: 'España',
-    roleHint: 'Alternativa femenina juvenil',
-  },
-  {
     id: 'es-ES-ArnauNeural',
     name: 'Arnau Neural',
     gender: 'male',
@@ -61,14 +53,6 @@ export const AZURE_EDGE_VOICES: AzureEdgeVoiceOption[] = [
     tone: 'Juvenil, dinámico y ameno',
     country: 'México',
     roleHint: 'Ideal para debates frescos',
-  },
-  {
-    id: 'es-MX-BeatrizNeural',
-    name: 'Beatriz Neural',
-    gender: 'female',
-    tone: 'Reflexiva, periodística y formal',
-    country: 'México',
-    roleHint: 'Tono documental periodístico',
   },
   {
     id: 'es-CO-SalomeNeural',
