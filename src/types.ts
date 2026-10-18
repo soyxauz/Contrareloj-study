@@ -163,9 +163,11 @@ export interface DeveloperSettings {
 }
 
 export interface PodcastSettings {
-  voiceEngine: 'gemini' | 'browser';
+  voiceEngine: 'gemini' | 'edge' | 'browser';
   sofiaVoice: string;
   mateoVoice: string;
+  edgeSofiaVoice?: string;
+  edgeMateoVoice?: string;
   playbackSpeed: number;
   geminiApiKey?: string;
   orientation?: string;

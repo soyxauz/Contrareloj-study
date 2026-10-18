@@ -90,10 +90,79 @@ function getAudioDatabase(): Promise<IDBDatabase | null> {
   });
 }
 
+export interface EdgeVoiceOption {
+  id: string;
+  name: string;
+  gender: 'female' | 'male';
+  tone: string;
+  country: string;
+}
+
+export const EDGE_VOICES: EdgeVoiceOption[] = [
+  {
+    id: 'es-ES-ElviraNeural',
+    name: 'Elvira Neural',
+    gender: 'female',
+    tone: 'Cálida, conversacional y expresiva',
+    country: 'España',
+  },
+  {
+    id: 'es-ES-AlvaroNeural',
+    name: 'Álvaro Neural',
+    gender: 'male',
+    tone: 'Enérgico, radiofónico y analítico',
+    country: 'España',
+  },
+  {
+    id: 'es-MX-DaliaNeural',
+    name: 'Dalia Neural',
+    gender: 'female',
+    tone: 'Fresca, clara y didáctica',
+    country: 'México',
+  },
+  {
+    id: 'es-MX-JorgeNeural',
+    name: 'Jorge Neural',
+    gender: 'male',
+    tone: 'Juvenil, dinámico y ameno',
+    country: 'México',
+  },
+  {
+    id: 'es-CO-SalomeNeural',
+    name: 'Salomé Neural',
+    gender: 'female',
+    tone: 'Dulce, pedagógica y serena',
+    country: 'Colombia',
+  },
+  {
+    id: 'es-CO-GonzaloNeural',
+    name: 'Gonzalo Neural',
+    gender: 'male',
+    tone: 'Profesional, seguro y reflexivo',
+    country: 'Colombia',
+  },
+  {
+    id: 'es-US-PalomaNeural',
+    name: 'Paloma Neural',
+    gender: 'female',
+    tone: 'Neutra, contemporánea y fluida',
+    country: 'EE.UU. / Latam',
+  },
+  {
+    id: 'es-US-AlonsoNeural',
+    name: 'Alonso Neural',
+    gender: 'male',
+    tone: 'Comunicativo, cercano y fluido',
+    country: 'EE.UU. / Latam',
+  },
+];
+
 export const DEFAULT_PODCAST_SETTINGS: PodcastSettings = {
   voiceEngine: 'gemini',
   sofiaVoice: 'Aoede',
   mateoVoice: 'Puck',
+  edgeSofiaVoice: 'es-ES-ElviraNeural',
+  edgeMateoVoice: 'es-ES-AlvaroNeural',
   playbackSpeed: 1,
   geminiApiKey: '',
   orientation: '',
