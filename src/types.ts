@@ -222,5 +222,8 @@ export interface SmartStudySessionState {
   revealedQuestionIds?: string[];
   levelCorrectCounts?: Record<1 | 2 | 3, number>;
   lastUpdated: number;
+  currentQuestionId?: string;
+  activePracticeLevel?: 1 | 2 | 3;
+  activePracticeDifficulty?: 'easy' | 'medium' | 'hard';
 }
 

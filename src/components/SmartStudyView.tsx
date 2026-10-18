@@ -231,7 +231,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // ── Calibración Pedagógica & Preguntas Dirigidas (Tuerca) ───────────────
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
-  const [targetLevel, setTargetLevel] = useState<1 | 2 | 3>(() => level);
+  const [activePracticeLevel, setActivePracticeLevel] = useState<1 | 2 | 3>(() => {
+    return ((savedSession as any)?.activePracticeLevel as 1 | 2 | 3) || (savedSession?.level as 1 | 2 | 3) || 1;
+  });
+  const [targetLevel, setTargetLevel] = useState<1 | 2 | 3>(() => activePracticeLevel);
   const [targetTopic, setTargetTopic] = useState('');
   const targetCount = 5;
   const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
@@ -318,6 +321,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
       if (generated.length > 0) {
         // Se preserva el nivel de progreso real ganado sin alterarlo por la dificultad de práctica
+        setActivePracticeLevel(targetLevel);
         setShuffleSeed(1);
         setCurrentIndex(0);
         setIsReinforcementMode(false);
@@ -328,12 +332,43 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         setCurrentQuestion(generated[0]);
         lastQId.current = generated[0].id;
 
+        const updatedQuestions = [...generated, ...kit.questions];
         if (onUpdateKit) {
           onUpdateKit({
             ...kit,
-            questions: [...generated, ...kit.questions],
+            questions: updatedQuestions,
           });
         }
+
+        // Guardar de inmediato en la sesión activa para persistencia total al cambiar de pestaña
+        authService.saveSmartStudySession(userId || null, kit.id, {
+          currentIndex: 0,
+          level,
+          activePracticeLevel: targetLevel,
+          currentQuestionId: generated[0].id,
+          levelCorrectCount: currentLevelCorrect,
+          levelCorrectCounts,
+          errorQueue: [],
+          isReinforcementMode: false,
+          selectedOption: null,
+          selectedMultiIndices: [],
+          matchingPairsMap: {},
+          matchingChecked: false,
+          placedChips: [],
+          dragDropChecked: false,
+          isAnswered: false,
+          isCurrentCorrect: null,
+          activeTab,
+          history: history.slice(0, 25),
+          historyFilter,
+          historyLevelFilter,
+          questionsAnsweredTotal,
+          totalErrorsReinforced,
+          socraticProfile,
+          revealedQuestionIds,
+          lastUpdated: Date.now(),
+          shuffleSeed: 1,
+        } as any);
 
         setTargetSuccessNotice(
           `Se generaron ${generated.length} preguntas de Nivel ${targetLevel} ${targetTopic.trim() ? `sobre "${targetTopic.trim()}"` : ''} listas para responder.`
@@ -427,8 +462,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // Disparar verificación y generación continua al cambiar de nivel o avanzar índice
   useEffect(() => {
-    checkAndPrefetchQuestions(level, currentIndex);
-  }, [level, currentIndex, checkAndPrefetchQuestions]);
+    checkAndPrefetchQuestions(activePracticeLevel, currentIndex);
+  }, [activePracticeLevel, currentIndex, checkAndPrefetchQuestions]);
 
   // ── Socratic Active Recall & Question Selection Logic ─────────────────────
   const answeredQuestionIdsRef = useRef<Set<string>>(
@@ -573,9 +608,16 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (savedSession?.errorQueue && savedSession.errorQueue.length > 0 && savedSession.isReinforcementMode) {
       return savedSession.errorQueue[0];
     }
+    // Si hay una pregunta guardada en la sesión que aún exista en el kit, restaurarla con máxima fidelidad
+    if (savedSession?.currentQuestionId) {
+      const found = kit.questions.find(q => q.id === savedSession.currentQuestionId);
+      if (found) {
+        return found;
+      }
+    }
     const initialIndex = savedSession?.currentIndex || 0;
-    const initialLevel = (savedSession?.level as 1 | 2 | 3) || 1;
-    const targetDiff = initialLevel === 1 ? 'easy' : initialLevel === 2 ? 'medium' : 'hard';
+    const practiceLevel = (savedSession as any)?.activePracticeLevel || (savedSession?.level as 1 | 2 | 3) || 1;
+    const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
     const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
     const finalPool = pool.length > 0 ? pool : kit.questions;
     const activeCategories: (keyof SmartStudyTypeFilters)[] = (
@@ -798,6 +840,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     authService.saveSmartStudySession(userId || null, kit.id, {
       currentIndex,
       level,
+      activePracticeLevel,
+      currentQuestionId: currentQ?.id,
       levelCorrectCount: currentLevelCorrect,
       levelCorrectCounts,
       errorQueue,
@@ -826,6 +870,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     kit.id,
     currentIndex,
     level,
+    activePracticeLevel,
+    currentQ?.id,
     currentLevelCorrect,
     levelCorrectCounts,
     errorQueue,
@@ -1326,6 +1372,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           const nextLevel = (level + 1) as 1 | 2 | 3;
           const nextCount = levelCorrectCounts[nextLevel] ?? 0;
           setLevel(nextLevel);
+          setActivePracticeLevel(nextLevel);
+          setTargetLevel(nextLevel);
           setLevelCorrectCount(nextCount);
           setErrorQueue([]);
           setIsReinforcementMode(false);
@@ -1363,8 +1411,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             setIsReinforcementMode(false);
             const nextIdx = currentIndex + 1;
             setCurrentIndex(nextIdx);
-            nextQ = resolveNextQuestion(level, nextIdx, false, [], currentQ.id);
-            checkAndPrefetchQuestions(level, nextIdx);
+            nextQ = resolveNextQuestion(activePracticeLevel, nextIdx, false, [], currentQ.id);
+            checkAndPrefetchQuestions(activePracticeLevel, nextIdx);
           } else {
             nextQ = remainingQueue[0];
           }
@@ -1378,8 +1426,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         // Avance normal a la siguiente pregunta del nivel actual
         const nextIdx = currentIndex + 1;
         setCurrentIndex(nextIdx);
-        nextQ = resolveNextQuestion(level, nextIdx, false, [], currentQ.id);
-        checkAndPrefetchQuestions(level, nextIdx);
+        nextQ = resolveNextQuestion(activePracticeLevel, nextIdx, false, [], currentQ.id);
+        checkAndPrefetchQuestions(activePracticeLevel, nextIdx);
       }
 
     // Salvaguarda final: NUNCA permitir que nextQ sea la misma pregunta actual si el kit tiene más preguntas
@@ -1424,6 +1472,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   const handleResetProgress = () => {
     setLevel(1);
+    setActivePracticeLevel(1);
+    setTargetLevel(1);
     setLevelCorrectCount(0);
     setLevelCorrectCounts({ 1: 0, 2: 0, 3: 0 });
     setErrorQueue([]);
@@ -1470,6 +1520,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       authService.saveSmartStudySession(userId || null, kit.id, {
         ...currentSession,
         level: 1,
+        activePracticeLevel: 1,
+        currentQuestionId: firstQ?.id,
         levelCorrectCount: 0,
         levelCorrectCounts: { 1: 0, 2: 0, 3: 0 },
         currentIndex: 0,
@@ -1487,6 +1539,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       const nextLevel = (level + 1) as 1 | 2 | 3;
       const nextCount = levelCorrectCounts[nextLevel] ?? 0;
       setLevel(nextLevel);
+      setActivePracticeLevel(nextLevel);
+      setTargetLevel(nextLevel);
       setLevelCorrectCount(nextCount);
       setErrorQueue([]);
       setIsReinforcementMode(false);
@@ -3206,7 +3260,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setTargetLevel(1)}
+                  onClick={() => {
+                    setTargetLevel(1);
+                    setActivePracticeLevel(1);
+                    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === 'easy');
+                    if (diffPool.length > 0 && (currentQ.difficulty || 'easy') !== 'easy') {
+                      setCurrentQuestion(diffPool[0]);
+                      lastQId.current = diffPool[0].id;
+                      setSelectedOption(null);
+                      setSelectedMultiIndices([]);
+                      setIsAnswered(false);
+                      setIsCurrentCorrect(null);
+                    }
+                  }}
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                     targetLevel === 1
                       ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md ring-1 ring-emerald-500/40'
@@ -3220,7 +3286,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
                 <button
                   type="button"
-                  onClick={() => setTargetLevel(2)}
+                  onClick={() => {
+                    setTargetLevel(2);
+                    setActivePracticeLevel(2);
+                    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === 'medium');
+                    if (diffPool.length > 0 && (currentQ.difficulty || 'easy') !== 'medium') {
+                      setCurrentQuestion(diffPool[0]);
+                      lastQId.current = diffPool[0].id;
+                      setSelectedOption(null);
+                      setSelectedMultiIndices([]);
+                      setIsAnswered(false);
+                      setIsCurrentCorrect(null);
+                    }
+                  }}
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                     targetLevel === 2
                       ? 'bg-blue-950/50 border-blue-500 text-white shadow-md ring-1 ring-blue-500/40'
@@ -3234,7 +3312,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
                 <button
                   type="button"
-                  onClick={() => setTargetLevel(3)}
+                  onClick={() => {
+                    setTargetLevel(3);
+                    setActivePracticeLevel(3);
+                    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === 'hard');
+                    if (diffPool.length > 0 && (currentQ.difficulty || 'easy') !== 'hard') {
+                      setCurrentQuestion(diffPool[0]);
+                      lastQId.current = diffPool[0].id;
+                      setSelectedOption(null);
+                      setSelectedMultiIndices([]);
+                      setIsAnswered(false);
+                      setIsCurrentCorrect(null);
+                    }
+                  }}
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
                     targetLevel === 3
                       ? 'bg-purple-950/60 border-amber-400 text-white shadow-md ring-1 ring-amber-400/50'
@@ -3322,7 +3412,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   onClick={() => {
                     setShuffleSeed((prev: number) => prev + 1);
                     setCurrentIndex(0);
-                    const q = resolveNextQuestion(level, 0, false, [], currentQ.id);
+                    const q = resolveNextQuestion(activePracticeLevel, 0, false, [], currentQ.id);
                     setCurrentQuestion(q);
                     lastQId.current = q.id;
                     setSelectedOption(null);
