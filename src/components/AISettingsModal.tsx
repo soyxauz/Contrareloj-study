@@ -51,7 +51,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     models?: string[];
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama-cloud');
   const [grokKey, setGrokKey] = useState<string>(() => getGrokApiKey());
   const [grokBaseUrl, setGrokBaseUrl] = useState<string>(() => getGrokBaseUrl());
   const [grokModel, setGrokModel] = useState<string>(() => getGrokModel());
@@ -79,6 +79,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       const match = AI_PRESETS.find(p => p.baseUrl === current.baseUrl);
       if (match) {
         setSelectedPresetId(match.id);
+      } else if (current.baseUrl?.includes('ollama.com')) {
+        setSelectedPresetId('ollama-cloud');
       } else {
         setSelectedPresetId('custom');
       }
@@ -210,18 +212,25 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
-  const handleResetOllama = () => {
+  const handleResetOllamaCloud = () => {
     resetAISettingsToDefault();
     const defaults = getAISettings();
-    setSettings(defaults);
-    setSelectedPresetId('ollama');
-    setTestResult({
-      success: true,
-      message: 'Configuración restablecida a Ollama Local (http://localhost:11434/v1, modelo llama3.2).',
-    });
+    const currentKey = settings.apiKey?.trim() || '';
+    const restored: AISettings = {
+      ...defaults,
+      baseUrl: 'https://ollama.com/v1',
+      model: 'gemma4:31b',
+      provider: 'openai-compatible',
+      apiKey: currentKey,
+      verified: Boolean(currentKey),
+    };
+    saveAISettings(restored);
+    setSettings(restored);
+    setSelectedPresetId('ollama-cloud');
+    setTestResult(null);
     const user = authService.getCurrentUser();
     if (user) {
-      authService.saveUserAISettings(user.id, defaults);
+      authService.saveUserAISettings(user.id, restored);
     }
     if (onSettingsSaved) onSettingsSaved();
   };
@@ -308,8 +317,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       provider: preset.provider,
       baseUrl: preset.baseUrl,
       model: preset.model,
-      // Conservar la clave si el usuario ya ingresó una, o dejar vacía si es Ollama local
-      apiKey: preset.id === 'ollama' ? '' : prev.apiKey,
+      // Conservar la clave si el usuario ya ingresó una, o dejar vacía sólo si es Ollama local
+      apiKey: preset.id === 'ollama-local' ? '' : prev.apiKey,
     }));
     setTestResult(null);
   };
@@ -337,11 +346,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   Motor de Inteligencia Artificial
                 </h2>
                 <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Ollama Local
+                  {settings.baseUrl?.includes('ollama.com') ? 'Ollama Cloud' : settings.baseUrl?.includes('localhost') ? 'Ollama Local' : 'IA Configurada'}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Configuración de Ollama Local para generación inteligente y offline
+                {settings.baseUrl?.includes('ollama.com')
+                  ? 'Servicio oficial de Ollama en la nube con API Key de ollama.com/settings/keys'
+                  : 'Configuración de motor de IA para generación inteligente de kits y exámenes'}
               </p>
             </div>
           </div>
@@ -435,7 +446,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 type="text"
                 value={settings.baseUrl}
                 onChange={e => setSettings(prev => ({ ...prev, baseUrl: e.target.value }))}
-                placeholder="http://localhost:11434/v1"
+                placeholder="https://ollama.com/v1"
                 className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
               />
             </div>
@@ -446,7 +457,18 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 <label className="text-[11px] font-semibold text-slate-300 block">
                   API Key / Token de Acceso:
                 </label>
-                {activePreset?.id === 'ollama' && (
+                {settings.baseUrl?.includes('ollama.com') && (
+                  <a
+                    href="https://ollama.com/settings/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-violet-400 hover:text-violet-300 flex items-center gap-0.5 text-[10px] underline"
+                  >
+                    <span>ollama.com/settings/keys</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
+                {activePreset?.id === 'ollama-local' && (
                   <span className="text-[10px] text-slate-500 italic">No requerida para Ollama local</span>
                 )}
               </div>
@@ -515,7 +537,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 type="text"
                 value={settings.model}
                 onChange={e => setSettings(prev => ({ ...prev, model: e.target.value }))}
-                placeholder="llama3.2, mistral, llama3.1, etc."
+                placeholder="gemma4:31b, llama3.3, mistral, etc."
                 className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
               />
 
@@ -758,12 +780,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
             <button
               type="button"
-              onClick={handleResetOllama}
+              onClick={handleResetOllamaCloud}
               className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
-              title="Restablecer a valores por defecto de Ollama Local (http://localhost:11434/v1, llama3.2)"
+              title="Restablecer a valores oficiales de Ollama Cloud (https://ollama.com/v1, gemma4:31b)"
             >
               <RefreshCw className="w-3.5 h-3.5 text-violet-400" />
-              <span>Restablecer Ollama</span>
+              <span>Restablecer Ollama Cloud</span>
             </button>
           </div>
 

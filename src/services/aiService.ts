@@ -32,19 +32,20 @@ export interface AIPreset {
 
 export const AI_PRESETS: AIPreset[] = [
   {
-    id: 'ollama',
-    name: 'Ollama Local',
-    provider: 'ollama',
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'llama3.2',
-    keyPlaceholder: 'No requerida para Ollama local',
-    description: 'Ejecución 100% privada y offline. Requiere Ollama corriendo en tu equipo.',
-    badge: 'Offline / Privado',
+    id: 'ollama-cloud',
+    name: 'Ollama Cloud',
+    provider: 'openai-compatible',
+    baseUrl: 'https://ollama.com/v1',
+    model: 'gemma4:31b',
+    keyPlaceholder: 'Pega tu clave de API de https://ollama.com/settings/keys',
+    keyUrl: 'https://ollama.com/settings/keys',
+    description: 'Servicio cloud oficial con modelo Gemma 4 (31B). Clave obtenida de https://ollama.com/settings/keys.',
+    badge: 'Ollama Cloud',
     freeTier: true,
   },
   {
     id: 'groq',
-    name: 'Groq',
+    name: 'Groq Cloud',
     provider: 'openai-compatible',
     baseUrl: 'https://api.groq.com/openai/v1',
     model: 'openai/gpt-oss-120b',
@@ -52,6 +53,29 @@ export const AI_PRESETS: AIPreset[] = [
     keyUrl: 'https://console.groq.com/keys',
     description: 'Muy rápido y con plan sin tarjeta. Cada usuario pega su propia API key.',
     badge: 'Rápido',
+    freeTier: true,
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    provider: 'openai-compatible',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-1.5-flash',
+    keyPlaceholder: 'AIzaSy...',
+    keyUrl: 'https://aistudio.google.com/app/apikey',
+    description: 'Endpoint oficial OpenAI de Google Gemini.',
+    badge: 'Google AI Studio',
+    freeTier: true,
+  },
+  {
+    id: 'ollama-local',
+    name: 'Ollama Local (Opcional)',
+    provider: 'ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    model: 'llama3.2',
+    keyPlaceholder: 'No requerida para Ollama local',
+    description: 'Ejecución 100% privada y offline si tienes Ollama instalado en tu PC.',
+    badge: 'Offline / Local',
     freeTier: true,
   },
 ];
@@ -80,12 +104,12 @@ export const DEFAULT_GROK_SETTINGS: GrokSettings = {
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
-  provider: 'ollama',
-  baseUrl: 'http://localhost:11434/v1',
+  provider: 'openai-compatible',
+  baseUrl: 'https://ollama.com/v1',
   apiKey: '',
-  model: 'llama3.2',
+  model: 'gemma4:31b',
   timeoutMs: 45000,
-  verified: true,
+  verified: false,
 };
 
 export function getAISettings(): AISettings {
@@ -93,7 +117,26 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Auto-reparación: si thea_ai_settings fue contaminado con xAI o Grok, purgar y restaurar a Ollama
+
+      // Si thea_ai_settings apunta a localhost:11434 o llama3.2, migrar a Ollama Cloud
+      // preservando la API key que el usuario haya ingresado
+      if (
+        parsed.baseUrl?.includes('11434') ||
+        parsed.baseUrl?.includes('localhost') ||
+        parsed.baseUrl?.includes('127.0.0.1')
+      ) {
+        parsed.baseUrl = DEFAULT_AI_SETTINGS.baseUrl;
+        parsed.provider = DEFAULT_AI_SETTINGS.provider;
+        if (parsed.model === 'llama3.2' || !parsed.model) {
+          parsed.model = DEFAULT_AI_SETTINGS.model;
+        }
+        delete parsed.grokApiKey;
+        delete parsed.grokBaseUrl;
+        delete parsed.grokModel;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      }
+
+      // Auto-reparación: si thea_ai_settings fue contaminado con xAI o Grok, purgar y restaurar a Ollama Cloud
       if (
         parsed.baseUrl?.includes('api.x.ai') ||
         parsed.baseUrl?.includes('grok.com') ||
@@ -104,18 +147,20 @@ export function getAISettings(): AISettings {
         parsed.provider = DEFAULT_AI_SETTINGS.provider;
         parsed.apiKey = '';
         parsed.model = DEFAULT_AI_SETTINGS.model;
-        parsed.verified = true;
+        parsed.verified = false;
         delete parsed.grokApiKey;
         delete parsed.grokBaseUrl;
         delete parsed.grokModel;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       }
+
+      const hasKey = Boolean(parsed.apiKey && parsed.apiKey.trim().length > 0);
       const isLocal = Boolean(parsed.baseUrl?.includes('localhost') || parsed.baseUrl?.includes('127.0.0.1'));
       return {
         ...DEFAULT_AI_SETTINGS,
         ...parsed,
         enabled: true,
-        verified: isLocal ? true : parsed.verified,
+        verified: hasKey || isLocal ? true : Boolean(parsed.verified),
       };
     } catch {
       // fallback
