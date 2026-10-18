@@ -1,4 +1,4 @@
-export type StudyMode = 'home' | 'smart-study' | 'study-guide' | 'images' | 'podcast' | 'ask-thea' | 'tests' | 'flashcards' | 'analytics' | 'create';
+export type StudyMode = 'home' | 'smart-study' | 'study-guide' | 'images' | 'podcast' | 'ask-thea' | 'oral-lesson' | 'tests' | 'flashcards' | 'analytics' | 'create';
 
 export type QuestionType =
   | 'multiple-choice'

@@ -17,6 +17,7 @@ const StudyGuideView = React.lazy(() => import('./components/StudyGuideView').th
 const ImagesGalleryView = React.lazy(() => import('./components/ImagesGalleryView').then(m => ({ default: m.ImagesGalleryView })));
 const PodcastView = React.lazy(() => import('./components/PodcastView').then(m => ({ default: m.PodcastView })));
 const AskTheaView = React.lazy(() => import('./components/AskTheaView').then(m => ({ default: m.AskTheaView })));
+const OralLessonView = React.lazy(() => import('./components/OralLessonView').then(m => ({ default: m.OralLessonView })));
 const PracticeTestView = React.lazy(() => import('./components/PracticeTestView').then(m => ({ default: m.PracticeTestView })));
 const FlashcardsView = React.lazy(() => import('./components/FlashcardsView').then(m => ({ default: m.FlashcardsView })));
 const AnalyticsView = React.lazy(() => import('./components/AnalyticsView').then(m => ({ default: m.AnalyticsView })));
@@ -629,6 +630,15 @@ export const App: React.FC = () => {
                 key={currentKit.id}
                 kit={currentKit}
                 onOpenAISettings={() => setShowAIModal(true)}
+                onNavigateToOral={() => setCurrentMode('oral-lesson')}
+              />
+            )}
+            {currentMode === 'oral-lesson' && (
+              <OralLessonView
+                key={currentKit.id}
+                kit={currentKit}
+                onOpenAISettings={() => setShowAIModal(true)}
+                onNavigateToChat={() => setCurrentMode('ask-thea')}
               />
             )}
             {currentMode === 'tests' && <PracticeTestView key={currentKit.id} kit={currentKit} />}

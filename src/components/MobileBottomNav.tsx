@@ -37,6 +37,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     'images',
     'podcast',
     'ask-thea',
+    'oral-lesson',
     'tests',
     'flashcards',
     'analytics',

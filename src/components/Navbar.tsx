@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Cloud,
   RefreshCw,
+  Mic,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -64,7 +65,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'study-guide', label: 'Guía de Estudio', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'images', label: 'Imágenes', icon: <ImageIcon className="w-4 h-4" /> },
     { id: 'podcast', label: 'Review Podcast', icon: <Headphones className="w-4 h-4" /> },
-    { id: 'ask-thea', label: 'Tutor IA', icon: <MessageSquareText className="w-4 h-4" /> },
+    { id: 'ask-thea', label: 'Chat Tutor', icon: <MessageSquareText className="w-4 h-4" /> },
+    { id: 'oral-lesson', label: 'Lección Oral', icon: <Mic className="w-4 h-4" /> },
     { id: 'tests', label: 'Exámenes & Tests', icon: <FileCheck2 className="w-4 h-4" /> },
     { id: 'flashcards', label: 'Flashcards', icon: <Layers className="w-4 h-4" /> },
     { id: 'analytics', label: 'Analíticas', icon: <BarChart3 className="w-4 h-4" /> },
