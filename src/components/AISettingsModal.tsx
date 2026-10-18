@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   RefreshCw,
   Cpu,
-  Cloud,
 } from 'lucide-react';
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
@@ -493,25 +492,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* Estado de Respaldo en Google Drive */}
-          <div className="pt-1">
-            {googleDriveService.getValidAccessToken() ? (
-              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
-                <Cloud className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="leading-snug">
-                  Google Drive conectado: Tu API personal y modelo se sincronizan y respaldan automáticamente en la nube.
-                </span>
-              </div>
-            ) : (
-              <div className="p-3 rounded-xl bg-thea-surface border border-thea-border text-slate-400 text-xs flex items-center gap-2.5">
-                <Cloud className="w-4 h-4 text-slate-500 shrink-0" />
-                <span className="leading-snug">
-                  Conecta Google Drive para respaldar tu API personal y sincronizarla en todos tus dispositivos.
-                </span>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Modal Actions */}
