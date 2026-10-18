@@ -9,16 +9,16 @@ import {
   Keyboard,
   Square,
   AlertTriangle,
-  Check,
   RotateCcw,
   Sparkles,
   History,
   X,
   ArrowLeft,
 } from 'lucide-react';
-import { askTheaAI } from '../services/aiService';
+import { askTheaAI, getGroqApiKey } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { FormattedText } from './FormattedText';
+import { startWhisperRecording, isWhisperMicSupported, type WhisperRecording } from '../services/whisperMic';
 
 interface OralLessonViewProps {
   kit: StudyKit;
@@ -100,9 +100,14 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [showTextInput, setShowTextInput] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(getPreferredSpeechLang);
-  const [copiedBrave, setCopiedBrave] = useState(false);
 
-  // Refs de sincronización
+  const useWhisper = Boolean(getGroqApiKey()) && isWhisperMicSupported();
+  const useWhisperRef = useRef(useWhisper);
+  useWhisperRef.current = useWhisper;
+  const whisperRef = useRef<WhisperRecording | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+
   // Refs de sincronización
   const voiceOnRef = useRef(voiceOn);
   const handsFreeRef = useRef(handsFree);
@@ -140,7 +145,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const speakToken = useRef(0);
   const handleSendRef = useRef<(display: string, prompt?: string) => Promise<void>>(async () => {});
 
-  const canListen = Boolean(SR);
+  const canListen = Boolean(SR) || useWhisper;
 
   // Detección de Brave Browser
   useEffect(() => {
@@ -165,6 +170,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
       speakToken.current++;
+      whisperRef.current?.cancel();
       try {
         recognitionRef.current?.abort();
       } catch {}
@@ -302,7 +308,65 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   };
 
   // ───────────────────────── VOZ: ENTRADA (MICROFONO) ─────────────────────────
+  const startListeningWhisper = async () => {
+    stopSpeaking();
+    setVoiceError('');
+    setInput('');
+    whisperRef.current?.cancel();
+    whisperRef.current = null;
+    isListeningDesiredRef.current = true;
+    setListening(true);
+    try {
+      const rec = await startWhisperRecording({
+        apiKey: getGroqApiKey(),
+        language: 'es',
+        prompt: kit.title,                        // mejora términos técnicos
+        autoStopOnSilence: handsFreeRef.current,  // solo en manos libres
+        onVolume: setMicLevel,
+        onTranscribing: () => { setListening(false); setTranscribing(true); },
+      });
+      whisperRef.current = rec;
+      rec.result
+        .then((text) => {
+          if (whisperRef.current !== rec) return;
+          whisperRef.current = null;
+          isListeningDesiredRef.current = false;
+          setListening(false);
+          setTranscribing(false);
+          if (text) handleSendRef.current(text);
+        })
+        .catch((err: Error) => {
+          if (whisperRef.current !== rec) return;
+          whisperRef.current = null;
+          isListeningDesiredRef.current = false;
+          setListening(false);
+          setTranscribing(false);
+          setVoiceError(err.message);
+        });
+    } catch (err: any) {
+      isListeningDesiredRef.current = false;
+      setListening(false);
+      setVoiceError(err?.message || 'No se pudo iniciar el micrófono.');
+    }
+  };
+
   const stopListening = (shouldSend = false) => {
+    if (useWhisperRef.current && whisperRef.current) {
+      const rec = whisperRef.current;
+      if (shouldSend) {
+        rec.stop();               // el .then() de startListeningWhisper envía el texto
+        setListening(false);
+        setTranscribing(true);
+      } else {
+        whisperRef.current = null;
+        rec.cancel();
+        isListeningDesiredRef.current = false;
+        setListening(false);
+        setTranscribing(false);
+      }
+      return;
+    }
+
     isListeningDesiredRef.current = false;
     if (restartTimeoutRef.current) {
       clearTimeout(restartTimeoutRef.current);
@@ -337,6 +401,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   stopListeningRef.current = stopListening;
 
   const startListening = async (isFallback = false) => {
+    if (useWhisperRef.current) { await startListeningWhisper(); return; }
     if (!SR) return;
     if (!isFallback) {
       fallbackAttemptsRef.current = 0;
@@ -545,7 +610,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
     if (voiceOnRef.current) {
       const finished = await speak(replyText);
-      if (finished && handsFreeRef.current && SR) {
+      if (finished && handsFreeRef.current && (SR || useWhisperRef.current)) {
         startListening();
       }
     }
@@ -664,41 +729,29 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         </div>
       </header>
 
-      {/* Banner especial para Brave Browser si fuese necesario */}
-      {voiceError === 'brave-blocked' && (
+      {/* Banner especial para Brave Browser si no se usa Whisper */}
+      {!useWhisper && voiceError === 'brave-blocked' && (
         <div className="my-2 px-4 py-3 bg-amber-950/85 border border-amber-500/50 rounded-2xl text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn shrink-0 shadow-lg">
           <div className="flex-1">
             <p className="font-bold text-amber-100 flex items-center gap-1.5">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Brave Browser bloquea el reconocimiento de voz de Google por privacidad</span>
+              <span>El reconocimiento de voz del navegador no funciona en Brave</span>
             </p>
             <p className="mt-1 text-[11px] text-amber-300/90 leading-relaxed">
-              Para activarlo: abre una pestaña, pega{' '}
-              <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-200 font-mono text-[10px]">
-                brave://settings/privacy
-              </code>{' '}
-              y activa <strong className="text-white">"Usar los servicios de Google para el reconocimiento de voz"</strong>.
+              Configura tu API key de Groq en Motor IA y el micrófono funcionará en cualquier navegador.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText('brave://settings/privacy');
-                setCopiedBrave(true);
-                setTimeout(() => setCopiedBrave(false), 2500);
-              }}
-              className="px-3 py-1.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 text-amber-100 font-medium text-[11px] transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              {copiedBrave ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>¡Ruta copiada!</span>
-                </>
-              ) : (
-                <span>Copiar enlace de ajuste</span>
-              )}
-            </button>
+            {onOpenAISettings && (
+              <button
+                type="button"
+                onClick={onOpenAISettings}
+                className="px-3 py-1.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 text-amber-100 font-medium text-[11px] transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Abrir Motor IA</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setVoiceError('')}
@@ -769,22 +822,27 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             onClick={() => {
               if (speaking) {
                 stopSpeaking();
-              } else if (!isTyping) {
+              } else if (!isTyping && !transcribing) {
                 toggleMic();
               }
             }}
-            disabled={!canListen || isTyping}
+            disabled={!canListen || isTyping || transcribing}
+            style={listening && useWhisper ? { transform: `scale(${1 + micLevel * 0.12})` } : undefined}
             className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_15px_50px_rgba(0,0,0,0.6)] ${
               listening
                 ? 'bg-gradient-to-tr from-rose-600 via-red-600 to-rose-700 text-white ring-8 ring-rose-500/30 scale-105 shadow-[0_0_80px_rgba(244,63,94,0.45)]'
                 : speaking
                 ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-slate-950 ring-8 ring-amber-500/30 shadow-[0_0_80px_rgba(245,158,11,0.4)] active:scale-95'
+                : transcribing
+                ? 'bg-gradient-to-tr from-cyan-700 via-indigo-700 to-violet-800 text-white ring-8 ring-cyan-500/20 shadow-[0_0_60px_rgba(6,182,212,0.3)]'
                 : isTyping
                 ? 'bg-gradient-to-tr from-violet-700 via-indigo-700 to-cyan-800 text-white ring-8 ring-cyan-500/20 shadow-[0_0_60px_rgba(6,182,212,0.3)]'
                 : 'bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-800 hover:from-violet-500 hover:via-indigo-500 hover:to-purple-700 text-white ring-8 ring-violet-500/20 hover:ring-violet-500/40 active:scale-95 shadow-[0_0_70px_rgba(139,92,246,0.35)]'
             } disabled:opacity-40 disabled:cursor-not-allowed`}
             title={
-              listening
+              transcribing
+                ? 'Transcribiendo audio con Groq Whisper...'
+                : listening
                 ? 'Pulsar para detener y enviar'
                 : speaking
                 ? 'Pulsar para callar a Thea'
@@ -805,6 +863,13 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
                 <VolumeX className="w-8 h-8 sm:w-10 sm:h-10" />
                 <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
                   Callar
+                </span>
+              </>
+            ) : transcribing ? (
+              <>
+                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-cyan-300" />
+                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest text-cyan-300">
+                  Transcribiendo
                 </span>
               </>
             ) : isTyping ? (
@@ -838,6 +903,10 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           ) : speaking ? (
             <p className="text-xs sm:text-sm text-amber-300 font-medium">
               Thea está hablando... pulsa el botón o Espacio para interrumpir
+            </p>
+          ) : transcribing ? (
+            <p className="text-xs sm:text-sm text-cyan-300 font-medium animate-pulse">
+              Transcribiendo tu respuesta...
             </p>
           ) : isTyping ? (
             <p className="text-xs sm:text-sm text-cyan-300 font-medium animate-pulse">
