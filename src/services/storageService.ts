@@ -429,3 +429,19 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
     }),
   }));
 }
+
+/**
+ * Valida si un objeto StudyKit es válido y no está corrupto.
+ */
+export function isCorruptedKit(k: unknown): boolean {
+  if (!k || typeof k !== 'object') return true;
+  const kit = k as Partial<StudyKit>;
+  if (!kit.id || typeof kit.id !== 'string') return true;
+  if (!kit.title || typeof kit.title !== 'string') return true;
+  if (!Array.isArray(kit.questions)) return true;
+  if (kit.id.includes('digitallibrary.un.org') || kit.title.toLowerCase().includes('endstream')) {
+    return true;
+  }
+  return false;
+}
+

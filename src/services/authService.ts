@@ -7,7 +7,8 @@ import {
   saveSessionItem,
   getSessionItem,
   removeSessionItem,
-  requestPersistentStorage
+  requestPersistentStorage,
+  isCorruptedKit
 } from './storageService';
 
 interface StoredUserRecord extends User {
@@ -400,7 +401,8 @@ export const authService = {
   },
 
   /**
-   * Carga los kits asociados al usuario o a la sesión de invitado.
+   * Carga los kits asociados al usuario o a la sesión de invitado de manera síncrona.
+   * Cuenta con fallback transparente a kits heredados o kits iniciales para evitar estados en blanco.
    */
   getUserKits(userId: string | null): StudyKit[] {
     try {
@@ -408,22 +410,145 @@ export const authService = {
         const key = 'thea_guest_kits';
         const stored = localStorage.getItem(key);
         if (stored !== null) {
-          return JSON.parse(stored);
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const clean = parsed.filter(k => !isCorruptedKit(k));
+              if (clean.length > 0) return clean;
+            }
+          } catch {}
         }
-        return [];
+
+        // Fallback 1: Comprobar almacenamiento heredado thea_study_kits_v2
+        const legacy = localStorage.getItem('thea_study_kits_v2');
+        if (legacy !== null) {
+          try {
+            const parsedLegacy = JSON.parse(legacy);
+            if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
+              const cleanLegacy = parsedLegacy.filter(k => !isCorruptedKit(k));
+              if (cleanLegacy.length > 0) {
+                try {
+                  localStorage.setItem(key, JSON.stringify(cleanLegacy));
+                } catch {}
+                return cleanLegacy;
+              }
+            }
+          } catch {}
+        }
+
+        // Fallback final: kits de estudio predeterminados de fábrica
+        const defaultKits = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
+        this.saveUserKits(null, defaultKits);
+        return defaultKits;
       }
 
       const key = `thea_user_kits_${userId}`;
       const stored = localStorage.getItem(key);
       if (stored !== null) {
-        return JSON.parse(stored);
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const clean = parsed.filter(k => !isCorruptedKit(k));
+            if (clean.length > 0) return clean;
+          }
+        } catch {}
       }
 
-      return [];
+      // Fallback 1: Comprobar kits de invitado si el usuario aún no tiene kits asignados
+      const guestStored = localStorage.getItem('thea_guest_kits');
+      if (guestStored !== null) {
+        try {
+          const parsedGuest = JSON.parse(guestStored);
+          if (Array.isArray(parsedGuest) && parsedGuest.length > 0) {
+            const cleanGuest = parsedGuest.filter(k => !isCorruptedKit(k));
+            if (cleanGuest.length > 0) {
+              this.saveUserKits(userId, cleanGuest);
+              return cleanGuest;
+            }
+          }
+        } catch {}
+      }
+
+      // Fallback 2: Comprobar legacy thea_study_kits_v2
+      const legacy = localStorage.getItem('thea_study_kits_v2');
+      if (legacy !== null) {
+        try {
+          const parsedLegacy = JSON.parse(legacy);
+          if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
+            const cleanLegacy = parsedLegacy.filter(k => !isCorruptedKit(k));
+            if (cleanLegacy.length > 0) {
+              this.saveUserKits(userId, cleanLegacy);
+              return cleanLegacy;
+            }
+          }
+        } catch {}
+      }
+
+      // Fallback 3: Kits predeterminados de fábrica
+      const defaultKits = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
+      this.saveUserKits(userId, defaultKits);
+      return defaultKits;
     } catch (e) {
       console.error('Error al obtener kits de usuario', e);
-      return [];
+      return JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
     }
+  },
+
+  /**
+   * Restaura los kits asíncronamente desde IndexedDB o LocalStorage con tolerancia a fallos.
+   * Evita pérdidas de datos si LocalStorage fue purgado o reseteado.
+   */
+  async restoreUserKitsAsync(userId: string | null): Promise<StudyKit[]> {
+    try {
+      const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
+
+      // 1. Intentar leer de IndexedDB primero para recuperar kits íntegros con sus activos
+      const idbKits = await getSessionItem<StudyKit[]>(key);
+      if (idbKits && Array.isArray(idbKits) && idbKits.length > 0) {
+        const cleanIdb = idbKits.filter(k => !isCorruptedKit(k));
+        if (cleanIdb.length > 0) {
+          try {
+            localStorage.setItem(key, JSON.stringify(cleanIdb));
+          } catch {}
+          return cleanIdb;
+        }
+      }
+
+      // 2. Intentar recuperar desde legacy en IndexedDB
+      const legacyIdb = await getSessionItem<StudyKit[]>('thea_study_kits_v2');
+      if (legacyIdb && Array.isArray(legacyIdb) && legacyIdb.length > 0) {
+        const cleanLegacy = legacyIdb.filter(k => !isCorruptedKit(k));
+        if (cleanLegacy.length > 0) {
+          try {
+            localStorage.setItem(key, JSON.stringify(cleanLegacy));
+          } catch {}
+          return cleanLegacy;
+        }
+      }
+
+      // 3. Fallback a lectura síncrona
+      const localKits = this.getUserKits(userId);
+      if (localKits && localKits.length > 0) {
+        return localKits;
+      }
+
+      // 4. Kits predeterminados de fábrica garantizados
+      const defaults = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
+      this.saveUserKits(userId, defaults);
+      return defaults;
+    } catch (e) {
+      console.error('[authService] Error al restaurar kits asíncronamente:', e);
+      return this.getUserKits(userId);
+    }
+  },
+
+  /**
+   * Restablece los kits de estudio iniciales de fábrica para el usuario actual o invitado.
+   */
+  resetToDefaultKits(userId: string | null): StudyKit[] {
+    const defaults = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
+    this.saveUserKits(userId, defaults);
+    return defaults;
   },
 
   /**
@@ -431,29 +556,33 @@ export const authService = {
    * Transfiere automáticamente los activos pesados a IndexedDB para no saturar LocalStorage.
    */
   saveUserKits(userId: string | null, kits: StudyKit[]): void {
+    const cleanKits = Array.isArray(kits) ? kits.filter(k => !isCorruptedKit(k)) : [];
+
     if (!userId) {
       try {
-        localStorage.setItem('thea_guest_kits', JSON.stringify(kits));
+        localStorage.setItem('thea_guest_kits', JSON.stringify(cleanKits));
       } catch (e) {
-        console.warn('Error al guardar kits de invitado:', e);
+        console.warn('Error al guardar kits de invitado en LocalStorage:', e);
       }
+      saveSessionItem('thea_guest_kits', cleanKits).catch(() => {});
+      saveAssetsFromKits(cleanKits).catch(() => {});
       return;
     }
 
     // Persistir activos en IndexedDB en segundo plano
-    saveAssetsFromKits(kits).catch((err) => {
+    saveAssetsFromKits(cleanKits).catch((err) => {
       console.warn('[authService] Error al sincronizar activos con IndexedDB:', err);
     });
 
     const key = `thea_user_kits_${userId}`;
-    saveSessionItem(key, kits).catch(() => {});
+    saveSessionItem(key, cleanKits).catch(() => {});
     try {
-      localStorage.setItem(key, JSON.stringify(kits));
+      localStorage.setItem(key, JSON.stringify(cleanKits));
     } catch (e) {
       console.warn('Quota excedida al guardar kits completos en LocalStorage, optimizando con IndexedDB...', e);
       try {
         // Aligerar datos quitando dataUrls pesados (preservados en IndexedDB)
-        const lightweight = stripHeavyAssetsForLocalStorage(kits).map(k => ({
+        const lightweight = stripHeavyAssetsForLocalStorage(cleanKits).map(k => ({
           ...k,
           sourceMaterials: k.sourceMaterials?.map(m => ({
             ...m,
@@ -695,6 +824,26 @@ export const authService = {
           saveSessionItem(key, union).catch(() => {});
         } catch {}
       }
+    }
+
+    // Migrar kits creados en modo invitado al usuario si procede
+    try {
+      const guestKey = 'thea_guest_kits';
+      const storedGuest = localStorage.getItem(guestKey);
+      if (storedGuest) {
+        const guestKits = JSON.parse(storedGuest);
+        if (Array.isArray(guestKits) && guestKits.length > 0) {
+          const userKits = this.getUserKits(userId);
+          const userKitIds = new Set(userKits.map(k => k.id));
+          const newKitsFromGuest = guestKits.filter(k => !userKitIds.has(k.id) && !isCorruptedKit(k));
+          if (newKitsFromGuest.length > 0) {
+            const mergedKits = [...userKits, ...newKitsFromGuest];
+            this.saveUserKits(userId, mergedKits);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[authService] Error al migrar kits de invitado:', e);
     }
   },
 

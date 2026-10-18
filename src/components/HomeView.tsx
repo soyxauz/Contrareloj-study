@@ -7,6 +7,7 @@ import {
   Brain,
   BookOpen,
   Headphones,
+  RotateCcw,
   Layers,
   MessageSquareText,
   FileCheck2,
@@ -172,6 +173,7 @@ interface HomeViewProps {
   onOpenAuth?: () => void;
   onDeleteKitsBatch?: (kitIds: string[]) => void;
   onChangeCategoryBatch?: (kitIds: string[], newCategory: string) => void;
+  onResetDefaultKits?: () => void;
 }
 
 const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.ReactNode; gradient: string }[] = [
@@ -209,6 +211,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenAuth,
   onDeleteKitsBatch,
   onChangeCategoryBatch,
+  onResetDefaultKits,
 }) => {
   const [isAIActive, setIsAIActive] = React.useState<boolean>(isAIWorking);
 
@@ -707,15 +710,25 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <h3 className="text-lg sm:text-xl font-bold text-white mb-2">No tienes ningún Study Kit activo</h3>
             <p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
               {userId
-                ? 'Aún no tienes Study Kits creados en esta cuenta. Sube tu material para generar uno nuevo o sincroniza con Google Drive.'
-                : 'Has cerrado sesión o aún no has iniciado sesión. Inicia sesión con tu cuenta para recuperar todo tu progreso guardado, o crea un kit nuevo.'}
+                ? 'No se encontraron Study Kits en esta sesión. Puedes restaurar los kits de estudio de demostración para empezar de inmediato o crear un kit propio.'
+                : 'Puedes restaurar los kits de estudio de fábrica para explorar la plataforma, iniciar sesión para recuperar tu progreso guardado o crear un kit nuevo.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              {onResetDefaultKits && (
+                <button
+                  type="button"
+                  onClick={onResetDefaultKits}
+                  className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Restaurar Kits Predeterminados</span>
+                </button>
+              )}
               {!userId && onOpenAuth && (
                 <button
                   type="button"
                   onClick={onOpenAuth}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-200 hover:text-white hover:bg-thea-surfaceLight font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
                   <LogIn className="w-4 h-4" />
                   <span>Iniciar Sesión</span>
@@ -724,11 +737,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('create')}
-                className={`px-5 py-2.5 rounded-xl ${
-                  !userId && onOpenAuth
-                    ? 'bg-thea-surface border border-thea-border text-slate-200 hover:text-white hover:bg-thea-surfaceLight'
-                    : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-900/20'
-                } font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer`}
+                className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-200 hover:text-white hover:bg-thea-surfaceLight font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 <span>Crear nuevo Study Kit</span>

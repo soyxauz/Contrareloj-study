@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
 import { BookOpen, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
-import { hydrateKitAssets } from './services/storageService';
+import { hydrateKitAssets, isCorruptedKit } from './services/storageService';
 import { googleDriveService, type DriveSyncState } from './services/googleDriveService';
 import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
 import { savePodcastSettings } from './services/geminiAudioService';
@@ -36,18 +36,6 @@ const ViewLoadingFallback: React.FC = () => (
 
 const STORAGE_CURRENT_KIT_KEY = 'thea_currentkit_id';
 
-function isCorruptedKit(k: unknown): boolean {
-  if (!k || typeof k !== 'object') return true;
-  const kit = k as Partial<StudyKit>;
-  if (!kit.id || typeof kit.id !== 'string') return true;
-  if (!kit.title || typeof kit.title !== 'string') return true;
-  if (!Array.isArray(kit.questions)) return true;
-  if (kit.id.includes('digitallibrary.un.org') || kit.title.toLowerCase().includes('endstream')) {
-    return true;
-  }
-  return false;
-}
-
 export const App: React.FC = () => {
   // User Authentication State
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
@@ -55,6 +43,7 @@ export const App: React.FC = () => {
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
   const [driveSyncState, setDriveSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
   const isLoggingOutRef = useRef(false);
+  const isHydratedRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = googleDriveService.subscribe((state) => {
@@ -63,30 +52,17 @@ export const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  // Restauración de sesión persistente triple (IndexedDB / Cookie 1 año / LocalStorage)
-  useEffect(() => {
-    authService.restorePersistentSession().then((restoredUser) => {
-      if (restoredUser && !currentUser) {
-        setCurrentUser(restoredUser);
-        const userKits = authService.getUserKits(restoredUser.id);
-        const cleanKits = userKits.filter(k => !isCorruptedKit(k));
-        setKits(cleanKits);
-        if (cleanKits.length > 0 && !currentKit) {
-          setCurrentKit(cleanKits[0]);
-        }
-      }
-    });
-  }, []);
-
-  // Load kits from authService: si no hay usuario autenticado, inicia completamente vacío
+  // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
   const [kits, setKits] = useState<StudyKit[]>(() => {
-    if (!currentUser) return [];
-    const userKits = authService.getUserKits(currentUser.id);
-    const cleanKits = userKits.filter(k => !isCorruptedKit(k));
+    const initialKits = authService.getUserKits(currentUser ? currentUser.id : null);
+    const cleanKits = initialKits.filter(k => !isCorruptedKit(k));
+    if (cleanKits.length > 0) {
+      isHydratedRef.current = true;
+    }
     return cleanKits;
   });
 
-  // Load current kit from LocalStorage or pick first clean kit
+  // Selección inicial del kit activo
   const [currentKit, setCurrentKit] = useState<StudyKit | null>(() => {
     const savedCurrentId = localStorage.getItem(STORAGE_CURRENT_KIT_KEY);
     if (savedCurrentId) {
@@ -100,6 +76,53 @@ export const App: React.FC = () => {
     }
     return null;
   });
+
+  // Restauración de sesión persistente triple y recuperación asíncrona de kits desde IndexedDB
+  useEffect(() => {
+    let isCancelled = false;
+
+    authService.restorePersistentSession().then(async (restoredUser) => {
+      if (isCancelled) return;
+      const targetUser = restoredUser || currentUser;
+      if (restoredUser && !currentUser) {
+        setCurrentUser(restoredUser);
+      }
+
+      const targetUserId = targetUser ? targetUser.id : null;
+      const recoveredKits = await authService.restoreUserKitsAsync(targetUserId);
+      if (isCancelled) return;
+
+      const cleanKits = recoveredKits.filter(k => !isCorruptedKit(k));
+      if (cleanKits.length > 0) {
+        setKits(prev => {
+          if (prev.length === 0) {
+            isHydratedRef.current = true;
+            return cleanKits;
+          }
+          isHydratedRef.current = true;
+          return prev;
+        });
+        setCurrentKit(prev => {
+          if (!prev) {
+            const savedCurrentId = localStorage.getItem(STORAGE_CURRENT_KIT_KEY);
+            const found = cleanKits.find(k => k.id === savedCurrentId);
+            const selected = found || cleanKits[0];
+            if (selected) {
+              localStorage.setItem(STORAGE_CURRENT_KIT_KEY, selected.id);
+            }
+            return selected;
+          }
+          return prev;
+        });
+      } else {
+        isHydratedRef.current = true;
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const [currentMode, setCurrentMode] = useState<StudyMode>('home');
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
@@ -157,12 +180,13 @@ export const App: React.FC = () => {
     localStorage.setItem('thea_developersettings', JSON.stringify(permanentSettings));
   }, []);
 
-  // Sync Study Kits for current user (protegido contra sobreescritura al cerrar sesión)
+  // Sync Study Kits (protegido contra sobreescritura destructiva en arranque)
   useEffect(() => {
     if (isLoggingOutRef.current) return;
-    if (!currentUser) return;
+    if (!isHydratedRef.current && kits.length === 0) return;
+    isHydratedRef.current = true;
     try {
-      authService.saveUserKits(currentUser.id, kits);
+      authService.saveUserKits(currentUser ? currentUser.id : null, kits);
     } catch (e) {
       console.error('Error al guardar Study Kits:', e);
     }
@@ -193,6 +217,8 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isLoggingOutRef.current) return;
     if (!currentUser || !googleDriveService.getValidAccessToken()) return;
+    if (!isHydratedRef.current && kits.length === 0) return;
+
     const timer = setTimeout(() => {
       googleDriveService.pushToDrive(currentUser.id, kits).catch((err) => {
         console.warn('[App] Error en sincronización en segundo plano con Google Drive:', err);
@@ -390,16 +416,31 @@ export const App: React.FC = () => {
       authService.logout();
       resetAISettingsToDefault();
       setCurrentUser(null);
-      setKits([]);
-      setCurrentKit(null);
-      localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
-      localStorage.setItem('thea_guest_kits', JSON.stringify([]));
-      localStorage.removeItem('thea_study_kits_v2');
+      // Al cerrar sesión, cargar los kits de invitado o de fábrica en lugar de dejar la pantalla vacía
+      const guestKits = authService.getUserKits(null).filter(k => !isCorruptedKit(k));
+      setKits(guestKits);
+      const first = guestKits[0] || null;
+      setCurrentKit(first);
+      if (first) {
+        localStorage.setItem(STORAGE_CURRENT_KIT_KEY, first.id);
+      } else {
+        localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
+      }
       setCurrentMode('home');
     } finally {
       setTimeout(() => {
         isLoggingOutRef.current = false;
       }, 400);
+    }
+  };
+
+  const handleResetDefaults = () => {
+    const defaults = authService.resetToDefaultKits(currentUser ? currentUser.id : null);
+    const clean = defaults.filter(k => !isCorruptedKit(k));
+    setKits(clean);
+    if (clean.length > 0) {
+      setCurrentKit(clean[0]);
+      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, clean[0].id);
     }
   };
 
@@ -547,6 +588,7 @@ export const App: React.FC = () => {
             onUpdateKit={handleUpdateKit}
             onDeleteKitsBatch={handleDeleteKitsBatch}
             onChangeCategoryBatch={handleChangeCategoryBatch}
+            onResetDefaultKits={handleResetDefaults}
             userId={currentUser?.id || null}
             onOpenAISettings={() => setShowAIModal(true)}
             onOpenAuth={() => setShowAuthModal(true)}
@@ -608,12 +650,18 @@ export const App: React.FC = () => {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">No hay ningún Study Kit activo</h3>
               <p className="text-sm text-slate-400 mb-6">
-                Todos los kits han sido eliminados. Crea un nuevo kit para acceder a las herramientas de estudio.
+                No tienes ningún kit de estudio seleccionado. Puedes restaurar los kits de demostración iniciales o crear uno nuevo.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  onClick={() => setCurrentMode('create')}
+                  onClick={handleResetDefaults}
                   className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm transition-all cursor-pointer shadow-lg shadow-violet-900/30"
+                >
+                  Restaurar Kits Predeterminados
+                </button>
+                <button
+                  onClick={() => setCurrentMode('create')}
+                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-300 hover:text-white text-sm font-semibold transition-all cursor-pointer"
                 >
                   Crear Study Kit
                 </button>
