@@ -52,7 +52,7 @@ export const AI_PRESETS: AIPreset[] = [
     model: 'openai/gpt-oss-120b',
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
-    description: 'Muy rápido y con plan sin tarjeta. Cada usuario pega su propia API key.',
+    description: 'Inferencia ultrarrápida para Lección Oral y Whisper con modelos OSS de alto rendimiento.',
     badge: 'Rápido',
     freeTier: true,
   },
@@ -61,6 +61,7 @@ export const AI_PRESETS: AIPreset[] = [
 /** Modelo de respaldo para Groq cuando el principal da límite de tasa (429) o error de servidor (5xx) */
 const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 
+export const DEFAULT_GROQ_KEY = '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';
 export const DEFAULT_GROK_KEY = '';
 
 const STORAGE_KEY = 'thea_ai_settings';
@@ -88,6 +89,8 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   model: 'gemma4:31b',
   timeoutMs: 45000,
   verified: false,
+  groqApiKey: DEFAULT_GROQ_KEY,
+  groqModel: 'openai/gpt-oss-120b',
 };
 
 export function getAISettings(): AISettings {
@@ -122,6 +125,10 @@ export function getAISettings(): AISettings {
       const isOllamaCloud = Boolean(parsed.baseUrl?.includes('ollama.com'));
       const isGroq = Boolean(parsed.baseUrl?.includes('api.groq.com'));
 
+      if (isGroq && (!parsed.model || parsed.model.includes('llama-3.3') || parsed.model.includes('llama3'))) {
+        parsed.model = 'openai/gpt-oss-120b';
+      }
+
       // Resolver la apiKey estrictamente según el proveedor activo para aislar completamente las claves
       let activeKey = parsed.apiKey || '';
       if (isOllamaCloud) {
@@ -132,7 +139,7 @@ export function getAISettings(): AISettings {
       } else if (isGroq) {
         // En Groq Cloud, priorizar la clave gsk_
         if (!activeKey.startsWith('gsk_') || !activeKey) {
-          activeKey = groqKey || parsed.groqApiKey || '';
+          activeKey = groqKey || parsed.groqApiKey || DEFAULT_GROQ_KEY;
         }
       }
 
@@ -144,7 +151,7 @@ export function getAISettings(): AISettings {
         ...parsed,
         apiKey: activeKey,
         ollamaApiKey: ollamaKey || parsed.ollamaApiKey || '',
-        groqApiKey: groqKey || parsed.groqApiKey || '',
+        groqApiKey: groqKey || parsed.groqApiKey || DEFAULT_GROQ_KEY,
         enabled: true,
         verified: hasKey || isLocal ? true : Boolean(parsed.verified),
       };
@@ -157,7 +164,7 @@ export function getAISettings(): AISettings {
     ...DEFAULT_AI_SETTINGS,
     apiKey: ollamaKey,
     ollamaApiKey: ollamaKey,
-    groqApiKey: groqKey,
+    groqApiKey: groqKey || DEFAULT_GROQ_KEY,
   };
 }
 
@@ -333,7 +340,7 @@ export function getGroqApiKey(): string {
   if (current.apiKey && (current.apiKey.startsWith('gsk_') || current.baseUrl?.includes('api.groq.com'))) {
     return current.apiKey.trim();
   }
-  return '';
+  return DEFAULT_GROQ_KEY;
 }
 
 export function saveGroqApiKey(key: string): void {
@@ -2070,35 +2077,36 @@ export async function askTheaAI(
   userQuery: string,
   kit: StudyKit,
   history: Array<{ sender: 'thea' | 'user'; text: string }>,
-  enginePreference: 'ollama' | 'grok' | 'auto' = 'auto'
+  enginePreference: 'ollama' | 'grok' | 'groq' | 'auto' = 'auto'
 ): Promise<string> {
   const settings = getAISettings();
   const grokSettings = getGrokSettings();
   const groqKey = getGroqApiKey();
 
   // Enrutamiento desacoplado:
-  // - Si enginePreference es 'ollama': utiliza estrictamente Ollama Local / motor principal configurado.
-  // - Si enginePreference es 'grok': intenta prioritariamente xAI Grok (para lección oral y respuestas en tiempo real)
-  //   y si falla, recurre automáticamente a Ollama Local como respaldo.
+  // - Si enginePreference es 'ollama': utiliza estrictamente Ollama Cloud / motor principal configurado (para Chat Tutor).
+  // - Si enginePreference es 'groq' o 'grok': utiliza Groq Cloud con Whisper e inferencia ultra rápida (para Lección Oral).
   let targetSettings: AISettings = settings;
 
-  if (enginePreference === 'grok' && grokSettings.enabled && grokSettings.apiKey) {
-    targetSettings = {
-      enabled: true,
-      provider: 'openai-compatible',
-      baseUrl: grokSettings.baseUrl || 'https://api.x.ai/v1',
-      apiKey: grokSettings.apiKey,
-      model: grokSettings.model || 'grok-2-mini',
-      timeoutMs: 25000,
-      verified: true,
-    };
-  } else if (enginePreference !== 'ollama' && groqKey) {
+  if (enginePreference === 'ollama') {
+    targetSettings = settings;
+  } else if ((enginePreference === 'groq' || enginePreference === 'grok' || enginePreference === 'auto') && groqKey) {
     targetSettings = {
       enabled: true,
       provider: 'openai-compatible',
       baseUrl: 'https://api.groq.com/openai/v1',
       apiKey: groqKey,
       model: settings.groqModel || 'openai/gpt-oss-120b',
+      timeoutMs: 25000,
+      verified: true,
+    };
+  } else if (enginePreference === 'grok' && grokSettings.enabled && grokSettings.apiKey) {
+    targetSettings = {
+      enabled: true,
+      provider: 'openai-compatible',
+      baseUrl: grokSettings.baseUrl || 'https://api.x.ai/v1',
+      apiKey: grokSettings.apiKey,
+      model: grokSettings.model || 'grok-2-mini',
       timeoutMs: 25000,
       verified: true,
     };

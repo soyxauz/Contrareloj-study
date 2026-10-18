@@ -184,7 +184,7 @@ const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.R
   { id: 'podcast', label: 'Review Podcast', desc: 'Repaso en audio con 2 hosts', icon: <Headphones className="w-6 h-6" />, gradient: 'from-rose-600 to-pink-700' },
   { id: 'flashcards', label: 'Flashcards', desc: 'Memorización con repetición espaciada', icon: <Layers className="w-6 h-6" />, gradient: 'from-amber-500 to-orange-600' },
   { id: 'ask-thea', label: 'Chat Tutor', desc: 'Consultas y dudas por escrito', icon: <MessageSquareText className="w-6 h-6" />, gradient: 'from-cyan-500 to-teal-600' },
-  { id: 'oral-lesson', label: 'Lección Oral', desc: 'Práctica oral interactiva con Grok', icon: <Mic className="w-6 h-6" />, gradient: 'from-violet-600 to-indigo-600' },
+  { id: 'oral-lesson', label: 'Lección Oral', desc: 'Práctica oral interactiva con Groq (Voz)', icon: <Mic className="w-6 h-6" />, gradient: 'from-violet-600 to-indigo-600' },
   { id: 'tests', label: 'Exámenes', desc: 'Tests cronometrados personalizables', icon: <FileCheck2 className="w-6 h-6" />, gradient: 'from-emerald-600 to-green-700' },
 ];
 
