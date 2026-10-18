@@ -107,6 +107,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [copiedBrave, setCopiedBrave] = useState(false);
 
   // Refs de sincronización
+  // Refs de sincronización
   const voiceOnRef = useRef(voiceOn);
   const handsFreeRef = useRef(handsFree);
   const listeningRef = useRef(listening);
@@ -117,7 +118,17 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const speechLangRef = useRef<string>(getPreferredSpeechLang());
   const fallbackAttemptsRef = useRef(0);
   const isBraveRef = useRef(false);
-  const hasCheckedMicPermissionRef = useRef(false);
+  const messagesRef = useRef(messages);
+
+  const isListeningDesiredRef = useRef(false);
+  const transcriptBufferRef = useRef('');
+  const accumulatedFromPreviousSessionsRef = useRef('');
+  const restartTimeoutRef = useRef<any>(null);
+  const silenceTimeoutRef = useRef<any>(null);
+
+  const stopListeningRef = useRef<(shouldSend?: boolean) => void>(() => {});
+  const startListeningRef = useRef<(isFallback?: boolean) => Promise<void>>(async () => {});
+  const startOralLessonRef = useRef<() => void>(() => {});
 
   voiceOnRef.current = voiceOn;
   handsFreeRef.current = handsFree;
@@ -125,6 +136,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   speakingRef.current = speaking;
   isTypingRef.current = isTyping;
   speechLangRef.current = speechLang;
+  messagesRef.current = messages;
 
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -153,6 +165,9 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   // Limpieza al desmontar
   useEffect(() => {
     return () => {
+      isListeningDesiredRef.current = false;
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
       speakToken.current++;
       try {
         recognitionRef.current?.abort();
@@ -186,12 +201,17 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
         if (speakingRef.current) {
           stopSpeaking();
+          return;
         }
 
         if (listeningRef.current) {
-          stopListening();
+          stopListeningRef.current(true);
         } else {
-          startListening();
+          if (messagesRef.current.length <= 1) {
+            startOralLessonRef.current();
+          } else {
+            startListeningRef.current();
+          }
         }
       }
     };
@@ -215,7 +235,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           isSpacePressedRef.current = false;
           const heldDuration = Date.now() - spaceStartTimeRef.current;
           if (heldDuration >= 300 && listeningRef.current) {
-            stopListening();
+            stopListeningRef.current(true);
           }
         }
       }
@@ -286,7 +306,17 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   };
 
   // ───────────────────────── VOZ: ENTRADA (MICROFONO) ─────────────────────────
-  const stopListening = () => {
+  const stopListening = (shouldSend = false) => {
+    isListeningDesiredRef.current = false;
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.onresult = null;
@@ -294,47 +324,43 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         recognitionRef.current.onend = null;
         recognitionRef.current.stop();
       } catch {}
+      recognitionRef.current = null;
     }
-    setListening(false);
-  };
 
-  const verifyMicrophoneAccess = async (): Promise<boolean> => {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      return true;
-    }
-    if (hasCheckedMicPermissionRef.current) {
-      return true;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
-      hasCheckedMicPermissionRef.current = true;
-      return true;
-    } catch (err: any) {
-      setListening(false);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setVoiceError(
-          'Permiso de micrófono denegado. Haz clic en el candado de la barra de direcciones y autoriza el micrófono.'
-        );
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setVoiceError('No se detectó ningún micrófono conectado en tu equipo.');
-      } else {
-        setVoiceError(`Error de acceso al micrófono: ${err.message || err.name}`);
-      }
-      return false;
+    setListening(false);
+
+    const textToSend = (transcriptBufferRef.current || input).trim();
+    transcriptBufferRef.current = '';
+    accumulatedFromPreviousSessionsRef.current = '';
+    setInput('');
+
+    if (shouldSend && textToSend) {
+      handleSendRef.current(textToSend);
     }
   };
+  stopListeningRef.current = stopListening;
 
   const startListening = async (isFallback = false) => {
     if (!SR) return;
     if (!isFallback) {
       fallbackAttemptsRef.current = 0;
+      accumulatedFromPreviousSessionsRef.current = '';
+      transcriptBufferRef.current = '';
     }
     stopSpeaking();
     setVoiceError('');
 
-    const hasMic = await verifyMicrophoneAccess();
-    if (!hasMic) return;
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+
+    isListeningDesiredRef.current = true;
+    setListening(true);
 
     if (recognitionRef.current) {
       try {
@@ -350,33 +376,65 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       const rec = new SR();
       rec.lang = speechLangRef.current;
       rec.interimResults = true;
-      rec.continuous = false;
+      rec.continuous = true;
 
       rec.onresult = (e: any) => {
-        let interim = '';
-        let final = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
+        let sessionTranscript = '';
+        for (let i = 0; i < e.results.length; i++) {
           const r = e.results[i];
-          if (r.isFinal) final += r[0].transcript;
-          else interim += r[0].transcript;
+          if (r && r[0]) {
+            sessionTranscript += r[0].transcript + ' ';
+          }
         }
-        if (final.trim()) {
-          setInput('');
-          handleSendRef.current(final.trim());
-        } else {
-          setInput(interim);
+        const fullText = (accumulatedFromPreviousSessionsRef.current + ' ' + sessionTranscript)
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (fullText) {
+          transcriptBufferRef.current = fullText;
+          setInput(fullText);
+
+          // Si el modo manos libres está activo, enviar tras pausa de 2.5s de silencio
+          if (handsFreeRef.current) {
+            if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = setTimeout(() => {
+              if (isListeningDesiredRef.current && transcriptBufferRef.current.trim()) {
+                stopListening(true);
+              }
+            }, 2500);
+          }
         }
       };
 
       rec.onerror = (e: any) => {
-        setListening(false);
+        // Pausas de habla, silencios normales o abort intencional: NO apagar el micrófono
+        if (e.error === 'no-speech' || e.error === 'aborted') {
+          return;
+        }
+
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          setVoiceError('Permite el acceso al micrófono en el navegador para activar la voz.');
-        } else if (e.error === 'network') {
+          isListeningDesiredRef.current = false;
+          setListening(false);
+          setVoiceError(
+            'Permiso de micrófono denegado. Haz clic en el candado de la barra de direcciones y autoriza el micrófono.'
+          );
+          return;
+        }
+
+        if (e.error === 'audio-capture') {
+          isListeningDesiredRef.current = false;
+          setListening(false);
+          setVoiceError('No se detectó ningún micrófono disponible en tu dispositivo.');
+          return;
+        }
+
+        if (e.error === 'network') {
           const isBrave = Boolean(
             isBraveRef.current || (navigator as any).brave || (window as any).brave
           );
           if (isBrave) {
+            isListeningDesiredRef.current = false;
+            setListening(false);
             setShowTextInput(true);
             setVoiceError('brave-blocked');
             return;
@@ -388,37 +446,59 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             speechLangRef.current = nextLang;
             setSpeechLang(nextLang);
             setTimeout(() => {
-              startListening(true);
+              if (isListeningDesiredRef.current) {
+                startListening(true);
+              }
             }, 300);
             return;
           }
 
+          isListeningDesiredRef.current = false;
+          setListening(false);
           setShowTextInput(true);
           setVoiceError(
-            'El servicio de transcripción de voz del navegador no pudo contactar con los servidores de Google (error de red). Puedes usar el teclado para responder o reintentar.'
+            'El servicio de transcripción de voz del navegador no pudo contactar con los servidores de Google (error de red). Puedes usar el teclado para responder o pulsar el micrófono para reintentar.'
           );
           setTimeout(() => setVoiceError(''), 7000);
-        } else if (e.error === 'no-speech') {
-        } else if (e.error === 'aborted') {
+          return;
+        }
+
+        console.warn('SpeechRecognition warning:', e.error);
+      };
+
+      rec.onend = () => {
+        accumulatedFromPreviousSessionsRef.current = transcriptBufferRef.current;
+        // Si el usuario aún mantiene activo el micrófono, reiniciar la sesión de forma continua
+        if (isListeningDesiredRef.current) {
+          if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+          restartTimeoutRef.current = setTimeout(() => {
+            if (isListeningDesiredRef.current) {
+              startListening(true);
+            }
+          }, 80);
         } else {
-          setVoiceError(`Aviso de micrófono: ${e.error}`);
-          setTimeout(() => setVoiceError(''), 5000);
+          setListening(false);
         }
       };
 
-      rec.onend = () => setListening(false);
-
       recognitionRef.current = rec;
       rec.start();
-      setListening(true);
-    } catch {
+    } catch (err: any) {
+      console.warn('Error starting speech recognition:', err);
+      isListeningDesiredRef.current = false;
       setListening(false);
+      if (err.name === 'NotAllowedError') {
+        setVoiceError('Permiso de micrófono no otorgado por el navegador.');
+      } else {
+        setVoiceError('No se pudo iniciar el servicio de voz del navegador.');
+      }
     }
   };
+  startListeningRef.current = startListening;
 
   const toggleMic = () => {
     if (listening) {
-      stopListening();
+      stopListening(true);
     } else {
       // Si la lección aún no ha comenzado y se pulsa el micro, disparar la primera pregunta si procede
       if (messages.length <= 1) {
@@ -448,6 +528,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     setInput('');
     setIsTyping(true);
     stopSpeaking();
+    stopListening(false);
 
     const queryForAI = promptText ?? (ORAL_DIRECTIVE + displayText);
 
@@ -474,10 +555,11 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   handleSendRef.current = handleSend;
 
   const startOralLesson = () => handleSend('Empezar lección oral', ORAL_DIRECTIVE + 'empezar');
+  startOralLessonRef.current = startOralLesson;
 
   const clearConversation = () => {
     stopSpeaking();
-    stopListening();
+    stopListening(false);
     setMessages([messages[0]]);
   };
 
@@ -689,11 +771,11 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             onClick={() => {
               if (speaking) {
                 stopSpeaking();
-              } else {
+              } else if (!isTyping) {
                 toggleMic();
               }
             }}
-            disabled={!canListen}
+            disabled={!canListen || isTyping}
             className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_15px_50px_rgba(0,0,0,0.6)] ${
               listening
                 ? 'bg-gradient-to-tr from-rose-600 via-red-600 to-rose-700 text-white ring-8 ring-rose-500/30 scale-105 shadow-[0_0_80px_rgba(244,63,94,0.45)]'
@@ -753,7 +835,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             </p>
           ) : listening ? (
             <p className="text-xs sm:text-sm text-rose-300 font-semibold animate-pulse">
-              Escuchando tu voz... suelta Espacio o pulsa el botón para enviar
+              Escuchando tu voz... habla y pulsa el botón (o suelta Espacio) para enviar
             </p>
           ) : speaking ? (
             <p className="text-xs sm:text-sm text-amber-300 font-medium">
