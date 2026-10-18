@@ -1095,6 +1095,20 @@ export const googleDriveService = {
       // 5. Procesar e integrar progreso de Smart Study (nivel, respuestas, historial)
       if (cloudProgress?.sessions && typeof cloudProgress.sessions === 'object') {
         authService.saveAllSmartStudySessions(userId, cloudProgress.sessions, cloudProgress.revealedQuestions);
+
+        // Subir inmediatamente la versión validada y saneada a Google Drive para limpiar la nube
+        const cleanSessions = authService.getAllSmartStudySessions(userId);
+        const cleanRevealed = authService.getAllRevealedQuestionIds(userId);
+        const cleanPayload = {
+          version: 1,
+          updatedAt: Date.now(),
+          userId,
+          sessions: cleanSessions,
+          revealedQuestions: cleanRevealed,
+        };
+        this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, cleanPayload).catch(err => {
+          console.warn('[GoogleDriveService] Error actualizando progreso saneado en Drive:', err);
+        });
       }
 
       // 6. Procesar e integrar ajustes de IA

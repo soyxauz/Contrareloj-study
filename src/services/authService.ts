@@ -104,6 +104,96 @@ function saveStoredUsers(users: StoredUserRecord[]): void {
   }
 }
 
+/**
+ * Valida y calibra la sesión de Smart Study para garantizar que siempre refleje el nivel real y exacto.
+ * Invariante pedagógico de Smart Study:
+ * - Nivel 1: Retención & Fundamentos (hasta 25 aciertos).
+ * - Nivel 2: Aplicación y Relaciones (requiere haber alcanzado 25 aciertos en Nivel 1).
+ * - Nivel 3: Casos Prácticos y Síntesis (requiere haber alcanzado 25 aciertos en Nivel 1 y 25 aciertos en Nivel 2).
+ * Sin subir ni bajar arbitrariamente el nivel real ganado.
+ */
+export function sanitizeSmartStudySession(session: SmartStudySessionState | null | undefined): SmartStudySessionState | null {
+  if (!session || typeof session !== 'object') return null;
+
+  const history = Array.isArray(session.history) ? session.history : [];
+  const correctInHistory = history.filter((h: any) => h && h.isCorrect).length;
+  const answeredTotal = Math.max(
+    typeof session.questionsAnsweredTotal === 'number' ? session.questionsAnsweredTotal : 0,
+    history.length,
+    correctInHistory
+  );
+
+  // Si no hay ninguna pregunta respondida ni aciertos en historial, el nivel exacto es 1 con 0 aciertos
+  if (answeredTotal === 0 && correctInHistory === 0) {
+    return {
+      ...session,
+      level: 1,
+      levelCorrectCount: 0,
+      levelCorrectCounts: { 1: 0, 2: 0, 3: 0 },
+      currentIndex: 0,
+      questionsAnsweredTotal: 0,
+    };
+  }
+
+  let l1 = typeof session.levelCorrectCounts?.[1] === 'number' ? session.levelCorrectCounts[1] : 0;
+  let l2 = typeof session.levelCorrectCounts?.[2] === 'number' ? session.levelCorrectCounts[2] : 0;
+  let l3 = typeof session.levelCorrectCounts?.[3] === 'number' ? session.levelCorrectCounts[3] : 0;
+
+  // Si no venía levelCorrectCounts detallado
+  if (!session.levelCorrectCounts && typeof session.levelCorrectCount === 'number') {
+    if (session.level === 1) l1 = session.levelCorrectCount;
+    else if (session.level === 2) { l1 = 25; l2 = session.levelCorrectCount; }
+    else if (session.level === 3) { l1 = 25; l2 = 25; l3 = session.levelCorrectCount; }
+  }
+
+  // Si los aciertos declarados exceden el total respondido, calibrar con el historial
+  const claimedCorrect = l1 + l2 + l3;
+  if (claimedCorrect > answeredTotal && answeredTotal > 0) {
+    if (correctInHistory > 0) {
+      l1 = history.filter((h: any) => h.isCorrect && (h.level === 1 || !h.level)).length;
+      l2 = history.filter((h: any) => h.isCorrect && h.level === 2).length;
+      l3 = history.filter((h: any) => h.isCorrect && h.level === 3).length;
+    } else {
+      l1 = Math.min(25, answeredTotal);
+      l2 = 0;
+      l3 = 0;
+    }
+  }
+
+  // Determinar el nivel real exacto ganado:
+  let realLevel: 1 | 2 | 3 = 1;
+  if (l1 >= 25) {
+    if (l2 >= 25) {
+      realLevel = 3;
+    } else {
+      realLevel = 2;
+      l3 = 0;
+    }
+  } else {
+    realLevel = 1;
+    l2 = 0;
+    l3 = 0;
+  }
+
+  if (realLevel === 2) {
+    l3 = 0;
+  }
+
+  const currentCount = realLevel === 1 ? l1 : (realLevel === 2 ? l2 : l3);
+
+  return {
+    ...session,
+    level: realLevel,
+    levelCorrectCount: Math.min(25, Math.max(0, currentCount)),
+    levelCorrectCounts: {
+      1: Math.min(25, Math.max(0, l1)),
+      2: Math.min(25, Math.max(0, l2)),
+      3: Math.min(25, Math.max(0, l3)),
+    },
+    questionsAnsweredTotal: Math.max(answeredTotal, l1 + l2 + l3),
+  };
+}
+
 export const authService = {
   /**
    * Obtiene el usuario actual logueado o null si está en modo invitado.
@@ -397,7 +487,13 @@ export const authService = {
         }
       }
       if (!raw) return null;
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      const sanitized = sanitizeSmartStudySession(parsed);
+      if (sanitized && (sanitized.level !== parsed.level || sanitized.levelCorrectCount !== parsed.levelCorrectCount)) {
+        localStorage.setItem(userKey, JSON.stringify(sanitized));
+        saveSessionItem(userKey, sanitized).catch(() => {});
+      }
+      return sanitized;
     } catch (e) {
       console.error('Error al leer memoria de Smart Study', e);
       return null;
@@ -410,13 +506,14 @@ export const authService = {
    */
   saveSmartStudySession(userId: string | null, kitId: string, state: SmartStudySessionState): void {
     try {
+      const sanitized = sanitizeSmartStudySession(state) || state;
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
-      localStorage.setItem(key, JSON.stringify(state));
-      saveSessionItem(key, state).catch(() => {});
+      localStorage.setItem(key, JSON.stringify(sanitized));
+      saveSessionItem(key, sanitized).catch(() => {});
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('thea_session_saved', {
-          detail: { userId, kitId, state }
+          detail: { userId, kitId, state: sanitized }
         }));
       }
     } catch (e) {
@@ -443,7 +540,8 @@ export const authService = {
         try {
           const raw = localStorage.getItem(key);
           if (raw) {
-            result[kitId] = JSON.parse(raw);
+            const sanitized = sanitizeSmartStudySession(JSON.parse(raw));
+            if (sanitized) result[kitId] = sanitized;
           }
         } catch {}
       } else if (userId && userId !== 'guest' && key.startsWith(guestPrefix)) {
@@ -452,7 +550,8 @@ export const authService = {
           try {
             const raw = localStorage.getItem(key);
             if (raw) {
-              result[kitId] = JSON.parse(raw);
+              const sanitized = sanitizeSmartStudySession(JSON.parse(raw));
+              if (sanitized) result[kitId] = sanitized;
             }
           } catch {}
         }
@@ -486,44 +585,40 @@ export const authService = {
 
   /**
    * Fusiona una sesión entrante (ej. descargada de Google Drive) con la sesión local
-   * aplicando el criterio: prevalece el progreso más avanzado (mayor nivel y mayor cantidad de aciertos).
+   * sincronizando el progreso exacto sin subir ni bajar arbitrariamente el nivel real.
    */
   mergeSmartStudySession(userId: string | null, kitId: string, incomingSession: SmartStudySessionState): void {
     if (!incomingSession) return;
-    const currentSession = this.getSmartStudySession(userId, kitId);
+    const sanitizedIncoming = sanitizeSmartStudySession(incomingSession);
+    if (!sanitizedIncoming) return;
 
-    if (!currentSession) {
-      this.saveSmartStudySession(userId, kitId, incomingSession);
+    const rawCurrent = this.getSmartStudySession(userId, kitId);
+    if (!rawCurrent) {
+      this.saveSmartStudySession(userId, kitId, sanitizedIncoming);
       return;
     }
 
-    const localLevel = currentSession.level || 1;
-    const incomingLevel = incomingSession.level || 1;
+    const localSession = sanitizeSmartStudySession(rawCurrent) || rawCurrent;
 
-    const localCorrect = (currentSession.levelCorrectCounts && currentSession.levelCorrectCounts[localLevel]) ?? currentSession.levelCorrectCount ?? 0;
-    const incomingCorrect = (incomingSession.levelCorrectCounts && incomingSession.levelCorrectCounts[incomingLevel]) ?? incomingSession.levelCorrectCount ?? 0;
-
-    const localAnswered = currentSession.questionsAnsweredTotal || (currentSession.history ? currentSession.history.length : 0);
-    const incomingAnswered = incomingSession.questionsAnsweredTotal || (incomingSession.history ? incomingSession.history.length : 0);
+    // Comparar aciertos acumulados reales para que la sincronización sea exacta
+    const localTotalCorrect = (localSession.levelCorrectCounts?.[1] || 0) + (localSession.levelCorrectCounts?.[2] || 0) + (localSession.levelCorrectCounts?.[3] || 0);
+    const incomingTotalCorrect = (sanitizedIncoming.levelCorrectCounts?.[1] || 0) + (sanitizedIncoming.levelCorrectCounts?.[2] || 0) + (sanitizedIncoming.levelCorrectCounts?.[3] || 0);
 
     let isIncomingBetter = false;
-
-    if (incomingLevel > localLevel) {
+    if (incomingTotalCorrect > localTotalCorrect) {
       isIncomingBetter = true;
-    } else if (incomingLevel === localLevel) {
-      if (incomingCorrect > localCorrect) {
+    } else if (incomingTotalCorrect === localTotalCorrect) {
+      const localAnswered = localSession.questionsAnsweredTotal || (localSession.history ? localSession.history.length : 0);
+      const incomingAnswered = sanitizedIncoming.questionsAnsweredTotal || (sanitizedIncoming.history ? sanitizedIncoming.history.length : 0);
+      if (incomingAnswered > localAnswered) {
         isIncomingBetter = true;
-      } else if (incomingCorrect === localCorrect) {
-        if (incomingAnswered > localAnswered) {
-          isIncomingBetter = true;
-        } else if (incomingAnswered === localAnswered) {
-          isIncomingBetter = (incomingSession.lastUpdated || 0) > (currentSession.lastUpdated || 0);
-        }
+      } else if (incomingAnswered === localAnswered) {
+        isIncomingBetter = (sanitizedIncoming.lastUpdated || 0) > (localSession.lastUpdated || 0);
       }
     }
 
-    const baseSession = isIncomingBetter ? incomingSession : currentSession;
-    const otherSession = isIncomingBetter ? currentSession : incomingSession;
+    const baseSession = isIncomingBetter ? sanitizedIncoming : localSession;
+    const otherSession = isIncomingBetter ? localSession : sanitizedIncoming;
 
     const mergedRevealed = Array.from(new Set([
       ...(baseSession.revealedQuestionIds || []),

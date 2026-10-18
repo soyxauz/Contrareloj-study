@@ -231,7 +231,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // ── Calibración Pedagógica & Preguntas Dirigidas (Tuerca) ───────────────
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
-  const [targetLevel, setTargetLevel] = useState<1 | 2 | 3>(3);
+  const [targetLevel, setTargetLevel] = useState<1 | 2 | 3>(() => level);
   const [targetTopic, setTargetTopic] = useState('');
   const targetCount = 5;
   const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
@@ -317,8 +317,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       );
 
       if (generated.length > 0) {
-        // Establecer nivel activo al nivel calibrado elegido
-        setLevel(targetLevel);
+        // Se preserva el nivel de progreso real ganado sin alterarlo por la dificultad de práctica
         setShuffleSeed(1);
         setCurrentIndex(0);
         setIsReinforcementMode(false);
