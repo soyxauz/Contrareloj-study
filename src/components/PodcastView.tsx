@@ -131,14 +131,34 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     voiceEngineRef.current = voiceEngine;
   }, [voiceEngine]);
 
-  // Estados y referencias para navegación granular palabra por palabra
+  // Duración total calculada en segundos del podcast
+  const totalDurationSecs = useMemo(() => {
+    if (!kit.podcast?.dialogue || kit.podcast.dialogue.length === 0) return 60;
+    const parsedDuration = parseTimeToSeconds(kit.podcast.duration || '');
+    if (parsedDuration > 0) return parsedDuration;
+    const lastItem = kit.podcast.dialogue[kit.podcast.dialogue.length - 1];
+    const lastStartSec = parseTimeToSeconds(lastItem.time || '');
+    const estimatedLastSegSec = Math.max(15, lastItem.text.split(/\s+/).length * 0.4);
+    return Math.max(60, Math.round(lastStartSec + estimatedLastSegSec));
+  }, [kit.podcast?.dialogue, kit.podcast?.duration]);
+
+  // Tiempo continuo actual en segundos (resolución continua para animación ultra-suave a 60fps)
+  const [currentPlaybackSecs, setCurrentPlaybackSecs] = useState<number>(() => {
+    if (initialPosition.lineIndex && kit.podcast?.dialogue?.[initialPosition.lineIndex]) {
+      return parseTimeToSeconds(kit.podcast.dialogue[initialPosition.lineIndex].time || '0:00');
+    }
+    return 0;
+  });
+  const currentPlaybackSecsRef = useRef<number>(currentPlaybackSecs);
+
+  // Estados y referencias para navegación y resaltado sincronizado
   const [currentWordIndexInSegment, setCurrentWordIndexInSegment] = useState(initialPosition.wordIndexInSegment);
   const [currentGlobalWordIndex, setCurrentGlobalWordIndex] = useState(initialPosition.globalIndex);
   const currentWordIndexRef = useRef(initialPosition.wordIndexInSegment);
   const currentGlobalWordIndexRef = useRef(initialPosition.globalIndex);
   const speakDialogueLineRef = useRef<((index: number, startWordIdx?: number) => void) | null>(null);
 
-  // Control de arrastre y desplazamiento del scrubber (evita saltos y bucles de retroceso)
+  // Control de arrastre y desplazamiento del scrubber suave
   const [isScrubbing, setIsScrubbing] = useState(false);
   const isScrubbingRef = useRef(false);
   const wasPlayingBeforeScrubRef = useRef(false);
@@ -147,7 +167,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const preloadedNextAudioRef = useRef<{ index: number; audio: HTMLAudioElement } | null>(null);
 
   // Helper síncrono para mantener estado y referencias siempre alineados en el mismo tick
-  const setWordPosition = useCallback((globalIdx: number, segIdx: number, wordInSegIdx: number) => {
+  const setWordPosition = useCallback((globalIdx: number, segIdx: number, wordInSegIdx: number, secs?: number) => {
     currentGlobalWordIndexRef.current = globalIdx;
     currentWordIndexRef.current = wordInSegIdx;
     currentLineIndexRef.current = segIdx;
@@ -156,11 +176,14 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     setCurrentWordIndexInSegment(wordInSegIdx);
     setCurrentLineIndex(segIdx);
 
+    const safeSecs = secs !== undefined ? secs : currentPlaybackSecsRef.current;
+
     try {
       localStorage.setItem(`thea_podcast_pos_${kit.id}`, JSON.stringify({
         lineIndex: segIdx,
         wordIndexInSegment: wordInSegIdx,
         globalIndex: globalIdx,
+        playbackSecs: safeSecs,
       }));
     } catch (_) {}
   }, [kit.id]);
@@ -362,16 +385,51 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     return clean ? clean.split(/\s+/).filter(Boolean) : [];
   }, [currentItem?.text]);
 
+  // Tiempo formateado actual (ej. "3:13")
   const currentTimeDisplay = useMemo(() => {
-    if (!currentItem || !podcast?.dialogue) return '0:00';
-    const startSecs = parseTimeToSeconds(currentItem.time);
-    const nextItem = podcast.dialogue[currentLineIndex + 1];
-    const nextSecs = nextItem ? parseTimeToSeconds(nextItem.time) : startSecs + Math.max(15, currentSegmentWords.length * 0.4);
-    const segDuration = Math.max(2, nextSecs - startSecs);
-    const wordRatio = currentSegmentWords.length > 0 ? (currentWordIndexInSegment / currentSegmentWords.length) : 0;
-    const currentSecs = Math.round(startSecs + wordRatio * segDuration);
-    return formatSeconds(currentSecs);
-  }, [currentItem, podcast?.dialogue, currentLineIndex, currentWordIndexInSegment, currentSegmentWords.length]);
+    return formatSeconds(Math.floor(currentPlaybackSecs));
+  }, [currentPlaybackSecs]);
+
+  // Porcentaje fluido de 0% a 100% para la barra interactiva
+  const progressPercent = useMemo(() => {
+    if (totalDurationSecs <= 0) return 0;
+    const pct = (currentPlaybackSecs / totalDurationSecs) * 100;
+    return Math.max(0, Math.min(100, pct));
+  }, [currentPlaybackSecs, totalDurationSecs]);
+
+  // Bucle de sincronización continua a 60 FPS durante la reproducción
+  useEffect(() => {
+    if (!isPlaying) return;
+    let animId: number;
+    const updateSmoothTick = () => {
+      if (
+        isMountedRef.current &&
+        !isScrubbingRef.current &&
+        !isAudioSeekingRef.current &&
+        audioPlayerRef.current
+      ) {
+        const audio = audioPlayerRef.current;
+        if (!audio.paused && audio.duration && Number.isFinite(audio.duration)) {
+          const segStart = parseTimeToSeconds(podcast?.dialogue?.[currentLineIndexRef.current]?.time || '0:00');
+          const exact = segStart + audio.currentTime;
+          currentPlaybackSecsRef.current = exact;
+          setCurrentPlaybackSecs(exact);
+        }
+      }
+      animId = requestAnimationFrame(updateSmoothTick);
+    };
+    animId = requestAnimationFrame(updateSmoothTick);
+    return () => cancelAnimationFrame(animId);
+  }, [isPlaying, podcast?.dialogue]);
+
+  // Sincronizar tiempo base cuando cambia el segmento si no se está arrastrando
+  useEffect(() => {
+    if (isScrubbingRef.current) return;
+    if (!podcast?.dialogue) return;
+    const segStart = parseTimeToSeconds(podcast.dialogue[currentLineIndex]?.time || '0:00');
+    currentPlaybackSecsRef.current = segStart;
+    setCurrentPlaybackSecs(segStart);
+  }, [currentLineIndex, podcast?.dialogue]);
 
   // Cargar catálogo de voces del sintetizador del navegador
   useEffect(() => {
@@ -1114,14 +1172,111 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }, 60);
   }, [allWords, podcast?.dialogue, setWordPosition, stopCurrentAudio]);
 
-  // Control de arrastre interactivo del scrubber
-  const handleScrubStart = useCallback(() => {
+  // Navegar a un segundo específico en el podcast de forma continua y suave
+  const seekToTime = useCallback((targetSecs: number, forcePlay?: boolean) => {
+    if (!podcast?.dialogue || podcast.dialogue.length === 0) return;
+    const safeSecs = Math.max(0, Math.min(totalDurationSecs, targetSecs));
+    currentPlaybackSecsRef.current = safeSecs;
+    setCurrentPlaybackSecs(safeSecs);
+
+    // Encontrar qué segmento corresponde al segundo destino
+    let targetSegIdx = 0;
+    for (let i = 0; i < podcast.dialogue.length; i++) {
+      const segStart = parseTimeToSeconds(podcast.dialogue[i].time || '0:00');
+      if (segStart <= safeSecs) {
+        targetSegIdx = i;
+      } else {
+        break;
+      }
+    }
+
+    const segStartSecs = parseTimeToSeconds(podcast.dialogue[targetSegIdx].time || '0:00');
+    const offsetInSeg = Math.max(0, safeSecs - segStartSecs);
+
+    const segWords = podcast.dialogue[targetSegIdx].text
+      .replace(/[*_#`~[\]]/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[$]/g, '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const nextSeg = podcast.dialogue[targetSegIdx + 1];
+    const nextSegStart = nextSeg ? parseTimeToSeconds(nextSeg.time) : (segStartSecs + Math.max(10, segWords.length * 0.4));
+    const segDuration = Math.max(1, nextSegStart - segStartSecs);
+    const wordRatio = Math.max(0, Math.min(0.99, offsetInSeg / segDuration));
+    const approxWordIdx = Math.floor(wordRatio * segWords.length);
+
+    const baseGlobal = segmentStartGlobalIndices[targetSegIdx] || 0;
+    setWordPosition(baseGlobal + approxWordIdx, targetSegIdx, approxWordIdx, safeSecs);
+
+    const willPlay = forcePlay !== undefined ? forcePlay : isPlayingRef.current;
+    const audio = audioPlayerRef.current;
+    const isSameLoadedSegment = loadedAudioSegmentRef.current === targetSegIdx;
+
+    if (voiceEngineRef.current === 'edge' && audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
+      isManualInterruptionRef.current = true;
+      isAudioSeekingRef.current = true;
+
+      const finishSeek = () => {
+        audio.removeEventListener('seeked', finishSeek);
+        setTimeout(() => {
+          isAudioSeekingRef.current = false;
+          isManualInterruptionRef.current = false;
+        }, 120);
+      };
+      audio.addEventListener('seeked', finishSeek, { once: true });
+      audio.currentTime = Math.max(0, Math.min(audio.duration - 0.05, offsetInSeg));
+
+      setTimeout(() => {
+        isAudioSeekingRef.current = false;
+        isManualInterruptionRef.current = false;
+      }, 350);
+
+      if (willPlay) {
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+        if (audio.paused) {
+          audio.play().catch(console.warn);
+        }
+      } else {
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+        audio.pause();
+      }
+      return;
+    }
+
+    isManualInterruptionRef.current = true;
+    stopCurrentAudio();
+    loadedAudioSegmentRef.current = -1;
+
+    setTimeout(() => {
+      isManualInterruptionRef.current = false;
+      if (willPlay) {
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+        speakDialogueLineRef.current?.(targetSegIdx, approxWordIdx);
+      } else {
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+      }
+    }, 60);
+  }, [podcast?.dialogue, totalDurationSecs, segmentStartGlobalIndices, setWordPosition, stopCurrentAudio]);
+
+  // Avanzar o retroceder segundos (ej. -10s o +10s)
+  const handleSkipSeconds = useCallback((deltaSecs: number) => {
+    const target = currentPlaybackSecsRef.current + deltaSecs;
+    seekToTime(target);
+  }, [seekToTime]);
+
+  // Control interactivo del slider continuo
+  const handleProgressPointerDown = useCallback(() => {
     isManualInterruptionRef.current = true;
     isScrubbingRef.current = true;
     setIsScrubbing(true);
     wasPlayingBeforeScrubRef.current = isPlayingRef.current;
 
-    // Pausar temporalmente para que el audio no siga avanzando mientras el usuario arrastra
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
     }
@@ -1131,39 +1286,52 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     setIsAudioActive(false);
   }, []);
 
-  const handleScrubChange = useCallback((targetGlobalIndex: number) => {
-    if (allWords.length === 0) return;
-    const safeGlobal = Math.max(0, Math.min(allWords.length - 1, targetGlobalIndex));
-    const target = allWords[safeGlobal];
-    if (!target) return;
+  const handleProgressChange = useCallback((stepVal: number) => {
+    if (totalDurationSecs <= 0) return;
+    const ratio = Math.max(0, Math.min(1, stepVal / 1000));
+    const targetSecs = ratio * totalDurationSecs;
+    currentPlaybackSecsRef.current = targetSecs;
+    setCurrentPlaybackSecs(targetSecs);
 
-    // Actualizar de forma visual e inmediata el cursor, el texto y el contador sin disparar audio
-    setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment);
-  }, [allWords, setWordPosition]);
+    if (podcast?.dialogue) {
+      let previewSeg = 0;
+      for (let i = 0; i < podcast.dialogue.length; i++) {
+        if (parseTimeToSeconds(podcast.dialogue[i].time || '0:00') <= targetSecs) {
+          previewSeg = i;
+        } else {
+          break;
+        }
+      }
+      if (previewSeg !== currentLineIndexRef.current) {
+        currentLineIndexRef.current = previewSeg;
+        setCurrentLineIndex(previewSeg);
+      }
+    }
+  }, [totalDurationSecs, podcast?.dialogue]);
 
-  const handleScrubEnd = useCallback((e?: React.SyntheticEvent | Event) => {
+  const handleProgressPointerUp = useCallback((e?: React.SyntheticEvent | Event) => {
     if (!isScrubbingRef.current) return;
     isScrubbingRef.current = false;
     setIsScrubbing(false);
 
-    let targetGlobal = currentGlobalWordIndexRef.current;
+    let targetSecs = currentPlaybackSecsRef.current;
     if (e && 'target' in e && (e.target as HTMLInputElement)?.value !== undefined) {
       const inputVal = Number((e.target as HTMLInputElement).value);
-      if (!isNaN(inputVal)) {
-        targetGlobal = inputVal;
+      if (!isNaN(inputVal) && totalDurationSecs > 0) {
+        targetSecs = (Math.max(0, Math.min(1000, inputVal)) / 1000) * totalDurationSecs;
       }
     }
 
     const shouldResume = wasPlayingBeforeScrubRef.current;
-    seekToGlobalWord(targetGlobal, shouldResume);
-  }, [seekToGlobalWord]);
+    seekToTime(targetSecs, shouldResume);
+  }, [seekToTime, totalDurationSecs]);
 
   // Listener global de pointerup para asegurar que si el usuario suelta fuera de la barra, se consolide el salto
   useEffect(() => {
     if (!isScrubbing) return;
 
     const onGlobalPointerUp = () => {
-      handleScrubEnd();
+      handleProgressPointerUp();
     };
 
     window.addEventListener('pointerup', onGlobalPointerUp);
@@ -1172,15 +1340,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       window.removeEventListener('pointerup', onGlobalPointerUp);
       window.removeEventListener('pointercancel', onGlobalPointerUp);
     };
-  }, [isScrubbing, handleScrubEnd]);
+  }, [isScrubbing, handleProgressPointerUp]);
 
-  // Avanzar o retroceder palabra por palabra
-  const handleStepWord = useCallback((direction: -1 | 1) => {
-    if (allWords.length === 0) return;
-    const currentIdx = currentGlobalWordIndexRef.current;
-    const nextGlobal = Math.max(0, Math.min(allWords.length - 1, currentIdx + direction));
-    seekToGlobalWord(nextGlobal);
-  }, [allWords.length, seekToGlobalWord]);
+
 
   // Adelantar o atrasar a un segmento completo
   const handleSeek = useCallback((targetIndex: number) => {
@@ -1247,7 +1409,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (audioPlayerRef.current) {
       audioPlayerRef.current.currentTime = 0;
     }
-    setWordPosition(0, 0, 0);
+    currentPlaybackSecsRef.current = 0;
+    setCurrentPlaybackSecs(0);
+    setWordPosition(0, 0, 0, 0);
 
     setTimeout(() => {
       isManualInterruptionRef.current = false;
@@ -1604,39 +1768,46 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               </div>
             </div>
 
-            {/* ── LÍNEA DE TIEMPO INTERACTIVA (SCRUBBER PALABRA POR PALABRA) ── */}
+            {/* ── LÍNEA DE TIEMPO INTERACTIVA ULTRA-FLUIDA (SMOOTH SCRUBBER) ── */}
             <div className="max-w-2xl mx-auto mb-6 px-2 relative z-10">
-              <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-                <span className="font-semibold text-amber-400">{currentTimeDisplay}</span>
-                <div className="flex items-center gap-1.5 text-[11px] font-sans">
-                  <span className="text-slate-300 font-medium">
-                    Segmento {currentLineIndex + 1}/{podcast.dialogue.length}
-                  </span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-amber-300 font-semibold">
-                    Palabra {Math.min(currentSegmentWords.length, currentWordIndexInSegment + 1)} de {currentSegmentWords.length}
-                  </span>
-                  <span className="text-slate-600 hidden sm:inline">•</span>
-                  <span className="text-slate-500 text-[10px] hidden sm:inline">
-                    ({currentGlobalWordIndex + 1} de {allWords.length} totales)
-                  </span>
-                </div>
-                <span>{podcast.duration}</span>
+              <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2.5">
+                <span className="font-semibold text-amber-400 text-sm">{currentTimeDisplay}</span>
+                <span className="text-slate-300 font-medium text-xs font-sans">
+                  Segmento {currentLineIndex + 1} de {podcast.dialogue.length}
+                </span>
+                <span className="text-slate-400">{podcast.duration}</span>
               </div>
 
-              {/* Slider interactivo con resolución exacta palabra por palabra */}
-              <div className="relative flex items-center group">
+              {/* Slider interactivo suave a 60fps con track visual y perla dorada */}
+              <div className="relative flex items-center group py-2">
+                {/* Pista de fondo con glow sutil */}
+                <div className="w-full h-2 group-hover:h-2.5 bg-slate-800/90 rounded-full overflow-hidden transition-all duration-150 relative">
+                  {/* Pista de relleno suave con gradiente ámbar */}
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-300 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.35)]"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+
+                {/* Thumb perla brillante deslizante */}
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-amber-400 border-2 border-slate-900 shadow-md shadow-amber-500/60 transition-transform group-hover:scale-125 pointer-events-none"
+                  style={{ left: `${progressPercent}%` }}
+                />
+
+                {/* Input nativo transparente para control táctil y ratón con 1000 pasos */}
                 <input
                   type="range"
                   min={0}
-                  max={Math.max(1, allWords.length - 1)}
-                  value={currentGlobalWordIndex}
-                  onPointerDown={handleScrubStart}
-                  onChange={(e) => handleScrubChange(Number(e.target.value))}
-                  onPointerUp={handleScrubEnd}
-                  onKeyUp={handleScrubEnd}
-                  className="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 focus:outline-none transition-[height] group-hover:h-3"
-                  title="Arrastra para navegar con precisión palabra por palabra en el episodio"
+                  max={1000}
+                  step={1}
+                  value={Math.round(progressPercent * 10)}
+                  onPointerDown={handleProgressPointerDown}
+                  onChange={(e) => handleProgressChange(Number(e.target.value))}
+                  onPointerUp={handleProgressPointerUp}
+                  onKeyUp={handleProgressPointerUp}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  title="Arrastra para avanzar o retroceder suavemente en el podcast"
                 />
               </div>
             </div>
@@ -1664,16 +1835,16 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
-              {/* Retroceder 1 Palabra */}
+              {/* Retroceder 10 Segundos */}
               <button
                 type="button"
-                onClick={() => handleStepWord(-1)}
-                disabled={currentGlobalWordIndex === 0}
-                className="px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs"
-                title="Retroceder 1 palabra"
+                onClick={() => handleSkipSeconds(-10)}
+                disabled={currentPlaybackSecs <= 0}
+                className="px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
+                title="Retroceder 10 segundos"
               >
                 <ChevronLeft className="w-4 h-4 text-amber-400" />
-                <span className="hidden sm:inline">Palabra</span>
+                <span>-10s</span>
               </button>
 
               {/* Play / Pausa */}
@@ -1686,15 +1857,15 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 {isPlaying ? <Pause className="w-6 h-6 sm:w-7 sm:h-7 fill-white" /> : <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-white ml-0.5" />}
               </button>
 
-              {/* Adelantar 1 Palabra */}
+              {/* Adelantar 10 Segundos */}
               <button
                 type="button"
-                onClick={() => handleStepWord(1)}
-                disabled={currentGlobalWordIndex >= allWords.length - 1}
-                className="px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs"
-                title="Adelantar 1 palabra"
+                onClick={() => handleSkipSeconds(10)}
+                disabled={currentPlaybackSecs >= totalDurationSecs}
+                className="px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
+                title="Adelantar 10 segundos"
               >
-                <span className="hidden sm:inline">Palabra</span>
+                <span>+10s</span>
                 <ChevronRight className="w-4 h-4 text-amber-400" />
               </button>
 
