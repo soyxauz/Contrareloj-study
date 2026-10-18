@@ -8,7 +8,6 @@ import {
   VolumeX,
   Keyboard,
   Square,
-  Zap,
   AlertTriangle,
   Check,
   RotateCcw,
@@ -17,7 +16,7 @@ import {
   X,
   ArrowLeft,
 } from 'lucide-react';
-import { askTheaAI, getGrokApiKey, getGrokModel } from '../services/aiService';
+import { askTheaAI } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { FormattedText } from './FormattedText';
 
@@ -82,9 +81,6 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   onOpenAISettings,
   onNavigateToChat,
 }) => {
-  const grokKey = getGrokApiKey();
-  const grokModel = getGrokModel();
-  const hasGrok = Boolean(grokKey);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -407,6 +403,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       };
 
       rec.onerror = (e: any) => {
+        console.warn('[Oral mic] error:', e.error);
         // Pausas de habla, silencios normales o abort intencional: NO apagar el micrófono
         if (e.error === 'no-speech' || e.error === 'aborted') {
           return;
@@ -467,6 +464,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       };
 
       rec.onend = () => {
+        console.warn('[Oral mic] onend, deseado =', isListeningDesiredRef.current);
         accumulatedFromPreviousSessionsRef.current = transcriptBufferRef.current;
         // Si el usuario aún mantiene activo el micrófono, reiniciar la sesión de forma continua
         if (isListeningDesiredRef.current) {
@@ -534,7 +532,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
     let replyText: string;
     try {
-      replyText = await askTheaAI(queryForAI, kit, previousHistory, 'grok');
+      replyText = await askTheaAI(queryForAI, kit, previousHistory, 'auto');
     } catch {
       replyText = `He analizado tu respuesta sobre "${kit.title}". ¿Podrías resumir la idea central o reformularla brevemente?`;
     }
@@ -606,15 +604,15 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
         {/* Acciones mínimas superiores */}
         <div className="flex items-center gap-2">
-          {hasGrok && (
+          {onOpenAISettings && (
             <button
               type="button"
               onClick={onOpenAISettings}
-              className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/30 flex items-center gap-1.5 hover:bg-violet-500/25 transition-colors cursor-pointer"
-              title={`Motor de voz activo: xAI Grok (${grokModel})`}
+              className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-thea-surface/80 border border-thea-border/70 text-slate-300 hover:text-white hover:bg-thea-surface flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Configurar motor de IA (Groq / Ollama)"
             >
-              <Zap className="w-3 h-3 text-violet-400" />
-              <span>xAI Grok</span>
+              <Sparkles className="w-3 h-3 text-cyan-400" />
+              <span>Motor IA</span>
             </button>
           )}
 
