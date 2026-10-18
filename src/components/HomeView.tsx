@@ -35,6 +35,16 @@ import {
   GraduationCap,
   Pill,
   Calculator,
+  HeartPulse,
+  Germ,
+  Virus,
+  Bone,
+  Eye,
+  Droplets,
+  Syringe,
+  Wind,
+  CloudRain,
+  Leaf,
   X,
   MoreVertical,
   FolderEdit,
@@ -108,6 +118,47 @@ const HospitalIllustration: React.FC<{ className?: string }> = ({ className = "w
     </svg>
   );
 };
+
+/**
+ * Ilustración vectorial plana y estilizada del aparato respiratorio / pulmones.
+ * Mantiene la armonía visual de las marcas de agua con trazo redondeado y relleno sutil.
+ */
+const LungsIllustration: React.FC<{ className?: string; style?: React.CSSProperties }> = ({
+  className = "w-28 h-28",
+  style,
+}) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={style}
+  >
+    {/* Tráquea y anillos cartilaginosos */}
+    <path d="M12 2v6" />
+    <path d="M10 4h4" />
+    <path d="M10 6.5h4" />
+    {/* Ramas bronquiales principales */}
+    <path d="M12 8l-3 3" />
+    <path d="M12 8l3 3" />
+    {/* Pulmón derecho */}
+    <path
+      d="M9 11C6.2 11 3.8 13.2 3.8 16.5C3.8 19.8 6 21.5 8.5 21.5C10.6 21.5 11.5 20.2 11.8 18.8L12 11z"
+      className="fill-current/25"
+    />
+    {/* Pulmón izquierdo con escotadura cardíaca */}
+    <path
+      d="M15 11C17.8 11 20.2 13.2 20.2 16.5C20.2 19.8 18 21.5 15.5 21.5C13.4 21.5 12.5 20.2 12.2 18.8L12 11z"
+      className="fill-current/25"
+    />
+    {/* Ramificaciones bronquiales internas */}
+    <path d="M7.8 15.2l-2 1.8" />
+    <path d="M16.2 15.2l2 1.8" />
+  </svg>
+);
 
 interface HomeViewProps {
   kits: StudyKit[];
@@ -299,6 +350,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const style = colorHex ? { color: colorHex } : undefined;
     const cls = "w-5 h-5";
     switch (iconName) {
+      case 'Lungs': return <LungsIllustration className={cls} style={style} />;
+      case 'HeartPulse': return <HeartPulse className={cls} style={style} />;
+      case 'Germ': return <Germ className={cls} style={style} />;
+      case 'Virus': return <Virus className={cls} style={style} />;
+      case 'Bone': return <Bone className={cls} style={style} />;
+      case 'Eye': return <Eye className={cls} style={style} />;
+      case 'Droplets': return <Droplets className={cls} style={style} />;
+      case 'Syringe': return <Syringe className={cls} style={style} />;
+      case 'Wind': return <Wind className={cls} style={style} />;
+      case 'CloudRain': return <CloudRain className={cls} style={style} />;
+      case 'Leaf': return <Leaf className={cls} style={style} />;
       case 'Hospital': return <Hospital className={cls} style={style} />;
       case 'Microscope': return <Microscope className={cls} style={style} />;
       case 'Scale': return <Scale className={cls} style={style} />;
@@ -319,13 +381,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   const renderWatermarkIcon = (iconName: string, category?: string, title?: string) => {
-    const isMed = /fisiopatolog|medicin|salud|enfermedad|hospital|clinica/i.test(`${category || ''} ${title || ''}`);
-    if (iconName === 'Hospital' || iconName === 'Stethoscope' || (isMed && iconName !== 'Microscope')) {
-      return <HospitalIllustration className="w-28 h-28" />;
-    }
-
     const cls = "w-28 h-28 stroke-[2.2] fill-current/25";
     switch (iconName) {
+      case 'Lungs': return <LungsIllustration className={cls} />;
+      case 'HeartPulse': return <HeartPulse className={cls} />;
+      case 'Germ': return <Germ className={cls} />;
+      case 'Virus': return <Virus className={cls} />;
+      case 'Bone': return <Bone className={cls} />;
+      case 'Eye': return <Eye className={cls} />;
+      case 'Droplets': return <Droplets className={cls} />;
+      case 'Syringe': return <Syringe className={cls} />;
+      case 'Wind': return <Wind className={cls} />;
+      case 'CloudRain': return <CloudRain className={cls} />;
+      case 'Leaf': return <Leaf className={cls} />;
       case 'Microscope': return <Microscope className={cls} />;
       case 'Scale': return <Scale className={cls} />;
       case 'Dna': return <Dna className={cls} />;
@@ -339,7 +407,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
       case 'Calculator': return <Calculator className={cls} />;
       case 'Brain': return <Brain className={cls} />;
       case 'BookOpen': return <BookOpen className={cls} />;
-      default: return <GraduationCap className={cls} />;
+      case 'Hospital':
+      case 'Stethoscope':
+        return <HospitalIllustration className="w-28 h-28" />;
+      default: {
+        const isMed = /fisiopatolog|medicin|salud|enfermedad|hospital|clinica/i.test(`${category || ''} ${title || ''}`);
+        if (isMed && (iconName === 'Hospital' || iconName === 'Stethoscope')) {
+          return <HospitalIllustration className="w-28 h-28" />;
+        }
+        return <GraduationCap className={cls} />;
+      }
     }
   };
 

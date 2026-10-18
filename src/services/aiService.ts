@@ -2312,6 +2312,350 @@ export interface DocumentClassification {
   isForeign?: boolean;
 }
 
+export const VALID_CONTENT_ICONS = [
+  'Lungs',
+  'HeartPulse',
+  'Germ',
+  'Virus',
+  'Dna',
+  'Bone',
+  'Eye',
+  'Droplets',
+  'Pill',
+  'Syringe',
+  'Brain',
+  'Microscope',
+  'Hospital',
+  'Stethoscope',
+  'Wind',
+  'CloudRain',
+  'Leaf',
+  'FlaskConical',
+  'Atom',
+  'Binary',
+  'Cpu',
+  'Scale',
+  'TrendingUp',
+  'Calculator',
+  'Landmark',
+  'BookOpen',
+  'GraduationCap',
+] as const;
+
+export type ValidContentIcon = (typeof VALID_CONTENT_ICONS)[number];
+
+export const ICON_COLORS: Record<string, string> = {
+  Lungs: 'from-cyan-600 to-teal-800',
+  HeartPulse: 'from-rose-600 to-red-800',
+  Germ: 'from-emerald-600 to-green-800',
+  Virus: 'from-amber-600 to-rose-700',
+  Dna: 'from-teal-500 to-emerald-700',
+  Bone: 'from-amber-700 to-stone-800',
+  Eye: 'from-blue-600 to-cyan-700',
+  Droplets: 'from-red-600 to-rose-800',
+  Pill: 'from-emerald-500 to-teal-700',
+  Syringe: 'from-indigo-500 to-blue-700',
+  Brain: 'from-purple-600 to-fuchsia-800',
+  Microscope: 'from-teal-600 to-emerald-800',
+  Hospital: 'from-rose-600 to-red-800',
+  Stethoscope: 'from-rose-500 to-red-700',
+  Wind: 'from-sky-500 to-blue-700',
+  CloudRain: 'from-blue-600 to-indigo-800',
+  Leaf: 'from-emerald-500 to-green-700',
+  FlaskConical: 'from-cyan-500 to-blue-700',
+  Atom: 'from-indigo-500 to-purple-700',
+  Binary: 'from-violet-600 to-indigo-800',
+  Cpu: 'from-blue-600 to-cyan-800',
+  Scale: 'from-amber-600 to-yellow-800',
+  TrendingUp: 'from-emerald-600 to-green-800',
+  Calculator: 'from-orange-500 to-amber-600',
+  Landmark: 'from-yellow-600 to-amber-700',
+  BookOpen: 'from-pink-500 to-rose-700',
+  GraduationCap: 'from-violet-500 to-purple-700',
+};
+
+interface ContentIconMatcher {
+  icon: string;
+  keywords: string[];
+}
+
+const CONTENT_ICON_MATCHERS: ContentIconMatcher[] = [
+  {
+    icon: 'Lungs',
+    keywords: [
+      'pulmon', 'pulmón', 'pulmonar', 'pulmonares', 'respirat', 'alvéol', 'alveol', 'bronqui', 'bronco',
+      'neumo', 'neumonía', 'neumonia', 'asma', 'epoc', 'pleura', 'pleural', 'ventilac', 'disnea',
+      'espirometr', 'hipoxia', 'hipercapnia', 'enfisema', 'traquea', 'tráquea', 'laringe', 'respiración',
+      'respiracion', 'tórax', 'torax', 'oxigenación', 'oxigenacion', 'gasometría', 'gasometria',
+      'cianosis', 'atelectas'
+    ],
+  },
+  {
+    icon: 'HeartPulse',
+    keywords: [
+      'cardio', 'corazón', 'corazon', 'cardíac', 'cardiac', 'infarto', 'arritmia', 'electrocardio',
+      'ecg', 'ekg', 'hemodinám', 'hemodinam', 'presión arterial', 'presion arterial', 'hipertens',
+      'miocard', 'pericard', 'valvul', 'valvular', 'endocard', 'aurícul', 'auricul', 'ventrícul',
+      'ventricul', 'isquemia', 'coronari', 'sístole', 'sistole', 'diástole', 'diastole',
+      'insuficiencia cardíaca', 'insuficiencia cardiaca', 'pulso', 'bradicard', 'taquicard'
+    ],
+  },
+  {
+    icon: 'Germ',
+    keywords: [
+      'bacteri', 'germen', 'gérmenes', 'germenes', 'microbi', 'sepsis', 'patógeno', 'patogeno',
+      'estafilococ', 'estreptococ', 'bacilo', 'escherichia', 'gram positivo', 'gram negativo',
+      'antimicrobi', 'resistencia bacteriana', 'flora bacteriana', 'microbioma', 'inóculo', 'inoculo',
+      'toxina bacteriana', 'endotoxina', 'exotoxina', 'pseudomona', 'salmonella', 'tuberculosis',
+      'mycobacteri', 'infección bacteriana', 'infeccion bacteriana'
+    ],
+  },
+  {
+    icon: 'Virus',
+    keywords: [
+      'virus', 'viral', 'virolog', 'vih', 'sida', 'covid', 'coronavirus', 'influenza', 'gripe',
+      'hepatitis', 'herpes', 'retrovirus', 'retroviral', 'virión', 'virion', 'cápside', 'capside',
+      'antiviral', 'arbovirus', 'dengue', 'varicela', 'sarampión', 'sarampion', 'infección viral',
+      'infeccion viral', 'inmunodeficiencia'
+    ],
+  },
+  {
+    icon: 'Dna',
+    keywords: [
+      'genétic', 'genetic', 'adn', 'arn', 'dna', 'rna', 'genoma', 'cromosoma', 'herencia',
+      'mutación', 'mutacion', 'alelo', 'genotipo', 'fenotipo', 'epigenétic', 'epigenetic',
+      'transcripción génica', 'transcripcion genica', 'traducción génica', 'traduccion genica',
+      'polimorfismo', 'nucleótido', 'nucleotido', 'telómero', 'telomero', 'clonación', 'clonacion', 'crispr'
+    ],
+  },
+  {
+    icon: 'Bone',
+    keywords: [
+      'hueso', 'óseo', 'oseo', 'esqueleto', 'esquelét', 'esquelet', 'fractura', 'osteoporos',
+      'articulac', 'articular', 'columna vertebral', 'vértebr', 'vertebr', 'fémur', 'femur',
+      'tibia', 'cráneo', 'craneo', 'traumatolog', 'ortoped', 'ligamento', 'cartílago', 'cartilago',
+      'tendón', 'tendon', 'esguince', 'luxación', 'luxacion', 'artritis', 'artrosis', 'médula ósea', 'medula osea'
+    ],
+  },
+  {
+    icon: 'Eye',
+    keywords: [
+      'ojo', 'ocular', 'visión', 'vision', 'oftalmo', 'retina', 'retinian', 'córnea', 'cornea',
+      'glaucoma', 'catarata', 'mácula', 'macula', 'iris', 'pupila', 'óptica ocular', 'optica ocular',
+      'agudeza visual', 'conjuntiv', 'estrabismo', 'miopía', 'miopia', 'astigmatismo'
+    ],
+  },
+  {
+    icon: 'Droplets',
+    keywords: [
+      'sangre', 'sanguín', 'sanguin', 'hematolog', 'hemoglobi', 'eritrocit', 'glóbulo rojo', 'globulo rojo',
+      'leucocit', 'plaqueta', 'anemia', 'leucemia', 'coagulación', 'coagulacion', 'hemostasia',
+      'hemorragi', 'transfusión', 'transfusion', 'plasma sanguíneo', 'hematocrito', 'linfocit'
+    ],
+  },
+  {
+    icon: 'Pill',
+    keywords: [
+      'fármac', 'farmac', 'medicament', 'pastilla', 'comprimido', 'dosis', 'posología', 'posologia',
+      'farmacocinét', 'farmacocinet', 'farmacodinám', 'farmacodinam', 'toxicolog', 'agonista',
+      'antagonista', 'receta', 'prescripción', 'prescripcion', 'antibiótic', 'antibiotic',
+      'analgésic', 'analgesic', 'antiinflamat', 'cápsula', 'capsula', 'vía oral', 'via oral'
+    ],
+  },
+  {
+    icon: 'Syringe',
+    keywords: [
+      'vacuna', 'vacunac', 'jeringa', 'inyección', 'inyeccion', 'inmunolog', 'inmunidad',
+      'anticuerpo', 'antígeno', 'antigeno', 'inmunoterap', 'inmunodeficienc', 'anestesi',
+      'intravenos', 'parenteral', 'suero', 'endovenos', 'intramuscular', 'inmunización', 'inmunizacion'
+    ],
+  },
+  {
+    icon: 'Brain',
+    keywords: [
+      'cerebr', 'encéfal', 'encefal', 'neurona', 'neural', 'neurolog', 'neurocienc', 'sinapsis',
+      'neurotransmisor', 'corteza cerebral', 'hipocampo', 'psiquiatr', 'dopamina', 'serotonina',
+      'parkinson', 'alzheimer', 'epilepsia', 'ictus', 'acv', 'psicolog', 'cogniti', 'mente',
+      'conductual', 'neuroanatom'
+    ],
+  },
+  {
+    icon: 'Microscope',
+    keywords: [
+      'célula', 'celula', 'celular', 'histolog', 'tejido', 'microscop', 'mitocondria', 'citoplasma',
+      'organelo', 'membrana celular', 'tinción', 'tincion', 'biopsia', 'epitelio', 'endotelio',
+      'citolog'
+    ],
+  },
+  {
+    icon: 'Wind',
+    keywords: [
+      'viento', 'vientos', 'meteorolog', 'atmósfera', 'atmosfera', 'climatolog', 'huracán', 'huracan',
+      'tornado', 'ciclón', 'ciclon', 'presión atmosférica', 'presion atmosferica', 'frente frío',
+      'corriente de chorro', 'brisa', 'vendaval', 'borrasca'
+    ],
+  },
+  {
+    icon: 'CloudRain',
+    keywords: [
+      'lluvia', 'precipitac', 'hidrolog', 'nube', 'nubes', 'tormenta', 'monzón', 'monzon',
+      'inundación', 'inundacion', 'humedad relativa', 'cuenca hidrográfica'
+    ],
+  },
+  {
+    icon: 'Leaf',
+    keywords: [
+      'planta', 'botánic', 'botanic', 'ecolog', 'fotosíntesis', 'fotosintesis', 'vegetal',
+      'clorofila', 'bosque', 'biodiversidad', 'flora', 'ecosistema', 'medio ambiente',
+      'agronom', 'cultivo', 'bioma', 'especie vegetal'
+    ],
+  },
+  {
+    icon: 'FlaskConical',
+    keywords: [
+      'químic', 'quimic', 'reacción química', 'reaccion quimica', 'estequiometr', 'disolución',
+      'disolucion', 'molaridad', 'ácido base', 'acido base', 'titulación', 'titulacion',
+      'termoquímic', 'enlace químico', 'compuesto orgánico', 'termoquimic'
+    ],
+  },
+  {
+    icon: 'Atom',
+    keywords: [
+      'físic', 'fisic', 'átomo', 'atomo', 'cuántic', 'cuantic', 'partícula', 'particula',
+      'electrón', 'electron', 'protón', 'proton', 'newton', 'relatividad', 'termodinámica',
+      'termodinamica', 'fuerza gravitatoria', 'energía cinética', 'materia condensada'
+    ],
+  },
+  {
+    icon: 'Binary',
+    keywords: [
+      'algoritm', 'programac', 'código', 'codigo', 'software', 'computac', 'informát',
+      'informat', 'base de datos', 'sql', 'javascript', 'python', 'estructura de datos',
+      'ciberseguridad', 'redes computacionales'
+    ],
+  },
+  {
+    icon: 'Cpu',
+    keywords: [
+      'procesador', 'cpu', 'microcontrolador', 'arquitectura de computad', 'memoria ram',
+      'placa base', 'semiconductor', 'circuito integrado', 'gpu'
+    ],
+  },
+  {
+    icon: 'Scale',
+    keywords: [
+      'derecho', 'ley', 'leyes', 'jurídic', 'juridic', 'tribunal', 'código penal', 'codigo penal',
+      'código civil', 'codigo civil', 'juez', 'abogad', 'jurisprudenc', 'delito', 'constitución',
+      'constitucion', 'norma jurídica'
+    ],
+  },
+  {
+    icon: 'TrendingUp',
+    keywords: [
+      'economí', 'economi', 'finanza', 'mercado', 'inflación', 'inflacion', 'pib',
+      'tasa de interés', 'costo', 'precio', 'microeconom', 'macroeconom', 'bolsa de valores',
+      'inversión', 'contabilidad'
+    ],
+  },
+  {
+    icon: 'Calculator',
+    keywords: [
+      'matemát', 'matemat', 'cálculo', 'calculo', 'integral', 'derivada', 'álgebra', 'algebra',
+      'ecuación', 'ecuacion', 'teorema', 'estadístic', 'estadistic', 'probabilidad', 'matriz',
+      'trigonometr'
+    ],
+  },
+  {
+    icon: 'Landmark',
+    keywords: [
+      'historia', 'siglo', 'imperio', 'revolución', 'revolucion', 'civilización', 'civilizacion',
+      'arqueolog', 'patrimonio histórico', 'antigüedad', 'edad media', 'tratado de paz', 'polític', 'politic'
+    ],
+  },
+  {
+    icon: 'BookOpen',
+    keywords: [
+      'literatur', 'novela', 'poesía', 'poesia', 'filosof', 'lingüíst', 'autor', 'narrativa',
+      'ensayo literario', 'semántica', 'sintaxis', 'idioma'
+    ],
+  },
+  {
+    icon: 'Hospital',
+    keywords: [
+      'hospital', 'clínica', 'clinica', 'salud pública', 'salud publica', 'atención primaria',
+      'urgencias', 'triage', 'sala de emergencias', 'epidemiolog', 'gestión hospitalaria', 'enfermería', 'enfermeria'
+    ],
+  },
+];
+
+/**
+ * Infiere el icono y gradiente visual analizando primordialmente el CONTENIDO ESPECÍFICO del documento
+ * (tema, conceptos clave y texto fuente) en lugar de encasillar por la disciplina o materia general.
+ */
+export function inferContentVisuals(
+  tema: string,
+  rawText: string,
+  palabrasClave: string[] = [],
+  materia?: string,
+  aiSuggestedIcon?: string
+): { icon: string; color: string } {
+  // 1. Si la IA sugirió un icono específico válido reconocido, honrarlo directamente
+  if (aiSuggestedIcon && VALID_CONTENT_ICONS.includes(aiSuggestedIcon as ValidContentIcon)) {
+    const validIcon = aiSuggestedIcon as ValidContentIcon;
+    if (validIcon !== 'GraduationCap') {
+      return {
+        icon: validIcon,
+        color: ICON_COLORS[validIcon] || 'from-violet-500 to-purple-700',
+      };
+    }
+  }
+
+  // 2. Motor de inferencia semántica por frecuencia ponderada de contenido
+  const cleanTema = (tema || '').toLowerCase();
+  const cleanKeywords = (palabrasClave || []).join(' ').toLowerCase();
+  const cleanSample = (rawText || '').slice(0, 4500).toLowerCase();
+  const cleanMateria = (materia || '').toLowerCase();
+
+  let bestIcon = 'GraduationCap';
+  let highestScore = 0;
+
+  for (const matcher of CONTENT_ICON_MATCHERS) {
+    let score = 0;
+    for (const kw of matcher.keywords) {
+      if (cleanTema.includes(kw)) {
+        score += 5; // Máxima prioridad al título específico del contenido
+      }
+      if (cleanKeywords.includes(kw)) {
+        score += 3; // Fuerte prioridad a los conceptos nucleares
+      }
+      if (cleanSample.includes(kw)) {
+        score += 1; // Muestra de texto del documento
+      }
+      if (cleanMateria.includes(kw)) {
+        score += 2; // Apoyo de la materia
+      }
+    }
+
+    if (score > highestScore) {
+      highestScore = score;
+      bestIcon = matcher.icon;
+    }
+  }
+
+  // Si no se superó el umbral mínimo de coincidencia específica, recurrir a la materia como fallback
+  if (highestScore < 3 && materia) {
+    const fallbackVisuals = getVisualsForMateria(materia);
+    if (fallbackVisuals.icon !== 'GraduationCap') {
+      return fallbackVisuals;
+    }
+  }
+
+  return {
+    icon: bestIcon,
+    color: ICON_COLORS[bestIcon] || 'from-violet-500 to-purple-700',
+  };
+}
+
 export function getVisualsForMateria(materia: string): { icon: string; color: string } {
   const m = (materia || '').toLowerCase();
 
@@ -2373,9 +2717,10 @@ export async function classifyDocumentWithAI(
 
   if (!settings.enabled) {
     const fallbackMateria = 'General';
-    const visuals = getVisualsForMateria(fallbackMateria);
+    const fallbackTema = rawText.split('\n')[0]?.slice(0, 50) || 'Material de Estudio';
+    const visuals = inferContentVisuals(fallbackTema, rawText, [], fallbackMateria);
     return {
-      tema: rawText.split('\n')[0]?.slice(0, 50) || 'Material de Estudio',
+      tema: fallbackTema,
       materia: fallbackMateria,
       descripcion: 'Material de estudio analizado.',
       palabrasClave: [],
@@ -2407,17 +2752,45 @@ Tu objetivo es analizar el contenido de un documento educativo y clasificarlo co
 ${translationDirective}
 
 DEBES IDENTIFICAR (OBLIGATORIAMENTE EN ESPAÑOL):
-1. "tema": El título o tema central real del documento (de 3 a 8 palabras) OBLIGATORIAMENTE EN ESPAÑOL. Debe ser concreto, académico y descriptivo del contenido (ej: "Mecanismo de Acción de Betalactámicos y Resistencia", "Teoría del Delito y Culpabilidad Penal", "Ciclo de Krebs y Fosforilación Oxidativa"). Si el texto fuente está en inglés u otro idioma, TRADÚCELO AL ESPAÑOL. NO uses nombres de archivo ni palabras vacías como "Documento", "Apuntes" o "PDF".
+1. "tema": El título o tema central real del documento (de 3 a 8 palabras) OBLIGATORIAMENTE EN ESPAÑOL. Debe ser concreto, académico y descriptivo del contenido (ej: "Mecanismo de Acción de Betalactámicos y Resistencia", "Teoría del Delito y Culpabilidad Penal", "Ciclo de Krebs y Fosforilación Oxidativa", "Fisiopatología del Asma y Ventilación Alveolar"). Si el texto fuente está en inglés u otro idioma, TRADÚCELO AL ESPAÑOL. NO uses nombres de archivo ni palabras vacías como "Documento", "Apuntes" o "PDF".
 2. "materia": La materia o disciplina académica específica OBLIGATORIAMENTE EN ESPAÑOL (ej: "Farmacología", "Derecho Penal", "Bioquímica", "Fisiología Médica", "Ingeniería de Software", "Economía Internacional", "Microbiología", "Física Cuántica"). Sé específico con la disciplina exacta.
 3. "descripcion": Una síntesis académica en 1 o 2 oraciones concisas en español que explique qué abarca el material y qué se aprenderá.
 4. "palabras_clave": Una lista de 3 a 5 conceptos nucleares o palabras clave más relevantes del texto en español.
+5. "icono_sugerido": El icono que mejor representa el tema específico del contenido (NO la materia genérica). Elige estrictamente uno de los siguientes nombres:
+   "Lungs" (aparato respiratorio, pulmones, asma, ventilación, neumología),
+   "HeartPulse" (cardiología, corazón, arritmias, electrocardiograma, hemodinámica, presión arterial),
+   "Germ" (bacteriología, bacterias, infecciones bacterianas, sepsis, patógenos, microbiología),
+   "Virus" (virología, virus, infecciones virales, epidemias, VIH),
+   "Dna" (genética, adn, mutaciones, herencia, biología molecular),
+   "Bone" (huesos, esqueleto, fracturas, ortopedia, traumatología, articulaciones),
+   "Eye" (oftalmología, visión, ojos, retina, glaucoma),
+   "Droplets" (hematología, sangre, hemoglobina, coagulación, anemia, leucemia),
+   "Pill" (farmacología, medicamentos, fármacos, posología, toxicología),
+   "Syringe" (inyecciones, vacunas, anestesia, inmunología, sueros),
+   "Brain" (neurología, cerebro, neurociencia, mente, psiquiatría, psicología),
+   "Microscope" (citología, histología, células, biopsias),
+   "Wind" (meteorología, viento, clima, atmósfera, huracanes),
+   "CloudRain" (lluvia, precipitaciones, hidrología, tormentas),
+   "Leaf" (botánica, plantas, ecología, medio ambiente, agronomía),
+   "FlaskConical" (química, reacciones químicas, disoluciones, laboratorio),
+   "Atom" (física, cuántica, átomos, termodinámica, energía),
+   "Binary" (programación, software, algoritmos, bases de datos),
+   "Cpu" (hardware, procesadores, arquitectura de computadoras),
+   "Scale" (derecho, leyes, justicia, penal, civil),
+   "TrendingUp" (economía, finanzas, mercados, contabilidad),
+   "Calculator" (matemáticas, cálculo, álgebra, estadística),
+   "Landmark" (historia, civilizaciones, arqueología, política),
+   "BookOpen" (literatura, filosofía, idiomas, lingüística),
+   "Hospital" (sistemas hospitalarios, gestión clínica, salud pública),
+   "GraduationCap" (educación general).
 
 FORMATO DE SALIDA (EXCLUSIVAMENTE OBJETO JSON VÁLIDO):
 {
   "tema": "Tema concreto y académico del texto en español",
   "materia": "Materia o disciplina académica específica en español",
   "descripcion": "Descripción concisa en 1-2 líneas del contenido educativo en español.",
-  "palabras_clave": ["concepto1", "concepto2", "concepto3"]
+  "palabras_clave": ["concepto1", "concepto2", "concepto3"],
+  "icono_sugerido": "Lungs"
 }`;
 
   const userPrompt = `Analiza este fragmento del documento y clasifícalo en formato JSON (100% en español):
@@ -2452,7 +2825,8 @@ ${sampleText}`;
     const materia = String(parsed.materia || '').trim() || 'General';
     const descripcion = String(parsed.descripcion || '').trim() || `Study Kit de ${materia} sobre ${tema}.`;
     const palabrasClave = Array.isArray(parsed.palabras_clave) ? parsed.palabras_clave.map(String) : [];
-    const visuals = getVisualsForMateria(materia);
+    const aiSuggestedIcon = typeof parsed.icono_sugerido === 'string' ? parsed.icono_sugerido.trim() : undefined;
+    const visuals = inferContentVisuals(tema, sampleText, palabrasClave, materia, aiSuggestedIcon);
 
     const result: DocumentClassification = {
       tema,
@@ -2475,14 +2849,17 @@ ${sampleText}`;
   } catch (err) {
     console.warn('[classifyDocumentWithAI] Fallback de clasificación:', err);
     const fallbackMateria = 'General';
-    const visuals = getVisualsForMateria(fallbackMateria);
+    const fallbackTema = rawText.split('\n')[0]?.slice(0, 50) || 'Material de Estudio';
+    const visuals = inferContentVisuals(fallbackTema, rawText, [], fallbackMateria);
     return {
-      tema: rawText.split('\n')[0]?.slice(0, 50) || 'Material de Estudio',
+      tema: fallbackTema,
       materia: fallbackMateria,
-      descripcion: 'Material de estudio analizado.',
+      descripcion: `Study Kit general sobre ${fallbackTema}.`,
       palabrasClave: [],
       icon: visuals.icon,
       color: visuals.color,
+      detectedLanguage: langDetection.detectedLanguage,
+      isForeign: langDetection.isForeign,
     };
   }
 }

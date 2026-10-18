@@ -2,6 +2,7 @@ import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentAsset } fro
 import {
   generateCompleteAIPedagogicalBatch,
   classifyDocumentWithAI,
+  inferContentVisuals,
 } from '../services/aiService';
 import { detectDocumentLanguage } from '../services/languageService';
 import { chunkDocument } from './chunker';
@@ -843,20 +844,27 @@ const CATEGORY_KEYWORDS: Record<string, { keywords: string[]; icon: string; colo
   'Derecho': { keywords: ['derecho', 'ley', 'norma', 'código', 'jurídico', 'tribunal', 'delito', 'civil', 'penal', 'constitucional'], icon: 'Scale', color: 'from-slate-500 to-gray-700' },
 };
 
-function inferCategory(text: string): { category: string; icon: string; color: string } {
+function inferCategory(text: string, title?: string): { category: string; icon: string; color: string } {
   const lower = text.toLowerCase();
-  let bestMatch = { category: 'General', icon: 'GraduationCap', color: 'from-violet-500 to-purple-700' };
+  let bestCategory = 'General';
   let bestScore = 0;
 
   for (const [cat, config] of Object.entries(CATEGORY_KEYWORDS)) {
     const score = config.keywords.filter(kw => lower.includes(kw)).length;
     if (score > bestScore) {
       bestScore = score;
-      bestMatch = { category: cat, icon: config.icon, color: config.color };
+      bestCategory = cat;
     }
   }
 
-  return bestMatch;
+  // Asignar icono y color en base al contenido específico del tema y texto
+  const visuals = inferContentVisuals(title || '', text, [], bestCategory);
+
+  return {
+    category: bestCategory,
+    icon: visuals.icon,
+    color: visuals.color,
+  };
 }
 
 // ── Public API ───────────────────────────────────────────────────────────
@@ -889,7 +897,7 @@ export function processContent(
     );
   }
 
-  const { category, icon, color } = inferCategory(cleanText);
+  const { category, icon, color } = inferCategory(cleanText, title);
 
   // Generar chunks semánticos con enlace de proximidad a activos
   const chunks = chunkDocument(cleanText, assets);
@@ -995,8 +1003,11 @@ export async function processContentAsync(
 
   const finalCategory = aiClassification.materia || 'General';
   const finalDescription = description || aiClassification.descripcion || `Study Kit de ${finalCategory} sobre "${finalTitle}".`;
-  const finalIcon = aiClassification.icon;
-  const finalColor = aiClassification.color;
+  const finalVisuals = aiClassification.icon
+    ? { icon: aiClassification.icon, color: aiClassification.color }
+    : inferContentVisuals(finalTitle, cleanText, aiClassification.palabrasClave, finalCategory);
+  const finalIcon = finalVisuals.icon;
+  const finalColor = finalVisuals.color;
 
   // Generar embeddings densos de Ollama en segundo plano sin bloquear la UI
   vectorStore.generateDenseEmbeddings().catch(() => {});
