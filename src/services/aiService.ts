@@ -59,10 +59,24 @@ export const AI_PRESETS: AIPreset[] = [
 /** Modelo de respaldo para Groq cuando el principal da límite de tasa (429) o error de servidor (5xx) */
 const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 
-export const DEFAULT_GROK_KEY =
-  'grok_c8053868fdc7c58a6da0137e5565de08_f6e36552c01428d2b1b558c5a239453dd74d98fc5571d742491b70c0df6abccf';
+export const DEFAULT_GROK_KEY = '';
 
 const STORAGE_KEY = 'thea_ai_settings';
+const GROK_STORAGE_KEY = 'thea_grok_settings';
+
+export interface GrokSettings {
+  enabled: boolean;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
+export const DEFAULT_GROK_SETTINGS: GrokSettings = {
+  enabled: false,
+  apiKey: '',
+  baseUrl: 'https://api.x.ai/v1',
+  model: 'grok-2-mini',
+};
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
@@ -72,9 +86,6 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   model: 'llama3.2',
   timeoutMs: 45000,
   verified: true,
-  grokApiKey: DEFAULT_GROK_KEY,
-  grokBaseUrl: 'https://api.x.ai/v1',
-  grokModel: 'grok-2-mini',
 };
 
 export function getAISettings(): AISettings {
@@ -82,7 +93,30 @@ export function getAISettings(): AISettings {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      return { ...DEFAULT_AI_SETTINGS, ...parsed, enabled: true };
+      // Auto-reparación: si thea_ai_settings fue contaminado con xAI o Grok, purgar y restaurar a Ollama
+      if (
+        parsed.baseUrl?.includes('api.x.ai') ||
+        parsed.baseUrl?.includes('grok.com') ||
+        parsed.apiKey?.startsWith('grok_') ||
+        parsed.apiKey?.startsWith('xai-')
+      ) {
+        parsed.baseUrl = DEFAULT_AI_SETTINGS.baseUrl;
+        parsed.provider = DEFAULT_AI_SETTINGS.provider;
+        parsed.apiKey = '';
+        parsed.model = DEFAULT_AI_SETTINGS.model;
+        parsed.verified = true;
+        delete parsed.grokApiKey;
+        delete parsed.grokBaseUrl;
+        delete parsed.grokModel;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      }
+      const isLocal = Boolean(parsed.baseUrl?.includes('localhost') || parsed.baseUrl?.includes('127.0.0.1'));
+      return {
+        ...DEFAULT_AI_SETTINGS,
+        ...parsed,
+        enabled: true,
+        verified: isLocal ? true : parsed.verified,
+      };
     } catch {
       // fallback
     }
@@ -91,7 +125,16 @@ export function getAISettings(): AISettings {
 }
 
 export function saveAISettings(settings: AISettings): void {
-  const enforced = { ...settings, enabled: true };
+  const cleanSettings = { ...settings };
+  delete cleanSettings.grokApiKey;
+  delete cleanSettings.grokBaseUrl;
+  delete cleanSettings.grokModel;
+  const isLocal = Boolean(cleanSettings.baseUrl?.includes('localhost') || cleanSettings.baseUrl?.includes('127.0.0.1'));
+  const enforced = {
+    ...cleanSettings,
+    enabled: true,
+    verified: isLocal ? true : cleanSettings.verified,
+  };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(enforced));
   // Notificar cambios al sistema en tiempo real
   if (typeof window !== 'undefined') {
@@ -110,67 +153,65 @@ export function hasPersonalApiKey(): boolean {
   const current = getAISettings();
   return Boolean(
     (current.apiKey && current.apiKey.trim().length > 0) ||
-    (current.grokApiKey && current.grokApiKey.trim().length > 0) ||
     (current.groqApiKey && current.groqApiKey.trim().length > 0)
   );
 }
 
+export function getGrokSettings(): GrokSettings {
+  if (typeof localStorage === 'undefined') return DEFAULT_GROK_SETTINGS;
+  try {
+    const saved = localStorage.getItem(GROK_STORAGE_KEY);
+    if (saved) {
+      return { ...DEFAULT_GROK_SETTINGS, ...JSON.parse(saved) };
+    }
+    const legacyKey = localStorage.getItem('thea_grok_api_key');
+    if (legacyKey && legacyKey.trim()) {
+      return { ...DEFAULT_GROK_SETTINGS, apiKey: legacyKey.trim(), enabled: true };
+    }
+  } catch {}
+  return DEFAULT_GROK_SETTINGS;
+}
+
+export function saveGrokSettings(settings: Partial<GrokSettings>): void {
+  if (typeof localStorage === 'undefined') return;
+  const current = getGrokSettings();
+  const updated = { ...current, ...settings };
+  localStorage.setItem(GROK_STORAGE_KEY, JSON.stringify(updated));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('thea_grok_settings_changed'));
+  }
+}
+
 export function getGrokApiKey(): string {
-  const current = getAISettings();
-  if (current.grokApiKey && current.grokApiKey.trim().length > 0) {
-    return current.grokApiKey.trim();
-  }
-  if (typeof localStorage !== 'undefined') {
-    const direct = localStorage.getItem('thea_grok_api_key');
-    if (direct && direct.trim().length > 0) return direct.trim();
-  }
-  return DEFAULT_GROK_KEY;
+  return getGrokSettings().apiKey;
 }
 
 export function saveGrokApiKey(key: string): void {
   const cleanKey = key.trim();
+  saveGrokSettings({ apiKey: cleanKey, enabled: Boolean(cleanKey) });
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('thea_grok_api_key', cleanKey);
+    if (cleanKey) {
+      localStorage.setItem('thea_grok_api_key', cleanKey);
+    } else {
+      localStorage.removeItem('thea_grok_api_key');
+    }
   }
-  const current = getAISettings();
-  saveAISettings({
-    ...current,
-    grokApiKey: cleanKey,
-  });
 }
 
 export function getGrokBaseUrl(): string {
-  const current = getAISettings();
-  if (current.grokBaseUrl && current.grokBaseUrl.trim().length > 0) {
-    return current.grokBaseUrl.trim();
-  }
-  return 'https://api.x.ai/v1';
+  return getGrokSettings().baseUrl || 'https://api.x.ai/v1';
 }
 
 export function saveGrokBaseUrl(url: string): void {
-  const clean = url.trim();
-  const current = getAISettings();
-  saveAISettings({
-    ...current,
-    grokBaseUrl: clean,
-  });
+  saveGrokSettings({ baseUrl: url.trim() || 'https://api.x.ai/v1' });
 }
 
 export function getGrokModel(): string {
-  const current = getAISettings();
-  if (current.grokModel && current.grokModel.trim().length > 0) {
-    return current.grokModel.trim();
-  }
-  return 'grok-2-mini';
+  return getGrokSettings().model || 'grok-2-mini';
 }
 
 export function saveGrokModel(model: string): void {
-  const clean = model.trim();
-  const current = getAISettings();
-  saveAISettings({
-    ...current,
-    grokModel: clean,
-  });
+  saveGrokSettings({ model: model.trim() || 'grok-2-mini' });
 }
 
 export function getGroqApiKey(): string {
@@ -1916,28 +1957,30 @@ Responde ÚNICAMENTE con un JSON con la estructura:
 export async function askTheaAI(
   userQuery: string,
   kit: StudyKit,
-  history: Array<{ sender: 'thea' | 'user'; text: string }>
+  history: Array<{ sender: 'thea' | 'user'; text: string }>,
+  enginePreference: 'ollama' | 'grok' | 'auto' = 'auto'
 ): Promise<string> {
   const settings = getAISettings();
-  const grokKey = getGrokApiKey();
-  const grokBase = getGrokBaseUrl();
-  const grokModel = getGrokModel();
+  const grokSettings = getGrokSettings();
   const groqKey = getGroqApiKey();
 
-  // Enrutamiento prioritario a xAI Grok (o Groq) para el módulo conversacional y lección oral (tiempo real),
-  // permitiendo que Ollama Local siga activo simultáneamente e independientemente para el resto de la aplicación (kits, preguntas, guías)
+  // Enrutamiento desacoplado:
+  // - Si enginePreference es 'ollama': utiliza estrictamente Ollama Local / motor principal configurado.
+  // - Si enginePreference es 'grok': intenta prioritariamente xAI Grok (para lección oral y respuestas en tiempo real)
+  //   y si falla, recurre automáticamente a Ollama Local como respaldo.
   let targetSettings: AISettings = settings;
-  if (grokKey) {
+
+  if (enginePreference === 'grok' && grokSettings.enabled && grokSettings.apiKey) {
     targetSettings = {
       enabled: true,
       provider: 'openai-compatible',
-      baseUrl: grokBase,
-      apiKey: grokKey,
-      model: grokModel,
+      baseUrl: grokSettings.baseUrl || 'https://api.x.ai/v1',
+      apiKey: grokSettings.apiKey,
+      model: grokSettings.model || 'grok-2-mini',
       timeoutMs: 25000,
       verified: true,
     };
-  } else if (groqKey) {
+  } else if (enginePreference !== 'ollama' && groqKey) {
     targetSettings = {
       enabled: true,
       provider: 'openai-compatible',
@@ -1980,9 +2023,9 @@ Responde siempre de forma clara, motivadora y estructurada en español. Si el ma
       try {
         reply = await queryAICompletion(messages, false, targetSettings);
       } catch (primaryErr) {
-        // Si xAI Grok falló y el motor general es distinto (ej. Ollama local), reintentar automáticamente con Ollama
+        // Si xAI Grok falló y el motor general es Ollama local, reintentar automáticamente con Ollama
         if (targetSettings !== settings) {
-          console.warn('[AskThea AI] Motor de voz falló, reintentando con motor local principal:', primaryErr);
+          console.warn('[AskThea AI] Motor específico falló, reintentando con motor local principal:', primaryErr);
           reply = await queryAICompletion(messages, false, settings);
         } else {
           throw primaryErr;

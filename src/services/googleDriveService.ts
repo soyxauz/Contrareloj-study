@@ -8,7 +8,7 @@ import {
   getSessionItem,
   removeSessionItem
 } from './storageService';
-import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
+import { getAISettings, saveAISettings, resetAISettingsToDefault, DEFAULT_AI_SETTINGS, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
@@ -1063,11 +1063,20 @@ export const googleDriveService = {
         for (const u of localUsers) mergedMap.set(u.id, u);
         for (const u of remoteUsers) {
           const localU = mergedMap.get(u.id);
+          if (
+            u.aiSettings &&
+            (u.aiSettings.baseUrl?.includes('api.x.ai') ||
+             u.aiSettings.baseUrl?.includes('grok.com') ||
+             u.aiSettings.apiKey?.startsWith('grok_') ||
+             u.aiSettings.apiKey?.startsWith('xai-'))
+          ) {
+            u.aiSettings = { ...DEFAULT_AI_SETTINGS };
+          }
           const uHasAiKey = Boolean(
             (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) ||
             (u.aiSettings?.geminiApiKey && u.aiSettings.geminiApiKey.trim().length > 0)
           );
-          if (uHasAiKey) {
+          if (uHasAiKey && u.aiSettings) {
             u.aiSettings.verified = true;
             authService.saveUserAISettings(u.id, u.aiSettings);
             const currentSettings = getAISettings();
@@ -1113,10 +1122,19 @@ export const googleDriveService = {
 
       // 6. Procesar e integrar ajustes de IA
       const localAISettings = getAISettings();
-      if (remoteAISettings && typeof remoteAISettings === 'object') {
+      let effectiveRemoteAI = remoteAISettings;
+      if (effectiveRemoteAI && typeof effectiveRemoteAI === 'object') {
+        if (
+          effectiveRemoteAI.baseUrl?.includes('api.x.ai') ||
+          effectiveRemoteAI.baseUrl?.includes('grok.com') ||
+          effectiveRemoteAI.apiKey?.startsWith('grok_') ||
+          effectiveRemoteAI.apiKey?.startsWith('xai-')
+        ) {
+          effectiveRemoteAI = { ...DEFAULT_AI_SETTINGS };
+        }
         const remoteHasKey = Boolean(
-          (remoteAISettings.apiKey && remoteAISettings.apiKey.trim().length > 0) ||
-          (remoteAISettings.geminiApiKey && remoteAISettings.geminiApiKey.trim().length > 0)
+          (effectiveRemoteAI.apiKey && effectiveRemoteAI.apiKey.trim().length > 0) ||
+          (effectiveRemoteAI.geminiApiKey && effectiveRemoteAI.geminiApiKey.trim().length > 0)
         );
         const localHasKey = Boolean(
           (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
@@ -1125,13 +1143,13 @@ export const googleDriveService = {
 
         if (remoteHasKey) {
           const merged: AISettings = {
-            ...remoteAISettings,
+            ...effectiveRemoteAI,
             verified: true,
           };
           saveAISettings(merged);
-          if (remoteAISettings.geminiApiKey?.trim()) {
-            localStorage.setItem('contrareloj_gemini_api_key', remoteAISettings.geminiApiKey.trim());
-            savePodcastSettings({ geminiApiKey: remoteAISettings.geminiApiKey.trim() });
+          if (effectiveRemoteAI.geminiApiKey?.trim()) {
+            localStorage.setItem('contrareloj_gemini_api_key', effectiveRemoteAI.geminiApiKey.trim());
+            savePodcastSettings({ geminiApiKey: effectiveRemoteAI.geminiApiKey.trim() });
           }
           if (userId) {
             authService.saveUserAISettings(userId, merged);

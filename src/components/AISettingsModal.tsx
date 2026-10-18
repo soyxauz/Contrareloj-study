@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   getAISettings,
   saveAISettings,
+  resetAISettingsToDefault,
   testAIConnection,
   AI_PRESETS,
   type AISettings,
@@ -209,6 +210,22 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
+  const handleResetOllama = () => {
+    resetAISettingsToDefault();
+    const defaults = getAISettings();
+    setSettings(defaults);
+    setSelectedPresetId('ollama');
+    setTestResult({
+      success: true,
+      message: 'Configuración restablecida a Ollama Local (http://localhost:11434/v1, modelo llama3.2).',
+    });
+    const user = authService.getCurrentUser();
+    if (user) {
+      authService.saveUserAISettings(user.id, defaults);
+    }
+    if (onSettingsSaved) onSettingsSaved();
+  };
+
   const handleClose = () => {
     const cleanGrok = grokKey.trim();
     if (cleanGrok) {
@@ -216,15 +233,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       saveGrokBaseUrl(grokBaseUrl.trim() || 'https://api.x.ai/v1');
       saveGrokModel(grokModel.trim() || 'grok-2-mini');
     }
-    if (settings.apiKey && settings.apiKey.trim().length > 0) {
+    const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
+    if ((settings.apiKey && settings.apiKey.trim().length > 0) || isLocal) {
       const updated: AISettings = {
         ...settings,
-        grokApiKey: cleanGrok || settings.grokApiKey,
-        grokBaseUrl: grokBaseUrl.trim() || settings.grokBaseUrl || 'https://api.x.ai/v1',
-        grokModel: grokModel.trim() || settings.grokModel || 'grok-2-mini',
         verified: true,
       };
-      if (updated.apiKey.startsWith('AIzaSy') || updated.baseUrl?.includes('googleapis')) {
+      if (updated.apiKey && (updated.apiKey.startsWith('AIzaSy') || updated.baseUrl?.includes('googleapis'))) {
         updated.geminiApiKey = updated.apiKey;
         localStorage.setItem('contrareloj_gemini_api_key', updated.apiKey);
       }
@@ -232,14 +247,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       const user = authService.getCurrentUser();
       if (user) authService.saveUserAISettings(user.id, updated);
       googleDriveService.syncAISettingsToDrive(updated).catch(console.warn);
-    } else if (cleanGrok) {
-      const updated: AISettings = {
-        ...settings,
-        grokApiKey: cleanGrok,
-        grokBaseUrl: grokBaseUrl.trim() || 'https://api.x.ai/v1',
-        grokModel: grokModel.trim() || 'grok-2-mini',
-      };
-      saveAISettings(updated);
     }
     onClose();
   };
@@ -250,11 +257,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     saveGrokBaseUrl(grokBaseUrl.trim() || 'https://api.x.ai/v1');
     saveGrokModel(grokModel.trim() || 'grok-2-mini');
 
-    let currentSettings = {
+    const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
+    let currentSettings: AISettings = {
       ...settings,
-      grokApiKey: cleanGrok,
-      grokBaseUrl: grokBaseUrl.trim() || 'https://api.x.ai/v1',
-      grokModel: grokModel.trim() || 'grok-2-mini',
+      verified: isLocal ? true : settings.verified,
     };
     if (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) {
       currentSettings.verified = true;
@@ -730,24 +736,36 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
         {/* Modal Actions */}
         <div className="flex items-center justify-between gap-3 pt-4 mt-3 border-t border-thea-border shrink-0">
-          <button
-            type="button"
-            onClick={handleTestConnection}
-            disabled={isTesting}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all disabled:opacity-50"
-          >
-            {isTesting ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-400" />
-                <span>Probando conexión...</span>
-              </>
-            ) : (
-              <>
-                <Radio className="w-3.5 h-3.5 text-violet-400" />
-                <span>Probar Conexión</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={isTesting}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all disabled:opacity-50"
+            >
+              {isTesting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-400" />
+                  <span>Probando...</span>
+                </>
+              ) : (
+                <>
+                  <Radio className="w-3.5 h-3.5 text-violet-400" />
+                  <span>Probar Conexión</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetOllama}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
+              title="Restablecer a valores por defecto de Ollama Local (http://localhost:11434/v1, llama3.2)"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-violet-400" />
+              <span>Restablecer Ollama</span>
+            </button>
+          </div>
 
           <button
             type="button"

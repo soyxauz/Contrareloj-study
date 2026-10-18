@@ -78,7 +78,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
 
     let replyText: string;
     try {
-      replyText = await askTheaAI(trimmed, kit, previousHistory);
+      replyText = await askTheaAI(trimmed, kit, previousHistory, 'ollama');
     } catch {
       replyText = `He analizado tu material de estudio sobre "${kit.title}". ¿Podrías reformular tu consulta o indicar qué concepto específico deseas revisar?`;
     }

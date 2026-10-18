@@ -453,7 +453,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
     let replyText: string;
     try {
-      replyText = await askTheaAI(queryForAI, kit, previousHistory);
+      replyText = await askTheaAI(queryForAI, kit, previousHistory, 'grok');
     } catch {
       replyText = `He analizado tu respuesta sobre "${kit.title}". ¿Podrías resumir la idea central o reformularla brevemente?`;
     }
