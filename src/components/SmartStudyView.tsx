@@ -3401,16 +3401,16 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               type="button"
               onClick={handleGenerateTargetedQuestions}
               disabled={isGeneratingTargeted}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-violet-900/30 transition-all cursor-pointer disabled:opacity-60"
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 hover:border-slate-600 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer disabled:opacity-60 active:scale-[0.99]"
             >
               {isGeneratingTargeted ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-200" />
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
                   <span>Generando Preguntas con IA...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <Sparkles className="w-4 h-4 text-amber-400" />
                   <span>Generar y Evaluar Ahora</span>
                 </>
               )}
