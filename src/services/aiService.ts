@@ -1,4 +1,4 @@
-import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions } from '../types';
+import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions, GuessWhoCase } from '../types';
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 
 export interface AISettings {
@@ -1322,6 +1322,121 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   }
 
   return generateAdditionalAIFlashcards(rawText, title, category, existingTerms, count);
+}
+
+/** Generación de casos para el juego Adivina Quién / Pistas Progresivas con IA */
+export async function generateAIGuessWhoCases(
+  rawText: string,
+  title: string,
+  category: string,
+  targetCards: Array<{ id?: string; term: string; definition: string }>,
+  allAvailableTerms: string[] = []
+): Promise<GuessWhoCase[]> {
+  const settings = getAISettings();
+  if (!settings.enabled || targetCards.length === 0) return [];
+
+  const langDetection = detectDocumentLanguage(rawText);
+  const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
+  const targetsPrompt = targetCards.slice(0, 5).map((t, idx) =>
+    `Caso ${idx + 1}:
+- Entidad Objetivo: "${t.term}"
+- Definición de referencia: "${t.definition}"`
+  ).join('\n\n');
+
+  const candidatesHint = allAvailableTerms
+    .filter(t => t && t.length >= 3 && t.length <= 40 && !/^(opci[oó]n|alternativa|respuesta)\s+[a-d0-9]/i.test(t))
+    .slice(0, 25)
+    .join(', ');
+
+  const systemPrompt = `Eres un docente y pedagogo de élite diseñando el juego interactivo "Adivina Quién / Pistas Progresivas" de Contrareloj Study.
+El estudiante debe deducir una entidad misteriosa oculta a través de 4 pistas progresivas.
+
+${translationDirective}
+
+REGLAS DE ORO OBLIGATORIAS (PROHIBIDO EL CONTENIDO GENÉRICO O PLACEHOLDERS):
+1. PISTAS ESTRICTAMENTE ESPECÍFICAS PARA CADA CASO:
+   NUNCA uses frases genéricas como "Pertenece al ámbito de..." o "Es un concepto nuclear de este tema...". Cada pista debe aportar datos reales del tema.
+   - Pista 1 (Contexto y Localización / 100 pts / 3 estrellas): Revela la taxonomía, categoría precisa o ubicación anatómica/estructural de la entidad (ej: "Vía motora descendente de proyección que conecta la corteza motora con la médula espinal..."). NO menciones el nombre de la entidad.
+   - Pista 2 (Mecanismo o Causa / 75 pts / 2 estrellas): Explica cómo funciona, su fisiología, proceso de acción, conexiones o función operativa.
+   - Pista 3 (Signo Patognomónico o Rasgo Distintivo / 50 pts / 1 estrella): Proporciona un signo clínico característico, hallazgo patognomónico o rasgo distintivo único que la diferencia de entidades similares.
+   - Pista 4 (Dato Definitorio / 25 pts / 1 estrella): Proporciona la definición concluyente y completa reemplazando el nombre exacto de la entidad por "[Entidad Oculta]".
+
+2. OPCIONES CANDIDATAS Y DISTRACTORES:
+   - Para cada caso genera EXACTAMENTE 4 opciones cortas: la entidad correcta y 3 distractores del MISMO tema o disciplina.
+   - PROHIBIDO usar "Opción A", "Opción B", "Opción C", "Opción D" ni comodines como "Criterio Diagnóstico", "Mecanismo Principal" o "Factor Estructural".
+   - Las opciones deben ser términos o conceptos breves (máximo 4 palabras).
+${candidatesHint ? `   - Puedes usar como distractores o inspiración estos conceptos del kit: [${candidatesHint}].` : ''}
+
+Responde ÚNICAMENTE con un JSON con la estructura:
+{
+  "cases": [
+    {
+      "id": "case-1",
+      "targetTerm": "Nombre del Concepto",
+      "options": ["Opción 1", "Opción 2", "Opción 3", "Opción 4"],
+      "clues": [
+        { "level": 1, "title": "Pista 1: Contexto y Dominio", "badge": "Generalidad", "text": "Texto específico de Pista 1...", "unlockedScore": 100, "stars": 3 },
+        { "level": 2, "title": "Pista 2: Mecanismo o Causa", "badge": "Funcionamiento", "text": "Texto específico de Pista 2...", "unlockedScore": 75, "stars": 2 },
+        { "level": 3, "title": "Pista 3: Signo Patognomónico", "badge": "Rasgo Clave", "text": "Texto específico de Pista 3...", "unlockedScore": 50, "stars": 1 },
+        { "level": 4, "title": "Pista 4: Definición Reveladora", "badge": "Definición", "text": "Texto concluyente con [Entidad Oculta]...", "unlockedScore": 25, "stars": 1 }
+      ]
+    }
+  ]
+}`;
+
+  const userPrompt = `Kit: "${title}" (${category})\n\nContexto del material:\n${rawText.slice(0, 6000)}\n\nGenera los casos de Adivina Quién para estas entidades objetivo:\n\n${targetsPrompt}`;
+
+  try {
+    const res = await queryAICompletion(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      true
+    );
+
+    const match = res.match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed.cases) && parsed.cases.length > 0) {
+        return parsed.cases.map((c: any, idx: number) => {
+          const target = targetCards[idx]?.term || c.targetTerm;
+          let opts: string[] = Array.isArray(c.options) ? c.options.map((o: any) => String(o).trim()) : [];
+          // Garantizar que la correcta esté y que no haya placeholders
+          opts = opts.filter(o => o && !/^(opci[oó]n|alternativa|respuesta)\s+[a-d0-9]/i.test(o));
+          if (!opts.includes(target)) {
+            opts.unshift(target);
+          }
+          // Asegurar 4 opciones
+          while (opts.length < 4) {
+            const extra = allAvailableTerms.find(t => !opts.includes(t)) || `Alternativa ${opts.length + 1}`;
+            opts.push(extra);
+          }
+          opts = opts.slice(0, 4).sort(() => Math.random() - 0.5);
+
+          return {
+            id: c.id || targetCards[idx]?.id || `guess-case-ai-${idx}`,
+            targetTerm: target,
+            fullDefinition: targetCards[idx]?.definition || '',
+            clues: Array.isArray(c.clues) && c.clues.length === 4
+              ? c.clues
+              : [
+                  { level: 1, title: 'Pista 1: Contexto y Dominio', badge: 'Generalidad', text: c.clues?.[0]?.text || '', unlockedScore: 100, stars: 3 },
+                  { level: 2, title: 'Pista 2: Mecanismo o Causa', badge: 'Funcionamiento', text: c.clues?.[1]?.text || '', unlockedScore: 75, stars: 2 },
+                  { level: 3, title: 'Pista 3: Signo Patognomónico', badge: 'Rasgo Clave', text: c.clues?.[2]?.text || '', unlockedScore: 50, stars: 1 },
+                  { level: 4, title: 'Pista 4: Definición Reveladora', badge: 'Definición', text: c.clues?.[3]?.text || '', unlockedScore: 25, stars: 1 },
+                ],
+            options: opts,
+          };
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[GuessWho AI] Error generando casos con IA:', err);
+  }
+
+  return [];
 }
 
 /** Generación de Guía de Estudio bajo demanda */

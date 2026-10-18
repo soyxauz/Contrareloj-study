@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { StudyKit, Flashcard } from '../types';
+import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
 import {
   Layers,
   Sparkles,
@@ -29,25 +29,9 @@ import {
   generateAIFlashcards,
   generateAdditionalAIFlashcards,
   generateTargetedAIFlashcards,
+  generateAIGuessWhoCases,
 } from '../services/aiService';
 import { FormattedText } from './FormattedText';
-
-interface GuessWhoClue {
-  level: number;
-  title: string;
-  badge: string;
-  text: string;
-  unlockedScore: number;
-  stars: number;
-}
-
-interface GuessWhoCase {
-  id: string;
-  targetTerm: string;
-  fullDefinition: string;
-  clues: GuessWhoClue[];
-  options: string[];
-}
 
 interface CaseHistoryItem {
   term: string;
@@ -134,11 +118,23 @@ const cleanToShortConcept = (rawText: string): string => {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
 
+const isGarbageOrPlaceholderOption = (text: string): boolean => {
+  if (!text) return true;
+  const t = text.trim().toLowerCase();
+  // Placeholders directos tipo Opción A, B, C, D o Choice
+  if (/^(opci[oó]n|alternativa|respuesta|inciso|item|choice)\b/i.test(t)) return true;
+  if (/^(opci[oó]n|alternativa|respuesta)\s+[a-d0-9]/i.test(t)) return true;
+  if (/^(verdadero|falso|true|false|todas las anteriores|ninguna de las anteriores|ambas|n\/a)$/i.test(t)) return true;
+  // Frases o comodines artificiales vacíos
+  if (/^(principio de|mecanismo principal|factor estructural|criterio diagn[oó]stico|patr[oó]n funcional|elemento central|concepto clave|entidad clave)/i.test(t)) return true;
+  if (/^(pregunta \d+|caso \d+|ejemplo \d+|tema \d+|definici[oó]n \d+)/i.test(t)) return true;
+  if (t.length < 3 || t.length > 45) return true;
+  return false;
+};
+
 const buildGuessWhoCases = (
   deck: Flashcard[],
-  kitTitle: string,
-  kitCategory?: string,
-  questions?: Array<{ question: string; answer?: string; options?: string[]; topic?: string }>
+  kit: StudyKit
 ): GuessWhoCase[] => {
   if (!deck || deck.length === 0) return [];
 
@@ -147,8 +143,15 @@ const buildGuessWhoCases = (
   const seenConcepts = new Set<string>();
 
   const registerConcept = (concept: string) => {
+    if (!concept || isGarbageOrPlaceholderOption(concept)) return;
     const cleaned = cleanToShortConcept(concept);
-    if (cleaned && !isQuestionOrSentence(cleaned) && cleaned.length >= 3) {
+    if (
+      cleaned &&
+      !isGarbageOrPlaceholderOption(cleaned) &&
+      !isQuestionOrSentence(cleaned) &&
+      cleaned.length >= 3 &&
+      cleaned.length <= 40
+    ) {
       const key = cleaned.toLowerCase();
       if (!seenConcepts.has(key)) {
         seenConcepts.add(key);
@@ -157,18 +160,34 @@ const buildGuessWhoCases = (
     }
   };
 
-  // 1. Recolectar conceptos directos de las flashcards
-  deck.forEach(card => {
-    registerConcept(card.term);
+  // 1. Recolectar conceptos directos de todas las flashcards (activas y archivadas)
+  const allCards = [...deck, ...(kit.archivedFlashcards || [])];
+  allCards.forEach(card => {
+    if (card.term) registerConcept(card.term);
+    if (card.type === 'question' && card.definition) {
+      const defWords = card.definition.trim().split(/\s+/);
+      if (defWords.length <= 4 && !isQuestionOrSentence(card.definition)) {
+        registerConcept(card.definition);
+      }
+    }
   });
 
-  // 2. Recolectar de los temas (topics) y opciones cortas de las preguntas del kit
-  if (questions) {
-    questions.forEach(q => {
+  // 2. Recolectar de los temas (topics), parejas de match y opciones válidas de las preguntas
+  if (kit.questions && Array.isArray(kit.questions)) {
+    kit.questions.forEach(q => {
       if (q.topic) registerConcept(q.topic);
+      if (q.matchingPairs) {
+        q.matchingPairs.forEach(p => registerConcept(p.term));
+      }
+      if (q.blanksCorrect) {
+        q.blanksCorrect.forEach(b => registerConcept(b));
+      }
+      if (q.wordBank) {
+        q.wordBank.forEach(w => registerConcept(w));
+      }
       if (Array.isArray(q.options)) {
         q.options.forEach(opt => {
-          if (!isQuestionOrSentence(opt) && opt.split(/\s+/).length <= 4) {
+          if (!isGarbageOrPlaceholderOption(opt) && !isQuestionOrSentence(opt)) {
             registerConcept(opt);
           }
         });
@@ -176,79 +195,152 @@ const buildGuessWhoCases = (
     });
   }
 
-  // 3. Fallbacks tematicos si hay muy pocas tarjetas
-  const contextName = (kitCategory || kitTitle || 'Estudio').slice(0, 16);
-  const genericFallbacks = [
-    `Principio de ${contextName}`,
-    `Mecanismo Principal`,
-    `Factor Estructural`,
-    `Criterio Diagnóstico`,
-    `Patrón Funcional`,
-    `Elemento Central`,
-  ];
-  genericFallbacks.forEach(fb => registerConcept(fb));
+  // 3. Recolectar del texto fuente y fragmentos (chunks) términos técnicos destacados
+  const sourceToScan = (kit.sourceText || '') + ' ' + (kit.chunks?.map(c => c.text).join(' ') || '');
+  if (sourceToScan.trim()) {
+    const boldMatches = sourceToScan.match(/\*\*([^*]{3,40})\*\*/g);
+    if (boldMatches) {
+      boldMatches.forEach(bm => {
+        const raw = bm.replace(/\*\*/g, '').trim();
+        registerConcept(raw);
+      });
+    }
 
-  // Priorizar estrictamente tarjetas que NO sean preguntas para los casos de estudio
-  const nonQuestionCards = deck.filter(c => !isQuestionOrSentence(c.term));
+    const capMatches = sourceToScan.match(/\b[A-ZÁÉÍÓÚ][a-záéíóúñ]{3,}(?:\s+(?:de|del|en|la|el|y|o)\s+|\s+)[A-ZÁÉÍÓÚ][a-záéíóúñ]{3,}\b/g);
+    if (capMatches) {
+      capMatches.slice(0, 40).forEach(cm => registerConcept(cm));
+    }
+  }
+
+  // 4. Si el kit tiene muy pocos conceptos, alimentar con terminología real según la disciplina
+  const categoryStr = (kit.category || kit.title || '').toLowerCase();
+  let domainFallbacks: string[] = [];
+  if (/neuro|cerebr|encef|medul|nervi/i.test(categoryStr)) {
+    domainFallbacks = [
+      'Tracto espinotalámico', 'Corteza motora primaria', 'Cerebelo', 'Tronco encefálico',
+      'Fascículo grácil', 'Vía piramidal', 'Neurona motora inferior', 'Sinapsis química',
+      'Lóbulo frontal', 'Núcleo caudado', 'Médula espinal', 'Reflejo osteotendinoso'
+    ];
+  } else if (/medic|salud|farmac|fisiolog|patolog|clinic/i.test(categoryStr)) {
+    domainFallbacks = [
+      'Receptor celular', 'Canal iónico', 'Neurotransmisor', 'Membrana plasmática',
+      'Fosforilación oxidativa', 'Bomba de sodio-potasio', 'Enzima catalítica', 'Homeostasis'
+    ];
+  } else if (/derech|jurid|legal|ley|penal|constituc/i.test(categoryStr)) {
+    domainFallbacks = [
+      'Debido proceso', 'Presunción de inocencia', 'Jurisdicción ordinaria', 'Cosa juzgada',
+      'Principio de legalidad', 'Responsabilidad civil', 'Sujeto procesal', 'Recurso de apelación'
+    ];
+  } else {
+    const words = sourceToScan.replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g, ' ').split(/\s+/).filter(w => w.length > 5);
+    const uniqueWords = Array.from(new Set(words)).slice(0, 10).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    domainFallbacks = uniqueWords.filter(w => !isGarbageOrPlaceholderOption(w));
+  }
+  domainFallbacks.forEach(fb => registerConcept(fb));
+
+  // Priorizar tarjetas que sean conceptos (no preguntas)
+  const nonQuestionCards = deck.filter(c => c.type !== 'question' && !isQuestionOrSentence(c.term));
   const candidatePool = nonQuestionCards.length >= 3 ? nonQuestionCards : deck;
 
   // Seleccionar hasta 5 tarjetas representativas
-  const candidates = [...candidatePool].sort(() => Math.random() - 0.5).slice(0, Math.min(5, candidatePool.length));
+  const candidates = [...candidatePool]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, Math.min(5, candidatePool.length));
 
   return candidates.map((card, idx) => {
-    // Garantizar que la entidad misteriosa SIEMPRE sea un concepto corto y NUNCA una pregunta
-    let targetConcept = card.term;
-    if (isQuestionOrSentence(targetConcept)) {
+    let targetConcept = cleanToShortConcept(card.term);
+    if (!targetConcept || isQuestionOrSentence(targetConcept) || isGarbageOrPlaceholderOption(targetConcept)) {
       targetConcept = cleanToShortConcept(card.term) || shortConceptsBank[idx % shortConceptsBank.length] || 'Entidad Clave';
     }
 
     const rawDef = (card.definition || '').trim();
     const maskedDef = maskTermInText(rawDef, targetConcept);
 
-    // Dividir la definición en oraciones limpias
-    const sentences = rawDef
+    // Fragmentos y preguntas asociadas para enriquecer pistas
+    const relatedChunk = kit.chunks?.find(c =>
+      c.text.toLowerCase().includes(targetConcept.toLowerCase())
+    )?.text || card.sourceChunkText || '';
+
+    const relatedQ = kit.questions?.find(q =>
+      (q.topic && q.topic.toLowerCase() === targetConcept.toLowerCase()) ||
+      (q.explanation && q.explanation.toLowerCase().includes(targetConcept.toLowerCase()))
+    );
+
+    // Separar la definición en oraciones
+    const defSentences = rawDef
       .split(/(?<=[.?!;])\s+/)
       .map(s => s.trim())
       .filter(s => s.length > 6);
 
-    const maskedSentences = sentences.map(s => maskTermInText(s, targetConcept));
-    const categoryName = kitCategory || kitTitle || 'Dominio de Estudio';
+    // ── PISTA 1: Contexto, Clasificación y Localización (100 pts, 3★) ──────────
+    // Específica y única para cada tarjeta (PROHIBIDO plantilla genérica)
+    let clue1Text = '';
+    const firstSentence = defSentences[0] || rawDef;
 
-    // Pista 1: Localización / Generalidad / Contexto disciplinar (100 pts, 3 estrellas)
-    const clue1Text = `Pertenece al ámbito de "${categoryName}". Constituye un elemento o principio nuclear en la comprensión y dominio de este tema.`;
+    if (firstSentence) {
+      const openingClauseMatch = firstSentence.match(/^([^,;:]+(?:que|cuyo|cuya|responsable de|encargad[oa] de|donde|situad[oa] en|ubicad[oa] en)[^,;:]+)/i);
+      const openingNature = openingClauseMatch ? openingClauseMatch[1].trim() : firstSentence;
+      clue1Text = `Categoría y localización general: ${maskTermInText(openingNature, targetConcept)}.`;
+    } else {
+      clue1Text = `Categoría y ámbito funcional: Elemento estructural clave evaluado en ${kit.category || kit.title}.`;
+    }
 
-    // Pista 2: Mecanismo / Fisiopatología / Causa (75 pts, 2 estrellas)
+    // ── PISTA 2: Mecanismo de Acción o Proceso Funcional (75 pts, 2★) ──────────
     let clue2Text = '';
-    if (maskedSentences.length >= 2) {
-      clue2Text = `Mecanismo o base funcional: ${maskedSentences[0]}`;
+    const functionSentence = defSentences.find((s, sIdx) =>
+      sIdx > 0 && /función|mecanismo|opera|actúa|encargad|conduce|regula|controla|transporta|estimula|inhibe|sintetiza|genera|participa|transmite|ejecuta|conecta|desciende|asciende/i.test(s)
+    );
+
+    if (functionSentence) {
+      clue2Text = `Mecanismo de acción o rol funcional: ${maskTermInText(functionSentence, targetConcept)}`;
+    } else if (defSentences.length >= 2) {
+      clue2Text = `Mecanismo y principio operativo: ${maskTermInText(defSentences[1], targetConcept)}`;
     } else {
-      const words = maskedDef.split(' ');
-      if (words.length > 6) {
-        const half = Math.ceil(words.length / 2);
-        clue2Text = `Mecanismo o principio activo: ${words.slice(0, half).join(' ')}...`;
+      const chunkSentences = relatedChunk.split(/(?<=[.?!;])\s+/).filter(s => s.length > 10);
+      const chunkFunc = chunkSentences.find(s =>
+        s.toLowerCase().includes(targetConcept.toLowerCase()) &&
+        /función|mecanismo|actúa|permite|produce|regula|desciende|inerva|conecta/i.test(s)
+      );
+      if (chunkFunc) {
+        clue2Text = `Mecanismo operativo: ${maskTermInText(chunkFunc, targetConcept)}`;
       } else {
-        clue2Text = `Mecanismo operativo: Opera como factor determinante en la estructura conceptual de ${categoryName}.`;
+        const words = maskedDef.split(' ');
+        const midStart = Math.floor(words.length / 3);
+        const midEnd = Math.floor((words.length * 2) / 3);
+        const slice = words.slice(midStart, Math.max(midStart + 6, midEnd)).join(' ');
+        clue2Text = `Mecanismo y proceso funcional: ...${slice}...`;
       }
     }
 
-    // Pista 3: Signo patognomónico / Hallazgo característico (50 pts, 1 estrella)
+    // ── PISTA 3: Signo Patognomónico, Hallazgo Distintivo o Criterio Clave (50 pts, 1★) ─
     let clue3Text = '';
-    if (maskedSentences.length >= 3) {
-      clue3Text = `Signo patognomónico o rasgo distintivo: ${maskedSentences[1]}`;
-    } else if (maskedSentences.length === 2) {
-      clue3Text = `Hallazgo o criterio específico: ${maskedSentences[1]}`;
-    } else {
-      const words = maskedDef.split(' ');
-      if (words.length > 6) {
-        const half = Math.ceil(words.length / 2);
-        clue3Text = `Criterio distintivo: ...${words.slice(half).join(' ')}`;
-      } else {
-        clue3Text = `Hallazgo distintivo: Posee características propias y relaciones normativas que la diferencian de conceptos similares.`;
+    if (relatedQ?.explanation) {
+      const expSentences = relatedQ.explanation.split(/(?<=[.?!;])\s+/).filter(s => s.length > 8);
+      const hallmarkSentence = expSentences.find(s =>
+        /signo|patognomónico|distintivo|característic|lesión|clínic|decusación|hallazgo|específic|reflejo|diferencial|criterio|prueba|babinski|síndrome/i.test(s)
+      );
+      if (hallmarkSentence) {
+        clue3Text = `Signo patognomónico o rasgo distintivo: ${maskTermInText(hallmarkSentence, targetConcept)}`;
       }
     }
 
-    // Pista 4: Tratamiento / Dato definitorio / Aplicación (25 pts, 1 estrella)
-    const clue4Text = `Dato definitorio esencial: ${maskedDef}`;
+    if (!clue3Text) {
+      const distinctSentence = defSentences.find((s, sIdx) =>
+        sIdx > 1 || /signo|patognomónico|distintiv|característic|lesión|decusación|hallazgo|criterio|específic|típic|causa/i.test(s)
+      );
+      if (distinctSentence && distinctSentence !== defSentences[0]) {
+        clue3Text = `Rasgo distintivo característico: ${maskTermInText(distinctSentence, targetConcept)}`;
+      } else if (defSentences.length >= 3) {
+        clue3Text = `Criterio o rasgo clave: ${maskTermInText(defSentences[2], targetConcept)}`;
+      } else {
+        const words = maskedDef.split(' ');
+        const half = Math.ceil(words.length / 2);
+        clue3Text = `Hallazgo o rasgo distintivo: ...${words.slice(half).join(' ')}`;
+      }
+    }
+
+    // ── PISTA 4: Dato Definitorio Revelador (25 pts, 1★) ──────────────────────
+    const clue4Text = `Dato definitorio concluyente: ${maskedDef}`;
 
     const clues: GuessWhoClue[] = [
       {
@@ -285,10 +377,14 @@ const buildGuessWhoCases = (
       },
     ];
 
-    // Distractores: EXCLUSIVAMENTE conceptos cortos que NO sean preguntas y diferentes al target
+    // ── OPCIONES CANDIDATAS Y DISTRACTORES ─────────────────────────────────────
     const targetKey = targetConcept.toLowerCase();
     const availableDistractors = shortConceptsBank
-      .filter(concept => concept.toLowerCase() !== targetKey && !isQuestionOrSentence(concept))
+      .filter(concept =>
+        concept.toLowerCase() !== targetKey &&
+        !isGarbageOrPlaceholderOption(concept) &&
+        !isQuestionOrSentence(concept)
+      )
       .sort(() => Math.random() - 0.5);
 
     const distractors: string[] = [];
@@ -298,14 +394,15 @@ const buildGuessWhoCases = (
       }
     }
 
-    while (distractors.length < 3) {
-      const fallback = genericFallbacks[distractors.length] || `Concepto Clave ${distractors.length + 1}`;
-      if (!distractors.includes(fallback) && fallback.toLowerCase() !== targetKey) {
-        distractors.push(fallback);
+    let fallbackIdx = 0;
+    while (distractors.length < 3 && fallbackIdx < domainFallbacks.length) {
+      const fb = domainFallbacks[fallbackIdx];
+      if (fb && !distractors.includes(fb) && fb.toLowerCase() !== targetKey && !isGarbageOrPlaceholderOption(fb)) {
+        distractors.push(fb);
       }
+      fallbackIdx++;
     }
 
-    // Opciones finales: 1 correcta + 3 distractores (TODAS opciones cortas y limpias)
     const options = [targetConcept, ...distractors].sort(() => Math.random() - 0.5);
 
     return {
@@ -585,10 +682,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
   };
 
   // Inicializar o reiniciar partida de Adivina Quien (hasta 5 casos progresivos)
-  const startNewGuessWhoGame = () => {
+  const startNewGuessWhoGame = async () => {
     if (cards.length === 0) return;
-    const cases = buildGuessWhoCases(cards, kit.title, kit.category, kit.questions);
-    setGuessWhoCases(cases);
+    const initialCases = buildGuessWhoCases(cards, kit);
+    setGuessWhoCases(initialCases);
     setCurrentCaseIdx(0);
     setRevealedCluesCount(1);
     setSelectedGuessOption(null);
@@ -600,6 +697,36 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
     setTotalStars(0);
     setIsGameFinished(false);
     setCasesHistory([]);
+
+    // Enriquecimiento en segundo plano con IA si está habilitada
+    try {
+      const targetCards = initialCases.map(c => ({
+        id: c.id,
+        term: c.targetTerm,
+        definition: c.fullDefinition,
+      }));
+      const allAvailableTerms = cards.map(c => c.term);
+      const aiCases = await generateAIGuessWhoCases(
+        kit.sourceText || kit.description,
+        kit.title,
+        kit.category,
+        targetCards,
+        allAvailableTerms
+      );
+      if (aiCases && aiCases.length > 0) {
+        setGuessWhoCases(prev => {
+          if (prev.length === 0) return aiCases;
+          return prev.map((pCase, pIdx) => {
+            if (pIdx < currentCaseIdx || (pIdx === currentCaseIdx && (revealedCluesCount > 1 || wrongOptions.length > 0 || isCaseSolved))) {
+              return pCase;
+            }
+            return aiCases[pIdx] || pCase;
+          });
+        });
+      }
+    } catch {
+      // Si la IA no está disponible, los casos locales ya están perfectamente calibrados
+    }
   };
 
   // Auto-iniciar si entra al modo Adivina Quien y no hay casos cargados

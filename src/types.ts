@@ -123,6 +123,23 @@ export interface Flashcard {
   sourceAsset?: DocumentAsset;
 }
 
+export interface GuessWhoClue {
+  level: number;
+  title: string;
+  badge: string;
+  text: string;
+  unlockedScore: number;
+  stars: number;
+}
+
+export interface GuessWhoCase {
+  id: string;
+  targetTerm: string;
+  fullDefinition: string;
+  clues: GuessWhoClue[];
+  options: string[];
+}
+
 export type PodcastFormat = 'detailed' | 'brief' | 'critique' | 'debate';
 export type PodcastDuration = 'short' | 'normal' | 'long';
 
