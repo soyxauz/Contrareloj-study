@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { StudyKit, Flashcard } from '../types';
 import {
   Layers,
@@ -16,6 +16,11 @@ import {
   Target,
   HelpCircle,
   BookOpen,
+  Timer,
+  Trophy,
+  Flame,
+  RotateCcw,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   generateAIFlashcards,
@@ -48,10 +53,29 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
   const [targetCount, setTargetCount] = useState<number>(10);
   const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
 
-  // Term Matching Game State
+  // Term Matching Game State (Modo Dinámico sin Scroll estilo Duolingo/Quizlet)
+  const [matchDeck, setMatchDeck] = useState<Flashcard[]>([]);
+  const [activeTerms, setActiveTerms] = useState<{ id: string; term: string }[]>([]);
+  const [activeDefs, setActiveDefs] = useState<{ id: string; definition: string }[]>([]);
   const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
   const [selectedDef, setSelectedDef] = useState<string | null>(null);
   const [matchedIds, setMatchedIds] = useState<string[]>([]);
+  const [wrongPair, setWrongPair] = useState<{ termId: string; defId: string } | null>(null);
+  const [correctPair, setCorrectPair] = useState<string | null>(null);
+  const [timerSeconds, setTimerSeconds] = useState<number>(0);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  const [streak, setStreak] = useState<number>(0);
+  const [bestStreak, setBestStreak] = useState<number>(0);
+  const [mistakesCount, setMistakesCount] = useState<number>(0);
+  const [isGameComplete, setIsGameComplete] = useState<boolean>(false);
+  const [bestTime, setBestTime] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem(`thea_match_best_${kit.id}`);
+      return saved ? parseFloat(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const showNotification = (msg: string) => {
     setStatusNotification(msg);
@@ -228,25 +252,203 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
     setCurrentIdx(prev => (prev + 1) % cards.length);
   };
 
-  const handleMatchingClick = (id: string, type: 'term' | 'def') => {
-    if (type === 'term') {
-      setSelectedTerm(id);
-      if (selectedDef) {
-        if (id === selectedDef) {
-          setMatchedIds(prev => [...prev, id]);
+  // Retroalimentación auditiva sintetizada con Web Audio API (cero dependencias externas)
+  const playAudioFeedback = (type: 'correct' | 'wrong' | 'victory') => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      if (type === 'correct') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.2);
+      } else if (type === 'wrong') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        osc.frequency.setValueAtTime(180, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.14, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+      } else if (type === 'victory') {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.08);
+          gain.gain.setValueAtTime(0.12, ctx.currentTime + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.08 + 0.25);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + i * 0.08 + 0.25);
+        });
+      }
+    } catch {
+      // AudioContext no disponible o bloqueado - ignorar silenciosamente
+    }
+  };
+
+  // Cronómetro de alta precisión en segundos con decimales
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isTimerRunning && !isGameComplete && gameMode === 'matching') {
+      const startMs = Date.now() - timerSeconds * 1000;
+      interval = setInterval(() => {
+        setTimerSeconds(+((Date.now() - startMs) / 1000).toFixed(1));
+      }, 100);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning, isGameComplete, gameMode]);
+
+  const formatMatchTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    const tenths = Math.floor((secs % 1) * 10);
+    return `${m > 0 ? `${m}m ` : ''}${s < 10 && m > 0 ? '0' : ''}${s}.${tenths}s`;
+  };
+
+  // Inicializar o reiniciar partida de Match (4 pares activos a la vez)
+  const startNewMatchGame = () => {
+    if (cards.length === 0) return;
+    const shuffled = [...cards].sort(() => Math.random() - 0.5);
+    setMatchDeck(shuffled);
+    const initialBatch = shuffled.slice(0, Math.min(4, shuffled.length));
+
+    const terms = [...initialBatch]
+      .map(c => ({ id: c.id, term: c.term }))
+      .sort(() => Math.random() - 0.5);
+
+    const defs = [...initialBatch]
+      .map(c => ({ id: c.id, definition: c.definition }))
+      .sort(() => Math.random() - 0.5);
+
+    setActiveTerms(terms);
+    setActiveDefs(defs);
+    setMatchedIds([]);
+    setSelectedTerm(null);
+    setSelectedDef(null);
+    setWrongPair(null);
+    setCorrectPair(null);
+    setTimerSeconds(0);
+    setIsTimerRunning(true);
+    setStreak(0);
+    setBestStreak(0);
+    setMistakesCount(0);
+    setIsGameComplete(false);
+  };
+
+  // Auto-iniciar si entra a matching y no hay tarjetas activas
+  useEffect(() => {
+    if (gameMode === 'matching' && activeTerms.length === 0 && cards.length > 0 && !isGameComplete) {
+      startNewMatchGame();
+    }
+  }, [gameMode, cards.length]);
+
+  const handleTermClick = (id: string) => {
+    if (isGameComplete || correctPair || wrongPair) return;
+    if (selectedTerm === id) {
+      setSelectedTerm(null);
+      return;
+    }
+    setSelectedTerm(id);
+    if (selectedDef) {
+      evaluateMatch(id, selectedDef);
+    }
+  };
+
+  const handleDefClick = (id: string) => {
+    if (isGameComplete || correctPair || wrongPair) return;
+    if (selectedDef === id) {
+      setSelectedDef(null);
+      return;
+    }
+    setSelectedDef(id);
+    if (selectedTerm) {
+      evaluateMatch(selectedTerm, id);
+    }
+  };
+
+  const evaluateMatch = (termId: string, defId: string) => {
+    if (termId === defId) {
+      // Par correcto: feedback visual y sonoro inmediato
+      setCorrectPair(termId);
+      playAudioFeedback('correct');
+      setStreak(prev => {
+        const next = prev + 1;
+        setBestStreak(b => Math.max(b, next));
+        return next;
+      });
+
+      setTimeout(() => {
+        const nextMatched = [...matchedIds, termId];
+        setMatchedIds(nextMatched);
+
+        const isFinished = nextMatched.length === cards.length;
+        if (isFinished) {
+          setIsTimerRunning(false);
+          setIsGameComplete(true);
+          playAudioFeedback('victory');
+
+          try {
+            const savedBest = localStorage.getItem(`thea_match_best_${kit.id}`);
+            const currentBest = savedBest ? parseFloat(savedBest) : null;
+            if (!currentBest || timerSeconds < currentBest) {
+              localStorage.setItem(`thea_match_best_${kit.id}`, timerSeconds.toString());
+              setBestTime(timerSeconds);
+            }
+          } catch {
+            // Manejo silencioso de localStorage
+          }
+        } else {
+          // Reposición sin mover los demás elementos
+          const currentlyActiveIds = new Set(activeTerms.map(t => t.id));
+          const matchedSet = new Set(nextMatched);
+          const nextCard = matchDeck.find(c => !currentlyActiveIds.has(c.id) && !matchedSet.has(c.id));
+
+          if (nextCard) {
+            setActiveTerms(prev => prev.map(t => t.id === termId ? { id: nextCard.id, term: nextCard.term } : t));
+            setActiveDefs(prev => prev.map(d => d.id === termId ? { id: nextCard.id, definition: nextCard.definition } : d));
+          } else {
+            setActiveTerms(prev => prev.filter(t => t.id !== termId));
+            setActiveDefs(prev => prev.filter(d => d.id !== termId));
+          }
         }
+
         setSelectedTerm(null);
         setSelectedDef(null);
-      }
+        setCorrectPair(null);
+      }, 320);
     } else {
-      setSelectedDef(id);
-      if (selectedTerm) {
-        if (id === selectedTerm) {
-          setMatchedIds(prev => [...prev, id]);
-        }
+      // Par incorrecto: shake y penalización
+      setWrongPair({ termId, defId });
+      playAudioFeedback('wrong');
+      setStreak(0);
+      setMistakesCount(m => m + 1);
+
+      setTimeout(() => {
         setSelectedTerm(null);
         setSelectedDef(null);
-      }
+        setWrongPair(null);
+      }, 450);
     }
   };
 
@@ -262,6 +464,289 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
     large: 'text-xl sm:text-2xl md:text-3xl font-medium leading-relaxed text-slate-100',
     huge: 'text-2xl sm:text-3xl md:text-4xl font-semibold leading-relaxed text-slate-50',
   }[textSize];
+
+  if (gameMode === 'matching') {
+    return (
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 h-[calc(100vh-4.5rem)] max-h-[860px] flex flex-col justify-between select-none overflow-hidden animate-fadeIn relative">
+        {/* Cabecera del Juego: Botón Salir, Título, Cronómetro, Racha, Récord y Reiniciar */}
+        <div className="flex items-center justify-between gap-2 sm:gap-4 shrink-0 pb-2 border-b border-thea-border/80">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setGameMode('study');
+                setIsTimerRunning(false);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Volver a la vista de estudio de Flashcards"
+            >
+              <ArrowLeft className="w-4 h-4 text-violet-400" />
+              <span className="hidden sm:inline">Volver a Flashcards</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-1.5">
+                <Gamepad2 className="w-5 h-5 text-amber-400" />
+                <span>Match Contrareloj</span>
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Cronómetro Digital */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#20183d] border border-violet-500/40 text-violet-200 font-mono text-xs sm:text-sm font-extrabold shadow-inner">
+              <Timer className="w-4 h-4 text-violet-400" />
+              <span>{formatMatchTime(timerSeconds)}</span>
+            </div>
+
+            {/* Racha de Aciertos */}
+            <div
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-extrabold transition-all ${
+                streak > 1
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 ring-1 ring-amber-400/40 animate-pulse'
+                  : 'bg-thea-surface border-thea-border text-slate-400'
+              }`}
+              title="Racha de emparejamientos seguidos sin fallos"
+            >
+              <Flame className={`w-3.5 h-3.5 ${streak > 1 ? 'fill-amber-400 text-amber-400' : 'text-slate-500'}`} />
+              <span>{streak}x</span>
+            </div>
+
+            {/* Mejor Récord */}
+            {bestTime !== null && (
+              <div
+                className="hidden md:flex items-center gap-1 text-xs font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2.5 py-1.5 rounded-xl"
+                title="Tu mejor récord personal en este kit"
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span>{formatMatchTime(bestTime)}</span>
+              </div>
+            )}
+
+            {/* Reiniciar Partida */}
+            <button
+              type="button"
+              onClick={startNewMatchGame}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border hover:border-violet-500/40 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1"
+              title="Reiniciar y barajar de nuevo"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-400 hover:rotate-180 transition-transform" />
+              <span className="hidden lg:inline">Reiniciar</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Barra de Progreso del Mazo */}
+        <div className="shrink-0 my-1.5">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-1 px-0.5">
+            <span>Progreso del Mazo</span>
+            <span className="text-violet-300">
+              {matchedIds.length} / {cards.length} pares completados ({cards.length > 0 ? Math.round((matchedIds.length / cards.length) * 100) : 0}%)
+            </span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-[#1b1435] overflow-hidden border border-violet-900/30">
+            <div
+              className="h-full bg-gradient-to-r from-violet-600 via-indigo-500 to-emerald-400 transition-all duration-300 rounded-full"
+              style={{ width: `${cards.length > 0 ? Math.min(100, Math.round((matchedIds.length / cards.length) * 100)) : 0}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Tablero de Juego (2 Columnas Simétricas ajustadas a la altura de la ventana, sin scroll) */}
+        {cards.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-300">
+              <Layers className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-bold text-white">No hay tarjetas disponibles</h3>
+            <p className="text-xs text-slate-400 max-w-sm">Genera tarjetas primero en el Modo Flashcards para poder jugar a emparejar conceptos.</p>
+            <button
+              type="button"
+              onClick={() => setGameMode('study')}
+              className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs cursor-pointer shadow-lg transition-all"
+            >
+              Ir a Modo Flashcards
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5 sm:gap-4 my-1.5">
+            {/* Columna Izquierda: Conceptos */}
+            <div className="flex flex-col h-full min-h-0">
+              <div className="flex items-center justify-between pb-1 px-1 shrink-0">
+                <span className="text-[11px] sm:text-xs font-bold text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-violet-400" />
+                  Conceptos ({activeTerms.length})
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">Toca para seleccionar</span>
+              </div>
+              <div className="flex-1 min-h-0 grid grid-rows-4 gap-2 sm:gap-2.5 h-[calc(100%-1.75rem)]">
+                {activeTerms.map(item => {
+                  const isSelected = selectedTerm === item.id;
+                  const isWrong = wrongPair?.termId === item.id;
+                  const isCorrect = correctPair === item.id;
+
+                  let cardStyle = 'border-thea-border/80 bg-[#181138]/85 hover:border-violet-500/60 hover:bg-[#20174a] text-slate-200';
+                  if (isSelected) cardStyle = 'border-amber-400 bg-amber-400/20 text-amber-200 ring-2 ring-amber-400/60 shadow-lg shadow-amber-500/20 scale-[1.01]';
+                  if (isCorrect) cardStyle = 'border-emerald-400 bg-emerald-950/80 text-emerald-200 ring-2 ring-emerald-400 scale-[1.02] animate-cardCorrect';
+                  if (isWrong) cardStyle = 'border-rose-500 bg-rose-950/80 text-rose-200 ring-2 ring-rose-500 animate-cardError';
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={Boolean(correctPair)}
+                      onClick={() => handleTermClick(item.id)}
+                      className={`w-full h-full min-h-0 p-2 sm:p-3 rounded-2xl border transition-all duration-150 flex items-center justify-center text-center cursor-pointer select-none shadow-sm ${cardStyle}`}
+                    >
+                      <span className="font-extrabold text-xs sm:text-sm md:text-base leading-snug line-clamp-3 sm:line-clamp-4">
+                        <FormattedText text={item.term} inlineOnly={true} />
+                      </span>
+                    </button>
+                  );
+                })}
+                {/* Slots vacíos de soporte para mantener cuadrícula fija cuando se agota la baraja */}
+                {Array.from({ length: Math.max(0, 4 - activeTerms.length) }).map((_, i) => (
+                  <div
+                    key={`placeholder-term-${i}`}
+                    className="w-full h-full min-h-0 rounded-2xl border border-dashed border-violet-900/20 bg-violet-950/5 opacity-20 pointer-events-none"
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Columna Derecha: Definiciones */}
+            <div className="flex flex-col h-full min-h-0">
+              <div className="flex items-center justify-between pb-1 px-1 shrink-0">
+                <span className="text-[11px] sm:text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5 text-purple-400" />
+                  Definiciones ({activeDefs.length})
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">Empareja el concepto</span>
+              </div>
+              <div className="flex-1 min-h-0 grid grid-rows-4 gap-2 sm:gap-2.5 h-[calc(100%-1.75rem)]">
+                {activeDefs.map(item => {
+                  const isSelected = selectedDef === item.id;
+                  const isWrong = wrongPair?.defId === item.id;
+                  const isCorrect = correctPair === item.id;
+
+                  let cardStyle = 'border-thea-border/80 bg-[#181138]/85 hover:border-purple-500/60 hover:bg-[#20174a] text-slate-200';
+                  if (isSelected) cardStyle = 'border-amber-400 bg-amber-400/20 text-amber-200 ring-2 ring-amber-400/60 shadow-lg shadow-amber-500/20 scale-[1.01]';
+                  if (isCorrect) cardStyle = 'border-emerald-400 bg-emerald-950/80 text-emerald-200 ring-2 ring-emerald-400 scale-[1.02] animate-cardCorrect';
+                  if (isWrong) cardStyle = 'border-rose-500 bg-rose-950/80 text-rose-200 ring-2 ring-rose-500 animate-cardError';
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={Boolean(correctPair)}
+                      onClick={() => handleDefClick(item.id)}
+                      title={item.definition}
+                      className={`w-full h-full min-h-0 p-2 sm:p-3 rounded-2xl border transition-all duration-150 flex items-center justify-center text-center cursor-pointer select-none shadow-sm ${cardStyle}`}
+                    >
+                      <span className="font-medium text-[11px] sm:text-xs md:text-sm leading-snug sm:leading-relaxed text-slate-200 line-clamp-4 sm:line-clamp-5">
+                        <FormattedText text={item.definition} inlineOnly={true} />
+                      </span>
+                    </button>
+                  );
+                })}
+                {/* Slots vacíos de soporte para mantener cuadrícula fija cuando se agota la baraja */}
+                {Array.from({ length: Math.max(0, 4 - activeDefs.length) }).map((_, i) => (
+                  <div
+                    key={`placeholder-def-${i}`}
+                    className="w-full h-full min-h-0 rounded-2xl border border-dashed border-purple-900/20 bg-purple-950/5 opacity-20 pointer-events-none"
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Barra Inferior: Guía y Contador de Fallos */}
+        <div className="shrink-0 pt-2 border-t border-thea-border/60 flex items-center justify-between text-[11px] text-slate-400 px-1">
+          <span className="truncate mr-2">
+            Toca un concepto y su definición. Los pares acertados desaparecen y se reponen automáticamente hasta agotar el mazo.
+          </span>
+          <span className="shrink-0 font-bold text-slate-400">
+            Fallos: <span className={mistakesCount > 0 ? 'text-rose-400' : 'text-slate-400'}>{mistakesCount}</span>
+          </span>
+        </div>
+
+        {/* Modal de Victoria (Fin del Juego) */}
+        {isGameComplete && (
+          <div className="absolute inset-0 z-30 bg-[#0f0a21]/95 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+            <div className="max-w-md w-full bg-[#181138] border border-emerald-500/40 rounded-3xl p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden animate-feedbackPop">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center mx-auto mb-4 text-emerald-300 shadow-lg shadow-emerald-500/10">
+                <Trophy className="w-8 h-8 animate-iconPop" />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white mb-1">
+                ¡Baraja Completada!
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 mb-6">
+                Has emparejado todos los conceptos y definiciones con éxito.
+              </p>
+
+              {/* Grid de Métricas */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
+                <div className="p-3 rounded-2xl bg-violet-950/40 border border-violet-500/30">
+                  <span className="text-[10px] uppercase font-bold text-violet-300 block mb-1">
+                    Tiempo
+                  </span>
+                  <span className="text-base sm:text-lg font-black text-white">
+                    {formatMatchTime(timerSeconds)}
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/30">
+                  <span className="text-[10px] uppercase font-bold text-amber-300 block mb-1">
+                    Mejor Racha
+                  </span>
+                  <span className="text-base sm:text-lg font-black text-amber-300 flex items-center justify-center gap-0.5">
+                    <Flame className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    {bestStreak}x
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/30">
+                  <span className="text-[10px] uppercase font-bold text-emerald-300 block mb-1">
+                    Precisión
+                  </span>
+                  <span className="text-base sm:text-lg font-black text-emerald-300">
+                    {Math.round((cards.length / Math.max(cards.length, cards.length + mistakesCount)) * 100)}%
+                  </span>
+                </div>
+              </div>
+
+              {bestTime !== null && timerSeconds <= bestTime && (
+                <div className="mb-6 py-2 px-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>¡Nuevo Récord Personal!</span>
+                </div>
+              )}
+
+              {/* Botones de Acción */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={startNewMatchGame}
+                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-950/40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Jugar Otra Vez</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGameMode('study');
+                    setIsTimerRunning(false);
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-thea-surfaceLight hover:bg-thea-surface border border-thea-border text-slate-200 hover:text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <span>Volver a Flashcards</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -336,15 +821,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
           <button
             type="button"
             onClick={() => {
-              setGameMode(gameMode === 'study' ? 'matching' : 'study');
-              setMatchedIds([]);
-              setSelectedTerm(null);
-              setSelectedDef(null);
+              setGameMode('matching');
+              startNewMatchGame();
             }}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/40 text-xs font-bold text-violet-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
           >
-            <Gamepad2 className="w-4 h-4" />
-            <span>{gameMode === 'study' ? 'Jugar Match' : 'Modo Flashcards'}</span>
+            <Gamepad2 className="w-4 h-4 text-amber-400" />
+            <span>Jugar Match</span>
           </button>
         </div>
       </div>
@@ -586,82 +1069,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
             </button>
           </div>
         </div>
-      ) : (
-        /* Term Matching Game */
-        <div className="space-y-6">
-          <div className="p-4 rounded-2xl bg-violet-950/30 border border-violet-500/30 text-xs sm:text-sm text-violet-200">
-            <strong>Reglas del Juego:</strong> Selecciona un término de la izquierda y haz match con su definición correspondiente a la derecha lo más rápido posible.
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Terms Column */}
-            <div className="space-y-3">
-              <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block mb-2">Términos:</span>
-              {cards.map(c => {
-                const isMatched = matchedIds.includes(c.id);
-                const isSelected = selectedTerm === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    disabled={isMatched}
-                    onClick={() => handleMatchingClick(c.id, 'term')}
-                    className={`w-full p-4 sm:p-5 rounded-2xl border text-left text-base sm:text-lg font-bold transition-all cursor-pointer ${
-                      isMatched
-                        ? 'opacity-30 border-emerald-500/30 bg-emerald-950/20 text-emerald-300 line-through'
-                        : isSelected
-                        ? 'border-amber-400 bg-amber-400/20 text-amber-300 ring-2 ring-amber-400'
-                        : 'border-thea-border bg-thea-surface hover:border-violet-500 text-white'
-                    }`}
-                  >
-                    <FormattedText text={c.term} inlineOnly={true} />
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Definitions Column */}
-            <div className="space-y-3">
-              <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block mb-2">Definiciones:</span>
-              {[...cards].reverse().map(c => {
-                const isMatched = matchedIds.includes(c.id);
-                const isSelected = selectedDef === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    disabled={isMatched}
-                    onClick={() => handleMatchingClick(c.id, 'def')}
-                    className={`w-full p-4 sm:p-5 rounded-2xl border text-left text-sm sm:text-base font-medium leading-relaxed transition-all cursor-pointer ${
-                      isMatched
-                        ? 'opacity-30 border-emerald-500/30 bg-emerald-950/20 text-emerald-300 line-through'
-                        : isSelected
-                        ? 'border-amber-400 bg-amber-400/20 text-amber-300 ring-2 ring-amber-400'
-                        : 'border-thea-border bg-thea-surface hover:border-violet-500 text-slate-200'
-                    }`}
-                  >
-                    <FormattedText text={c.definition} inlineOnly={true} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {matchedIds.length === cards.length && (
-            <div className="p-6 rounded-3xl bg-emerald-950/30 border border-emerald-500/40 text-center animate-fadeIn">
-              <h4 className="text-xl font-bold text-emerald-300 mb-1">¡Perfecto! Todos los pares completados</h4>
-              <p className="text-xs sm:text-sm text-slate-300 mb-4">Has emparejado todas las flashcards con éxito.</p>
-              <button
-                type="button"
-                onClick={() => setMatchedIds([])}
-                className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm cursor-pointer shadow-lg"
-              >
-                Jugar de Nuevo
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      ) : null}
 
       {/* Modal de Calibración de Enfoque de Flashcards (Tuerca) */}
       {showConfigModal && (
