@@ -225,5 +225,6 @@ export interface SmartStudySessionState {
   currentQuestionId?: string;
   activePracticeLevel?: 1 | 2 | 3;
   activePracticeDifficulty?: 'easy' | 'medium' | 'hard';
+  seenQuestionIds?: string[];
 }
 

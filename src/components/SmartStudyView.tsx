@@ -306,6 +306,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     });
   };
 
+  // ── Tracking de Preguntas Respondidas y Vistas (para rotación dinámica y generación) ──
+  const answeredQuestionIdsRef = useRef<Set<string>>(
+    new Set(savedSession?.history?.map((h: any) => h.questionId) || [])
+  );
+  const completedSocraticIdsRef = useRef<Set<string>>(new Set());
+  const seenQuestionIdsRef = useRef<Set<string>>(
+    new Set([
+      ...((savedSession as any)?.seenQuestionIds || []),
+      ...(savedSession?.currentQuestionId ? [savedSession.currentQuestionId] : [])
+    ])
+  );
+
   const handleSelectDifficulty = async (selectedLvl: 1 | 2 | 3) => {
     if (isSwitchingDifficulty || isGeneratingTargeted) return;
 
@@ -314,11 +326,25 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setTargetErrorNotice('');
     setTargetSuccessNotice('');
 
-    const targetDiff: 'easy' | 'medium' | 'hard' = selectedLvl === 1 ? 'easy' : selectedLvl === 2 ? 'medium' : 'hard';
-    const diffPool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
+    // Marcar la pregunta actual como vista antes de conmutar
+    if (currentQ?.id) {
+      seenQuestionIdsRef.current.add(currentQ.id);
+    }
 
-    // Si quedan menos de 7 preguntas en esta dificultad, generar tanda de 10 preguntas con IA
-    if (diffPool.length < 7) {
+    const targetDiff: 'easy' | 'medium' | 'hard' = selectedLvl === 1 ? 'easy' : selectedLvl === 2 ? 'medium' : 'hard';
+    const allInDiff = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
+
+    // Conjunto de preguntas ya consumidas (respondidas o vistas)
+    const consumedIds = new Set([
+      ...Array.from(answeredQuestionIdsRef.current),
+      ...Array.from(seenQuestionIdsRef.current),
+    ]);
+
+    // Preguntas de este nivel que aún no han sido vistas ni respondidas, y distintas a la actual
+    let availableInDiff = allInDiff.filter(q => !consumedIds.has(q.id) && q.id !== currentQ?.id);
+
+    // Si quedan menos de 7 preguntas disponibles en esta dificultad -> Generar tanda de 10 con IA
+    if (availableInDiff.length < 7 || allInDiff.length < 7) {
       setIsSwitchingDifficulty(true);
       setSwitchingDiffMessage(
         `Generando tanda completa de 10 preguntas de Nivel ${selectedLvl} con IA...`
@@ -351,7 +377,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
           const existingIds = new Set(kit.questions.map(q => q.id));
           const fresh = marked.filter(q => !existingIds.has(q.id));
-          const updatedKitQuestions = [...fresh, ...kit.questions];
+          const updatedKitQuestions = [...kit.questions, ...fresh];
 
           if (onUpdateKit) {
             onUpdateKit({
@@ -361,6 +387,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           }
 
           const firstQ = fresh[0] || marked[0];
+          seenQuestionIdsRef.current.add(firstQ.id);
           setCurrentQuestion(firstQ);
           lastQId.current = firstQ.id;
 
@@ -409,6 +436,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             totalErrorsReinforced,
             socraticProfile,
             revealedQuestionIds,
+            seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
             lastUpdated: Date.now(),
             shuffleSeed: 1,
           } as any);
@@ -420,38 +448,50 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             setShowConfigDrawer(false);
             setTargetSuccessNotice('');
           }, 1200);
-        } else if (diffPool.length > 0) {
-          const fallbackQ = diffPool.find(q => q.id !== currentQ.id) || diffPool[0];
-          setCurrentQuestion(fallbackQ);
-          lastQId.current = fallbackQ.id;
+        } else {
+          // Si la IA no generó, pero hay disponibles en el banco, rotar a la siguiente
+          if (availableInDiff.length === 0) {
+            seenQuestionIdsRef.current.clear();
+            availableInDiff = allInDiff.filter(q => q.id !== currentQ?.id);
+          }
+          const fallbackQ = availableInDiff[0] || allInDiff[0];
+          if (fallbackQ) {
+            seenQuestionIdsRef.current.add(fallbackQ.id);
+            setCurrentQuestion(fallbackQ);
+            lastQId.current = fallbackQ.id;
+            setSelectedOption(null);
+            setSelectedMultiIndices([]);
+            setIsAnswered(false);
+            setIsCurrentCorrect(null);
+          }
           setTimeout(() => setShowConfigDrawer(false), 300);
         }
       } catch (err) {
         console.error('Error al generar preguntas de dificultad:', err);
         const msg = err instanceof Error ? err.message : 'Error al conectar con el servicio de IA.';
         setTargetErrorNotice(msg);
-        if (diffPool.length > 0) {
-          const fallbackQ = diffPool.find(q => q.id !== currentQ.id) || diffPool[0];
+        if (availableInDiff.length === 0) {
+          seenQuestionIdsRef.current.clear();
+          availableInDiff = allInDiff.filter(q => q.id !== currentQ?.id);
+        }
+        const fallbackQ = availableInDiff[0] || allInDiff[0];
+        if (fallbackQ) {
+          seenQuestionIdsRef.current.add(fallbackQ.id);
           setCurrentQuestion(fallbackQ);
           lastQId.current = fallbackQ.id;
+          setSelectedOption(null);
+          setSelectedMultiIndices([]);
+          setIsAnswered(false);
+          setIsCurrentCorrect(null);
         }
       } finally {
         setIsSwitchingDifficulty(false);
         setSwitchingDiffMessage('');
       }
     } else {
-      // El banco ya tiene 7 o más preguntas en esta dificultad: cambiar la pregunta de inmediato
-      const currentIndexInPool = diffPool.findIndex(q => q.id === currentQ.id);
-      let nextQ: Question;
-      if (currentIndexInPool >= 0) {
-        // Rotar a la siguiente pregunta del banco
-        const nextIdx = (currentIndexInPool + 1) % diffPool.length;
-        nextQ = diffPool[nextIdx];
-      } else {
-        // Cambio de nivel: tomar una pregunta de este nivel distinta a la actual
-        nextQ = diffPool.find(q => q.id !== currentQ.id) || diffPool[0];
-      }
-
+      // El banco tiene 7 o más preguntas disponibles en esta dificultad: tomar la siguiente no vista
+      const nextQ = availableInDiff[0];
+      seenQuestionIdsRef.current.add(nextQ.id);
       setCurrentQuestion(nextQ);
       lastQId.current = nextQ.id;
 
@@ -500,11 +540,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         totalErrorsReinforced,
         socraticProfile,
         revealedQuestionIds,
+        seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
         lastUpdated: Date.now(),
         shuffleSeed: 1,
       } as any);
 
-      // Cerrar el cajón para mostrar la nueva pregunta de inmediato
+      // Cerrar el cajón suavemente para mostrar la nueva pregunta de inmediato
       setTimeout(() => setShowConfigDrawer(false), 300);
     }
   };
@@ -671,10 +712,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   }, [activePracticeLevel, currentIndex, checkAndPrefetchQuestions]);
 
   // ── Socratic Active Recall & Question Selection Logic ─────────────────────
-  const answeredQuestionIdsRef = useRef<Set<string>>(
-    new Set(savedSession?.history?.map((h: any) => h.questionId) || [])
-  );
-  const completedSocraticIdsRef = useRef<Set<string>>(new Set());
 
   // Categorización y adaptación de preguntas para distribución proporcional
   const getCategoryForQuestion = useCallback((q: Question): keyof SmartStudyTypeFilters => {
@@ -1017,6 +1054,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
 
     lastQId.current = currentQ.id;
+    if (currentQ?.id) {
+      seenQuestionIdsRef.current.add(currentQ.id);
+    }
     setSelectedOption(null);
     setSelectedMultiIndices([]);
     setActiveMatchingTerm(null);
@@ -1067,6 +1107,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       totalErrorsReinforced,
       socraticProfile,
       revealedQuestionIds,
+      seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
       lastUpdated: Date.now(),
       shuffleSeed,
     } as any);
