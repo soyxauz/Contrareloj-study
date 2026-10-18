@@ -35,11 +35,12 @@ type TutorMode = 'chat' | 'oral';
 
 const VOICE = 'es-ES-ElviraNeural';
 
-// Selección dinámica del idioma de reconocimiento con fallback a español estándar
+// Idioma preferido para reconocimiento de voz en Web Speech API.
+// es-ES y es-419 son los dialectos universales con soporte garantizado en Chromium de escritorio.
 const getPreferredSpeechLang = (): string => {
   if (typeof navigator !== 'undefined' && navigator.language) {
-    const nav = navigator.language;
-    if (nav.startsWith('es')) return nav;
+    const nav = navigator.language.toLowerCase();
+    if (nav === 'es-419' || nav === 'es-us') return 'es-419';
   }
   return 'es-ES';
 };
@@ -106,7 +107,8 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
   const isTypingRef = useRef(isTyping);
   const isSpacePressedRef = useRef(false);
   const spaceStartTimeRef = useRef(0);
-  const triedLanguageFallbackRef = useRef(false);
+  const speechLangRef = useRef<string>(getPreferredSpeechLang());
+  const fallbackAttemptsRef = useRef(0);
 
   modeRef.current = mode;
   voiceOnRef.current = voiceOn;
@@ -114,6 +116,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
   listeningRef.current = listening;
   speakingRef.current = speaking;
   isTypingRef.current = isTyping;
+  speechLangRef.current = speechLang;
 
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -277,71 +280,94 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
 
   // ───────────────────────── VOZ: ENTRADA (MICROFONO) ─────────────────────────
   const stopListening = () => {
-    try {
-      recognitionRef.current?.stop();
-    } catch {}
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+      } catch {}
+    }
     setListening(false);
   };
 
-  const startListening = () => {
+  const startListening = (isFallback = false) => {
     if (!SR) return;
+    if (!isFallback) {
+      fallbackAttemptsRef.current = 0;
+    }
     stopSpeaking();
     setVoiceError('');
+
+    // Limpieza estricta de cualquier instancia previa para evitar colisiones de socket en Chrome
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch {}
+      recognitionRef.current = null;
+    }
+
     try {
-      recognitionRef.current?.abort();
-    } catch {}
+      const rec = new SR();
+      rec.lang = speechLangRef.current;
+      rec.interimResults = true;
+      rec.continuous = false;
 
-    const rec = new SR();
-    rec.lang = speechLang;
-    rec.interimResults = true;
-    rec.continuous = false;
-
-    rec.onresult = (e: any) => {
-      let interim = '';
-      let final = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) final += r[0].transcript;
-        else interim += r[0].transcript;
-      }
-      if (final.trim()) {
-        setInput('');
-        handleSendRef.current(final.trim());
-      } else {
-        setInput(interim);
-      }
-    };
-
-    rec.onerror = (e: any) => {
-      setListening(false);
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        setVoiceError('Permite el acceso al micrófono en el navegador para activar la voz.');
-      } else if (e.error === 'network') {
-        // Fallback al dialecto estándar es-ES si falló el dialecto regional
-        if (!triedLanguageFallbackRef.current && speechLang !== 'es-ES') {
-          triedLanguageFallbackRef.current = true;
-          setSpeechLang('es-ES');
-          setTimeout(() => {
-            startListening();
-          }, 250);
-          return;
+      rec.onresult = (e: any) => {
+        let interim = '';
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) final += r[0].transcript;
+          else interim += r[0].transcript;
         }
-        setVoiceError(
-          'El servicio de transcripción de voz del navegador no pudo contactar con el servidor. Puedes escribir tu respuesta o reintentar en unos segundos.'
-        );
-        setTimeout(() => setVoiceError(''), 6000);
-      } else if (e.error === 'no-speech') {
-        // No alertar de forma invasiva si solo hubo silencio
-      } else {
-        setVoiceError(`Aviso de micrófono: ${e.error}`);
-        setTimeout(() => setVoiceError(''), 5000);
-      }
-    };
+        if (final.trim()) {
+          setInput('');
+          handleSendRef.current(final.trim());
+        } else {
+          setInput(interim);
+        }
+      };
 
-    rec.onend = () => setListening(false);
+      rec.onerror = (e: any) => {
+        setListening(false);
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          setVoiceError('Permite el acceso al micrófono en el navegador para activar la voz.');
+        } else if (e.error === 'network') {
+          // Reintento automático con el dialecto alternativo compatible: es-ES <-> es-419
+          if (fallbackAttemptsRef.current === 0) {
+            fallbackAttemptsRef.current = 1;
+            const nextLang = speechLangRef.current === 'es-ES' ? 'es-419' : 'es-ES';
+            speechLangRef.current = nextLang;
+            setSpeechLang(nextLang);
+            setTimeout(() => {
+              startListening(true);
+            }, 300);
+            return;
+          }
 
-    recognitionRef.current = rec;
-    try {
+          // Si el servidor de Google sigue sin responder (ej. offline, firewall o bloqueo de Google Speech)
+          setShowTextInput(true);
+          setVoiceError(
+            'El servicio de transcripción de voz del navegador no pudo contactar con los servidores de Google (error de red). Puedes escribir tu respuesta abajo o pulsar el micrófono para reintentar.'
+          );
+          setTimeout(() => setVoiceError(''), 7000);
+        } else if (e.error === 'no-speech') {
+          // Silencio detectado, no alertar de forma invasiva
+        } else if (e.error === 'aborted') {
+          // Detención voluntaria
+        } else {
+          setVoiceError(`Aviso de micrófono: ${e.error}`);
+          setTimeout(() => setVoiceError(''), 5000);
+        }
+      };
+
+      rec.onend = () => setListening(false);
+
+      recognitionRef.current = rec;
       rec.start();
       setListening(true);
     } catch {
@@ -536,7 +562,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
 
         {/* Sub-barra de controles de audio y estado */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2 bg-thea-surface/40 border-b border-thea-border/40 text-xs text-slate-400 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {canListen && (
               <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer select-none">
                 <input
@@ -547,6 +573,27 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
                 />
                 <span className="font-medium">Modo Manos Libres</span>
               </label>
+            )}
+
+            {canListen && (
+              <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                <span className="hidden sm:inline">Idioma:</span>
+                <select
+                  value={speechLang}
+                  onChange={(e) => {
+                    const l = e.target.value;
+                    setSpeechLang(l);
+                    speechLangRef.current = l;
+                    fallbackAttemptsRef.current = 0;
+                  }}
+                  className="bg-thea-surface border border-thea-border/70 text-slate-300 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
+                  title="Dialecto del reconocimiento de voz"
+                >
+                  <option value="es-ES">Español (es-ES)</option>
+                  <option value="es-419">Español Latino (es-419)</option>
+                  <option value="es-US">Español EE.UU. (es-US)</option>
+                </select>
+              </div>
             )}
 
             <button
