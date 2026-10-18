@@ -290,6 +290,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
   const explanationRef = useRef<HTMLDivElement>(null);
 
+  // Candados de seguridad anti-doble clic y proteccion al avanzar preguntas
+  const lastQuestionLoadTimeRef = useRef<number>(Date.now());
+  const isAdvancingRef = useRef<boolean>(false);
+  const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
+
   // ── Justificaciones desplegables bajo demanda (Smart Study e Historial) ───
   const [showJustification, setShowJustification] = useState<boolean>(false);
   const [expandedHistoryQuestions, setExpandedHistoryQuestions] = useState<Set<string>>(new Set());
@@ -1045,15 +1050,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (isFirstMount.current) {
       isFirstMount.current = false;
       lastQId.current = currentQ.id;
+      lastQuestionLoadTimeRef.current = Date.now();
       return;
     }
 
-    // Protección estricta: Si la pregunta está respondida o su ID no cambió, NUNCA resetear
-    if (isAnswered || lastQId.current === currentQ.id) {
+    // Si el ID de la pregunta no cambio, no resetear para preservar respuestas en curso
+    if (lastQId.current === currentQ.id) {
       return;
     }
 
     lastQId.current = currentQ.id;
+    lastQuestionLoadTimeRef.current = Date.now();
+
     if (currentQ?.id) {
       seenQuestionIdsRef.current.add(currentQ.id);
     }
@@ -1078,7 +1086,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     setIsAnswered(false);
     setIsCurrentCorrect(null);
-  }, [currentQ.id, effectiveBlanksCorrect.length, isAnswered]);
+    setShowJustification(false);
+  }, [currentQ.id, effectiveBlanksCorrect.length]);
 
   // ── Auto-Save Session Memory (Guarda el instante exacto por kit y usuario) ──
   useEffect(() => {
@@ -1551,6 +1560,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const handleSkipQuestion = () => {
     if (isAnswered) return;
 
+    // Bloqueo de seguridad: Evitar salto accidental si la pregunta acaba de cargarse (<650ms) o esta avanzando
+    if (Date.now() - lastQuestionLoadTimeRef.current < 650 || isAdvancingRef.current) {
+      return;
+    }
+
     let correctAns = 'Respuesta correcta';
     if (qType === 'short-answer') {
       correctAns = currentQ.idealAnswer || currentQ.explanation;
@@ -1583,11 +1597,26 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   };
 
   const handleNext = () => {
+    if (isAdvancingRef.current) return;
+
     // Si la pregunta aún no está respondida y se pulsa el botón "Saltar pregunta", responderla automáticamente
     if (!isAnswered) {
+      // Evitar salto accidental por doble clic rápido residual al avanzar
+      if (Date.now() - lastQuestionLoadTimeRef.current < 650) {
+        return;
+      }
       handleSkipQuestion();
       return;
     }
+
+    // Activar candado de avance para prevenir dobles ejecuciones
+    isAdvancingRef.current = true;
+    setIsAdvancing(true);
+    lastQuestionLoadTimeRef.current = Date.now();
+    setTimeout(() => {
+      isAdvancingRef.current = false;
+      setIsAdvancing(false);
+    }, 600);
 
     let nextQ: Question = currentQ;
 
@@ -1696,6 +1725,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setSelectedMultiIndices([]);
     setActiveMatchingTerm(null);
     setMatchingPairsMap({});
+    setMatchingChecked(false);
+    setDragDropChecked(false);
+    setShowJustification(false);
     const nextBlanksCount = (nextQ?.blanksCorrect && nextQ.blanksCorrect.length > 0)
       ? nextQ.blanksCorrect.length
       : (nextQ?.templateSentence?.match(/\{\d+\}/g)?.length || nextQ?.question?.match(/\{\d+\}/g)?.length || 0);
@@ -3249,7 +3281,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           <button
             type="button"
             onClick={handleNext}
+            disabled={isAdvancing}
             className={`w-full sm:w-auto justify-center px-8 py-3.5 rounded-full font-bold text-sm sm:text-base shadow-lg transition-all transform hover:scale-[1.03] active:scale-95 flex items-center gap-2 cursor-pointer min-h-[48px] ${
+              isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
+            } ${
               currentLevelCorrect >= levelTarget
                 ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-violet-300 hover:from-amber-300 hover:to-violet-200 text-slate-950 font-extrabold shadow-amber-500/25 ring-2 ring-amber-400/50'
                 : 'bg-[#c8b6e2] hover:bg-[#d9caf2] text-[#1a1038]'
