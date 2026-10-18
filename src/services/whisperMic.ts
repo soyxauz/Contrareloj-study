@@ -34,6 +34,10 @@ export interface WhisperMicOptions {
   onTranscribing?: () => void;
   /** Se dispara tan pronto se detecta habla sostenida (para pausar audio/interrumpir) */
   onSpeechDetected?: () => void;
+  /** Si true, es una escucha de interrupción mientras suena el altavoz (ignora eco/volumen bajo) */
+  isInterruptionMode?: boolean;
+  /** Umbral RMS mínimo manual para considerar habla y no eco de los altavoces */
+  minSpeechRms?: number;
 }
 
 export interface WhisperRecording {
@@ -253,14 +257,21 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
       return;
     }
 
-    // Umbral de detección de voz suave pero inmune a ruidos de fondo suaves
-    const threshold = Math.max(0.016, Math.min(0.035, noiseFloor * 1.8));
+    // En modo interrupción mientras suena el altavoz, exigir voz firme por encima del altavoz (evita auto-pausa por eco)
+    // Una vez que Thea se pausa (heardSpeech === true), relajamos el umbral para que el usuario hable cómodo
+    const isInterruptionGate = Boolean(opts.isInterruptionMode && !heardSpeech);
+    const threshold = isInterruptionGate
+      ? (opts.minSpeechRms ?? 0.085)
+      : Math.max(0.016, Math.min(0.035, noiseFloor * 1.8));
+
+    const requiredTicks = isInterruptionGate ? 3 : 2;
+
     if (rms > threshold) {
       speechConsecutiveTicks++;
-      if (speechConsecutiveTicks >= 2 && !heardSpeech) {
+      if (speechConsecutiveTicks >= requiredTicks && !heardSpeech) {
         heardSpeech = true;
         opts.onSpeechDetected?.();
-      } else if (speechConsecutiveTicks >= 2) {
+      } else if (speechConsecutiveTicks >= requiredTicks) {
         heardSpeech = true;
       }
       lastVoiceAt = now;

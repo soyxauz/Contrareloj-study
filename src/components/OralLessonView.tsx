@@ -127,6 +127,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const isPausedForInterruptionRef = useRef(false);
   const bargeInRef = useRef<WhisperRecording | null>(null);
   const handleInterruptionRef = useRef<(text: string) => Promise<void>>(async () => {});
+  const lastTheaStatementRef = useRef<string>(messages[0]?.text || kit.title);
 
   // Refs de sincronización
   const modeRef = useRef<OralMode>(mode);
@@ -303,6 +304,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         autoStopOnSilence: true,
         silenceMs: 850,
         noSpeechTimeoutMs: 120000,
+        isInterruptionMode: true, // Umbral calibrado anti-eco: nunca se pausa por altavoces o ruido ambiente
+        minSpeechRms: 0.085,      // Requiere voz humana firme intencional por encima del audio
         onVolume: (vol) => {
           if (isPausedForInterruptionRef.current) {
             setMicLevel(vol);
@@ -793,6 +796,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       ...prev,
       { id: (Date.now() + 1).toString(), sender: 'thea', text: replyText, timestamp: nowLabel() },
     ]);
+    lastTheaStatementRef.current = replyText;
     setIsTyping(false);
 
     if (voiceOnRef.current) {
@@ -804,28 +808,73 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   };
   handleSendRef.current = handleSend;
 
+  const isTopicChangeRequested = (text: string): boolean => {
+    const t = text.toLowerCase();
+    return (
+      t.includes('cambiar de tema') ||
+      t.includes('cambia de tema') ||
+      t.includes('cambiemos de tema') ||
+      t.includes('otro tema') ||
+      t.includes('hablemos de otra cosa') ||
+      t.includes('pasemos a otra cosa') ||
+      t.includes('siguiente tema') ||
+      t.includes('cambiar el tema') ||
+      t.includes('tema nuevo')
+    );
+  };
+
   const handleInterruption = async (userSpeech: string) => {
     stopSpeaking();
     stopListening(false);
 
-    const directive =
-      modeRef.current === 'exam'
-        ? `[INTERRUPCIÓN EN LECCIÓN ORAL - tu respuesta se leerá en voz alta de inmediato]
-Reglas obligatorias:
-1. Máximo 2 frases muy breves y directas.
-2. Contesta o acota directamente a la pregunta, duda o acotación que el estudiante acaba de hacer.
-3. No uses listas, viñetas ni símbolos raros.
-4. Concluye formulando la siguiente pregunta de examen sobre el material.
+    const isTopicChange = isTopicChangeRequested(userSpeech);
+    const lastStatement = lastTheaStatementRef.current || kit.title;
 
-El estudiante te interrumpió diciendo: "${userSpeech}"`
-        : `[INTERRUPCIÓN EN CONVERSACIÓN LIBRE - tu respuesta se leerá en voz alta de inmediato]
-Reglas obligatorias:
-1. Máximo 2 frases naturales, dinámicas y cercanas.
-2. Responde directamente y con calidez a la acotación o duda planteada por el estudiante.
-3. No uses listas, viñetas ni símbolos raros.
-4. Concluye con un comentario abierto o pregunta para continuar dialogando.
+    let directive: string;
 
-El estudiante te interrumpió diciendo: "${userSpeech}"`;
+    if (isTopicChange) {
+      directive =
+        modeRef.current === 'exam'
+          ? `[CAMBIO DE TEMA SOLICITADO POR EL ESTUDIANTE EN EXAMEN ORAL - tu respuesta se leerá en voz alta de inmediato]
+Reglas obligatorias:
+1. Máximo 2 frases concisas y amables.
+2. Acepta el cambio de tema solicitado por el estudiante ("${userSpeech}").
+3. Plantea de inmediato la primera pregunta de examen sobre el nuevo tema o ángulo de "${kit.title}".
+4. NUNCA uses listas, viñetas ni símbolos raros.
+
+El estudiante solicitó cambiar de tema diciendo: "${userSpeech}"`
+          : `[CAMBIO DE TEMA SOLICITADO EN CONVERSACIÓN - tu respuesta se leerá en voz alta de inmediato]
+Reglas obligatorias:
+1. Máximo 2 frases naturales, fluidas y cálidas.
+2. Acepta el nuevo rumbo propuesto por el estudiante ("${userSpeech}").
+3. Abre la conversación sobre ese nuevo aspecto de "${kit.title}" con un comentario reflexivo o pregunta abierta.
+4. NUNCA uses listas, viñetas ni símbolos raros.
+
+El estudiante solicitó cambiar de tema diciendo: "${userSpeech}"`;
+    } else {
+      directive =
+        modeRef.current === 'exam'
+          ? `[INTERRUPCIÓN CON CONTINUIDAD OBLIGATORIA DE LA LECCIÓN - tu respuesta se leerá en voz alta de inmediato]
+Contexto: Antes de que el estudiante te interrumpiera, tú le estabas diciendo o preguntando: "${lastStatement}".
+El estudiante te interrumpió diciendo: "${userSpeech}".
+
+Reglas obligatorias estrictas:
+1. Máximo 2 o 3 frases directas y concisas.
+2. PASO 1 (Acotación): Responde o aclara brevemente la duda, acotación o comentario que acaba de hacer el estudiante.
+3. PASO 2 (Continuidad): Retoma INMEDIATAMENTE la lección desde el punto exacto donde se quedó antes de la pausa, volviendo a plantear o continuar la pregunta original que tenías pendiente ("${lastStatement}").
+4. NO cambies de tema ni inventes otra dirección, porque el estudiante NO pidió cambiar de tema.
+5. NUNCA uses listas, viñetas ni símbolos raros.`
+          : `[INTERRUPCIÓN CON CONTINUIDAD EN CONVERSACIÓN - tu respuesta se leerá en voz alta de inmediato]
+Contexto: Antes de que el estudiante te interrumpiera, tú le estabas diciendo o preguntando: "${lastStatement}".
+El estudiante te interrumpió diciendo: "${userSpeech}".
+
+Reglas obligatorias estrictas:
+1. Máximo 2 o 3 frases ágiles, cálidas y conversacionales.
+2. PASO 1 (Acotación): Responde con naturalidad a la duda o acotación del estudiante.
+3. PASO 2 (Continuidad): Conecta de vuelta con la idea o pregunta que estabas tratando antes de la pausa ("${lastStatement}").
+4. NO cambies de tema a menos que el estudiante lo haya pedido explícitamente.
+5. NUNCA uses listas, viñetas ni símbolos raros.`;
+    }
 
     await handleSend(userSpeech, directive);
   };
@@ -846,14 +895,16 @@ El estudiante te interrumpió diciendo: "${userSpeech}"`;
     stopListening(false);
     setMode(newMode);
     modeRef.current = newMode;
+    const initialText =
+      newMode === 'exam'
+        ? `Bienvenido a tu lección oral sobre "${kit.title}". Te haré preguntas habladas como en un examen real y evaluaré tus respuestas en voz alta. ¿Listo para empezar? Pulsa el micrófono o la barra espaciadora.`
+        : `Hola, conversemos libremente sobre "${kit.title}". Puedes hacerme cualquier pregunta, reflexionar en voz alta o debatir conceptos conmigo. ¿De qué te gustaría hablar primero?`;
+    lastTheaStatementRef.current = initialText;
     setMessages([
       {
         id: `${newMode}-init-${Date.now()}`,
         sender: 'thea',
-        text:
-          newMode === 'exam'
-            ? `Bienvenido a tu lección oral sobre "${kit.title}". Te haré preguntas habladas como en un examen real y evaluaré tus respuestas en voz alta. ¿Listo para empezar? Pulsa el micrófono o la barra espaciadora.`
-            : `Hola, conversemos libremente sobre "${kit.title}". Puedes hacerme cualquier pregunta, reflexionar en voz alta o debatir conceptos conmigo. ¿De qué te gustaría hablar primero?`,
+        text: initialText,
         timestamp: 'Ahora',
       },
     ]);
@@ -862,14 +913,16 @@ El estudiante te interrumpió diciendo: "${userSpeech}"`;
   const clearConversation = () => {
     stopSpeaking();
     stopListening(false);
+    const initialText =
+      mode === 'exam'
+        ? `Bienvenido a tu lección oral sobre "${kit.title}". Te haré preguntas habladas como en un examen real y evaluaré tus respuestas en voz alta. ¿Listo para empezar? Pulsa el micrófono o la barra espaciadora.`
+        : `Hola, conversemos libremente sobre "${kit.title}". Puedes hacerme cualquier pregunta, reflexionar en voz alta o debatir conceptos conmigo. ¿De qué te gustaría hablar primero?`;
+    lastTheaStatementRef.current = initialText;
     setMessages([
       {
         id: `${mode}-init-${Date.now()}`,
         sender: 'thea',
-        text:
-          mode === 'exam'
-            ? `Bienvenido a tu lección oral sobre "${kit.title}". Te haré preguntas habladas como en un examen real y evaluaré tus respuestas en voz alta. ¿Listo para empezar? Pulsa el micrófono o la barra espaciadora.`
-            : `Hola, conversemos libremente sobre "${kit.title}". Puedes hacerme cualquier pregunta, reflexionar en voz alta o debatir conceptos conmigo. ¿De qué te gustaría hablar primero?`,
+        text: initialText,
         timestamp: 'Ahora',
       },
     ]);
