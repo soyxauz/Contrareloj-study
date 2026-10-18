@@ -32,6 +32,8 @@ export interface WhisperMicOptions {
   onVolume?: (level: number) => void;
   /** Se llama cuando la grabación termina y empieza la transcripción */
   onTranscribing?: () => void;
+  /** Se dispara tan pronto se detecta habla sostenida (para pausar audio/interrumpir) */
+  onSpeechDetected?: () => void;
 }
 
 export interface WhisperRecording {
@@ -41,6 +43,44 @@ export interface WhisperRecording {
   cancel: () => void;
   /** Texto transcrito ('' si no se detectó voz). Rechaza con Error legible si algo falla */
   result: Promise<string>;
+}
+
+/**
+ * Determina si el texto transcrito corresponde a palabras reales con sentido
+ * o si fue solo un ruido, carraspeo, suspiro, click o alucinación de Whisper.
+ */
+export function isMeaningfulSpeech(raw: string): boolean {
+  if (!raw) return false;
+  const clean = raw.trim().replace(/^["'«»“”]+|["'«»“”]+$/g, '').trim();
+  if (!clean) return false;
+
+  // Filtrar tokens de ruido entre corchetes o paréntesis típicos de Whisper
+  if (/^(\[[^\]]+\]|\([^)]+\))$/i.test(clean)) return false;
+
+  // Filtrar alucinaciones comunes de subtítulos
+  if (/(subtítulo|suscríbete|gracias por ver|amara\.org|watching)/i.test(clean)) return false;
+
+  // Extraer palabras con caracteres alfanuméricos españoles
+  const words = clean
+    .toLowerCase()
+    .replace(/[.,/#!$%^&*;:{}=\-_`~()¿?¡!]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 0 && /[a-záéíóúüñ]/i.test(w));
+
+  if (words.length === 0) return false;
+
+  // Si es una sola palabra y coincide con sonidos, carraspeos o suspiros comunes
+  const noiseSounds = new Set([
+    'ah', 'eh', 'oh', 'uh', 'um', 'umm', 'mm', 'mmm', 'sh', 'shh', 'psst',
+    'ha', 'he', 'je', 'ay', 'uy', 'cough', 'throat'
+  ]);
+
+  if (words.length === 1 && noiseSounds.has(words[0])) {
+    return false;
+  }
+
+  // Si tiene al menos una palabra de 2 o más letras que no sea un ruido aislado
+  return words.some((w) => w.length >= 2 && !noiseSounds.has(w));
 }
 
 function pickMimeType(): string | undefined {
@@ -142,6 +182,7 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
   const startedAt = Date.now();
   let lastVoiceAt = 0;
   let heardSpeech = false;
+  let speechConsecutiveTicks = 0;
   let noiseFloor = 0.01;
   let calibrationSamples = 0;
   let cancelled = false;
@@ -215,8 +256,16 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
     // Umbral de detección de voz suave pero inmune a ruidos de fondo suaves
     const threshold = Math.max(0.016, Math.min(0.035, noiseFloor * 1.8));
     if (rms > threshold) {
-      heardSpeech = true;
+      speechConsecutiveTicks++;
+      if (speechConsecutiveTicks >= 2 && !heardSpeech) {
+        heardSpeech = true;
+        opts.onSpeechDetected?.();
+      } else if (speechConsecutiveTicks >= 2) {
+        heardSpeech = true;
+      }
       lastVoiceAt = now;
+    } else {
+      speechConsecutiveTicks = 0;
     }
 
     if (opts.autoStopOnSilence && heardSpeech && now - lastVoiceAt > silenceMs) {

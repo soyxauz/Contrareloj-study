@@ -18,7 +18,7 @@ import {
 import { askTheaAI, getGroqApiKey } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { FormattedText } from './FormattedText';
-import { startWhisperRecording, isWhisperMicSupported, type WhisperRecording } from '../services/whisperMic';
+import { startWhisperRecording, isWhisperMicSupported, isMeaningfulSpeech, type WhisperRecording } from '../services/whisperMic';
 
 interface OralLessonViewProps {
   kit: StudyKit;
@@ -122,6 +122,12 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [transcribing, setTranscribing] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
 
+  // Estados y refs para interrupción fluida (barge-in)
+  const [isInterrupted, setIsInterrupted] = useState(false);
+  const isPausedForInterruptionRef = useRef(false);
+  const bargeInRef = useRef<WhisperRecording | null>(null);
+  const handleInterruptionRef = useRef<(text: string) => Promise<void>>(async () => {});
+
   // Refs de sincronización
   const modeRef = useRef<OralMode>(mode);
   const voiceOnRef = useRef(voiceOn);
@@ -192,6 +198,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopSpeaking();
+      stopBargeInListener();
       stopListening(false);
       isListeningDesiredRef.current = false;
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
@@ -273,9 +280,114 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     };
   }, []);
 
+  // ───────────────────────── ESCUCHA DE INTERRUPCIÓN (BARGE-IN INTELIGENTE) ─────────────────────────
+  const stopBargeInListener = () => {
+    isPausedForInterruptionRef.current = false;
+    setIsInterrupted(false);
+    if (bargeInRef.current) {
+      const rec = bargeInRef.current;
+      bargeInRef.current = null;
+      rec.cancel();
+    }
+  };
+
+  const startBargeInListener = async () => {
+    if (!useWhisperRef.current) return;
+    stopBargeInListener();
+
+    try {
+      const rec = await startWhisperRecording({
+        apiKey: getGroqApiKey(),
+        language: 'es',
+        prompt: kit.title,
+        autoStopOnSilence: true,
+        silenceMs: 850,
+        noSpeechTimeoutMs: 120000,
+        onVolume: (vol) => {
+          if (isPausedForInterruptionRef.current) {
+            setMicLevel(vol);
+          }
+        },
+        onSpeechDetected: () => {
+          if (speakingRef.current) {
+            if (audioRef.current && !audioRef.current.paused) {
+              try {
+                audioRef.current.pause();
+              } catch {}
+              isPausedForInterruptionRef.current = true;
+              setIsInterrupted(true);
+            } else if (typeof speechSynthesis !== 'undefined' && speechSynthesis.speaking) {
+              try {
+                speechSynthesis.pause();
+              } catch {}
+              isPausedForInterruptionRef.current = true;
+              setIsInterrupted(true);
+            }
+          }
+        },
+        onTranscribing: () => {
+          if (isPausedForInterruptionRef.current) {
+            setTranscribing(true);
+          }
+        },
+      });
+
+      bargeInRef.current = rec;
+
+      rec.result
+        .then((text) => {
+          if (bargeInRef.current !== rec) return;
+          bargeInRef.current = null;
+          setTranscribing(false);
+
+          if (isMeaningfulSpeech(text)) {
+            // Confirmado: el estudiante dijo palabras reales con sentido
+            isPausedForInterruptionRef.current = false;
+            setIsInterrupted(false);
+            stopSpeaking();
+            handleInterruptionRef.current(text);
+          } else {
+            // Fue solo un sonido o carraspeo: reanudar habla de Thea donde iba
+            setIsInterrupted(false);
+            if (isPausedForInterruptionRef.current) {
+              isPausedForInterruptionRef.current = false;
+              if (audioRef.current && audioRef.current.paused) {
+                audioRef.current.play().catch(() => {});
+              }
+              if (typeof speechSynthesis !== 'undefined' && speechSynthesis.paused) {
+                speechSynthesis.resume();
+              }
+            }
+            // Si Thea continúa hablando, reactivar escucha de interrupción
+            if (speakingRef.current) {
+              startBargeInListener();
+            }
+          }
+        })
+        .catch(() => {
+          if (bargeInRef.current !== rec) return;
+          bargeInRef.current = null;
+          setTranscribing(false);
+          setIsInterrupted(false);
+          if (isPausedForInterruptionRef.current) {
+            isPausedForInterruptionRef.current = false;
+            if (audioRef.current && audioRef.current.paused) {
+              audioRef.current.play().catch(() => {});
+            }
+            if (typeof speechSynthesis !== 'undefined' && speechSynthesis.paused) {
+              speechSynthesis.resume();
+            }
+          }
+        });
+    } catch (err) {
+      console.warn('[BargeIn] No se pudo iniciar escucha de interrupción:', err);
+    }
+  };
+
   // ───────────────────────── VOZ: SALIDA (TTS) ─────────────────────────
   const stopSpeaking = () => {
     speakToken.current++;
+    stopBargeInListener();
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -332,9 +444,17 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     const chunks = splitForSpeech(text).slice(0, 6);
     if (chunks.length === 0) return false;
     setSpeaking(true);
+
+    if (useWhisperRef.current) {
+      startBargeInListener();
+    }
+
     try {
       for (let i = 0; i < chunks.length; i++) {
-        if (token !== speakToken.current) return false;
+        if (token !== speakToken.current) {
+          stopBargeInListener();
+          return false;
+        }
         if (i + 1 < chunks.length) prefetchAzureEdgeSpeech(chunks[i + 1], VOICE, TTS_RATE);
         let url: string | null = null;
         try {
@@ -342,12 +462,16 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         } catch {
           url = null;
         }
-        if (token !== speakToken.current) return false;
+        if (token !== speakToken.current) {
+          stopBargeInListener();
+          return false;
+        }
         if (url) await playUrl(url);
         else await speakWithBrowser(chunks[i]);
       }
       return token === speakToken.current;
     } finally {
+      stopBargeInListener();
       if (token === speakToken.current) setSpeaking(false);
     }
   };
@@ -680,6 +804,33 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   };
   handleSendRef.current = handleSend;
 
+  const handleInterruption = async (userSpeech: string) => {
+    stopSpeaking();
+    stopListening(false);
+
+    const directive =
+      modeRef.current === 'exam'
+        ? `[INTERRUPCIÓN EN LECCIÓN ORAL - tu respuesta se leerá en voz alta de inmediato]
+Reglas obligatorias:
+1. Máximo 2 frases muy breves y directas.
+2. Contesta o acota directamente a la pregunta, duda o acotación que el estudiante acaba de hacer.
+3. No uses listas, viñetas ni símbolos raros.
+4. Concluye formulando la siguiente pregunta de examen sobre el material.
+
+El estudiante te interrumpió diciendo: "${userSpeech}"`
+        : `[INTERRUPCIÓN EN CONVERSACIÓN LIBRE - tu respuesta se leerá en voz alta de inmediato]
+Reglas obligatorias:
+1. Máximo 2 frases naturales, dinámicas y cercanas.
+2. Responde directamente y con calidez a la acotación o duda planteada por el estudiante.
+3. No uses listas, viñetas ni símbolos raros.
+4. Concluye con un comentario abierto o pregunta para continuar dialogando.
+
+El estudiante te interrumpió diciendo: "${userSpeech}"`;
+
+    await handleSend(userSpeech, directive);
+  };
+  handleInterruptionRef.current = handleInterruption;
+
   const startOralLesson = () => {
     if (modeRef.current === 'exam') {
       handleSend('Empezar lección oral', ORAL_EXAM_DIRECTIVE + 'empezar');
@@ -867,8 +1018,10 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-600/15 border border-violet-500/30 text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-3">
             <Bot className="w-3.5 h-3.5 text-violet-400" />
             <span>
-              {speaking
-                ? 'Thea está hablando...'
+              {isInterrupted
+                ? 'Pausado: escuchando tu interrupción...'
+                : speaking
+                ? 'Thea está hablando... (habla para interrumpir)'
                 : isTyping
                 ? mode === 'exam'
                   ? 'Evaluando respuesta...'
@@ -907,7 +1060,14 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
         {/* ── HERO CONTROLLER: MICRÓFONO CENTRAL MINIMALISTA Y ATRACTIVO ── */}
         <div className="relative flex items-center justify-center my-4">
-          {/* Anillos de ondas sonoras cuando está escuchando o hablando */}
+          {/* Anillos de ondas sonoras cuando está escuchando, interrumpiendo o hablando */}
+          {isInterrupted && (
+            <>
+              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-amber-500/20 animate-ping pointer-events-none duration-1000" />
+              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-amber-500/40 animate-pulse pointer-events-none" />
+            </>
+          )}
+
           {listening && (
             <>
               <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-rose-500/15 animate-ping pointer-events-none duration-1000" />
@@ -916,7 +1076,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             </>
           )}
 
-          {speaking && (
+          {speaking && !isInterrupted && (
             <>
               <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-violet-500/20 animate-pulse pointer-events-none duration-700" />
               <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-violet-500/35 animate-ping pointer-events-none duration-1000" />
@@ -931,16 +1091,18 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           <button
             type="button"
             onClick={() => {
-              if (speaking) {
+              if (speaking || isInterrupted) {
                 stopSpeaking();
               } else if (!isTyping && !transcribing) {
                 toggleMic();
               }
             }}
             disabled={!canListen || isTyping || transcribing}
-            style={listening && useWhisper ? { transform: `scale(${1 + micLevel * 0.12})` } : undefined}
+            style={(listening || isInterrupted) && useWhisper ? { transform: `scale(${1 + micLevel * 0.12})` } : undefined}
             className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_15px_50px_rgba(0,0,0,0.6)] ${
-              listening
+              isInterrupted
+                ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-slate-950 ring-8 ring-amber-400/40 scale-105 shadow-[0_0_80px_rgba(245,158,11,0.5)]'
+                : listening
                 ? 'bg-gradient-to-tr from-rose-600 via-red-600 to-rose-700 text-white ring-8 ring-rose-500/30 scale-105 shadow-[0_0_80px_rgba(244,63,94,0.45)]'
                 : speaking
                 ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-slate-950 ring-8 ring-amber-500/30 shadow-[0_0_80px_rgba(245,158,11,0.4)] active:scale-95'
@@ -953,6 +1115,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             title={
               transcribing
                 ? 'Transcribiendo audio con Groq Whisper...'
+                : isInterrupted
+                ? 'Escuchando tu interrupción... di tu comentario'
                 : listening
                 ? 'Pulsar o presionar Espacio para detener y enviar'
                 : speaking
@@ -964,7 +1128,14 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
                 : 'Pulsar o presionar Espacio para hablar'
             }
           >
-            {listening ? (
+            {isInterrupted ? (
+              <>
+                <Mic className="w-8 h-8 sm:w-10 sm:h-10 text-slate-950 animate-bounce" />
+                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest text-slate-950">
+                  Oyéndote
+                </span>
+              </>
+            ) : listening ? (
               <>
                 <Square className="w-8 h-8 sm:w-10 sm:h-10 fill-white text-white" />
                 <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
@@ -1005,7 +1176,11 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
         {/* Transcripción en tiempo real o instrucción interactiva */}
         <div className="w-full max-w-md mx-auto mt-6 min-h-[3rem] flex flex-col items-center justify-center">
-          {input ? (
+          {isInterrupted ? (
+            <p className="text-xs sm:text-sm text-amber-300 font-semibold animate-pulse">
+              Thea pausó su voz: di tu duda o acotación en voz alta...
+            </p>
+          ) : input ? (
             <p className="text-sm sm:text-base text-rose-300 font-semibold animate-pulse px-4 py-2 rounded-2xl bg-rose-950/40 border border-rose-500/30">
               “{input}”
             </p>
@@ -1015,7 +1190,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             </p>
           ) : speaking ? (
             <p className="text-xs sm:text-sm text-amber-300 font-medium">
-              Thea está hablando... pulsa el botón o Espacio para interrumpir
+              Thea está hablando... puedes interrumpir hablando en voz alta o con Espacio
             </p>
           ) : transcribing ? (
             <p className="text-xs sm:text-sm text-cyan-300 font-medium animate-pulse">
