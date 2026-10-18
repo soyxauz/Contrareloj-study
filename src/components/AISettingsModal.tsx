@@ -6,8 +6,12 @@ import {
   AI_PRESETS,
   type AISettings,
   type AIPreset,
-  getGroqApiKey,
-  saveGroqApiKey
+  getGrokApiKey,
+  saveGrokApiKey,
+  getGrokBaseUrl,
+  saveGrokBaseUrl,
+  getGrokModel,
+  saveGrokModel
 } from '../services/aiService';
 import {
   Bot,
@@ -47,11 +51,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama');
-  const [groqKey, setGroqKey] = useState<string>(() => getGroqApiKey());
-  const [groqModel, setGroqModel] = useState<string>(() => getAISettings().groqModel || 'openai/gpt-oss-120b');
-  const [showGroqKey, setShowGroqKey] = useState(false);
-  const [isTestingGroq, setIsTestingGroq] = useState(false);
-  const [groqTestResult, setGroqTestResult] = useState<{
+  const [grokKey, setGrokKey] = useState<string>(() => getGrokApiKey());
+  const [grokBaseUrl, setGrokBaseUrl] = useState<string>(() => getGrokBaseUrl());
+  const [grokModel, setGrokModel] = useState<string>(() => getGrokModel());
+  const [showGrokKey, setShowGrokKey] = useState(false);
+  const [isTestingGrok, setIsTestingGrok] = useState(false);
+  const [grokTestResult, setGrokTestResult] = useState<{
     success: boolean;
     message: string;
   } | null>(null);
@@ -64,9 +69,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       setSettings(current);
       setTestResult(null);
       setIsSaved(false);
-      setGroqKey(getGroqApiKey());
-      setGroqModel(current.groqModel || 'openai/gpt-oss-120b');
-      setGroqTestResult(null);
+      setGrokKey(getGrokApiKey());
+      setGrokBaseUrl(getGrokBaseUrl());
+      setGrokModel(getGrokModel());
+      setGrokTestResult(null);
 
       // Detect matching preset
       const match = AI_PRESETS.find(p => p.baseUrl === current.baseUrl);
@@ -167,50 +173,55 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
-  const handleTestGroq = async () => {
-    const cleanKey = groqKey.trim();
+  const handleTestGrok = async () => {
+    const cleanKey = grokKey.trim();
     if (!cleanKey) {
-      setGroqTestResult({
+      setGrokTestResult({
         success: false,
-        message: 'Ingresa tu API Key de Groq (gsk_...) para verificar la conexión.',
+        message: 'Ingresa tu API Key de xAI Grok para verificar la conexión.',
       });
       return;
     }
-    setIsTestingGroq(true);
-    setGroqTestResult(null);
+    setIsTestingGrok(true);
+    setGrokTestResult(null);
     try {
       const res = await testAIConnection({
         ...settings,
-        baseUrl: 'https://api.groq.com/openai/v1',
+        baseUrl: grokBaseUrl.trim() || 'https://api.x.ai/v1',
         apiKey: cleanKey,
-        model: groqModel.trim() || 'openai/gpt-oss-120b',
+        model: grokModel.trim() || 'grok-2-mini',
         timeoutMs: 15000,
       });
-      setGroqTestResult(res);
+      setGrokTestResult(res);
       if (res.success) {
-        saveGroqApiKey(cleanKey);
+        saveGrokApiKey(cleanKey);
+        saveGrokBaseUrl(grokBaseUrl.trim() || 'https://api.x.ai/v1');
+        saveGrokModel(grokModel.trim() || 'grok-2-mini');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al conectar con Groq.';
-      setGroqTestResult({
+      const msg = err instanceof Error ? err.message : 'Error al conectar con xAI Grok.';
+      setGrokTestResult({
         success: false,
         message: msg,
       });
     } finally {
-      setIsTestingGroq(false);
+      setIsTestingGrok(false);
     }
   };
 
   const handleClose = () => {
-    const cleanGroq = groqKey.trim();
-    if (cleanGroq) {
-      saveGroqApiKey(cleanGroq);
+    const cleanGrok = grokKey.trim();
+    if (cleanGrok) {
+      saveGrokApiKey(cleanGrok);
+      saveGrokBaseUrl(grokBaseUrl.trim() || 'https://api.x.ai/v1');
+      saveGrokModel(grokModel.trim() || 'grok-2-mini');
     }
     if (settings.apiKey && settings.apiKey.trim().length > 0) {
       const updated: AISettings = {
         ...settings,
-        groqApiKey: cleanGroq || settings.groqApiKey,
-        groqModel: groqModel.trim() || settings.groqModel || 'openai/gpt-oss-120b',
+        grokApiKey: cleanGrok || settings.grokApiKey,
+        grokBaseUrl: grokBaseUrl.trim() || settings.grokBaseUrl || 'https://api.x.ai/v1',
+        grokModel: grokModel.trim() || settings.grokModel || 'grok-2-mini',
         verified: true,
       };
       if (updated.apiKey.startsWith('AIzaSy') || updated.baseUrl?.includes('googleapis')) {
@@ -221,11 +232,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       const user = authService.getCurrentUser();
       if (user) authService.saveUserAISettings(user.id, updated);
       googleDriveService.syncAISettingsToDrive(updated).catch(console.warn);
-    } else if (cleanGroq) {
+    } else if (cleanGrok) {
       const updated: AISettings = {
         ...settings,
-        groqApiKey: cleanGroq,
-        groqModel: groqModel.trim() || settings.groqModel || 'openai/gpt-oss-120b',
+        grokApiKey: cleanGrok,
+        grokBaseUrl: grokBaseUrl.trim() || 'https://api.x.ai/v1',
+        grokModel: grokModel.trim() || 'grok-2-mini',
       };
       saveAISettings(updated);
     }
@@ -233,13 +245,16 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   };
 
   const handleSave = async () => {
-    const cleanGroq = groqKey.trim();
-    saveGroqApiKey(cleanGroq);
+    const cleanGrok = grokKey.trim();
+    saveGrokApiKey(cleanGrok);
+    saveGrokBaseUrl(grokBaseUrl.trim() || 'https://api.x.ai/v1');
+    saveGrokModel(grokModel.trim() || 'grok-2-mini');
 
     let currentSettings = {
       ...settings,
-      groqApiKey: cleanGroq,
-      groqModel: groqModel.trim() || 'openai/gpt-oss-120b',
+      grokApiKey: cleanGrok,
+      grokBaseUrl: grokBaseUrl.trim() || 'https://api.x.ai/v1',
+      grokModel: grokModel.trim() || 'grok-2-mini',
     };
     if (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) {
       currentSettings.verified = true;
@@ -544,24 +559,24 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           )}
 
-          {/* Sección de Acelerador Groq (Doble Motor Simultáneo) */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-thea-surfaceLight/90 to-thea-surface border border-amber-500/30 shadow-lg space-y-3.5">
+          {/* Sección de Acelerador xAI Grok (Doble Motor Independiente) */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-950/40 via-thea-surfaceLight/90 to-thea-surface border border-violet-500/40 shadow-lg space-y-3.5">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-300 shrink-0">
                   <Zap className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-xs sm:text-sm font-bold text-white">
-                      Acelerador Groq (Ask Thea y Lección Oral)
+                      Acelerador xAI Grok (Ask Thea y Lección Oral)
                     </h3>
-                    <span className="text-[9px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 shrink-0">
-                      Doble Motor Activo
+                    <span className="text-[9px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
+                      Doble Motor Independiente
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
-                    Respuestas con latencia ultrabaja (&lt;0.5 s) para interacción vocal en tiempo real, mientras Ollama Local genera tus kits y evaluaciones.
+                    Ollama Local genera kits y exámenes de fondo. xAI Grok procesa en paralelo las respuestas de voz y lección oral en tiempo real.
                   </p>
                 </div>
               </div>
@@ -571,98 +586,142 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[11px] font-semibold text-slate-300">
-                    Clave de API Groq (gsk_...):
+                    Clave de API Grok:
                   </label>
-                  <a
-                    href="https://console.groq.com/keys"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 underline transition-colors"
-                  >
-                    <span>Obtener clave gratis en Groq</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <a
+                      href="https://grok.com/dashboard/api-keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:text-violet-300 flex items-center gap-0.5 underline transition-colors"
+                      title="Dashboard de grok.com"
+                    >
+                      <span>grok.com</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <span className="text-slate-500">|</span>
+                    <a
+                      href="https://console.x.ai/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:text-violet-300 flex items-center gap-0.5 underline transition-colors"
+                      title="Consola oficial de xAI (claves xai-...)"
+                    >
+                      <span>console.x.ai</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
                 </div>
                 <div className="relative">
                   <input
-                    type={showGroqKey ? 'text' : 'password'}
-                    value={groqKey}
+                    type={showGrokKey ? 'text' : 'password'}
+                    value={grokKey}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setGroqKey(val);
-                      saveGroqApiKey(val);
+                      setGrokKey(val);
+                      saveGrokApiKey(val);
                     }}
-                    placeholder="gsk_..."
-                    className="w-full px-3 py-2 pr-10 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+                    placeholder="grok_... o xai-..."
+                    className="w-full px-3 py-2 pr-10 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowGroqKey(!showGroqKey)}
+                    onClick={() => setShowGrokKey(!showGrokKey)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                   >
-                    {showGroqKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showGrokKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  Clave actual configurada para el módulo oral. Si tu clave proviene de grok.com o console.x.ai, funcionará de inmediato.
+                </span>
               </div>
 
               <div>
                 <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Modelo Groq para Conversación y Voz:
+                  URL Base del Endpoint xAI Grok:
                 </label>
                 <input
                   type="text"
-                  value={groqModel}
-                  onChange={(e) => setGroqModel(e.target.value)}
-                  placeholder="openai/gpt-oss-120b"
-                  className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+                  value={grokBaseUrl}
+                  onChange={(e) => setGrokBaseUrl(e.target.value)}
+                  placeholder="https://api.x.ai/v1"
+                  className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
                 />
-                <span className="text-[10px] text-slate-400 block mt-1">
-                  Predeterminado: <code className="text-amber-300">openai/gpt-oss-120b</code> con respaldo automático a <code className="text-amber-300">openai/gpt-oss-20b</code> y Ollama Local.
-                </span>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Modelo xAI Grok para Voz y Conversación:
+                </label>
+                <input
+                  type="text"
+                  value={grokModel}
+                  onChange={(e) => setGrokModel(e.target.value)}
+                  placeholder="grok-2-mini"
+                  className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
+                />
+                <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] text-slate-400">Modelos recomendados:</span>
+                  {['grok-2-mini', 'grok-2', 'grok-beta'].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setGrokModel(m)}
+                      className={`text-[10px] px-2 py-0.5 rounded-md border transition-all ${
+                        grokModel === m
+                          ? 'bg-violet-600 text-white border-violet-500 font-bold'
+                          : 'bg-thea-surfaceLight text-slate-300 border-thea-border hover:border-violet-400'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
-                  onClick={handleTestGroq}
-                  disabled={isTestingGroq || !groqKey.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
+                  onClick={handleTestGrok}
+                  disabled={isTestingGrok || !grokKey.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-violet-500/30 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
                 >
-                  {isTestingGroq ? (
+                  {isTestingGrok ? (
                     <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                      <span>Probando Groq...</span>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-400" />
+                      <span>Probando xAI Grok...</span>
                     </>
                   ) : (
                     <>
-                      <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Probar Conexión Groq</span>
+                      <Zap className="w-3.5 h-3.5 text-violet-400" />
+                      <span>Probar Conexión xAI Grok</span>
                     </>
                   )}
                 </button>
 
-                {groqKey.trim() && (
+                {grokKey.trim() && (
                   <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    Groq listo para Ask Thea
+                    xAI Grok activo para Ask Thea
                   </span>
                 )}
               </div>
 
-              {groqTestResult && (
+              {grokTestResult && (
                 <div
                   className={`p-2.5 rounded-xl text-xs flex items-start gap-2 animate-fadeIn ${
-                    groqTestResult.success
+                    grokTestResult.success
                       ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300'
                       : 'bg-rose-950/40 border border-rose-500/40 text-rose-300'
                   }`}
                 >
-                  {groqTestResult.success ? (
+                  {grokTestResult.success ? (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                   ) : (
                     <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
                   )}
-                  <span>{groqTestResult.message}</span>
+                  <span>{grokTestResult.message}</span>
                 </div>
               )}
             </div>

@@ -15,7 +15,7 @@ import {
   Square,
   Zap,
 } from 'lucide-react';
-import { askTheaAI, getGroqApiKey } from '../services/aiService';
+import { askTheaAI, getGrokApiKey, getGrokModel } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { FormattedText } from './FormattedText';
 
@@ -75,7 +75,9 @@ function splitForSpeech(text: string, max = 260): string[] {
 }
 
 export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings }) => {
-  const hasGroq = Boolean(getGroqApiKey());
+  const grokKey = getGrokApiKey();
+  const grokModel = getGrokModel();
+  const hasGrok = Boolean(grokKey);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'm1',
@@ -446,23 +448,25 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-violet-600/20 text-violet-300 border border-violet-500/30">
                   {mode === 'oral' ? 'Lección Oral' : 'Conversación'}
                 </span>
-                {hasGroq ? (
-                  <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1"
-                    title="Acelerador Groq activo: Respuestas en tiempo real para voz y conversación"
+                {hasGrok ? (
+                  <button
+                    type="button"
+                    onClick={onOpenAISettings}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 flex items-center gap-1 hover:bg-violet-500/30 transition-colors cursor-pointer"
+                    title={`Motor de voz activo: xAI Grok (${grokModel}). Haz clic para configurar.`}
                   >
-                    <Zap className="w-3 h-3 text-amber-400" />
-                    Groq Ultra-rápido
-                  </span>
+                    <Zap className="w-3 h-3 text-violet-400" />
+                    <span>xAI Grok ({grokModel})</span>
+                  </button>
                 ) : (
                   <button
                     type="button"
                     onClick={onOpenAISettings}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/40 flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Configurar Groq para acelerar las respuestas de voz a menos de 0.5s"
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 hover:text-violet-300 border border-slate-700 hover:border-violet-500/40 flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Configurar xAI Grok para respuestas instantáneas de voz"
                   >
                     <span>Motor: Ollama Local</span>
-                    <span className="text-amber-400 underline font-semibold">+ Acelerar con Groq</span>
+                    <span className="text-violet-400 underline font-semibold">+ Conectar xAI Grok</span>
                   </button>
                 )}
               </div>

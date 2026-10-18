@@ -12,6 +12,9 @@ export interface AISettings {
   geminiApiKey?: string;
   groqApiKey?: string;
   groqModel?: string;
+  grokApiKey?: string;
+  grokBaseUrl?: string;
+  grokModel?: string;
 }
 
 export interface AIPreset {
@@ -97,12 +100,74 @@ export function resetAISettingsToDefault(): void {
   }
 }
 
+export const DEFAULT_GROK_KEY =
+  'grok_0c3b733329956d0ffa02721bf06d3ab6_52e9db084ce04609ded1c3a5b2c5a065f6621d9073e388a72aac8314b8320655';
+
 export function hasPersonalApiKey(): boolean {
   const current = getAISettings();
   return Boolean(
     (current.apiKey && current.apiKey.trim().length > 0) ||
+    (current.grokApiKey && current.grokApiKey.trim().length > 0) ||
     (current.groqApiKey && current.groqApiKey.trim().length > 0)
   );
+}
+
+export function getGrokApiKey(): string {
+  const current = getAISettings();
+  if (current.grokApiKey && current.grokApiKey.trim().length > 0) {
+    return current.grokApiKey.trim();
+  }
+  if (typeof localStorage !== 'undefined') {
+    const direct = localStorage.getItem('thea_grok_api_key');
+    if (direct && direct.trim().length > 0) return direct.trim();
+  }
+  return DEFAULT_GROK_KEY;
+}
+
+export function saveGrokApiKey(key: string): void {
+  const cleanKey = key.trim();
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('thea_grok_api_key', cleanKey);
+  }
+  const current = getAISettings();
+  saveAISettings({
+    ...current,
+    grokApiKey: cleanKey,
+  });
+}
+
+export function getGrokBaseUrl(): string {
+  const current = getAISettings();
+  if (current.grokBaseUrl && current.grokBaseUrl.trim().length > 0) {
+    return current.grokBaseUrl.trim();
+  }
+  return 'https://api.x.ai/v1';
+}
+
+export function saveGrokBaseUrl(url: string): void {
+  const clean = url.trim();
+  const current = getAISettings();
+  saveAISettings({
+    ...current,
+    grokBaseUrl: clean,
+  });
+}
+
+export function getGrokModel(): string {
+  const current = getAISettings();
+  if (current.grokModel && current.grokModel.trim().length > 0) {
+    return current.grokModel.trim();
+  }
+  return 'grok-2-mini';
+}
+
+export function saveGrokModel(model: string): void {
+  const clean = model.trim();
+  const current = getAISettings();
+  saveAISettings({
+    ...current,
+    grokModel: clean,
+  });
 }
 
 export function getGroqApiKey(): string {
@@ -1851,12 +1916,25 @@ export async function askTheaAI(
   history: Array<{ sender: 'thea' | 'user'; text: string }>
 ): Promise<string> {
   const settings = getAISettings();
+  const grokKey = getGrokApiKey();
+  const grokBase = getGrokBaseUrl();
+  const grokModel = getGrokModel();
   const groqKey = getGroqApiKey();
 
-  // Enrutamiento prioritario a Groq para el módulo conversacional y lección oral (tiempo real),
-  // permitiendo que Ollama siga activo simultáneamente para el resto de la aplicación (kits, preguntas, guías)
+  // Enrutamiento prioritario a xAI Grok (o Groq) para el módulo conversacional y lección oral (tiempo real),
+  // permitiendo que Ollama Local siga activo simultáneamente e independientemente para el resto de la aplicación (kits, preguntas, guías)
   let targetSettings: AISettings = settings;
-  if (groqKey) {
+  if (grokKey) {
+    targetSettings = {
+      enabled: true,
+      provider: 'openai-compatible',
+      baseUrl: grokBase,
+      apiKey: grokKey,
+      model: grokModel,
+      timeoutMs: 25000,
+      verified: true,
+    };
+  } else if (groqKey) {
     targetSettings = {
       enabled: true,
       provider: 'openai-compatible',
@@ -1899,9 +1977,9 @@ Responde siempre de forma clara, motivadora y estructurada en español. Si el ma
       try {
         reply = await queryAICompletion(messages, false, targetSettings);
       } catch (primaryErr) {
-        // Si Groq falló y el proveedor general es distinto (ej. Ollama local), reintentar con el general
+        // Si xAI Grok falló y el motor general es distinto (ej. Ollama local), reintentar automáticamente con Ollama
         if (targetSettings !== settings) {
-          console.warn('[AskThea AI] Groq falló, reintentando con motor principal:', primaryErr);
+          console.warn('[AskThea AI] Motor de voz falló, reintentando con motor local principal:', primaryErr);
           reply = await queryAICompletion(messages, false, settings);
         } else {
           throw primaryErr;

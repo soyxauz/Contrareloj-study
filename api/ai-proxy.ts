@@ -25,7 +25,13 @@ export default async function handler(req: any, res: any) {
     const targetUrl = url || 'https://ollama.com/v1/chat/completions';
 
     // Seguridad: solo se permite reenviar a proveedores de IA conocidos (evita usar el proxy como relay abierto)
-    const ALLOWED_HOSTS = ['ollama.com', 'api.groq.com', 'generativelanguage.googleapis.com'];
+    const ALLOWED_HOSTS = [
+      'ollama.com',
+      'api.groq.com',
+      'api.x.ai',
+      'grok.com',
+      'generativelanguage.googleapis.com'
+    ];
     let host = '';
     try {
       const parsed = new URL(targetUrl);
