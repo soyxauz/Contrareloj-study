@@ -37,7 +37,22 @@ export const AI_PRESETS: AIPreset[] = [
     badge: 'Offline / Privado',
     freeTier: true,
   },
+  {
+    id: 'groq',
+    name: 'Groq',
+    provider: 'openai-compatible',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'openai/gpt-oss-120b',
+    keyPlaceholder: 'gsk_...',
+    keyUrl: 'https://console.groq.com/keys',
+    description: 'Muy rápido y con plan sin tarjeta. Cada usuario pega su propia API key.',
+    badge: 'Rápido',
+    freeTier: true,
+  },
 ];
+
+/** Modelo de respaldo para Groq cuando el principal da límite de tasa (429) o error de servidor (5xx) */
+const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 
 const STORAGE_KEY = 'thea_ai_settings';
 
@@ -383,7 +398,7 @@ export async function queryAICompletion(
   }
 
   try {
-    const response = await fetchWithProxyFallback(
+    let response = await fetchWithProxyFallback(
       url,
       {
         method: 'POST',
@@ -393,6 +408,25 @@ export async function queryAICompletion(
       },
       body
     );
+
+    // Failover automático en Groq: si el modelo principal da 429 o 5xx, reintenta con el modelo ligero
+    if (
+      (response.status === 429 || response.status >= 500) &&
+      cleanBase.includes('api.groq.com') &&
+      targetModel !== GROQ_FALLBACK_MODEL
+    ) {
+      const retryBody = { ...body, model: GROQ_FALLBACK_MODEL };
+      response = await fetchWithProxyFallback(
+        url,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(retryBody),
+          signal: controller.signal,
+        },
+        retryBody
+      );
+    }
 
     clearTimeout(timer);
 

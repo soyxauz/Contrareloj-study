@@ -24,6 +24,22 @@ export default async function handler(req: any, res: any) {
     const { url, method, data, headers } = body || {};
     const targetUrl = url || 'https://ollama.com/v1/chat/completions';
 
+    // Seguridad: solo se permite reenviar a proveedores de IA conocidos (evita usar el proxy como relay abierto)
+    const ALLOWED_HOSTS = ['ollama.com', 'api.groq.com', 'generativelanguage.googleapis.com'];
+    let host = '';
+    try {
+      const parsed = new URL(targetUrl);
+      host = parsed.hostname;
+      if (parsed.protocol !== 'https:') throw new Error('protocolo no permitido');
+    } catch {
+      res.status(400).json({ error: 'URL inválida' });
+      return;
+    }
+    if (!ALLOWED_HOSTS.some(h => host === h || host.endsWith('.' + h))) {
+      res.status(403).json({ error: 'Host no permitido' });
+      return;
+    }
+
     const cleanHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(headers || {}),
