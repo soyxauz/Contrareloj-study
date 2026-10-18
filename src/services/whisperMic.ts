@@ -135,7 +135,7 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
   source.connect(analyser);
   const buf = new Uint8Array(analyser.fftSize);
 
-  const silenceMs = opts.silenceMs ?? 1800;
+  const silenceMs = opts.silenceMs ?? 1400;
   const noSpeechTimeoutMs = opts.noSpeechTimeoutMs ?? 9000;
   const maxMs = opts.maxMs ?? 90000;
 
@@ -168,8 +168,10 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
     cleanup();
     if (cancelled) return resolveResult('');
     const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
-    // Sin voz detectada o audio diminuto: no se envía (evita alucinaciones de Whisper con silencio)
-    if (!heardSpeech || blob.size < 2500) return resolveResult('');
+    // Sin audio relevante (< 1500 bytes)
+    if (blob.size < 1500) return resolveResult('');
+    // Si no se detectó voz clara por VAD y el audio es minúsculo (< 3000 bytes), evitar alucinaciones
+    if (!heardSpeech && blob.size < 3000) return resolveResult('');
     try {
       opts.onTranscribing?.();
       resolveResult(await transcribe(blob, opts));
@@ -201,23 +203,30 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
     opts.onVolume?.(Math.min(1, rms * 6));
 
     const now = Date.now();
-    // Calibra el ruido ambiente durante los primeros ~500 ms
+    // Calibra el piso de ruido con muestras tranquilas iniciales
     if (calibrationSamples < 5) {
-      noiseFloor = Math.max(noiseFloor, rms);
+      if (rms < 0.03) {
+        noiseFloor = calibrationSamples === 0 ? rms : (noiseFloor * 0.7 + rms * 0.3);
+      }
       calibrationSamples++;
       return;
     }
-    const threshold = Math.max(0.02, noiseFloor * 2.5);
+
+    // Umbral de detección de voz suave pero inmune a ruidos de fondo suaves
+    const threshold = Math.max(0.016, Math.min(0.035, noiseFloor * 1.8));
     if (rms > threshold) {
       heardSpeech = true;
       lastVoiceAt = now;
     }
 
-    if (opts.autoStopOnSilence && heardSpeech && now - lastVoiceAt > silenceMs) finish();
-    else if (!heardSpeech && now - startedAt > noSpeechTimeoutMs) {
+    if (opts.autoStopOnSilence && heardSpeech && now - lastVoiceAt > silenceMs) {
+      finish();
+    } else if (!heardSpeech && now - startedAt > noSpeechTimeoutMs) {
       cancelled = true;
       finish();
-    } else if (now - startedAt > maxMs) finish();
+    } else if (now - startedAt > maxMs) {
+      finish();
+    }
   }, 100);
 
   recorder.start(250);

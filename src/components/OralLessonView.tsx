@@ -33,14 +33,14 @@ interface Message {
   timestamp: string;
 }
 
-const VOICE = 'es-ES-ElviraNeural';
+const VOICE = 'es-CO-SalomeNeural';
 
 const getPreferredSpeechLang = (): string => {
   if (typeof navigator !== 'undefined' && navigator.language) {
     const nav = navigator.language.toLowerCase();
-    if (nav === 'es-419' || nav === 'es-us') return 'es-419';
+    if (nav === 'es-419' || nav === 'es-us' || nav.includes('co')) return 'es-419';
   }
-  return 'es-ES';
+  return 'es-419';
 };
 
 const ORAL_DIRECTIVE = `[MODO LECCIÓN ORAL: tu respuesta se leerá en voz alta de inmediato]
@@ -114,8 +114,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const listeningRef = useRef(listening);
   const speakingRef = useRef(speaking);
   const isTypingRef = useRef(isTyping);
-  const isSpacePressedRef = useRef(false);
-  const spaceStartTimeRef = useRef(0);
+  const transcribingRef = useRef(transcribing);
   const speechLangRef = useRef<string>(getPreferredSpeechLang());
   const fallbackAttemptsRef = useRef(0);
   const isBraveRef = useRef(false);
@@ -136,6 +135,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   listeningRef.current = listening;
   speakingRef.current = speaking;
   isTypingRef.current = isTyping;
+  transcribingRef.current = transcribing;
   speechLangRef.current = speechLang;
   messagesRef.current = messages;
 
@@ -179,11 +179,9 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     };
   }, []);
 
-  // ───────────────────────── CONTROL DE ESPACIO (PUSH-TO-TALK) ─────────────────────────
+  // ───────────────────────── CONTROL DE ESPACIO (ACCION IDENTICA AL BOTON CENTRAL) ─────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (handsFreeRef.current) return;
-
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -196,19 +194,24 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
       if (e.code === 'Space') {
         e.preventDefault();
+        e.stopPropagation();
         if (e.repeat) return;
 
-        isSpacePressedRef.current = true;
-        spaceStartTimeRef.current = Date.now();
-
+        // Comportamiento 100% idéntico al clic en el botón central:
         if (speakingRef.current) {
           stopSpeaking();
           return;
         }
 
+        if (isTypingRef.current || transcribingRef.current) {
+          return;
+        }
+
         if (listeningRef.current) {
+          // Si está hablando/grabando, pulsar Espacio detiene e interpreta/envía de inmediato
           stopListeningRef.current(true);
         } else {
+          // Si está inactivo, pulsa Espacio para empezar a hablar
           if (messagesRef.current.length <= 1) {
             startOralLessonRef.current();
           } else {
@@ -219,8 +222,6 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (handsFreeRef.current) return;
-
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -233,21 +234,16 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
       if (e.code === 'Space') {
         e.preventDefault();
-        if (isSpacePressedRef.current) {
-          isSpacePressedRef.current = false;
-          const heldDuration = Date.now() - spaceStartTimeRef.current;
-          if (heldDuration >= 300 && listeningRef.current) {
-            stopListeningRef.current(true);
-          }
-        }
+        e.stopPropagation();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    // Usar useCapture = true para interceptar antes del evento nativo del botón enfocado
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
     };
   }, []);
 
@@ -315,15 +311,22 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     whisperRef.current?.cancel();
     whisperRef.current = null;
     isListeningDesiredRef.current = true;
+    listeningRef.current = true;
     setListening(true);
     try {
       const rec = await startWhisperRecording({
         apiKey: getGroqApiKey(),
         language: 'es',
         prompt: kit.title,                        // mejora términos técnicos
-        autoStopOnSilence: handsFreeRef.current,  // solo en manos libres
+        autoStopOnSilence: true,                  // ¡Auto-detección activa para responder solo!
+        silenceMs: 1400,                          // 1.4s de silencio tras hablar activa la respuesta
         onVolume: setMicLevel,
-        onTranscribing: () => { setListening(false); setTranscribing(true); },
+        onTranscribing: () => {
+          listeningRef.current = false;
+          transcribingRef.current = true;
+          setListening(false);
+          setTranscribing(true);
+        },
       });
       whisperRef.current = rec;
       rec.result
@@ -331,6 +334,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           if (whisperRef.current !== rec) return;
           whisperRef.current = null;
           isListeningDesiredRef.current = false;
+          listeningRef.current = false;
+          transcribingRef.current = false;
           setListening(false);
           setTranscribing(false);
           if (text) handleSendRef.current(text);
@@ -339,28 +344,35 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           if (whisperRef.current !== rec) return;
           whisperRef.current = null;
           isListeningDesiredRef.current = false;
+          listeningRef.current = false;
+          transcribingRef.current = false;
           setListening(false);
           setTranscribing(false);
           setVoiceError(err.message);
         });
     } catch (err: any) {
       isListeningDesiredRef.current = false;
+      listeningRef.current = false;
+      transcribingRef.current = false;
       setListening(false);
       setVoiceError(err?.message || 'No se pudo iniciar el micrófono.');
     }
   };
 
   const stopListening = (shouldSend = false) => {
+    listeningRef.current = false;
     if (useWhisperRef.current && whisperRef.current) {
       const rec = whisperRef.current;
       if (shouldSend) {
         rec.stop();               // el .then() de startListeningWhisper envía el texto
+        transcribingRef.current = true;
         setListening(false);
         setTranscribing(true);
       } else {
         whisperRef.current = null;
         rec.cancel();
         isListeningDesiredRef.current = false;
+        transcribingRef.current = false;
         setListening(false);
         setTranscribing(false);
       }
@@ -681,6 +693,15 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
             </button>
           )}
 
+          {/* Badge Voz Salomé */}
+          <div
+            title="Voz activa: Salomé Neural (Colombia) - Locución didáctica suave y clara"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-violet-950/50 border border-violet-500/40 text-[11px] text-violet-200 font-medium select-none shadow-sm"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Salomé · Colombia</span>
+          </div>
+
           {/* Selector de dialecto */}
           {canListen && (
             <select
@@ -843,12 +864,12 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
               transcribing
                 ? 'Transcribiendo audio con Groq Whisper...'
                 : listening
-                ? 'Pulsar para detener y enviar'
+                ? 'Pulsar o presionar Espacio para detener y enviar'
                 : speaking
-                ? 'Pulsar para callar a Thea'
+                ? 'Pulsar o presionar Espacio para callar a Thea'
                 : isInitialState
-                ? 'Pulsar para empezar la lección oral'
-                : 'Pulsar para hablar (o mantén la tecla Espacio)'
+                ? 'Pulsar o presionar Espacio para empezar la lección oral'
+                : 'Pulsar o presionar Espacio para hablar'
             }
           >
             {listening ? (
