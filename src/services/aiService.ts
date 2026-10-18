@@ -59,6 +59,9 @@ export const AI_PRESETS: AIPreset[] = [
 /** Modelo de respaldo para Groq cuando el principal da límite de tasa (429) o error de servidor (5xx) */
 const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 
+export const DEFAULT_GROK_KEY =
+  'grok_c8053868fdc7c58a6da0137e5565de08_f6e36552c01428d2b1b558c5a239453dd74d98fc5571d742491b70c0df6abccf';
+
 const STORAGE_KEY = 'thea_ai_settings';
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
@@ -69,6 +72,9 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   model: 'llama3.2',
   timeoutMs: 45000,
   verified: true,
+  grokApiKey: DEFAULT_GROK_KEY,
+  grokBaseUrl: 'https://api.x.ai/v1',
+  grokModel: 'grok-2-mini',
 };
 
 export function getAISettings(): AISettings {
@@ -99,9 +105,6 @@ export function resetAISettingsToDefault(): void {
     window.dispatchEvent(new Event('thea_ai_settings_changed'));
   }
 }
-
-export const DEFAULT_GROK_KEY =
-  'grok_0c3b733329956d0ffa02721bf06d3ab6_52e9db084ce04609ded1c3a5b2c5a065f6621d9073e388a72aac8314b8320655';
 
 export function hasPersonalApiKey(): boolean {
   const current = getAISettings();
