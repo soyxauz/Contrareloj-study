@@ -33,7 +33,7 @@ export const AI_PRESETS: AIPreset[] = [
     baseUrl: 'http://localhost:11434/v1',
     model: 'llama3.2',
     keyPlaceholder: 'No requerida para Ollama local',
-    description: 'Ejecución 100% privada, offline y gratuita. Requiere Ollama corriendo en tu equipo.',
+    description: 'Ejecución 100% privada y offline. Requiere Ollama corriendo en tu equipo.',
     badge: 'Offline / Privado',
     freeTier: true,
   },
@@ -312,13 +312,13 @@ export async function testAIConnection(override?: AISettings): Promise<{
     if (isLocal) {
       return {
         success: false,
-        message: `No se pudo conectar a Ollama local en ${cleanBase}. Verifica que esté activo con: set OLLAMA_ORIGINS=* && ollama serve`,
+        message: `No se pudo conectar a Ollama local en ${cleanBase}. Verifica que el servicio esté activo y en ejecución.`,
       };
     }
     if (msg.includes('Failed to fetch') || msg.includes('CORS') || msg.includes('NetworkError')) {
       return {
         success: false,
-        message: `Error de política de seguridad (CORS): El proveedor en ${cleanBase} no admite conexiones directas desde navegadores web sin un servidor backend. En GitHub Pages te recomendamos usar Google Gemini o Groq (gratuitos con soporte CORS para navegador). En localhost:5173 tu Ollama Cloud funciona al 100%.`,
+        message: `Error de política de seguridad (CORS): El proveedor en ${cleanBase} no admite conexiones directas desde navegadores web sin un servidor backend. En GitHub Pages te recomendamos usar Google Gemini o Groq (con soporte CORS para navegador). En localhost:5173 tu Ollama Cloud funciona al 100%.`,
       };
     }
     return {
@@ -352,7 +352,7 @@ export async function queryAICompletion(
 
   if (!isLocal && !hasPersonalKey) {
     throw new Error(
-      'Para generar contenido con IA necesitas configurar tu API Key personal. Abre "Configurar IA" para ingresar tu clave gratuita (Groq, Gemini, DeepSeek o local).'
+      'Para generar contenido con IA necesitas configurar tu API Key personal. Abre "Configurar IA" para ingresar tu clave (Groq, Gemini, DeepSeek o local).'
     );
   }
 

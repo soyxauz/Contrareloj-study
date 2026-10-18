@@ -1,6 +1,6 @@
 /**
  * Servicio de síntesis de voz neuronal de Microsoft Azure (Edge Neural TTS).
- * Voces originales de Azure de alta fidelidad, 100% gratuitas, sin límites ni claves de API.
+ * Voces originales de Azure de alta fidelidad, sin límites ni claves de API.
  * Incluye almacenamiento en caché persistente en IndexedDB y pre-carga fluida.
  */
 

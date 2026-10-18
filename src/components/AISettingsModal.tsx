@@ -15,7 +15,6 @@ import {
   Eye,
   EyeOff,
   Radio,
-  Server,
   ShieldCheck,
   RefreshCw,
   Cpu,
@@ -315,9 +314,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                         <span className="text-xs sm:text-sm font-bold text-white block">
                           {preset.name}
                         </span>
-                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                          Gratis
-                        </span>
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
                           {preset.badge}
                         </span>
@@ -333,23 +329,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 );
               })}
             </div>
-          </div>
-
-          {/* Ollama local guidance */}
-          <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200/90 leading-relaxed">
-            <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-300">
-              <Server className="w-4 h-4 text-amber-400 shrink-0" />
-              Instrucciones para Ollama Local en Windows:
-            </div>
-            <p className="text-[11px] text-slate-300">
-              Para permitir llamadas del navegador, inicia Ollama en tu consola ejecutando:
-            </p>
-            <code className="block bg-black/50 border border-thea-border rounded-lg p-2 font-mono text-[11px] text-amber-300 my-1.5 select-all">
-              set OLLAMA_ORIGINS=* && ollama serve
-            </code>
-            <p className="text-[10px] text-slate-400">
-              Asegúrate de haber descargado el modelo con: <code>ollama pull {settings.model || 'llama3.2'}</code>
-            </p>
           </div>
 
           {/* Form Fields */}
