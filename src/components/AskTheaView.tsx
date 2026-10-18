@@ -14,6 +14,8 @@ import {
   Keyboard,
   Square,
   Zap,
+  AlertTriangle,
+  Check,
 } from 'lucide-react';
 import { askTheaAI, getGrokApiKey, getGrokModel } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
@@ -97,6 +99,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
   const [voiceError, setVoiceError] = useState('');
   const [showTextInput, setShowTextInput] = useState(true);
   const [speechLang, setSpeechLang] = useState<string>(getPreferredSpeechLang);
+  const [copiedBrave, setCopiedBrave] = useState(false);
 
   // Refs para evitar variables obsoletas en closures asíncronos
   const modeRef = useRef(mode);
@@ -109,6 +112,8 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
   const spaceStartTimeRef = useRef(0);
   const speechLangRef = useRef<string>(getPreferredSpeechLang());
   const fallbackAttemptsRef = useRef(0);
+  const isBraveRef = useRef(false);
+  const hasCheckedMicPermissionRef = useRef(false);
 
   modeRef.current = mode;
   voiceOnRef.current = voiceOn;
@@ -137,6 +142,22 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, isTyping]);
+
+  // Detección de Brave Browser
+  useEffect(() => {
+    const detectBrave = async () => {
+      try {
+        if (typeof navigator !== 'undefined' && (navigator as any).brave) {
+          const isBrave =
+            typeof (navigator as any).brave.isBrave === 'function'
+              ? await (navigator as any).brave.isBrave()
+              : true;
+          isBraveRef.current = Boolean(isBrave);
+        }
+      } catch {}
+    };
+    detectBrave();
+  }, []);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -291,13 +312,45 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
     setListening(false);
   };
 
-  const startListening = (isFallback = false) => {
+  const verifyMicrophoneAccess = async (): Promise<boolean> => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      return true;
+    }
+    if (hasCheckedMicPermissionRef.current) {
+      return true;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Detener las pistas para liberar el hardware inmediatamente
+      stream.getTracks().forEach((track) => track.stop());
+      hasCheckedMicPermissionRef.current = true;
+      return true;
+    } catch (err: any) {
+      setListening(false);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setVoiceError(
+          'Permiso de micrófono denegado en el navegador. Haz clic en el icono de candado o ajustes de la barra de direcciones y autoriza el micrófono.'
+        );
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setVoiceError('No se encontró ningún micrófono conectado en tu equipo.');
+      } else {
+        setVoiceError(`Error de acceso al micrófono: ${err.message || err.name}`);
+      }
+      return false;
+    }
+  };
+
+  const startListening = async (isFallback = false) => {
     if (!SR) return;
     if (!isFallback) {
       fallbackAttemptsRef.current = 0;
     }
     stopSpeaking();
     setVoiceError('');
+
+    // Verificación previa de hardware y permisos mediante getUserMedia
+    const hasMic = await verifyMicrophoneAccess();
+    if (!hasMic) return;
 
     // Limpieza estricta de cualquier instancia previa para evitar colisiones de socket en Chrome
     if (recognitionRef.current) {
@@ -337,6 +390,16 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
           setVoiceError('Permite el acceso al micrófono en el navegador para activar la voz.');
         } else if (e.error === 'network') {
+          // Detectar Brave Browser: por privacidad bloquea speech.googleapis.com
+          const isBrave = Boolean(
+            isBraveRef.current || (navigator as any).brave || (window as any).brave
+          );
+          if (isBrave) {
+            setShowTextInput(true);
+            setVoiceError('brave-blocked');
+            return;
+          }
+
           // Reintento automático con el dialecto alternativo compatible: es-ES <-> es-419
           if (fallbackAttemptsRef.current === 0) {
             fallbackAttemptsRef.current = 1;
@@ -625,8 +688,58 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({ kit, onOpenAISettings 
           </div>
         </div>
 
-        {/* Mensaje de aviso de error de micrófono */}
-        {voiceError && (
+        {/* Banner especial para Brave Browser */}
+        {voiceError === 'brave-blocked' && (
+          <div className="px-4 py-3 bg-amber-950/80 border-b border-amber-500/50 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn shrink-0">
+            <div className="flex-1">
+              <p className="font-bold text-amber-100 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Brave Browser bloquea el reconocimiento de voz de Google por privacidad</span>
+              </p>
+              <p className="mt-1 text-[11px] text-amber-300/90 leading-relaxed">
+                Para permitir el micrófono en Brave: abre una nueva pestaña, pega{' '}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-200 font-mono text-[10px]">
+                  brave://settings/privacy
+                </code>{' '}
+                y activa la opción{' '}
+                <strong className="text-white">
+                  "Usar los servicios de Google para el reconocimiento de voz"
+                </strong>
+                .
+              </p>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText('brave://settings/privacy');
+                  setCopiedBrave(true);
+                  setTimeout(() => setCopiedBrave(false), 2500);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 text-amber-100 font-medium text-[11px] transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                {copiedBrave ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>¡Ruta copiada!</span>
+                  </>
+                ) : (
+                  <span>Copiar enlace de ajuste</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoiceError('')}
+                className="px-2 py-1.5 text-xs text-amber-300 hover:text-white underline cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mensaje de aviso de error regular de micrófono */}
+        {voiceError && voiceError !== 'brave-blocked' && (
           <div className="px-4 py-2 bg-rose-950/70 border-b border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-2 animate-fadeIn shrink-0">
             <span>{voiceError}</span>
             <button
