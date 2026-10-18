@@ -76,6 +76,64 @@ const maskTermInText = (text: string, term: string): string => {
   return masked;
 };
 
+const isQuestionOrSentence = (text: string): boolean => {
+  if (!text) return true;
+  const t = text.trim();
+  // Signos de interrogacion o exclamacion
+  if (/[?¿!¡]/.test(t)) return true;
+  // Palabras interrogativas o imperativas tipicas de preguntas
+  if (/^(¿|qué|que|cuál|cual|cuáles|cuales|cómo|como|por qué|porque|cuándo|cuando|dónde|donde|quién|quien|defina|describa|explique|mencione|indique|señale|calcule|en qué|en que|a qué|a que)\b/i.test(t)) {
+    return true;
+  }
+  // Puntuacion terminal de enunciado o formula larga
+  if (/[:.]$/.test(t)) return true;
+  // Mas de 5 palabras o mas de 45 caracteres NO es una opcion corta
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length > 5 || t.length > 45) return true;
+
+  return false;
+};
+
+const cleanToShortConcept = (rawText: string): string => {
+  if (!rawText) return '';
+  let cleaned = rawText.trim();
+
+  // Eliminar signos de pregunta/exclamacion
+  cleaned = cleaned.replace(/[¿?¡!]/g, '').trim();
+
+  // Eliminar frases de inicio de pregunta
+  cleaned = cleaned.replace(
+    /^(qué es|que es|cuál es|cual es|cuáles son|cuales son|en qué consiste|en que consiste|cómo se define|como se define|a qué se refiere|a que se refiere|defina|definición de|definicion de|describa|explique|mencione|indique|señale|concepto de)\s+(el|la|los|las|un|una|unos|unas)?\s*/i,
+    ''
+  ).trim();
+
+  // Eliminar articulos iniciales residuales
+  cleaned = cleaned.replace(/^(el|la|los|las|un|una)\s+/i, '').trim();
+
+  // Eliminar dos puntos o puntos finales
+  cleaned = cleaned.replace(/[:.]+$/, '').trim();
+
+  // Si tiene comillas, extraer lo que esta dentro de las comillas
+  const quoted = cleaned.match(/["'«»]([^"'«»]+)["'«»]/);
+  if (quoted && quoted[1].trim().length > 2) {
+    cleaned = quoted[1].trim();
+  }
+
+  // Cortar a maximo 4 palabras si sigue siendo largo
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length > 4) {
+    cleaned = words.slice(0, 4).join(' ');
+  }
+
+  if (cleaned.length > 40) {
+    cleaned = cleaned.slice(0, 40).trim();
+  }
+
+  if (!cleaned) return '';
+
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
 const buildGuessWhoCases = (
   deck: Flashcard[],
   kitTitle: string,
@@ -84,12 +142,68 @@ const buildGuessWhoCases = (
 ): GuessWhoCase[] => {
   if (!deck || deck.length === 0) return [];
 
-  // Barajar el mazo y seleccionar hasta 5 tarjetas representativas
-  const candidates = [...deck].sort(() => Math.random() - 0.5).slice(0, Math.min(5, deck.length));
+  // Banco de conceptos cortos puros del kit
+  const shortConceptsBank: string[] = [];
+  const seenConcepts = new Set<string>();
+
+  const registerConcept = (concept: string) => {
+    const cleaned = cleanToShortConcept(concept);
+    if (cleaned && !isQuestionOrSentence(cleaned) && cleaned.length >= 3) {
+      const key = cleaned.toLowerCase();
+      if (!seenConcepts.has(key)) {
+        seenConcepts.add(key);
+        shortConceptsBank.push(cleaned);
+      }
+    }
+  };
+
+  // 1. Recolectar conceptos directos de las flashcards
+  deck.forEach(card => {
+    registerConcept(card.term);
+  });
+
+  // 2. Recolectar de los temas (topics) y opciones cortas de las preguntas del kit
+  if (questions) {
+    questions.forEach(q => {
+      if (q.topic) registerConcept(q.topic);
+      if (Array.isArray(q.options)) {
+        q.options.forEach(opt => {
+          if (!isQuestionOrSentence(opt) && opt.split(/\s+/).length <= 4) {
+            registerConcept(opt);
+          }
+        });
+      }
+    });
+  }
+
+  // 3. Fallbacks tematicos si hay muy pocas tarjetas
+  const contextName = (kitCategory || kitTitle || 'Estudio').slice(0, 16);
+  const genericFallbacks = [
+    `Principio de ${contextName}`,
+    `Mecanismo Principal`,
+    `Factor Estructural`,
+    `Criterio Diagnóstico`,
+    `Patrón Funcional`,
+    `Elemento Central`,
+  ];
+  genericFallbacks.forEach(fb => registerConcept(fb));
+
+  // Priorizar estrictamente tarjetas que NO sean preguntas para los casos de estudio
+  const nonQuestionCards = deck.filter(c => !isQuestionOrSentence(c.term));
+  const candidatePool = nonQuestionCards.length >= 3 ? nonQuestionCards : deck;
+
+  // Seleccionar hasta 5 tarjetas representativas
+  const candidates = [...candidatePool].sort(() => Math.random() - 0.5).slice(0, Math.min(5, candidatePool.length));
 
   return candidates.map((card, idx) => {
+    // Garantizar que la entidad misteriosa SIEMPRE sea un concepto corto y NUNCA una pregunta
+    let targetConcept = card.term;
+    if (isQuestionOrSentence(targetConcept)) {
+      targetConcept = cleanToShortConcept(card.term) || shortConceptsBank[idx % shortConceptsBank.length] || 'Entidad Clave';
+    }
+
     const rawDef = (card.definition || '').trim();
-    const maskedDef = maskTermInText(rawDef, card.term);
+    const maskedDef = maskTermInText(rawDef, targetConcept);
 
     // Dividir la definición en oraciones limpias
     const sentences = rawDef
@@ -97,7 +211,7 @@ const buildGuessWhoCases = (
       .map(s => s.trim())
       .filter(s => s.length > 6);
 
-    const maskedSentences = sentences.map(s => maskTermInText(s, card.term));
+    const maskedSentences = sentences.map(s => maskTermInText(s, targetConcept));
     const categoryName = kitCategory || kitTitle || 'Dominio de Estudio';
 
     // Pista 1: Localización / Generalidad / Contexto disciplinar (100 pts, 3 estrellas)
@@ -171,39 +285,32 @@ const buildGuessWhoCases = (
       },
     ];
 
-    // Distractores para las 4 opciones
-    const otherCards = deck.filter(c => c.id !== card.id && c.term.trim() !== card.term.trim());
-    const shuffledOthers = otherCards.sort(() => Math.random() - 0.5).map(c => c.term);
+    // Distractores: EXCLUSIVAMENTE conceptos cortos que NO sean preguntas y diferentes al target
+    const targetKey = targetConcept.toLowerCase();
+    const availableDistractors = shortConceptsBank
+      .filter(concept => concept.toLowerCase() !== targetKey && !isQuestionOrSentence(concept))
+      .sort(() => Math.random() - 0.5);
+
     const distractors: string[] = [];
-
-    for (const term of shuffledOthers) {
-      if (distractors.length < 3 && !distractors.includes(term)) {
-        distractors.push(term);
+    for (const d of availableDistractors) {
+      if (distractors.length < 3 && !distractors.includes(d)) {
+        distractors.push(d);
       }
     }
 
-    if (distractors.length < 3 && questions) {
-      for (const q of questions) {
-        if (q.topic && q.topic !== card.term && !distractors.includes(q.topic)) {
-          distractors.push(q.topic);
-          if (distractors.length === 3) break;
-        }
-      }
-    }
-
-    const fallbacks = ['Concepto Complementario A', 'Concepto Complementario B', 'Concepto Complementario C'];
     while (distractors.length < 3) {
-      const fb = fallbacks[distractors.length];
-      if (!distractors.includes(fb) && fb !== card.term) {
-        distractors.push(fb);
+      const fallback = genericFallbacks[distractors.length] || `Concepto Clave ${distractors.length + 1}`;
+      if (!distractors.includes(fallback) && fallback.toLowerCase() !== targetKey) {
+        distractors.push(fallback);
       }
     }
 
-    const options = [card.term, ...distractors].sort(() => Math.random() - 0.5);
+    // Opciones finales: 1 correcta + 3 distractores (TODAS opciones cortas y limpias)
+    const options = [targetConcept, ...distractors].sort(() => Math.random() - 0.5);
 
     return {
       id: card.id || `guess-case-${idx}`,
-      targetTerm: card.term,
+      targetTerm: targetConcept,
       fullDefinition: card.definition,
       clues,
       options,
