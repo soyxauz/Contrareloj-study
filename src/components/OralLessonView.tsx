@@ -797,46 +797,6 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
 
         {/* Acciones mínimas superiores */}
         <div className="flex items-center gap-2">
-          {onOpenAISettings && (
-            <button
-              type="button"
-              onClick={onOpenAISettings}
-              className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-thea-surface/80 border border-thea-border/70 text-slate-300 hover:text-white hover:bg-thea-surface flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Configurar motor de IA (Groq / Ollama)"
-            >
-              <Sparkles className="w-3 h-3 text-cyan-400" />
-              <span>Motor IA</span>
-            </button>
-          )}
-
-          {/* Badge Voz Salomé */}
-          <div
-            title="Voz activa: Salomé Neural (Colombia) - Cadencia ultra rápida (+25%) y respuesta ágil"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-violet-950/50 border border-violet-500/40 text-[11px] text-violet-200 font-medium select-none shadow-sm"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Salomé · +25%</span>
-          </div>
-
-          {/* Selector de dialecto */}
-          {canListen && (
-            <select
-              value={speechLang}
-              onChange={(e) => {
-                const l = e.target.value;
-                setSpeechLang(l);
-                speechLangRef.current = l;
-                fallbackAttemptsRef.current = 0;
-              }}
-              className="bg-thea-surface/80 border border-thea-border/70 text-slate-300 text-[11px] rounded-xl px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
-              title="Dialecto del reconocimiento de voz"
-            >
-              <option value="es-ES">es-ES</option>
-              <option value="es-419">es-419 (Latam)</option>
-              <option value="es-US">es-US</option>
-            </select>
-          )}
-
           {/* Alternar Voz */}
           <button
             type="button"
