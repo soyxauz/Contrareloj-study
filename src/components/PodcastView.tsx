@@ -259,31 +259,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     };
   }, [stopCurrentAudio]);
 
-  // Si el usuario cambia de pestaña en el navegador web o minimiza la ventana
-  useEffect(() => {
-    const handleVisibilityOrHide = () => {
-      if (document.visibilityState === 'hidden') {
-        if (isPlayingRef.current) {
-          isManualInterruptionRef.current = true;
-          isPlayingRef.current = false;
-          setIsPlaying(false);
-          stopCurrentAudio(false);
-          setTimeout(() => {
-            if (isMountedRef.current) {
-              isManualInterruptionRef.current = false;
-            }
-          }, 150);
-        }
-      }
-    };
 
-    document.addEventListener('visibilitychange', handleVisibilityOrHide);
-    window.addEventListener('pagehide', handleVisibilityOrHide);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityOrHide);
-      window.removeEventListener('pagehide', handleVisibilityOrHide);
-    };
-  }, [stopCurrentAudio]);
 
   // Escuchar evento explícito de detención global desde el enrutador de la aplicación
   useEffect(() => {
