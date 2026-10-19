@@ -887,6 +887,8 @@ export const authService = {
       removeSessionItem('thea_guest_kits').catch(() => {});
       removeSessionItem('thea_guest_kits_index').catch(() => {});
       removeSessionItem('thea_study_kits_v2').catch(() => {});
+      localStorage.removeItem('thea_custom_materias');
+      removeSessionItem('thea_custom_materias').catch(() => {});
     } catch (e) {
       console.warn('[authService] Error al limpiar datos de invitado:', e);
     }

@@ -6,6 +6,7 @@
  */
 
 import type { StudyKit } from '../types';
+import { saveSessionItem, getSessionItem } from './storageService';
 
 export interface MateriaColorDef {
   id: string;
@@ -27,6 +28,7 @@ export interface CustomMateria {
   id: string;
   name: string;
   colorId: string;
+  updatedAt?: number;
 }
 
 export const OPAQUE_DARK_PALETTES: Record<string, MateriaColorDef> = {
@@ -183,19 +185,33 @@ export const OPAQUE_DARK_PALETTES: Record<string, MateriaColorDef> = {
 };
 
 const PALETTE_ROTATION = ['blue', 'emerald', 'amber', 'purple', 'indigo', 'rose', 'teal', 'cyan', 'orange'];
-const STORAGE_KEY = 'thea_custom_materias';
+export const getMateriaStorageKey = (userId?: string | null): string => {
+  return userId ? `thea_custom_materias_${userId}` : 'thea_custom_materias';
+};
 
 /**
  * Obtiene las materias personalizadas guardadas por el usuario.
  * No genera materias vacías por defecto.
  */
-export function getStoredCustomMaterias(): CustomMateria[] {
+export function getStoredCustomMaterias(userId?: string | null): CustomMateria[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed;
+    const key = getMateriaStorageKey(userId);
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+    // Si es usuario autenticado pero aún no tiene clave con userId, leer la clave global de respaldo
+    if (userId && typeof localStorage !== 'undefined') {
+      const fallbackRaw = localStorage.getItem('thea_custom_materias');
+      if (fallbackRaw) {
+        const parsedFallback = JSON.parse(fallbackRaw);
+        if (Array.isArray(parsedFallback) && parsedFallback.length > 0) {
+          return parsedFallback;
+        }
+      }
     }
   } catch (err) {
     console.error('Error al leer materias personalizadas:', err);
@@ -204,13 +220,111 @@ export function getStoredCustomMaterias(): CustomMateria[] {
 }
 
 /**
- * Guarda materias personalizadas
+ * Fusión acumulativa de materias personalizadas por nombre y marca temporal updatedAt (el más reciente gana).
  */
-export function saveCustomMaterias(materias: CustomMateria[]): void {
+export function mergeCustomMaterias(listA: CustomMateria[], listB: CustomMateria[]): CustomMateria[] {
+  const map = new Map<string, CustomMateria>();
+
+  const addOrMerge = (m: CustomMateria) => {
+    if (!m || !m.name) return;
+    const key = m.name.trim().toLowerCase();
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        ...m,
+        name: m.name.trim(),
+        updatedAt: m.updatedAt || Date.now(),
+      });
+      return;
+    }
+
+    const existingTime = existing.updatedAt || 0;
+    const incomingTime = m.updatedAt || 0;
+
+    // Prevalece la edición más reciente por fecha y hora
+    if (incomingTime >= existingTime) {
+      map.set(key, {
+        ...existing,
+        ...m,
+        name: m.name.trim() || existing.name,
+        colorId: m.colorId || existing.colorId,
+        updatedAt: incomingTime,
+      });
+    }
+  };
+
+  if (Array.isArray(listA)) {
+    for (const item of listA) addOrMerge(item);
+  }
+  if (Array.isArray(listB)) {
+    for (const item of listB) addOrMerge(item);
+  }
+
+  return Array.from(map.values());
+}
+
+/**
+ * Guarda materias personalizadas en LocalStorage e IndexedDB,
+ * y emite eventos para actualizar la interfaz y Google Drive en tiempo real.
+ */
+export function saveCustomMaterias(
+  materias: CustomMateria[],
+  userId?: string | null,
+  triggerCloudSync = true
+): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(materias));
+    const key = getMateriaStorageKey(userId);
+    const clean = materias.map(m => ({
+      ...m,
+      name: m.name.trim(),
+      updatedAt: m.updatedAt || Date.now(),
+    }));
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(clean));
+      if (!userId) {
+        localStorage.setItem('thea_custom_materias', JSON.stringify(clean));
+      }
+    }
+
+    // Persistencia inmutable en IndexedDB
+    saveSessionItem(key, clean).catch(() => {});
+
+    // Notificar reactivamente a la UI
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('thea_materias_updated', {
+        detail: { materias: clean, userId }
+      }));
+
+      // Disparar sincronización inmediata a Google Drive en segundo plano
+      if (triggerCloudSync && userId && userId !== 'guest') {
+        window.dispatchEvent(new CustomEvent('thea_materias_cloud_sync_request', {
+          detail: { userId, materias: clean }
+        }));
+      }
+    }
   } catch (err) {
     console.error('Error al guardar materias:', err);
+  }
+}
+
+/**
+ * Restaura las materias asíncronamente desde IndexedDB para máxima velocidad y tolerancia a fallos.
+ */
+export async function restoreCustomMateriasAsync(userId?: string | null): Promise<CustomMateria[]> {
+  const key = getMateriaStorageKey(userId);
+  try {
+    const idbMaterias = await getSessionItem<CustomMateria[]>(key);
+    const localMaterias = getStoredCustomMaterias(userId);
+    const merged = mergeCustomMaterias(localMaterias, idbMaterias || []);
+    if (merged.length > 0) {
+      saveCustomMaterias(merged, userId, false);
+      return merged;
+    }
+    return localMaterias;
+  } catch (e) {
+    console.warn('[materiaService] Error al restaurar materias desde IndexedDB:', e);
+    return getStoredCustomMaterias(userId);
   }
 }
 
@@ -218,9 +332,9 @@ export function saveCustomMaterias(materias: CustomMateria[]): void {
  * Asigna un color característico único para una materia, evitando repetir colores
  * asignados a otras materias presentes en la lista.
  */
-export function getDistinctColorForCategory(categoryName: string, usedColors: string[]): string {
+export function getDistinctColorForCategory(categoryName: string, usedColors: string[], userId?: string | null): string {
   // Ver si ya tiene un color guardado
-  const stored = getStoredCustomMaterias();
+  const stored = getStoredCustomMaterias(userId);
   const existing = stored.find(m => m.name.toLowerCase() === categoryName.trim().toLowerCase());
   if (existing && OPAQUE_DARK_PALETTES[existing.colorId]) {
     return existing.colorId;
@@ -264,7 +378,7 @@ export function getDistinctColorForCategory(categoryName: string, usedColors: st
  * No genera materias vacías con 0 kits.
  * Asigna a cada una un color característico único.
  */
-export function getAllAvailableMaterias(kits: StudyKit[]): { name: string; colorId: string; count: number }[] {
+export function getAllAvailableMaterias(kits: StudyKit[], userId?: string | null): { name: string; colorId: string; count: number }[] {
   const map = new Map<string, { colorId: string; count: number }>();
   const usedColors: string[] = [];
 
@@ -276,7 +390,7 @@ export function getAllAvailableMaterias(kits: StudyKit[]): { name: string; color
     if (map.has(rawCat)) {
       map.get(rawCat)!.count += 1;
     } else {
-      const assignedColor = getDistinctColorForCategory(rawCat, usedColors);
+      const assignedColor = getDistinctColorForCategory(rawCat, usedColors, userId);
       usedColors.push(assignedColor);
       map.set(rawCat, { colorId: assignedColor, count: 1 });
     }
@@ -296,13 +410,13 @@ export function getAllAvailableMaterias(kits: StudyKit[]): { name: string; color
  * Obtiene el tema visual de una categoría/materia.
  * Si se pasa la lista de kits actuales, garantiza que tome el color asignado a esa materia en el pool.
  */
-export function getMateriaTheme(categoryName: string | undefined, kits?: StudyKit[]): MateriaColorDef {
+export function getMateriaTheme(categoryName: string | undefined, kits?: StudyKit[], userId?: string | null): MateriaColorDef {
   if (!categoryName) return OPAQUE_DARK_PALETTES.slate;
   const trimmed = categoryName.trim();
 
   // Si se proporcionó la lista de kits, buscar la asignación unificada
   if (kits && kits.length > 0) {
-    const activeMaterias = getAllAvailableMaterias(kits);
+    const activeMaterias = getAllAvailableMaterias(kits, userId);
     const found = activeMaterias.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
     if (found && OPAQUE_DARK_PALETTES[found.colorId]) {
       return OPAQUE_DARK_PALETTES[found.colorId];
@@ -310,53 +424,57 @@ export function getMateriaTheme(categoryName: string | undefined, kits?: StudyKi
   }
 
   // Verificar si está en storage personalizado
-  const stored = getStoredCustomMaterias();
+  const stored = getStoredCustomMaterias(userId);
   const custom = stored.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
   if (custom && OPAQUE_DARK_PALETTES[custom.colorId]) {
     return OPAQUE_DARK_PALETTES[custom.colorId];
   }
 
   // Fallback determinista
-  const fallbackColor = getDistinctColorForCategory(trimmed, []);
+  const fallbackColor = getDistinctColorForCategory(trimmed, [], userId);
   return OPAQUE_DARK_PALETTES[fallbackColor] || OPAQUE_DARK_PALETTES.slate;
 }
 
 /**
  * Guarda una nueva asignación o edición de materia
  */
-export function addCustomMateria(name: string, colorId?: string): CustomMateria {
+export function addCustomMateria(name: string, colorId?: string, userId?: string | null): CustomMateria {
   const trimmed = name.trim();
-  const assignedColor = (colorId && colorId in OPAQUE_DARK_PALETTES) ? colorId : getDistinctColorForCategory(trimmed, []);
-  const current = getStoredCustomMaterias();
+  const assignedColor = (colorId && colorId in OPAQUE_DARK_PALETTES) ? colorId : getDistinctColorForCategory(trimmed, [], userId);
+  const current = getStoredCustomMaterias(userId);
   const existing = current.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
+  const now = Date.now();
   if (existing) {
     existing.colorId = assignedColor;
-    saveCustomMaterias(current);
+    existing.updatedAt = now;
+    saveCustomMaterias(current, userId, true);
     return existing;
   }
   const newMateria: CustomMateria = {
-    id: 'mat-' + Date.now().toString(36),
+    id: 'mat-' + now.toString(36),
     name: trimmed,
     colorId: assignedColor,
+    updatedAt: now,
   };
   const updated = [...current, newMateria];
-  saveCustomMaterias(updated);
+  saveCustomMaterias(updated, userId, true);
   return newMateria;
 }
 
-export function updateCustomMateria(oldName: string, newName: string, colorId: string): void {
-  const current = getStoredCustomMaterias();
+export function updateCustomMateria(oldName: string, newName: string, colorId: string, userId?: string | null): void {
+  const current = getStoredCustomMaterias(userId);
+  const now = Date.now();
   const updated = current.map(m => {
     if (m.name.toLowerCase() === oldName.toLowerCase()) {
-      return { ...m, name: newName.trim(), colorId };
+      return { ...m, name: newName.trim(), colorId, updatedAt: now };
     }
     return m;
   });
-  saveCustomMaterias(updated);
+  saveCustomMaterias(updated, userId, true);
 }
 
-export function deleteCustomMateria(name: string): void {
-  const current = getStoredCustomMaterias();
+export function deleteCustomMateria(name: string, userId?: string | null): void {
+  const current = getStoredCustomMaterias(userId);
   const updated = current.filter(m => m.name.toLowerCase() !== name.toLowerCase());
-  saveCustomMaterias(updated);
+  saveCustomMaterias(updated, userId, true);
 }

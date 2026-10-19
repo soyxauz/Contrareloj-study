@@ -17,6 +17,7 @@ import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
 import type { InputTab } from './components/CreateStudyKitView';
+import { restoreCustomMateriasAsync } from './services/materiaService';
 
 // Carga diferida (Lazy Loading) de vistas secundarias para arranque ultrarrápido
 const SmartStudyView = React.lazy(() => import('./components/SmartStudyView').then(m => ({ default: m.SmartStudyView })));
@@ -148,7 +149,10 @@ export const App: React.FC = () => {
       }
 
       const targetUserId = targetUser ? targetUser.id : null;
-      const recoveredKits = await authService.restoreUserKitsAsync(targetUserId);
+      const [recoveredKits] = await Promise.all([
+        authService.restoreUserKitsAsync(targetUserId),
+        restoreCustomMateriasAsync(targetUserId),
+      ]);
       if (isCancelled) return;
 
       const cleanKits = recoveredKits.filter(k => !isCorruptedKit(k));
@@ -731,6 +735,7 @@ export const App: React.FC = () => {
               onKitCreated={handleKitCreated}
               initialTab={createInitialTab}
               onOpenAISettings={() => setShowAIModal(true)}
+              userId={currentUser?.id || null}
             />
           </React.Suspense>
         )}

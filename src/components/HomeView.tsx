@@ -235,6 +235,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [reassignKitModal, setReassignKitModal] = React.useState<StudyKit | null>(null);
   const [kitMenuOpenId, setKitMenuOpenId] = React.useState<string | null>(null);
 
+  // Sincronizacion de temas de materias en tiempo real desde IndexedDB y Google Drive
+  React.useEffect(() => {
+    const handleMateriasUpdated = () => {
+      setMateriaVersion(v => v + 1);
+    };
+    window.addEventListener('thea_materias_updated', handleMateriasUpdated);
+    return () => {
+      window.removeEventListener('thea_materias_updated', handleMateriasUpdated);
+    };
+  }, []);
+
   // Estados y funciones de Selección y Operaciones en Lote
   const [isSelectionMode, setIsSelectionMode] = React.useState<boolean>(false);
   const [selectedKitIds, setSelectedKitIds] = React.useState<Set<string>>(new Set());
@@ -281,7 +292,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     if (!targetMateria || selectedKitIds.size === 0) return;
 
     if (batchNewMateriaName.trim()) {
-      addCustomMateria(targetMateria);
+      addCustomMateria(targetMateria, undefined, userId);
       setMateriaVersion(v => v + 1);
     }
 
@@ -342,8 +353,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   // Lista unificada de materias
   const availableMateriasList = React.useMemo(() => {
-    return getAllAvailableMaterias(kits);
-  }, [kits, materiaVersion]);
+    return getAllAvailableMaterias(kits, userId);
+  }, [kits, materiaVersion, userId]);
 
   // Kits filtrados por la materia seleccionada
   const filteredKits = React.useMemo(() => {
@@ -458,10 +469,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const materiaThemeMap = React.useMemo(() => {
     const map = new Map<string, ReturnType<typeof getMateriaTheme>>();
     for (const m of availableMateriasList) {
-      map.set(m.name.toLowerCase(), getMateriaTheme(m.name, kits));
+      map.set(m.name.toLowerCase(), getMateriaTheme(m.name, kits, userId));
     }
     return map;
-  }, [availableMateriasList, kits]);
+  }, [availableMateriasList, kits, userId]);
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 animate-fadeIn">
@@ -672,7 +683,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
             {/* Botones de cada Materia existente con color opaco */}
             {availableMateriasList.map(materia => {
-              const mTheme = materiaThemeMap.get(materia.name.toLowerCase()) || getMateriaTheme(materia.name, kits);
+              const mTheme = materiaThemeMap.get(materia.name.toLowerCase()) || getMateriaTheme(materia.name, kits, userId);
               const isSelected = selectedMateria.trim().toLowerCase() === materia.name.trim().toLowerCase();
               return (
                 <button
@@ -762,7 +773,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {filteredKits.map(kit => {
               const isActive = currentKit?.id === kit.id;
               const kStats = bookStatsMap.get(kit.id) || getBookRealStats(kit, userId);
-              const mTheme = materiaThemeMap.get((kit.category || 'General').toLowerCase()) || getMateriaTheme(kit.category, kits);
+              const mTheme = materiaThemeMap.get((kit.category || 'General').toLowerCase()) || getMateriaTheme(kit.category, kits, userId);
               const isMenuOpen = kitMenuOpenId === kit.id;
               const smartStudyPct = kStats.smartStudyProgressPercent ?? 0;
               const progressPercent = smartStudyPct > 0
@@ -1110,6 +1121,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {showMateriaManagerModal && createPortal(
         <MateriaManagerModal
           kits={kits}
+          userId={userId}
           onClose={() => setShowMateriaManagerModal(false)}
           onMateriasChanged={() => setMateriaVersion(v => v + 1)}
           onUpdateKit={onUpdateKit}
@@ -1122,6 +1134,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <ReassignMateriaModal
           kit={reassignKitModal}
           kits={kits}
+          userId={userId}
           onClose={() => setReassignKitModal(null)}
           onConfirm={(newCategory) => {
             if (onUpdateKit) {
@@ -1251,7 +1264,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </label>
                 <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 scrollbar-none">
                   {availableMateriasList.map(materia => {
-                    const mTheme = materiaThemeMap.get(materia.name.toLowerCase()) || getMateriaTheme(materia.name, kits);
+                    const mTheme = materiaThemeMap.get(materia.name.toLowerCase()) || getMateriaTheme(materia.name, kits, userId);
                     const isChosen = batchSelectedMateria.trim().toLowerCase() === materia.name.trim().toLowerCase() && !batchNewMateriaName.trim();
                     return (
                       <button
@@ -1419,6 +1432,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
 interface MateriaManagerModalProps {
   kits: StudyKit[];
+  userId?: string | null;
   onClose: () => void;
   onMateriasChanged: () => void;
   onUpdateKit?: (kit: StudyKit) => void;
@@ -1426,11 +1440,12 @@ interface MateriaManagerModalProps {
 
 const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
   kits,
+  userId = null,
   onClose,
   onMateriasChanged,
   onUpdateKit,
 }) => {
-  const activeMaterias = React.useMemo(() => getAllAvailableMaterias(kits), [kits]);
+  const activeMaterias = React.useMemo(() => getAllAvailableMaterias(kits, userId), [kits, userId]);
   const [editingMateriaName, setEditingMateriaName] = React.useState<string | null>(null);
   const [editingName, setEditingName] = React.useState('');
   const [editingColor, setEditingColor] = React.useState('blue');
@@ -1446,7 +1461,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
   const handleSaveEdit = (oldName: string) => {
     const trimmed = editingName.trim();
     if (!trimmed) return;
-    updateCustomMateria(oldName, trimmed, editingColor);
+    updateCustomMateria(oldName, trimmed, editingColor, userId);
 
     if (trimmed.toLowerCase() !== oldName.toLowerCase() && onUpdateKit) {
       kits.forEach(k => {
@@ -1464,7 +1479,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
     const kitsWithMateria = kits.filter(k => (k.category || '').toLowerCase() === materiaName.toLowerCase());
     let confirmMsg = `¿Deseas reasignar los libros de "${materiaName}" a la materia "General"?`;
     if (window.confirm(confirmMsg)) {
-      deleteCustomMateria(materiaName);
+      deleteCustomMateria(materiaName, userId);
       if (kitsWithMateria.length > 0 && onUpdateKit) {
         kitsWithMateria.forEach(k => {
           onUpdateKit({ ...k, category: 'General' });
@@ -1639,6 +1654,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
 interface ReassignMateriaModalProps {
   kit: StudyKit;
   kits: StudyKit[];
+  userId?: string | null;
   onClose: () => void;
   onConfirm: (newCategory: string) => void;
 }
@@ -1646,11 +1662,12 @@ interface ReassignMateriaModalProps {
 const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
   kit,
   kits,
+  userId = null,
   onClose,
   onConfirm,
 }) => {
   const currentCategory = kit.category || 'General';
-  const availableMaterias = React.useMemo(() => getAllAvailableMaterias(kits), [kits]);
+  const availableMaterias = React.useMemo(() => getAllAvailableMaterias(kits, userId), [kits, userId]);
 
   const [selectedTarget, setSelectedTarget] = React.useState<string>(currentCategory);
   const [isCreatingNew, setIsCreatingNew] = React.useState(false);
@@ -1663,7 +1680,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
     if (isCreatingNew) {
       const trimmed = newMateriaInput.trim();
       if (!trimmed) return;
-      addCustomMateria(trimmed, newMateriaColor);
+      addCustomMateria(trimmed, newMateriaColor, userId);
       onConfirm(trimmed);
     } else {
       onConfirm(selectedTarget);
@@ -1720,7 +1737,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
               </label>
               <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
                 {availableMaterias.map(m => {
-                  const pal = getMateriaTheme(m.name);
+                  const pal = getMateriaTheme(m.name, kits, userId);
                   const isSelected = selectedTarget.toLowerCase() === m.name.toLowerCase();
                   return (
                     <button

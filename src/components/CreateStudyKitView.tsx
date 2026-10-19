@@ -47,6 +47,7 @@ interface CreateStudyKitViewProps {
   onKitCreated: (kit: StudyKit) => void;
   initialTab?: InputTab;
   onOpenAISettings?: () => void;
+  userId?: string | null;
 }
 
 const SUGGESTED_TOPICS = [
@@ -77,7 +78,8 @@ const TABS: { id: InputTab; label: string; icon: React.ReactNode; description: s
 export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
   onKitCreated,
   initialTab = 'topic',
-  onOpenAISettings
+  onOpenAISettings,
+  userId = null,
 }) => {
   const [activeTab, setActiveTab] = useState<InputTab>(initialTab);
 
@@ -92,10 +94,22 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
   const [isTitleManuallyEdited, setIsTitleManuallyEdited] = useState(false);
   const [description, setDescription] = useState('');
 
-  const focusAreas = React.useMemo(() => {
-    const custom = getStoredCustomMaterias().map(m => m.name);
-    return Array.from(new Set([...DEFAULT_FOCUS_AREAS, ...custom]));
+  const [materiaVersion, setMateriaVersion] = useState(0);
+
+  React.useEffect(() => {
+    const handleMateriasUpdated = () => {
+      setMateriaVersion(v => v + 1);
+    };
+    window.addEventListener('thea_materias_updated', handleMateriasUpdated);
+    return () => {
+      window.removeEventListener('thea_materias_updated', handleMateriasUpdated);
+    };
   }, []);
+
+  const focusAreas = React.useMemo(() => {
+    const custom = getStoredCustomMaterias(userId).map(m => m.name);
+    return Array.from(new Set([...DEFAULT_FOCUS_AREAS, ...custom]));
+  }, [userId, materiaVersion]);
 
   const [isAIActive, setIsAIActive] = useState<boolean>(isAIWorking);
 

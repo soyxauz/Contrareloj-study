@@ -13,6 +13,12 @@ import {
 } from './storageService';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, DEFAULT_AI_SETTINGS, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
+import {
+  getStoredCustomMaterias,
+  saveCustomMaterias,
+  mergeCustomMaterias,
+  type CustomMateria
+} from './materiaService';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
 
@@ -156,6 +162,12 @@ async function restoreDriveStateFromIndexedDB(): Promise<void> {
 
 if (typeof window !== 'undefined') {
   restoreDriveStateFromIndexedDB();
+  window.addEventListener('thea_materias_cloud_sync_request', (event: any) => {
+    const detail = event?.detail;
+    if (detail?.userId) {
+      googleDriveService.pushMateriasToDrive(detail.userId, detail.materias).catch(() => {});
+    }
+  });
 }
 
 /**
@@ -1049,14 +1061,17 @@ export const googleDriveService = {
       const aiSettingsFile = rootFilesMap.get('thea_ai_settings.json');
       const userPodcastSettingsFileName = `thea_podcast_settings_${userId}.json`;
       const podcastSettingsFile = rootFilesMap.get(userPodcastSettingsFileName) || rootFilesMap.get('thea_podcast_settings.json');
+      const userMateriasFileName = `thea_materias_${userId}.json`;
+      const materiasFile = rootFilesMap.get(userMateriasFileName) || rootFilesMap.get('thea_custom_materias.json');
 
       // 2. Descargar todos los archivos JSON esenciales en paralelo ultrarrápido (sub-segundo)
-      const [remoteUsers, pulledKits, cloudProgress, remoteAISettings, remotePodcastSettings] = await Promise.all([
+      const [remoteUsers, pulledKits, cloudProgress, remoteAISettings, remotePodcastSettings, remoteMaterias] = await Promise.all([
         usersFile ? this.readJsonFromDrive<any[]>(token, usersFile.id).catch(() => null) : null,
         kitsFile ? this.readJsonFromDrive<StudyKit[]>(token, kitsFile.id).catch(() => null) : null,
         progressFile ? this.readJsonFromDrive<any>(token, progressFile.id).catch(() => null) : null,
         aiSettingsFile ? this.readJsonFromDrive<AISettings>(token, aiSettingsFile.id).catch(() => null) : null,
         podcastSettingsFile ? this.readJsonFromDrive<PodcastSettings>(token, podcastSettingsFile.id).catch(() => null) : null,
+        materiasFile ? this.readJsonFromDrive<CustomMateria[]>(token, materiasFile.id).catch(() => null) : null,
       ]);
 
       // 3. Procesar e integrar usuarios
@@ -1218,6 +1233,13 @@ export const googleDriveService = {
         }
       }
 
+      // 6.b Procesar e integrar materias personalizadas y colores con prioridad por fecha y hora (más reciente gana)
+      if (Array.isArray(remoteMaterias) && remoteMaterias.length > 0) {
+        const localMaterias = getStoredCustomMaterias(userId);
+        const mergedMaterias = mergeCustomMaterias(localMaterias, remoteMaterias);
+        saveCustomMaterias(mergedMaterias, userId, false);
+      }
+
       // 7. Notificar inmediatamente que los datos y el progreso están listos
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('thea_ai_settings_changed'));
@@ -1337,12 +1359,15 @@ export const googleDriveService = {
         revealedQuestions: userRevealed,
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
+      const userMateriasFileName = `thea_materias_${userId}.json`;
+      const localMaterias = getStoredCustomMaterias(userId);
 
       const currentPodcastSettings = getPodcastSettings();
       await Promise.all([
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers),
         this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits),
         this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
+        this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, localMaterias),
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', currentPodcastSettings),
       ]);
 
@@ -1681,6 +1706,53 @@ export const googleDriveService = {
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
           return this.pushProgressToDrive(userId);
+        }
+      }
+    }
+  },
+
+  /**
+   * Sube inmediatamente a Google Drive los colores y materias personalizadas en segundo plano.
+   * Realiza fusión previa por marca temporal para que prevalezca la modificación más reciente.
+   */
+  async pushMateriasToDrive(userId: string, materias?: CustomMateria[]): Promise<void> {
+    if (!userId || userId === 'guest') return;
+
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) return;
+
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const userMateriasFileName = `thea_materias_${userId}.json`;
+      const localMaterias = materias || getStoredCustomMaterias(userId);
+
+      // Descargar materias previas de Drive para fusión por fecha y hora (más reciente gana)
+      const rootFiles = await this.listFilesInFolder(token, rootFolderId);
+      const remoteFile = rootFiles.find(f => f.name === userMateriasFileName || f.name === 'thea_custom_materias.json');
+      let payload = localMaterias;
+      if (remoteFile) {
+        try {
+          const remoteMaterias = await this.readJsonFromDrive<CustomMateria[]>(token, remoteFile.id);
+          if (Array.isArray(remoteMaterias) && remoteMaterias.length > 0) {
+            payload = mergeCustomMaterias(localMaterias, remoteMaterias);
+            saveCustomMaterias(payload, userId, false);
+          }
+        } catch {}
+      }
+
+      await this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, payload);
+      console.log('[GoogleDriveService] Colores de materias sincronizados con Google Drive inmediatamente.');
+    } catch (e: any) {
+      console.warn('[GoogleDriveService] Error en pushMateriasToDrive:', e);
+      const is401 = e?.message?.includes('401') || e?.message?.includes('TOKEN_EXPIRED') || e?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        const refreshedToken = await this.attemptSilentTokenRefresh();
+        if (refreshedToken) {
+          return this.pushMateriasToDrive(userId, materias);
         }
       }
     }
