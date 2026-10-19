@@ -904,7 +904,8 @@ export function processContent(
   const vectorStore = new LocalVectorStore(chunks);
 
   const questionCount = 20;
-  const questions = generateQuestions(cleanText, questionCount, category);
+  const rawQuestions = generateQuestions(cleanText, questionCount, category);
+  const questions = [...rawQuestions].sort(() => Math.random() - 0.5);
 
   // Vincular cada pregunta a su fragmento de origen (RAG) y activo multimodal
   for (const q of questions) {
@@ -1062,6 +1063,13 @@ export async function processContentAsync(
     }
   }
 
+  // Barajado aleatorio para garantizar variedad impredecible desde la primera pregunta
+  const shuffledAiQuestions = [...aiQuestions];
+  for (let i = shuffledAiQuestions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledAiQuestions[i], shuffledAiQuestions[j]] = [shuffledAiQuestions[j], shuffledAiQuestions[i]];
+  }
+
   const kit: StudyKit = {
     id: `kit-${uid()}`,
     title: finalTitle,
@@ -1069,7 +1077,7 @@ export async function processContentAsync(
     description: finalDescription,
     icon: finalIcon,
     color: finalColor,
-    questions: aiQuestions,
+    questions: shuffledAiQuestions,
     flashcards: [], // Solo preguntas al inicio; las demás secciones se crean bajo demanda
     studyGuideMarkdown: '',
     podcast: null,

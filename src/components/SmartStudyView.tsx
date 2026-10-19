@@ -46,7 +46,6 @@ import {
   generateAIPedagogicalQuestions,
   generateSocraticReformulatedQuestion,
   generateTargetedPedagogicalQuestions,
-  generateFalseConceptQuestions,
   evaluateShortAnswer,
   parseCorrectIndex,
   parseCorrectIndices,
@@ -282,6 +281,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     });
   };
 
+  // Referencia para barajado inteligente de categorías (evita rachas monótonas consecutivas)
+  const recentCategoriesRef = useRef<(keyof SmartStudyTypeFilters)[]>([]);
+
   // ── Respuestas Abiertas Cortas (Short Answer) ──────────────────────────
   const [shortAnswerInput, setShortAnswerInput] = useState<string>('');
   const [isEvaluatingShortAnswer, setIsEvaluatingShortAnswer] = useState<boolean>(false);
@@ -461,7 +463,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             seenQuestionIdsRef.current.clear();
             availableInDiff = allInDiff.filter(q => q.id !== currentQ?.id);
           }
-          const fallbackQ = availableInDiff[0] || allInDiff[0];
+          const fallbackQ = availableInDiff[Math.floor(Math.random() * availableInDiff.length)] || allInDiff[0];
           if (fallbackQ) {
             seenQuestionIdsRef.current.add(fallbackQ.id);
             setCurrentQuestion(fallbackQ);
@@ -481,7 +483,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           seenQuestionIdsRef.current.clear();
           availableInDiff = allInDiff.filter(q => q.id !== currentQ?.id);
         }
-        const fallbackQ = availableInDiff[0] || allInDiff[0];
+        const fallbackQ = availableInDiff[Math.floor(Math.random() * availableInDiff.length)] || allInDiff[0];
         if (fallbackQ) {
           seenQuestionIdsRef.current.add(fallbackQ.id);
           setCurrentQuestion(fallbackQ);
@@ -496,8 +498,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         setSwitchingDiffMessage('');
       }
     } else {
-      // El banco tiene 7 o más preguntas disponibles en esta dificultad: tomar la siguiente no vista
-      const nextQ = availableInDiff[0];
+      // El banco tiene 7 o más preguntas disponibles en esta dificultad: tomar una aleatoria no vista
+      const nextQ = availableInDiff[Math.floor(Math.random() * availableInDiff.length)] || availableInDiff[0];
       seenQuestionIdsRef.current.add(nextQ.id);
       setCurrentQuestion(nextQ);
       lastQId.current = nextQ.id;
@@ -582,8 +584,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         setSelectedMultiIndices([]);
         setIsAnswered(false);
         setIsCurrentCorrect(null);
-        setCurrentQuestion(generated[0]);
-        lastQId.current = generated[0].id;
+        const randomTargetedQ = generated[Math.floor(Math.random() * generated.length)] || generated[0];
+        setCurrentQuestion(randomTargetedQ);
+        lastQId.current = randomTargetedQ.id;
 
         const updatedQuestions = [...generated, ...kit.questions];
         if (onUpdateKit) {
@@ -687,35 +690,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const currentPool = kit.questions.filter(q => q.difficulty === targetDiff);
     const remainingAhead = currentPool.length - (activeIndex + 1);
 
-    // Detección de escasez de preguntas de concepto falso / afirmación falsa en el pool activo
-    const falseConceptCount = currentPool.filter(isFalseConceptQuestion).length;
-    const needsFalseConcepts = falseConceptCount < 2;
-
-    // Si quedan 3 o menos preguntas por delante en este nivel, o el banco inicial tiene menos de 8, O faltan preguntas de afirmación falsa
-    if (remainingAhead <= 3 || currentPool.length < 8 || needsFalseConcepts) {
+    // Prefetch continuo equilibrado cuando quedan 3 o menos preguntas por delante en este nivel o el banco inicial tiene menos de 8
+    if (remainingAhead <= 3 || currentPool.length < 8) {
       isAutoGeneratingRef.current = true;
       setIsGeneratingMore(true);
 
       try {
-        let generated: Question[] = [];
-        if (needsFalseConcepts) {
-          // Inyectar lote especializado de conceptos falsos/equivocados
-          generated = await generateFalseConceptQuestions(
-            kit.sourceText || kit.description,
-            kit.title,
-            kit.category,
-            targetDiff,
-            6,
-            kit.chunks
-          );
-        } else {
-          generated = await generateAIPedagogicalQuestions(
-            kit.sourceText || kit.description,
-            5,
-            targetDiff,
-            kit.chunks
-          );
-        }
+        const generated = await generateAIPedagogicalQuestions(
+          kit.sourceText || kit.description,
+          5,
+          targetDiff,
+          kit.chunks
+        );
 
         if (generated.length > 0 && onUpdateKit) {
           const existingIds = new Set(kit.questions.map(q => q.id));
@@ -819,27 +805,38 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       return socraticTarget.reformulatedQuestion;
     }
 
-    // Distribución estrictamente proporcional entre los formatos activos en los interruptores (tuerca)
+    // Distribución aleatoria inteligente (shuffle no repetitivo) entre los formatos activos (tuerca)
     const activeCategories: (keyof SmartStudyTypeFilters)[] = (
       ['multipleChoice', 'shortAnswer', 'trueFalse', 'practical'] as (keyof SmartStudyTypeFilters)[]
     ).filter(cat => typeFilters[cat]);
     const safeActiveCategories = activeCategories.length > 0 ? activeCategories : (['multipleChoice'] as (keyof SmartStudyTypeFilters)[]);
-    const targetCat = safeActiveCategories[targetIndex % safeActiveCategories.length];
+
+    // Barajado inteligente: mezclar formatos para una secuencia impredecible y estimulante sin rachas monótonas
+    let targetCat: keyof SmartStudyTypeFilters;
+    if (safeActiveCategories.length === 1) {
+      targetCat = safeActiveCategories[0];
+    } else {
+      const recent = recentCategoriesRef.current;
+      const lastCat = recent[recent.length - 1];
+      const nonConsecutive = safeActiveCategories.filter(c => c !== lastCat);
+      const candidatesToPick = nonConsecutive.length > 0 ? nonConsecutive : safeActiveCategories;
+      targetCat = candidatesToPick[Math.floor(Math.random() * candidatesToPick.length)];
+    }
+    recentCategoriesRef.current = [...recentCategoriesRef.current.slice(-5), targetCat];
 
     const targetDiff = targetLevel === 1 ? 'easy' : targetLevel === 2 ? 'medium' : 'hard';
     const levelQuestions = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
     const pool = levelQuestions.length > 0 ? levelQuestions : kit.questions;
 
-    // Posición base de la pregunta actual para avanzar secuencialmente hacia adelante
-    const currentPos = pool.findIndex(q => q.id === excludeQuestionId);
-    const baseIndex = currentPos >= 0 ? currentPos : 0;
+    // Frecuencia moderada y aleatoria de afirmaciones falsas (~15% - 20%): solo ocasionalmente y de forma impredecible
+    const shouldPreferFalseConcept = (targetCat === 'multipleChoice') && (Math.random() < 0.18);
 
-    // Regla de frecuencia: 1 de cada 2 o 3 preguntas de opción múltiple (~35%-40%) prioriza conceptos falsos o equivocados
-    const shouldPreferFalseConcept = (targetCat === 'multipleChoice') && (targetIndex % 3 === 1 || targetIndex % 3 === 2);
+    // Shuffle de índices para exploración aleatoria impredecible del banco disponible
+    const shuffledIndices = Array.from({ length: pool.length }, (_, i) => i).sort(() => Math.random() - 0.5);
 
     if (shouldPreferFalseConcept) {
-      for (let i = 1; i <= pool.length; i++) {
-        const candidate = pool[(baseIndex + i) % pool.length];
+      for (const i of shuffledIndices) {
+        const candidate = pool[i];
         if (
           candidate.id !== excludeQuestionId &&
           !answeredQuestionIdsRef.current.has(candidate.id) &&
@@ -851,9 +848,23 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
     }
 
-    // Prioridad 1: Buscar hacia adelante la siguiente pregunta no respondida de este nivel que coincida con el tipo
-    for (let i = 1; i <= pool.length; i++) {
-      const candidate = pool[(baseIndex + i) % pool.length];
+    // Prioridad 1: Buscar una pregunta no respondida de este nivel que coincida con el tipo deseado
+    // Si NO se pidió concepto falso, priorizar una que NO sea de concepto falso para mantener variedad afirmativa
+    for (const i of shuffledIndices) {
+      const candidate = pool[i];
+      if (
+        candidate.id !== excludeQuestionId &&
+        !answeredQuestionIdsRef.current.has(candidate.id) &&
+        getCategoryForQuestion(candidate) === targetCat &&
+        (!shouldPreferFalseConcept ? !isFalseConceptQuestion(candidate) : true)
+      ) {
+        return candidate;
+      }
+    }
+
+    // Prioridad 1b: Si no había afirmativa de ese tipo, aceptar cualquier pregunta no respondida del tipo deseado
+    for (const i of shuffledIndices) {
+      const candidate = pool[i];
       if (
         candidate.id !== excludeQuestionId &&
         !answeredQuestionIdsRef.current.has(candidate.id) &&
@@ -863,34 +874,26 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
     }
 
-    // Prioridad 2: Buscar cualquier no respondida y adaptarla al formato proporcional seleccionado
-    for (let i = 1; i <= pool.length; i++) {
-      const candidate = pool[(baseIndex + i) % pool.length];
+    // Prioridad 2: Buscar cualquier no respondida del nivel y adaptarla al formato seleccionado
+    for (const i of shuffledIndices) {
+      const candidate = pool[i];
       if (candidate.id !== excludeQuestionId && !answeredQuestionIdsRef.current.has(candidate.id)) {
         return adaptQuestionToCategory(candidate, targetCat);
       }
     }
 
-    // Prioridad 3: Si ya se respondieron todas las del nivel, avanzar a la siguiente del pool y adaptarla
-    for (let i = 1; i <= pool.length; i++) {
-      const candidate = pool[(baseIndex + i) % pool.length];
+    // Prioridad 3: Si ya se respondieron todas las del nivel, elegir al azar una del pool y adaptarla
+    for (const i of shuffledIndices) {
+      const candidate = pool[i];
       if (candidate.id !== excludeQuestionId) {
         return adaptQuestionToCategory(candidate, targetCat);
       }
     }
 
     // Prioridad 4: En kit general
-    const currentKitPos = kit.questions.findIndex(q => q.id === excludeQuestionId);
-    const baseKitIndex = currentKitPos >= 0 ? currentKitPos : 0;
-    for (let i = 1; i <= kit.questions.length; i++) {
-      const candidate = kit.questions[(baseKitIndex + i) % kit.questions.length];
-      if (candidate.id !== excludeQuestionId) {
-        return adaptQuestionToCategory(candidate, targetCat);
-      }
-    }
-
-    return adaptQuestionToCategory(kit.questions[0], targetCat);
-  }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory]);
+    const randomKitQ = kit.questions[Math.floor(Math.random() * kit.questions.length)] || kit.questions[0];
+    return adaptQuestionToCategory(randomKitQ, targetCat);
+  }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory, isFalseConceptQuestion]);
 
   // Pregunta activa fijada en estado: NUNCA cambia por efectos secundarios en segundo plano
   const [currentQuestion, setCurrentQuestion] = useState<Question>(() => {
@@ -904,7 +907,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         return found;
       }
     }
-    const initialIndex = savedSession?.currentIndex || 0;
     const practiceLevel = (savedSession as any)?.activePracticeLevel || (savedSession?.level as 1 | 2 | 3) || 1;
     const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
     const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
@@ -913,9 +915,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       ['multipleChoice', 'shortAnswer', 'trueFalse', 'practical'] as (keyof SmartStudyTypeFilters)[]
     ).filter(cat => typeFilters[cat]);
     const safeActiveCategories = activeCategories.length > 0 ? activeCategories : (['multipleChoice'] as (keyof SmartStudyTypeFilters)[]);
-    const targetCat = safeActiveCategories[initialIndex % safeActiveCategories.length];
-    const raw = finalPool[initialIndex % finalPool.length] || kit.questions[0];
-    return adaptQuestionToCategory(raw, targetCat);
+
+    // Aleatorio puro desde el primer segundo: barajar todo el banco y tipos sin restricciones
+    const randomCat = safeActiveCategories[Math.floor(Math.random() * safeActiveCategories.length)];
+    const randomIdx = Math.floor(Math.random() * finalPool.length);
+    const raw = finalPool[randomIdx] || kit.questions[0];
+    return adaptQuestionToCategory(raw, randomCat);
   });
 
   const currentQ: Question = currentQuestion;

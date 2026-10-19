@@ -942,12 +942,13 @@ FASE 1: ANÁLISIS DEL TEXTO Y DETECCIÓN CONCEPTUAL
 
 FASE 2: DISTRIBUCIÓN Y VARIEDAD DINÁMICA DE ESTILOS DE PREGUNTA (PROPORCIÓN REQUERIDA)
 Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosamente la siguiente proporción:
-1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote.
-   * REGLA ESTRICTA DE DETECCIÓN DEL CONCEPTO EQUIVOCADO / IMPOSTOR: Al menos el 50% de las preguntas de opción múltiple (1 de cada 2) DEBEN solicitar identificar cuál opción es FALSA, INCORRECTA o EL CONCEPTO EQUIVOCADO (ejemplos: '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:'). En estos casos, 3 opciones son verdaderas y la opción elegida como 'respuesta_correcta' es la afirmación que contiene el error conceptual.
+1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote con variedad pedagógica amplia:
+   - Preguntas afirmativas de comprensión directa, principios clave y deducción en casos prácticos (la gran mayoría, ~80%-85%).
+   - Preguntas de detección de concepto equivocado, afirmación falsa o elemento impostor de forma moderada (~15%-20% del total de opción múltiple: ej. '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:').
 2. El 55% restante DEBE distribuirse de forma equitativa y activa entre los otros 5 formatos interactivos:
    - "matching": Emparejar conceptos (3 o 4 pares de "termino" <-> "definicion" exacta del texto).
    - "true-false": Pregunta de Verdadero o Falso enfocada en un matiz normativo, biológico, técnico o conceptual clave.
-   - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas. Al menos la mitad de las preguntas de selección múltiple DEBEN formularse para SELECCIONAR TODAS LAS AFIRMACIONES FALSAS O CONCEPTOS EQUIVOCADOS (ejemplo: 'Selecciona las 2 afirmaciones que son FALSAS o incorrectas sobre...', donde las opciones marcadas en 'indices_correctos' son las que contienen los errores).
+   - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas (tanto para marcar afirmaciones verdaderas como ocasionalmente para identificar errores).
    - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
    - "image-labeling": Etiquetado de diagrama o esquema funcional descrito en el texto (ubicar partes o fases en un esquema).
 
@@ -1031,9 +1032,9 @@ ${sourceRepresentation}
 - Cantidad exacta de preguntas a generar: ${count}
 - Nivel de exigencia: ${difficulty.toUpperCase()}
 - COBERTURA COMPLETA OBLIGATORIA: Distribuye las preguntas de manera equilibrada a lo largo de TODAS las diapositivas/páginas presentadas (desde el inicio, pasando por el desarrollo intermedio, hasta la última diapositiva). ESTÁ PROHIBIDO concentrar las preguntas solo en las primeras 4 o 5 diapositivas.
-- PROPORCIÓN Y VARIEDAD EXACTA:
-  * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D). OBLIGATORIO: al menos la mitad (50%) de estas preguntas DEBEN solicitar señalar la afirmación falsa o el concepto equivocado ('¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las opciones son correctas, EXCEPTO:').
-  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling"). En "multi-select", formula también casos donde se deban marcar las afirmaciones falsas o incorrectas.
+- PROPORCIÓN Y VARIEDAD BALANCEADA:
+  * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D), priorizando preguntas afirmativas de comprensión directa y deducción, con presencia moderada (~15%-20%) de preguntas de afirmación falsa o concepto equivocado.
+  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling").
 - LÍMITES ESTRICTOS DE EXTENSIÓN: Máximo 50 palabras por enunciado estándar; únicamente si es la descripción de un caso práctico, viñeta o supuesto de hecho, el límite máximo sube a 80 palabras.
 - REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
 - TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
@@ -1264,6 +1265,12 @@ Genera el JSON completo respetando la estructura exigida:`;
       };
     });
 
+    // Barajado aleatorio (Fisher-Yates) para que el orden de generación de la IA sea impredecible y no comience siempre igual
+    for (let i = mappedQuestions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [mappedQuestions[i], mappedQuestions[j]] = [mappedQuestions[j], mappedQuestions[i]];
+    }
+
     return mappedQuestions;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1315,7 +1322,16 @@ export async function generateCompleteAIPedagogicalBatch(
   const mediumQuestions = resMedium.status === 'fulfilled' ? resMedium.value : [];
   const hardQuestions = resHard.status === 'fulfilled' ? resHard.value : [];
 
-  const allQuestions = [...easyQuestions, ...mediumQuestions, ...hardQuestions];
+  const shuffleArray = <T>(arr: T[]): T[] => {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+
+  const allQuestions = [...shuffleArray(easyQuestions), ...shuffleArray(mediumQuestions), ...shuffleArray(hardQuestions)];
 
   // Si todas las llamadas fallaron o no se generó ninguna pregunta
   if (allQuestions.length === 0) {
