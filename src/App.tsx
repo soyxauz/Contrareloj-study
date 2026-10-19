@@ -315,6 +315,9 @@ export const App: React.FC = () => {
     isLoggingOutRef.current = false;
     setCurrentUser(user);
 
+    // 0. Borrado total e inmediato de datos de invitado (aislamiento estricto)
+    authService.clearGuestData();
+
     // 1. Restaurar ajustes de IA asociados a esta cuenta
     const userAISettings = authService.getUserAISettings(user.id);
     const currentSettings = getAISettings();
@@ -415,9 +418,10 @@ export const App: React.FC = () => {
     try {
       googleDriveService.disconnect();
       authService.logout();
+      authService.clearGuestData();
       resetAISettingsToDefault();
       setCurrentUser(null);
-      // Al cerrar sesión, cargar los kits de invitado o de fábrica en lugar de dejar la pantalla vacía
+      // Al cerrar sesión, cargar los kits limpios de fábrica para invitado en lugar de dejar la pantalla vacía
       const guestKits = authService.getUserKits(null).filter(k => !isCorruptedKit(k));
       setKits(guestKits);
       const first = guestKits[0] || null;

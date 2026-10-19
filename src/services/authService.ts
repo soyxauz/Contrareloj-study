@@ -298,7 +298,7 @@ export const authService = {
 
     // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
     persistSessionRecord(newUser.id);
-    this.migrateGuestProgressToUser(newUser.id);
+    this.clearGuestData();
 
     const { passwordHash: _, ...safeUser } = newUser;
     return { success: true, user: safeUser };
@@ -323,7 +323,7 @@ export const authService = {
 
     // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
     persistSessionRecord(user.id);
-    this.migrateGuestProgressToUser(user.id);
+    this.clearGuestData();
     const { passwordHash: _, ...safeUser } = user;
     return { success: true, user: safeUser };
   },
@@ -370,7 +370,7 @@ export const authService = {
 
       // Iniciar sesión persistente extendida (LocalStorage + Cookie 1 año + IndexedDB)
       persistSessionRecord(existing.id);
-      this.migrateGuestProgressToUser(existing.id);
+      this.clearGuestData();
       const { passwordHash: _, ...safeUser } = existing;
       return { success: true, user: safeUser };
     } catch (e: any) {
@@ -454,37 +454,7 @@ export const authService = {
         } catch {}
       }
 
-      // Fallback 1: Comprobar kits de invitado si el usuario aún no tiene kits asignados
-      const guestStored = localStorage.getItem('thea_guest_kits');
-      if (guestStored !== null) {
-        try {
-          const parsedGuest = JSON.parse(guestStored);
-          if (Array.isArray(parsedGuest) && parsedGuest.length > 0) {
-            const cleanGuest = parsedGuest.filter(k => !isCorruptedKit(k));
-            if (cleanGuest.length > 0) {
-              this.saveUserKits(userId, cleanGuest);
-              return cleanGuest;
-            }
-          }
-        } catch {}
-      }
-
-      // Fallback 2: Comprobar legacy thea_study_kits_v2
-      const legacy = localStorage.getItem('thea_study_kits_v2');
-      if (legacy !== null) {
-        try {
-          const parsedLegacy = JSON.parse(legacy);
-          if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
-            const cleanLegacy = parsedLegacy.filter(k => !isCorruptedKit(k));
-            if (cleanLegacy.length > 0) {
-              this.saveUserKits(userId, cleanLegacy);
-              return cleanLegacy;
-            }
-          }
-        } catch {}
-      }
-
-      // Fallback 3: Kits predeterminados de fábrica
+      // Fallback para usuario sin kits locales previos: inicializar con kits limpios de fábrica
       const defaultKits = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
       this.saveUserKits(userId, defaultKits);
       return defaultKits;
@@ -603,18 +573,7 @@ export const authService = {
   getSmartStudySession(userId: string | null, kitId: string): SmartStudySessionState | null {
     try {
       const userKey = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
-      let raw = localStorage.getItem(userKey);
-      if (!raw && userId && userId !== 'guest') {
-        const guestKey = `thea_ss_mem_guest_${kitId}`;
-        const guestRaw = localStorage.getItem(guestKey);
-        if (guestRaw) {
-          raw = guestRaw;
-          localStorage.setItem(userKey, guestRaw);
-          try {
-            saveSessionItem(userKey, JSON.parse(guestRaw)).catch(() => {});
-          } catch {}
-        }
-      }
+      const raw = localStorage.getItem(userKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const sanitized = sanitizeSmartStudySession(parsed);
@@ -658,7 +617,6 @@ export const authService = {
     if (typeof localStorage === 'undefined') return result;
 
     const prefix = `thea_ss_mem_${userId || 'guest'}_`;
-    const guestPrefix = 'thea_ss_mem_guest_';
 
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -673,17 +631,6 @@ export const authService = {
             if (sanitized) result[kitId] = sanitized;
           }
         } catch {}
-      } else if (userId && userId !== 'guest' && key.startsWith(guestPrefix)) {
-        const kitId = key.substring(guestPrefix.length);
-        if (!result[kitId]) {
-          try {
-            const raw = localStorage.getItem(key);
-            if (raw) {
-              const sanitized = sanitizeSmartStudySession(JSON.parse(raw));
-              if (sanitized) result[kitId] = sanitized;
-            }
-          } catch {}
-        }
       }
     }
     return result;
@@ -803,48 +750,45 @@ export const authService = {
   },
 
   /**
-   * Migra el progreso acumulado en modo invitado hacia una cuenta de usuario recién conectada.
+   * Borra total e inmediatamente todos los datos temporales del modo invitado
+   * (kits, progreso de Smart Study, preguntas reveladas y caché de sesión) tanto de LocalStorage
+   * como de IndexedDB al iniciar sesión, evitando cualquier contaminación cruzada con la nube.
    */
-  migrateGuestProgressToUser(userId: string): void {
-    if (!userId || userId === 'guest') return;
-    const guestSessions = this.getAllSmartStudySessions('guest');
-    const guestRevealed = this.getAllRevealedQuestionIds('guest');
-
-    for (const [kitId, session] of Object.entries(guestSessions)) {
-      this.mergeSmartStudySession(userId, kitId, session);
-    }
-
-    for (const [kitId, ids] of Object.entries(guestRevealed)) {
-      if (Array.isArray(ids)) {
-        const current = this.getRevealedQuestionIds(userId, kitId);
-        const union = Array.from(new Set([...current, ...ids]));
-        const key = `thea_revealed_q_${userId}_${kitId}`;
-        try {
-          localStorage.setItem(key, JSON.stringify(union));
-          saveSessionItem(key, union).catch(() => {});
-        } catch {}
-      }
-    }
-
-    // Migrar kits creados en modo invitado al usuario si procede
+  clearGuestData(): void {
     try {
-      const guestKey = 'thea_guest_kits';
-      const storedGuest = localStorage.getItem(guestKey);
-      if (storedGuest) {
-        const guestKits = JSON.parse(storedGuest);
-        if (Array.isArray(guestKits) && guestKits.length > 0) {
-          const userKits = this.getUserKits(userId);
-          const userKitIds = new Set(userKits.map(k => k.id));
-          const newKitsFromGuest = guestKits.filter(k => !userKitIds.has(k.id) && !isCorruptedKit(k));
-          if (newKitsFromGuest.length > 0) {
-            const mergedKits = [...userKits, ...newKitsFromGuest];
-            this.saveUserKits(userId, mergedKits);
-          }
+      localStorage.removeItem('thea_guest_kits');
+      localStorage.removeItem('thea_study_kits_v2');
+
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key &&
+          (key.startsWith('thea_ss_mem_guest_') ||
+           key.startsWith('thea_revealed_q_guest_') ||
+           key.startsWith('thea_guest_'))
+        ) {
+          keysToRemove.push(key);
         }
       }
+      for (const k of keysToRemove) {
+        localStorage.removeItem(k);
+        removeSessionItem(k).catch(() => {});
+      }
+
+      removeSessionItem('thea_guest_kits').catch(() => {});
+      removeSessionItem('thea_study_kits_v2').catch(() => {});
     } catch (e) {
-      console.warn('[authService] Error al migrar kits de invitado:', e);
+      console.warn('[authService] Error al limpiar datos de invitado:', e);
     }
+  },
+
+  /**
+   * @deprecated Prohibido fusionar datos de invitado con la cuenta de usuario.
+   * Ejecuta en su lugar un borrado limpio de datos de invitado.
+   */
+  migrateGuestProgressToUser(_userId: string): void {
+    this.clearGuestData();
   },
 
   /**

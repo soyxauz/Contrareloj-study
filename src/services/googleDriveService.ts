@@ -6,7 +6,8 @@ import {
   stripHeavyAssetsForLocalStorage,
   saveSessionItem,
   getSessionItem,
-  removeSessionItem
+  removeSessionItem,
+  isCorruptedKit
 } from './storageService';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, DEFAULT_AI_SETTINGS, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
@@ -1096,9 +1097,16 @@ export const googleDriveService = {
         authService.setRawStoredUsers(Array.from(mergedMap.values()));
       }
 
-      // 4. Procesar e integrar kits de estudio
+      // 4. Procesar e integrar kits de estudio con proteccion anti-vaciado
+      let validPulledKits: StudyKit[] | null = null;
       if (Array.isArray(pulledKits)) {
-        authService.saveUserKits(userId, pulledKits);
+        const cleanKits = pulledKits.filter(k => !isCorruptedKit(k));
+        if (cleanKits.length > 0) {
+          validPulledKits = cleanKits;
+          authService.saveUserKits(userId, cleanKits);
+        } else {
+          console.warn('[GoogleDriveService] Kits descargados de la nube vacios o corruptos; se preservan los kits locales para garantizar datos infinitos.');
+        }
       }
 
       // 5. Procesar e integrar progreso de Smart Study (nivel, respuestas, historial)
@@ -1214,7 +1222,7 @@ export const googleDriveService = {
         console.warn('[GoogleDriveService] Error en sincronización de activos en segundo plano:', err);
       });
 
-      return pulledKits;
+      return validPulledKits;
     } catch (err: any) {
       console.error('[GoogleDriveService] Error en pullFromDrive:', err);
       const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
@@ -1239,6 +1247,24 @@ export const googleDriveService = {
    * Sube los datos locales actualizados a Google Drive en segundo plano con auto-renovación silenciosa de token.
    */
   async pushToDrive(userId: string, kits: StudyKit[]): Promise<void> {
+    // 1. Candado estricto de sesión abierta: los datos de la nube solo pueden ser modificados con sesión abierta
+    if (!userId || userId === 'guest') {
+      console.warn('[GoogleDriveService] Intento de escritura en la nube sin sesión de usuario activa bloqueado.');
+      return;
+    }
+
+    // 2. Candado estricto anti-vaciado: prohibido sobreescribir la nube con listas vacías o corruptas (datos infinitos)
+    if (!kits || !Array.isArray(kits) || kits.length === 0) {
+      console.warn('[GoogleDriveService] Bloqueada sobreescritura de la nube con lista vacía para proteger la persistencia infinita.');
+      return;
+    }
+
+    const cleanKits = kits.filter(k => !isCorruptedKit(k));
+    if (cleanKits.length === 0) {
+      console.warn('[GoogleDriveService] Intento de subir kits corruptos a la nube bloqueado.');
+      return;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
@@ -1347,6 +1373,11 @@ export const googleDriveService = {
    * sin esperar el debounce y con subidas concurrentes en paralelo (lotes de 6 simultáneos).
    */
   async pushKitImmediately(userId: string, newKit: StudyKit, allKits: StudyKit[]): Promise<void> {
+    if (!userId || userId === 'guest') {
+      console.warn('[GoogleDriveService] Intento de subir kit a la nube sin sesión activa bloqueado.');
+      return;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
@@ -1557,6 +1588,11 @@ export const googleDriveService = {
    * Sincroniza únicamente el progreso de estudio hacia Google Drive en segundo plano (nivel, respuestas e historial).
    */
   async pushProgressToDrive(userId: string): Promise<void> {
+    if (!userId || userId === 'guest') {
+      console.warn('[GoogleDriveService] Intento de sincronizar progreso en la nube sin sesión activa bloqueado.');
+      return;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();

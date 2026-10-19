@@ -77,7 +77,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       return;
     }
 
-    const effectiveUserId = currentUser?.id || (syncState.userEmail ? `usr_g_${syncState.userEmail}` : 'guest');
+    const effectiveUserId = currentUser?.id || (syncState.userEmail ? `usr_g_${syncState.userEmail}` : null);
+    if (!effectiveUserId) {
+      setNoticeMessage('Debes iniciar sesión para sincronizar datos con la nube.');
+      return;
+    }
     setIsProcessing(true);
     setNoticeMessage(null);
     try {
