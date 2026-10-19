@@ -1675,8 +1675,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const durationObj = PODCAST_DURATION_OPTIONS.find((d) => d.id === selectedDuration);
 
     return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-        <div className="bg-thea-surface border border-rose-500/40 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative">
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+        <div className="bg-thea-surface border border-rose-500/40 rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative mb-14 sm:mb-0">
           <div className="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
             <AlertTriangle className="w-7 h-7" />
           </div>
@@ -1729,8 +1729,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const candidateVoices = esVoices.length > 0 ? esVoices : voices;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-        <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-7 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative text-left">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+        <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl relative text-left mb-14 sm:mb-0">
           {/* Encabezado del Modal */}
           <div className="flex items-center justify-between pb-4 border-b border-thea-border mb-4">
             <div className="flex items-center gap-2.5">
@@ -2375,38 +2375,38 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             {/* SECCIÓN INFERIOR PARA PESTAÑAS AZURE Y BROWSER (BOTONES DE PRUEBA) */}
             {voiceModalTab !== 'new_episode' && (
               <div className="pt-3 border-t border-thea-border">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={isTestingVoice}
-                        onClick={() => testVoiceSample('sofia')}
-                        className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-amber-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-                      >
-                        {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
-                        <span>Probar Sofía</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isTestingVoice}
-                        onClick={() => testVoiceSample('mateo')}
-                        className="px-3.5 py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-violet-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-                      >
-                        {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-400" />}
-                        <span>Probar Mateo</span>
-                      </button>
-                    </div>
+                <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <button
+                      type="button"
+                      disabled={isTestingVoice}
+                      onClick={() => testVoiceSample('sofia')}
+                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-amber-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
+                      <span>Probar Sofía</span>
+                    </button>
 
                     <button
                       type="button"
-                      onClick={handleCloseVoiceModal}
-                      className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                      disabled={isTestingVoice}
+                      onClick={() => testVoiceSample('mateo')}
+                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-violet-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
                     >
-                      Listo
+                      {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-400" />}
+                      <span>Probar Mateo</span>
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseVoiceModal}
+                    className="px-4 py-1.5 sm:px-5 sm:py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Listo
+                  </button>
                 </div>
+              </div>
             )}
           </div>
         </div>
@@ -2414,18 +2414,18 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     );
   };
 
-  const speeds = [0.75, 1, 1.25, 1.5];
+  const speeds = [0.75, 1, 1.25, 1.5, 2];
 
   if (!podcast || !podcast.dialogue || podcast.dialogue.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8 animate-fadeIn">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-2 sm:pt-6 pb-32 sm:pb-12 animate-fadeIn">
         {/* Encabezado */}
-        <div className="text-center max-w-2xl mx-auto mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider mb-3">
+        <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2 sm:mb-3">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             Configuración Previa del Podcast
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
+          <h1 className="text-xl sm:text-3xl font-extrabold text-white mb-2">
             Personaliza tu Episodio Educativo
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
@@ -2433,7 +2433,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           </p>
         </div>
 
-        <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl space-y-5 sm:space-y-6">
           {/* SECCIÓN 1: FORMATO */}
           <div>
             <div className="mb-3">
@@ -2641,60 +2641,90 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const speakerAcoustics = getSpeakerAcoustics(currentItem.speaker, currentItem.text);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Badge Header */}
-      <div className="flex items-center justify-between mb-6 pb-6 border-b border-thea-border">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600 text-white">
-              PODCAST EDUCATIVO
-            </span>
-            <span className="text-xs text-slate-400 font-medium">Recap de audio con síntesis vocal emotiva</span>
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-2 sm:pt-6 pb-32 sm:pb-12 animate-fadeIn">
+      {/* Badge Header & Controls Bar */}
+      <div className="mb-4 sm:mb-6 pb-3 sm:pb-6 border-b border-thea-border">
+        {/* Fila 1: Título y Selector de Pestañas */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+              <span className="text-[10px] sm:text-xs uppercase font-extrabold px-1.5 sm:px-2 py-0.5 rounded bg-violet-600 text-white shrink-0">
+                PODCAST EDUCATIVO
+              </span>
+              <span className="text-[11px] sm:text-xs text-slate-400 font-medium truncate hidden sm:inline">
+                Recap de audio con síntesis vocal emotiva
+              </span>
+            </div>
+            <h1 className="text-base sm:text-2xl font-bold text-white flex items-center gap-1.5 sm:gap-2 truncate">
+              <Headphones className="w-4 h-4 sm:w-6 sm:h-6 text-amber-400 shrink-0" />
+              <span className="truncate">Contrareloj Review Podcast</span>
+            </h1>
           </div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Headphones className="w-6 h-6 text-amber-400" />
-            <span>Contrareloj Review Podcast</span>
-          </h1>
+
+          {/* Selector de Pestañas [Reproductor | Transcripción] */}
+          <div className="flex items-center gap-1 bg-thea-surface border border-thea-border rounded-xl p-1 text-xs shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('player')}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-medium transition-all cursor-pointer text-xs ${
+                activeTab === 'player' ? 'bg-violet-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Reproductor
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('transcript')}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-medium transition-all cursor-pointer text-xs ${
+                activeTab === 'transcript' ? 'bg-violet-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Transcripción
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        {/* Fila 2: Motor de Voz y Acciones */}
+        <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-thea-border/40 flex items-center justify-between gap-2 flex-wrap">
           {/* Selector de Motor de Voz Dinámico (Azure Neural vs Sistema) */}
-          <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-1 text-xs gap-1">
+          <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-0.5 text-xs gap-0.5">
             <button
               type="button"
               onClick={() => handleSwitchEngine('edge')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
                 voiceEngine === 'edge'
                   ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
               title="Azure Neural: Voces oficiales de Microsoft Azure."
             >
-              <Headphones className="w-3.5 h-3.5 text-emerald-400" />
+              <Headphones className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>Azure Neural</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleSwitchEngine('browser')}
-              className={`px-2.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
                 voiceEngine === 'browser'
                   ? 'bg-violet-600/20 border border-violet-500/40 text-violet-300 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
               title="Voz del Sistema: Síntesis local offline del navegador"
             >
-              <Volume2 className="w-3.5 h-3.5 text-slate-400" />
+              <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span>Voz Local</span>
             </button>
+          </div>
 
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => {
                 setVoiceModalTab('azure');
                 setShowVoiceModal(true);
               }}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-thea-surfaceLight transition-colors cursor-pointer ml-0.5"
+              className="p-1.5 sm:p-2 rounded-xl bg-thea-surface border border-thea-border text-slate-400 hover:text-amber-300 hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               title="Configuración de Voces, Locutores y Enfoque"
             >
               <Settings2 className="w-4 h-4" />
@@ -2706,47 +2736,27 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 setVoiceModalTab('new_episode');
                 setShowVoiceModal(true);
               }}
-              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-violet-500/20 hover:from-amber-500/30 hover:to-violet-500/30 border border-amber-500/30 hover:border-amber-400/50 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ml-1"
+              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-violet-500/20 hover:from-amber-500/30 hover:to-violet-500/30 border border-amber-500/30 hover:border-amber-400/50 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
               title="Crear un nuevo episodio con otras configuraciones de formato y duración"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>Nuevo Episodio</span>
-            </button>
-          </div>
-
-          {/* Selector de Pestañas */}
-          <div className="flex items-center gap-1 bg-thea-surface border border-thea-border rounded-xl p-1 text-xs">
-            <button
-              onClick={() => setActiveTab('player')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
-                activeTab === 'player' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Reproductor
-            </button>
-            <button
-              onClick={() => setActiveTab('transcript')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
-                activeTab === 'transcript' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Transcripción
             </button>
           </div>
         </div>
       </div>
 
       {activeTab === 'player' ? (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Main Visual Player Card */}
-          <div className="bg-gradient-to-b from-thea-surface to-thea-bg border border-thea-border rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden text-center">
+          <div className="bg-gradient-to-b from-thea-surface to-thea-bg border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl relative overflow-hidden text-center">
             {/* Background Glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
 
             {/* Episode Title */}
-            <div className="relative z-10 mb-6">
-              <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
-                <span className="text-xs font-bold text-violet-400 uppercase tracking-widest">
+            <div className="relative z-10 mb-3 sm:mb-6">
+              <div className="flex items-center justify-center gap-1.5 mb-1.5 sm:mb-2 flex-wrap">
+                <span className="text-[10px] sm:text-xs font-bold text-violet-400 uppercase tracking-wider">
                   REPASO DE AUDIO DINÁMICO
                 </span>
                 {podcast.format && (
@@ -2770,16 +2780,16 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   </span>
                 )}
               </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
+              <h2 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-white mb-1 sm:mb-2 leading-snug">
                 {podcast.title}
               </h2>
-              <p className="text-xs sm:text-sm text-slate-400">
+              <p className="text-[11px] sm:text-xs text-slate-400">
                 Duración: {podcast.duration} • Generado a partir de tus materiales
               </p>
             </div>
 
             {/* Host Cards */}
-            <div className="flex justify-center items-center gap-6 mb-8 relative z-10">
+            <div className="flex justify-center items-center gap-4 sm:gap-6 mb-3 sm:mb-6 relative z-10">
               {podcast.hosts.map((host, idx) => {
                 const isCurrentHostSpeaking =
                   isPlaying &&
@@ -2788,25 +2798,25 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
                 return (
                   <div key={idx} className="flex flex-col items-center">
-                    <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-thea-surfaceLight border-2 flex items-center justify-center font-bold text-xl text-violet-300 shadow-xl transition-all duration-300 relative ${
+                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-thea-surfaceLight border-2 flex items-center justify-center font-bold text-base sm:text-xl text-violet-300 shadow-xl transition-all duration-300 relative ${
                       isCurrentHostSpeaking
                         ? 'border-amber-400 ring-4 ring-amber-400/20 scale-105 shadow-amber-500/20'
                         : 'border-thea-border opacity-70'
                     }`}>
                       {host.name.charAt(0)}
                       {isCurrentHostSpeaking && (
-                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
                       )}
                     </div>
-                    <span className="text-xs font-bold text-white mt-2">{host.name}</span>
-                    <span className="text-[10px] text-slate-400">{host.role}</span>
+                    <span className="text-[11px] sm:text-xs font-bold text-white mt-1.5">{host.name}</span>
+                    <span className="text-[9px] sm:text-[10px] text-slate-400">{host.role}</span>
                   </div>
                 );
               })}
             </div>
 
             {/* Animated Audio Equalizer Waveform */}
-            <div className="flex items-center justify-center gap-1.5 h-14 mb-6 relative z-10">
+            <div className="flex items-center justify-center gap-1 sm:gap-1.5 h-7 sm:h-12 mb-3 sm:mb-6 relative z-10">
               {[12, 28, 45, 60, 32, 50, 75, 90, 65, 40, 20, 55, 80, 45, 30, 65, 85, 50, 35, 70, 40, 25].map((height, i) => (
                 <div
                   key={i}
@@ -2815,7 +2825,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                       ? `${Math.max(20, Math.min(100, height * (Math.sin(i * 0.8 + currentLineIndex * 2) + 1.2) * 0.6))}%`
                       : '15%',
                   }}
-                  className={`w-1.5 rounded-full transition-all duration-300 ${
+                  className={`w-1 sm:w-1.5 rounded-full transition-all duration-300 ${
                     isPlaying && isAudioActive ? 'bg-gradient-to-t from-violet-500 to-amber-400' : 'bg-thea-border'
                   }`}
                 />
@@ -2824,8 +2834,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
             {/* Alerta visible si la síntesis de voz experimenta un error */}
             {synthesisError && (
-              <div className="mb-4 max-w-2xl mx-auto px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
-                <span className="flex-1 leading-relaxed font-medium">
+              <div className="mb-3 max-w-2xl mx-auto px-3.5 py-2.5 rounded-xl sm:rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
+                <span className="flex-1 leading-relaxed font-medium text-left">
                   {synthesisError}
                 </span>
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
@@ -2851,37 +2861,39 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             )}
 
             {/* Current Active Dialogue Bubble */}
-            <div className="bg-thea-surfaceLight/80 backdrop-blur border border-thea-border rounded-2xl p-5 mb-6 max-w-2xl mx-auto shadow-inner text-left relative z-10">
+            <div className="bg-thea-surfaceLight/80 backdrop-blur border border-thea-border rounded-xl sm:rounded-2xl p-3.5 sm:p-5 mb-3 sm:mb-6 max-w-2xl mx-auto shadow-inner text-left relative z-10">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-bold text-xs text-amber-300 flex items-center gap-1.5">
                   <Volume2 className={`w-3.5 h-3.5 ${isAudioActive ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
                   {currentItem.speaker}
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   {voiceEngine === 'edge' ? (
                     isSynthesizing ? (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center gap-1 animate-pulse">
                         <Loader2 className="w-3 h-3 animate-spin" />
-                        Sintetizando voz neuronal...
+                        <span className="hidden sm:inline">Sintetizando voz neuronal...</span>
+                        <span className="sm:hidden">Sintetizando...</span>
                       </span>
                     ) : (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-600/25 border border-cyan-500/35 text-cyan-300 flex items-center gap-1 font-medium">
-                        <Headphones className="w-3 h-3 text-cyan-400" />
-                        Azure Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})
+                        <Headphones className="w-3 h-3 text-cyan-400 shrink-0" />
+                        <span className="hidden sm:inline">Azure Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})</span>
+                        <span className="sm:hidden">Azure ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name.replace(' Neural', '') || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name.replace(' Neural', '') || 'Álvaro')})</span>
                       </span>
                     )
                   ) : (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1 font-medium">
-                      <Headphones className="w-3 h-3 text-emerald-400" />
-                      {speakerAcoustics.voiceName}
+                      <Headphones className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span className="truncate max-w-[100px] sm:max-w-none">{speakerAcoustics.voiceName}</span>
                     </span>
                   )}
-                  <span className="text-[11px] text-slate-500 font-mono">
+                  <span className="text-[10px] sm:text-[11px] text-slate-500 font-mono">
                     {currentItem.time}
                   </span>
                 </div>
               </div>
-              <div className="text-sm sm:text-base font-medium leading-relaxed flex flex-wrap gap-x-1.5 gap-y-1 select-none">
+              <div className="text-xs sm:text-base font-medium leading-relaxed flex flex-wrap gap-x-1.5 gap-y-1 select-none max-h-24 sm:max-h-36 overflow-y-auto pr-1">
                 {currentSegmentWords.map((word, wIdx) => {
                   const isCurrent = wIdx === currentWordIndexInSegment;
                   const isPast = wIdx < currentWordIndexInSegment;
@@ -2909,10 +2921,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             </div>
 
             {/* ── LÍNEA DE TIEMPO INTERACTIVA ULTRA-FLUIDA (SMOOTH SCRUBBER) ── */}
-            <div className="max-w-2xl mx-auto mb-6 px-2 relative z-10">
-              <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2.5">
-                <span className="font-semibold text-amber-400 text-sm">{currentTimeDisplay}</span>
-                <span className="text-slate-300 font-medium text-xs font-sans">
+            <div className="max-w-2xl mx-auto mb-3 sm:mb-6 px-1 sm:px-2 relative z-10">
+              <div className="flex items-center justify-between text-[11px] sm:text-xs font-mono text-slate-400 mb-1.5 sm:mb-2.5">
+                <span className="font-semibold text-amber-400 text-xs sm:text-sm">{currentTimeDisplay}</span>
+                <span className="text-slate-300 font-medium text-[11px] sm:text-xs font-sans">
                   Segmento {currentLineIndex + 1} de {podcast.dialogue.length}
                 </span>
                 <span className="text-slate-400">{podcast.duration}</span>
@@ -2952,115 +2964,130 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               </div>
             </div>
 
-            {/* Controles de Reproducción y Navegación */}
-            <div className="flex items-center justify-center gap-2 sm:gap-3 relative z-10 flex-wrap">
-              {/* Reiniciar */}
-              <button
-                type="button"
-                onClick={handleRestart}
-                className="p-2.5 sm:p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white transition-colors cursor-pointer"
-                title="Reiniciar podcast desde el principio"
-              >
-                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+            {/* Controles de Reproducción y Navegación en 2 Filas */}
+            <div className="max-w-2xl mx-auto space-y-2.5 sm:space-y-3 relative z-10">
+              {/* Fila 1: Botones Primarios de Reproducción */}
+              <div className="flex items-center justify-center gap-1.5 sm:gap-3">
+                {/* Reiniciar */}
+                <button
+                  type="button"
+                  onClick={handleRestart}
+                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="Reiniciar podcast desde el principio"
+                >
+                  <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
 
-              {/* Segmento Anterior */}
-              <button
-                type="button"
-                onClick={handleSkipBackward}
-                disabled={currentLineIndex === 0}
-                className="p-2.5 sm:p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
-                title="Atrasar al segmento anterior"
-              >
-                <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+                {/* Segmento Anterior */}
+                <button
+                  type="button"
+                  onClick={handleSkipBackward}
+                  disabled={currentLineIndex === 0}
+                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                  title="Atrasar al segmento anterior"
+                >
+                  <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
 
-              {/* Retroceder 10 Segundos */}
-              <button
-                type="button"
-                onClick={() => handleSkipSeconds(-10)}
-                disabled={currentPlaybackSecs <= 0}
-                className="px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
-                title="Retroceder 10 segundos (Flecha izquierda)"
-              >
-                <ChevronLeft className="w-4 h-4 text-amber-400" />
-                <span>-10s</span>
-              </button>
+                {/* Retroceder 10 Segundos */}
+                <button
+                  type="button"
+                  onClick={() => handleSkipSeconds(-10)}
+                  disabled={currentPlaybackSecs <= 0}
+                  className="px-2 py-1.5 sm:px-3 sm:py-2.5 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
+                  title="Retroceder 10 segundos"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                  <span>-10s</span>
+                </button>
 
-              {/* Play / Pausa */}
-              <button
-                type="button"
-                onClick={handleTogglePlay}
-                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-amber-500 hover:scale-105 transition-all shadow-xl shadow-violet-900/40 flex items-center justify-center text-white font-bold cursor-pointer"
-                title={isPlaying ? 'Pausar (Espacio)' : 'Reproducir (Espacio)'}
-              >
-                {isPlaying ? <Pause className="w-6 h-6 sm:w-7 sm:h-7 fill-white" /> : <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-white ml-0.5" />}
-              </button>
+                {/* Play / Pausa Botón Central */}
+                <button
+                  type="button"
+                  onClick={handleTogglePlay}
+                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-amber-500 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-violet-900/40 flex items-center justify-center text-white font-bold cursor-pointer shrink-0"
+                  title={isPlaying ? 'Pausar' : 'Reproducir'}
+                >
+                  {isPlaying ? (
+                    <Pause className="w-5 h-5 sm:w-7 sm:h-7 fill-white" />
+                  ) : (
+                    <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-white ml-0.5" />
+                  )}
+                </button>
 
-              {/* Adelantar 10 Segundos */}
-              <button
-                type="button"
-                onClick={() => handleSkipSeconds(10)}
-                disabled={currentPlaybackSecs >= totalDurationSecs}
-                className="px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
-                title="Adelantar 10 segundos (Flecha derecha)"
-              >
-                <span>+10s</span>
-                <ChevronRight className="w-4 h-4 text-amber-400" />
-              </button>
+                {/* Adelantar 10 Segundos */}
+                <button
+                  type="button"
+                  onClick={() => handleSkipSeconds(10)}
+                  disabled={currentPlaybackSecs >= totalDurationSecs}
+                  className="px-2 py-1.5 sm:px-3 sm:py-2.5 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
+                  title="Adelantar 10 segundos"
+                >
+                  <span>+10s</span>
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                </button>
 
-              {/* Segmento Siguiente */}
-              <button
-                type="button"
-                onClick={handleSkipForward}
-                disabled={currentLineIndex >= podcast.dialogue.length - 1}
-                className="p-2.5 sm:p-3 rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
-                title="Adelantar al siguiente segmento"
-              >
-                <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+                {/* Segmento Siguiente */}
+                <button
+                  type="button"
+                  onClick={handleSkipForward}
+                  disabled={currentLineIndex >= podcast.dialogue.length - 1}
+                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                  title="Adelantar al siguiente segmento"
+                >
+                  <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </div>
 
-              {/* Mute */}
-              <button
-                type="button"
-                onClick={handleToggleMute}
-                className={`p-2.5 sm:p-3 rounded-2xl border transition-colors cursor-pointer ${
-                  isMuted
-                    ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                    : 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-white'
-                }`}
-                title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
-              >
-                {isMuted ? <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" /> : <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />}
-              </button>
+              {/* Fila 2: Controles Secundarios (Silenciar y Velocidad) */}
+              <div className="flex items-center justify-between sm:justify-center gap-2 sm:gap-4 pt-2 border-t border-thea-border/40">
+                {/* Mute */}
+                <button
+                  type="button"
+                  onClick={handleToggleMute}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl border transition-colors cursor-pointer text-xs ${
+                    isMuted
+                      ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                      : 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-white'
+                  }`}
+                  title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  )}
+                  <span className="text-[11px] font-medium">{isMuted ? 'Mudo' : 'Sonido'}</span>
+                </button>
 
-              {/* Speed Controller */}
-              <div className="flex items-center gap-1 bg-thea-surface border border-thea-border rounded-2xl p-1 text-xs">
-                {speeds.map(s => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => handleSpeedChange(s)}
-                    className={`px-2.5 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
-                      playbackSpeed === s ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {s}x
-                  </button>
-                ))}
+                {/* Speed Controller */}
+                <div className="flex items-center gap-0.5 sm:gap-1 bg-thea-surface border border-thea-border rounded-xl p-0.5 sm:p-1 text-xs">
+                  {speeds.map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => handleSpeedChange(s)}
+                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1 rounded-lg font-bold transition-colors cursor-pointer text-[10px] sm:text-xs ${
+                        playbackSpeed === s ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
       ) : (
         /* Full Transcript View */
-        <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between pb-4 border-b border-thea-border">
-            <h3 className="font-bold text-white text-base">Transcripción Completa del Episodio</h3>
+        <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-8 space-y-3 sm:space-y-4 shadow-xl">
+          <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-thea-border">
+            <h3 className="font-bold text-white text-sm sm:text-base">Transcripción Completa del Episodio</h3>
             <span className="text-xs text-amber-400 font-semibold">{podcast.dialogue.length} intervenciones</span>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {podcast.dialogue.map((item, idx) => (
               <div
                 key={idx}
@@ -3069,17 +3096,17 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   setIsPlaying(true);
                   setActiveTab('player');
                 }}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer ${
                   currentLineIndex === idx
                     ? 'border-amber-500/50 bg-amber-500/10 shadow-md ring-1 ring-amber-500/30'
                     : 'border-thea-border/60 bg-thea-surfaceLight/40 hover:bg-thea-surfaceLight'
                 }`}
               >
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-xs text-violet-300">{item.speaker}</span>
-                  <span className="text-[11px] text-slate-500 font-mono">{item.time}</span>
+                  <span className="text-[10px] sm:text-[11px] text-slate-500 font-mono">{item.time}</span>
                 </div>
-                <p className="text-sm text-slate-300">{item.text}</p>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{item.text}</p>
               </div>
             ))}
           </div>
