@@ -191,9 +191,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [totalErrorsReinforced, setTotalErrorsReinforced] = useState(savedSession?.totalErrorsReinforced || 0);
 
   // Question iteration
-  const [currentIndex, setCurrentIndex] = useState(savedSession?.currentIndex || 0);
-  const [isAnswered, setIsAnswered] = useState(savedSession?.isAnswered || false);
-  const [isCurrentCorrect, setIsCurrentCorrect] = useState<boolean | null>(savedSession?.isCurrentCorrect ?? null);
+  const wasPreviouslyAnswered = Boolean(savedSession?.isAnswered);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    return (savedSession?.currentIndex || 0) + (wasPreviouslyAnswered ? 1 : 0);
+  });
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [isCurrentCorrect, setIsCurrentCorrect] = useState<boolean | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
 
@@ -207,17 +210,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   }, [userId, kit.id]);
 
   // ── Interactive Question Type States ────────────────────────────────────
-  const [selectedOption, setSelectedOption] = useState<number | null>(savedSession?.selectedOption ?? null);
-  const [selectedMultiIndices, setSelectedMultiIndices] = useState<number[]>(savedSession?.selectedMultiIndices || []);
+  const [selectedOption, setSelectedOption] = useState<number | null>(wasPreviouslyAnswered ? null : (savedSession?.selectedOption ?? null));
+  const [selectedMultiIndices, setSelectedMultiIndices] = useState<number[]>(wasPreviouslyAnswered ? [] : (savedSession?.selectedMultiIndices || []));
   const [activeMatchingTerm, setActiveMatchingTerm] = useState<string | null>(null);
-  const [matchingPairsMap, setMatchingPairsMap] = useState<Record<string, string>>(savedSession?.matchingPairsMap || {});
-  const [matchingChecked, setMatchingChecked] = useState(savedSession?.matchingChecked || false);
-  const [placedChips, setPlacedChips] = useState<(string | null)[]>(savedSession?.placedChips || []);
+  const [matchingPairsMap, setMatchingPairsMap] = useState<Record<string, string>>(wasPreviouslyAnswered ? {} : (savedSession?.matchingPairsMap || {}));
+  const [matchingChecked, setMatchingChecked] = useState(wasPreviouslyAnswered ? false : (savedSession?.matchingChecked || false));
+  const [placedChips, setPlacedChips] = useState<(string | null)[]>(wasPreviouslyAnswered ? [] : (savedSession?.placedChips || []));
   const [draggedChip, setDraggedChip] = useState<string | null>(null);
-  const [dragDropChecked, setDragDropChecked] = useState(savedSession?.dragDropChecked || false);
-  const [placedImageLabels, setPlacedImageLabels] = useState<Record<string, string>>((savedSession as any)?.placedImageLabels || {});
+  const [dragDropChecked, setDragDropChecked] = useState(wasPreviouslyAnswered ? false : (savedSession?.dragDropChecked || false));
+  const [placedImageLabels, setPlacedImageLabels] = useState<Record<string, string>>(wasPreviouslyAnswered ? {} : ((savedSession as any)?.placedImageLabels || {}));
   const [activeLabelChip, setActiveLabelChip] = useState<string | null>(null);
-  const [imageLabelChecked, setImageLabelChecked] = useState((savedSession as any)?.imageLabelChecked || false);
+  const [imageLabelChecked, setImageLabelChecked] = useState(wasPreviouslyAnswered ? false : ((savedSession as any)?.imageLabelChecked || false));
 
   // ── RAG Evidence Modal State ───────────────────────────────────────────
   const [showSourceModal, setShowSourceModal] = useState(false);
@@ -285,7 +288,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const recentCategoriesRef = useRef<(keyof SmartStudyTypeFilters)[]>([]);
 
   // ── Respuestas Abiertas Cortas (Short Answer) ──────────────────────────
-  const [shortAnswerInput, setShortAnswerInput] = useState<string>('');
+  const [shortAnswerInput, setShortAnswerInput] = useState<string>(wasPreviouslyAnswered ? '' : (savedSession?.shortAnswerInput || ''));
   const [isEvaluatingShortAnswer, setIsEvaluatingShortAnswer] = useState<boolean>(false);
   const [shortAnswerEvalResult, setShortAnswerEvalResult] = useState<ShortAnswerEvaluation | null>(null);
   const [isManuallyOverridden, setIsManuallyOverridden] = useState<boolean>(false);
@@ -425,6 +428,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             level,
             activePracticeLevel: selectedLvl,
             currentQuestionId: firstQ.id,
+            currentQuestion: firstQ,
             levelCorrectCount: currentLevelCorrect,
             levelCorrectCounts,
             errorQueue: [],
@@ -529,6 +533,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         level,
         activePracticeLevel: selectedLvl,
         currentQuestionId: nextQ.id,
+        currentQuestion: nextQ,
         levelCorrectCount: currentLevelCorrect,
         levelCorrectCounts,
         errorQueue: [],
@@ -602,6 +607,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           level,
           activePracticeLevel: targetLevel,
           currentQuestionId: generated[0].id,
+          currentQuestion: generated[0],
           levelCorrectCount: currentLevelCorrect,
           levelCorrectCounts,
           errorQueue: [],
@@ -900,11 +906,36 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (savedSession?.errorQueue && savedSession.errorQueue.length > 0 && savedSession.isReinforcementMode) {
       return savedSession.errorQueue[0];
     }
-    // Si hay una pregunta guardada en la sesión que aún exista en el kit, restaurarla con máxima fidelidad
-    if (savedSession?.currentQuestionId && kit.questions && kit.questions.length > 0) {
-      const found = kit.questions.find(q => q.id === savedSession.currentQuestionId);
-      if (found) {
-        return found;
+
+    const wasAnswered = Boolean(savedSession?.isAnswered);
+
+    // Caso 1: La pregunta NO estaba respondida previamente.
+    // Preservar exactamente la misma pregunta para que el usuario pueda continuar respondiendo justo donde se quedó.
+    if (!wasAnswered) {
+      if (savedSession?.currentQuestion && savedSession.currentQuestion.id) {
+        return savedSession.currentQuestion;
+      }
+      if (savedSession?.currentQuestionId && kit.questions && kit.questions.length > 0) {
+        let found = kit.questions.find(q => q.id === savedSession.currentQuestionId);
+        if (!found) {
+          const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
+          found = kit.questions.find(q => q.id === rawId);
+          if (found) {
+            const prefix = savedSession.currentQuestionId.startsWith('tf-')
+              ? 'trueFalse'
+              : savedSession.currentQuestionId.startsWith('sa-')
+              ? 'shortAnswer'
+              : savedSession.currentQuestionId.startsWith('mc-')
+              ? 'multipleChoice'
+              : null;
+            if (prefix) {
+              return adaptQuestionToCategory(found, prefix as any);
+            }
+          }
+        }
+        if (found) {
+          return found;
+        }
       }
     }
 
@@ -922,6 +953,22 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
 
     const practiceLevel = (savedSession as any)?.activePracticeLevel || (savedSession?.level as 1 | 2 | 3) || 1;
+    const prevQId = savedSession?.currentQuestion?.id || savedSession?.currentQuestionId;
+
+    // Caso 2: Si ya estaba respondida y conocemos la pregunta previa, avanzar automáticamente a la siguiente pregunta del nivel
+    if (wasAnswered && prevQId) {
+      const nextQ = resolveNextQuestion(
+        practiceLevel,
+        (savedSession?.currentIndex || 0) + 1,
+        false,
+        [],
+        prevQId
+      );
+      if (nextQ) {
+        return nextQ;
+      }
+    }
+
     const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
     const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
     const finalPool = pool.length > 0 ? pool : kit.questions;
@@ -941,6 +988,21 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   useEffect(() => {
     if (kit.questions && kit.questions.length > 0) {
       if (!currentQuestion || currentQuestion.id === 'thea-placeholder-loading') {
+        if (savedSession?.currentQuestion && savedSession.currentQuestion.id) {
+          setCurrentQuestion(savedSession.currentQuestion);
+          return;
+        }
+        if (savedSession?.currentQuestionId) {
+          let found = kit.questions.find(q => q.id === savedSession.currentQuestionId);
+          if (!found) {
+            const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
+            found = kit.questions.find(q => q.id === rawId);
+          }
+          if (found) {
+            setCurrentQuestion(found);
+            return;
+          }
+        }
         const practiceLevel = activePracticeLevel || level || 1;
         const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
         const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
@@ -1174,6 +1236,49 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setShowJustification(false);
   }, [currentQ?.id, effectiveBlanksCorrect.length]);
 
+  // Referencia actualizada al último estado de sesión para persistencia garantizada al desmontar la vista
+  const latestSessionRef = useRef<any>(null);
+  latestSessionRef.current = {
+    currentIndex,
+    level,
+    activePracticeLevel,
+    currentQuestionId: currentQ?.id,
+    currentQuestion: currentQ,
+    shortAnswerInput,
+    levelCorrectCount: currentLevelCorrect,
+    levelCorrectCounts,
+    errorQueue,
+    isReinforcementMode,
+    selectedOption,
+    selectedMultiIndices,
+    matchingPairsMap,
+    matchingChecked,
+    placedChips,
+    dragDropChecked,
+    isAnswered,
+    isCurrentCorrect,
+    activeTab,
+    history: history.slice(0, 25),
+    historyFilter,
+    historyLevelFilter,
+    questionsAnsweredTotal,
+    totalErrorsReinforced,
+    socraticProfile,
+    revealedQuestionIds,
+    seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
+    lastUpdated: Date.now(),
+    shuffleSeed,
+  };
+
+  // Guardado garantizado al salir o desmontar de Smart Study a otra sección
+  useEffect(() => {
+    return () => {
+      if (latestSessionRef.current && kit?.id) {
+        authService.saveSmartStudySession(userId || null, kit.id, latestSessionRef.current);
+      }
+    };
+  }, [userId, kit?.id]);
+
   // ── Auto-Save Session Memory (Guarda el instante exacto por kit y usuario) ──
   useEffect(() => {
     authService.saveSmartStudySession(userId || null, kit.id, {
@@ -1181,6 +1286,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       level,
       activePracticeLevel,
       currentQuestionId: currentQ?.id,
+      currentQuestion: currentQ,
+      shortAnswerInput,
       levelCorrectCount: currentLevelCorrect,
       levelCorrectCounts,
       errorQueue,
@@ -1212,6 +1319,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     level,
     activePracticeLevel,
     currentQ?.id,
+    currentQ,
+    shortAnswerInput,
     currentLevelCorrect,
     levelCorrectCounts,
     errorQueue,
@@ -1803,6 +1912,24 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (nextQ) {
       setCurrentQuestion(nextQ);
       lastQId.current = nextQ.id;
+      authService.saveSmartStudySession(userId || null, kit.id, {
+        ...savedSession,
+        currentIndex: currentIndex + 1,
+        level,
+        activePracticeLevel,
+        currentQuestionId: nextQ.id,
+        currentQuestion: nextQ,
+        selectedOption: null,
+        selectedMultiIndices: [],
+        matchingPairsMap: {},
+        matchingChecked: false,
+        placedChips: [],
+        dragDropChecked: false,
+        isAnswered: false,
+        isCurrentCorrect: null,
+        shortAnswerInput: '',
+        lastUpdated: Date.now(),
+      } as any);
     }
 
     // 3. Limpieza DIRECTA e INCONDICIONAL de todos los estados para que NUNCA quede bloqueada
@@ -1885,6 +2012,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         level: 1,
         activePracticeLevel: 1,
         currentQuestionId: firstQ?.id,
+        currentQuestion: firstQ,
         levelCorrectCount: 0,
         levelCorrectCounts: { 1: 0, 2: 0, 3: 0 },
         currentIndex: 0,
@@ -3840,6 +3968,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     setSelectedMultiIndices([]);
                     setIsAnswered(false);
                     setIsCurrentCorrect(null);
+                    setShortAnswerInput('');
+                    authService.saveSmartStudySession(userId || null, kit.id, {
+                      ...savedSession,
+                      currentIndex: 0,
+                      currentQuestionId: q.id,
+                      currentQuestion: q,
+                      selectedOption: null,
+                      selectedMultiIndices: [],
+                      isAnswered: false,
+                      isCurrentCorrect: null,
+                      shortAnswerInput: '',
+                      lastUpdated: Date.now(),
+                    } as any);
                     setShowConfigDrawer(false);
                   }}
                   className="p-3 rounded-2xl border border-thea-border bg-thea-surfaceLight text-slate-300 hover:text-white hover:border-violet-500/50 flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all active:scale-95"

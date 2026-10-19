@@ -241,6 +241,8 @@ export interface SmartStudySessionState {
   levelCorrectCounts?: Record<1 | 2 | 3, number>;
   lastUpdated: number;
   currentQuestionId?: string;
+  currentQuestion?: Question;
+  shortAnswerInput?: string;
   activePracticeLevel?: 1 | 2 | 3;
   activePracticeDifficulty?: 'easy' | 'medium' | 'hard';
   seenQuestionIds?: string[];
