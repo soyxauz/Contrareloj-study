@@ -42,6 +42,57 @@ const ViewLoadingFallback: React.FC = () => (
   </div>
 );
 
+interface ErrorBoundaryProps {
+  onReset: () => void;
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class ViewErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[ViewErrorBoundary] Error capturado en vista:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="max-w-md mx-auto px-6 py-24 text-center animate-fadeIn">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">Se produjo un problema al cargar esta vista</h3>
+          <p className="text-sm text-slate-400 mb-6">
+            Tus datos y progresos están a salvo. Puedes regresar a la pantalla principal para reabrir el kit.
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false });
+              this.props.onReset();
+            }}
+            className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm transition-all cursor-pointer shadow-lg shadow-violet-900/30"
+          >
+            Volver al Inicio
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const STORAGE_CURRENT_KIT_KEY = 'thea_currentkit_id';
 
 export const App: React.FC = () => {
@@ -108,10 +159,17 @@ export const App: React.FC = () => {
           return merged;
         });
         setCurrentKit(prev => {
+          const savedCurrentId = localStorage.getItem(STORAGE_CURRENT_KIT_KEY);
+          const targetId = prev ? prev.id : savedCurrentId;
+          const fullKit = cleanKits.find(k => k.id === targetId);
+
+          // Si el kit activo tiene 0 preguntas y cleanKits contiene la versión completa, actualizarlo
+          if (fullKit && (fullKit.questions?.length || 0) > (prev?.questions?.length || 0)) {
+            return fullKit;
+          }
+
           if (!prev) {
-            const savedCurrentId = localStorage.getItem(STORAGE_CURRENT_KIT_KEY);
-            const found = cleanKits.find(k => k.id === savedCurrentId);
-            const selected = found || cleanKits[0];
+            const selected = fullKit || cleanKits[0];
             if (selected) {
               localStorage.setItem(STORAGE_CURRENT_KIT_KEY, selected.id);
             }
@@ -492,8 +550,10 @@ export const App: React.FC = () => {
 
   const handleSelectKit = (kit: StudyKit) => {
     if (!kit || isCorruptedKit(kit)) return;
-    setCurrentKit(kit);
-    localStorage.setItem(STORAGE_CURRENT_KIT_KEY, kit.id);
+    const fullKit = kits.find(k => k.id === kit.id);
+    const bestKit = (fullKit && (fullKit.questions?.length || 0) > (kit.questions?.length || 0)) ? fullKit : kit;
+    setCurrentKit(bestKit);
+    localStorage.setItem(STORAGE_CURRENT_KIT_KEY, bestKit.id);
   };
 
   const handleKitCreated = (newKit: StudyKit) => {
@@ -648,6 +708,7 @@ export const App: React.FC = () => {
 
       {/* Main Mode View */}
       <main className="flex-1 pb-24 md:pb-8">
+        <ViewErrorBoundary onReset={() => setCurrentMode('home')}>
         {currentMode === 'home' && (
           <HomeView
             kits={kits}
@@ -760,6 +821,7 @@ export const App: React.FC = () => {
             </div>
           )
         )}
+        </ViewErrorBoundary>
       </main>
 
       {/* AI / Ollama Engine Settings Modal */}

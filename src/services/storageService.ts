@@ -400,6 +400,16 @@ export async function hydrateKitsAssets(kits: StudyKit[]): Promise<StudyKit[]> {
 export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
   return kits.map((kit) => ({
     ...kit,
+    // Eliminar sourceText y chunks del almacenamiento en LocalStorage para garantizar que nunca exceda 5MB
+    sourceText: undefined,
+    chunks: undefined,
+    sourceMaterials: kit.sourceMaterials?.map(m => ({
+      id: m.id,
+      name: m.name,
+      type: m.type,
+      size: m.size,
+      rawText: undefined,
+    })),
     assets: kit.assets?.map((a) => {
       if (a.dataUrl && a.dataUrl.length > 1000) {
         const { dataUrl: _, ...rest } = a;
@@ -579,20 +589,42 @@ export function mergeKitsByUpdatedAt(
     const existingTime = existing.updatedAt || 0;
     const incomingTime = kit.updatedAt || 0;
 
-    if (incomingTime > existingTime) {
+    // Preservar siempre las listas con contenido frente a esquemas vacíos o parciales
+    const mergedQuestions = (kit.questions && kit.questions.length > 0)
+      ? ((existing.questions && existing.questions.length > kit.questions.length && existingTime > incomingTime) ? existing.questions : kit.questions)
+      : (existing.questions || []);
+
+    const mergedFlashcards = (kit.flashcards && kit.flashcards.length > 0)
+      ? ((existing.flashcards && existing.flashcards.length > kit.flashcards.length && existingTime > incomingTime) ? existing.flashcards : kit.flashcards)
+      : (existing.flashcards || []);
+
+    const mergedAssets = (kit.assets && kit.assets.length > 0)
+      ? ((existing.assets && existing.assets.length > kit.assets.length && existingTime > incomingTime) ? existing.assets : kit.assets)
+      : (existing.assets || []);
+
+    const mergedGuide = (kit.studyGuideMarkdown && kit.studyGuideMarkdown.length > 0)
+      ? (incomingTime >= existingTime ? kit.studyGuideMarkdown : (existing.studyGuideMarkdown || kit.studyGuideMarkdown))
+      : (existing.studyGuideMarkdown || '');
+
+    if (incomingTime >= existingTime) {
       map.set(kit.id, {
         ...existing,
         ...kit,
         updatedAt: incomingTime,
-        questions: (kit.questions && kit.questions.length >= (existing.questions?.length || 0)) ? kit.questions : existing.questions,
-        flashcards: (kit.flashcards && kit.flashcards.length >= (existing.flashcards?.length || 0)) ? kit.flashcards : existing.flashcards,
-        assets: (kit.assets && kit.assets.length >= (existing.assets?.length || 0)) ? kit.assets : existing.assets,
+        questions: mergedQuestions,
+        flashcards: mergedFlashcards,
+        assets: mergedAssets,
+        studyGuideMarkdown: mergedGuide,
       });
     } else {
       map.set(kit.id, {
         ...kit,
         ...existing,
-        updatedAt: existingTime || incomingTime || Date.now(),
+        updatedAt: existingTime,
+        questions: mergedQuestions,
+        flashcards: mergedFlashcards,
+        assets: mergedAssets,
+        studyGuideMarkdown: mergedGuide,
       });
     }
   };

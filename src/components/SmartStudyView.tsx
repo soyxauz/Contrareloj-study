@@ -901,12 +901,26 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       return savedSession.errorQueue[0];
     }
     // Si hay una pregunta guardada en la sesión que aún exista en el kit, restaurarla con máxima fidelidad
-    if (savedSession?.currentQuestionId) {
+    if (savedSession?.currentQuestionId && kit.questions && kit.questions.length > 0) {
       const found = kit.questions.find(q => q.id === savedSession.currentQuestionId);
       if (found) {
         return found;
       }
     }
+
+    if (!kit.questions || kit.questions.length === 0) {
+      return {
+        id: 'thea-placeholder-loading',
+        question: 'Cargando preguntas del kit...',
+        options: ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+        correctIndex: 0,
+        explanation: 'Preparando el kit de estudio.',
+        difficulty: 'easy',
+        topic: 'General',
+        type: 'multiple-choice',
+      };
+    }
+
     const practiceLevel = (savedSession as any)?.activePracticeLevel || (savedSession?.level as 1 | 2 | 3) || 1;
     const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
     const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
@@ -920,8 +934,24 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const randomCat = safeActiveCategories[Math.floor(Math.random() * safeActiveCategories.length)];
     const randomIdx = Math.floor(Math.random() * finalPool.length);
     const raw = finalPool[randomIdx] || kit.questions[0];
-    return adaptQuestionToCategory(raw, randomCat);
+    return adaptQuestionToCategory(raw, randomCat) || raw || kit.questions[0];
   });
+
+  // Hidratar pregunta activa si el kit llega asíncronamente con preguntas completas
+  useEffect(() => {
+    if (kit.questions && kit.questions.length > 0) {
+      if (!currentQuestion || currentQuestion.id === 'thea-placeholder-loading') {
+        const practiceLevel = activePracticeLevel || level || 1;
+        const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
+        const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
+        const finalPool = pool.length > 0 ? pool : kit.questions;
+        const first = finalPool[0] || kit.questions[0];
+        if (first) {
+          setCurrentQuestion(first);
+        }
+      }
+    }
+  }, [kit.questions, currentQuestion?.id, activePracticeLevel, level]);
 
   const currentQ: Question = currentQuestion;
 
@@ -932,15 +962,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // Regla estricta para adjuntar imágenes a las preguntas individuales
   const isImageStrictlyNecessary = (q: Question): boolean => {
-    if (!q.sourceAsset || !q.sourceAsset.dataUrl) return false;
-    const combined = (q.question + ' ' + (q.explanation || '')).toLowerCase();
+    if (!q || !q.sourceAsset || !q.sourceAsset.dataUrl) return false;
+    const combined = ((q.question || '') + ' ' + (q.explanation || '')).toLowerCase();
     return /\b(según el esquema|en la figura|observa la imagen|en el gráfico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test(combined);
   };
 
   const isCurrentQRevealed = useMemo(() => {
-    if (!currentQ) return false;
+    if (!currentQ?.id) return false;
     return revealedQuestionIds.includes(currentQ.id);
-  }, [currentQ, revealedQuestionIds]);
+  }, [currentQ?.id, revealedQuestionIds]);
 
   // ── Drag & Drop Resiliency & Normalized State ─────────────────────────────
   const effectiveTemplateSentence = useMemo(() => {
@@ -993,6 +1023,14 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // ── Distribución Equitativa y Aleatoria de Opciones (Misma probabilidad del 25% para cada opción) ──
   const { safeOptions, safeCorrectIndex, safeCorrectIndices } = useMemo(() => {
+    if (!currentQ) {
+      return {
+        safeOptions: ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+        safeCorrectIndex: 0,
+        safeCorrectIndices: [0],
+      };
+    }
+
     if (qType === 'true-false') {
       const opts = ['Verdadero', 'Falso'];
       const cIdx = parseCorrectIndex(currentQ.correctIndex, opts, 'true-false');
@@ -1059,7 +1097,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     let targetSlot = 0;
     if (currentQ.id) {
       let hash = 0;
-      const key = `thea_slot_dist_${currentQ.id}_${kit.id}`;
+      const key = `thea_slot_dist_${currentQ.id}_${kit?.id || 'default'}`;
       for (let i = 0; i < key.length; i++) {
         hash = (hash << 5) - hash + key.charCodeAt(i);
         hash |= 0;
@@ -1085,7 +1123,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       safeCorrectIndex: targetSlot,
       safeCorrectIndices: [targetSlot],
     };
-  }, [currentQ.id, currentQ.options, currentQ.correctIndex, currentQ.correctIndices, qType, kit.id]);
+  }, [currentQ?.id, currentQ?.options, currentQ?.correctIndex, currentQ?.correctIndices, qType, kit?.id]);
 
   // Guard against initial mount wiping restored question state
   const isFirstMount = useRef(true);
@@ -1096,17 +1134,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     if (isFirstMount.current) {
       isFirstMount.current = false;
-      lastQId.current = currentQ.id;
+      lastQId.current = currentQ?.id || '';
       lastQuestionLoadTimeRef.current = Date.now();
       return;
     }
 
     // Si el ID de la pregunta no cambio, no resetear para preservar respuestas en curso
-    if (lastQId.current === currentQ.id) {
+    if (lastQId.current === currentQ?.id) {
       return;
     }
 
-    lastQId.current = currentQ.id;
+    lastQId.current = currentQ?.id || '';
     lastQuestionLoadTimeRef.current = Date.now();
 
     if (currentQ?.id) {
@@ -1134,7 +1172,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setIsAnswered(false);
     setIsCurrentCorrect(null);
     setShowJustification(false);
-  }, [currentQ.id, effectiveBlanksCorrect.length]);
+  }, [currentQ?.id, effectiveBlanksCorrect.length]);
 
   // ── Auto-Save Session Memory (Guarda el instante exacto por kit y usuario) ──
   useEffect(() => {
@@ -1199,7 +1237,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // Shuffled matching definitions with guaranteed derangement (never side-by-side with original term)
   const shuffledDefinitions = useMemo(() => {
-    if (!currentQ.matchingPairs || currentQ.matchingPairs.length === 0) return [];
+    if (!currentQ?.matchingPairs || currentQ.matchingPairs.length === 0) return [];
     const pairs = currentQ.matchingPairs;
     if (pairs.length === 1) return [pairs[0].definition];
 
@@ -1208,7 +1246,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     // PRNG determinista basado en el ID de la pregunta, kit y shuffleSeed
     let hash = 0;
-    const seedKey = `thea_derange_${currentQ.id}_${kit.id}_${shuffleSeed}`;
+    const seedKey = `thea_derange_${currentQ?.id || 'default'}_${kit?.id || 'default'}_${shuffleSeed}`;
     for (let i = 0; i < seedKey.length; i++) {
       hash = (hash << 5) - hash + seedKey.charCodeAt(i);
       hash |= 0;
@@ -1237,16 +1275,16 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Para cualquier n >= 2, un desplazamiento de 1 a n-1 nunca deja un elemento en su índice original
     const shift = 1 + (Math.abs(hash) % (n - 1));
     return originalDefs.map((_, i) => originalDefs[(i + shift) % n]);
-  }, [currentQ.id, currentQ.matchingPairs, kit.id, shuffleSeed]);
+  }, [currentQ?.id, currentQ?.matchingPairs, kit?.id, shuffleSeed]);
 
   // Fórmula compacta de emparejamientos correctos (ej: "1:3, 2:1, 3:2")
   const correctMatchingFormula = useMemo(() => {
-    if (!currentQ.matchingPairs || currentQ.matchingPairs.length === 0) return '';
+    if (!currentQ?.matchingPairs || currentQ.matchingPairs.length === 0) return '';
     return currentQ.matchingPairs.map((p, leftIdx) => {
       const rightIdx = shuffledDefinitions.findIndex(d => d === p.definition);
       return `${leftIdx + 1}:${rightIdx >= 0 ? rightIdx + 1 : '?'}`;
     }).join(', ');
-  }, [currentQ.matchingPairs, shuffledDefinitions]);
+  }, [currentQ?.matchingPairs, shuffledDefinitions]);
 
   // Historial filtrado para visualización
   const filteredHistory = useMemo(() => {
@@ -2103,6 +2141,27 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Salvaguarda: si el kit aún no tiene preguntas disponibles o se están cargando
+  if (!kit.questions || kit.questions.length === 0 || !currentQ || currentQ.id === 'thea-placeholder-loading') {
+    return (
+      <div className="max-w-md mx-auto px-6 py-24 text-center animate-fadeIn">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
+          <BookOpen className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">Cargando preguntas del kit...</h3>
+        <p className="text-sm text-slate-400 mb-6">
+          Estamos preparando los contenidos interactivos de este kit de estudio.
+        </p>
+        <button
+          onClick={() => onNavigate && onNavigate('home')}
+          className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-300 hover:text-white text-sm font-semibold transition-all cursor-pointer"
+        >
+          Volver al Inicio
+        </button>
       </div>
     );
   }

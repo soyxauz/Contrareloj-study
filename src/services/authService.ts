@@ -451,6 +451,10 @@ export const authService = {
           if (Array.isArray(indexItems) && indexItems.length > 0) {
             const cleanIndex = indexItems.filter(item => item && item.id && !deletedIds.has(item.id));
             if (cleanIndex.length > 0) {
+              const existingMem = inMemoryKitsCache.get(key);
+              if (existingMem && existingMem.some(k => k.questions && k.questions.length > 0)) {
+                return existingMem;
+              }
               const partialKits: StudyKit[] = cleanIndex.map(item => ({
                 id: item.id,
                 title: item.title,
@@ -650,18 +654,9 @@ export const authService = {
 
     // 3. Intentar guardar versión aligerada en LocalStorage
     try {
-      const lightweight = stripHeavyAssetsForLocalStorage(cleanKits).map(k => ({
-        ...k,
-        sourceMaterials: k.sourceMaterials?.map(m => ({
-          ...m,
-          rawText: m.rawText && m.rawText.length > 5000 ? m.rawText.slice(0, 5000) : m.rawText,
-        })),
-      }));
+      const lightweight = stripHeavyAssetsForLocalStorage(cleanKits);
       localStorage.setItem(key, JSON.stringify(lightweight));
     } catch (err) {
-      try {
-        localStorage.removeItem(key);
-      } catch {}
       notifyQuotaExceeded(err);
     }
 
