@@ -177,6 +177,7 @@ export interface StudyKit {
   assets?: DocumentAsset[];
   archivedFlashcards?: Flashcard[];
   sourceLanguage?: string;
+  updatedAt?: number;
 }
 
 

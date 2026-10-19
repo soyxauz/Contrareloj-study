@@ -8,8 +8,16 @@ import {
   getSessionItem,
   removeSessionItem,
   requestPersistentStorage,
-  isCorruptedKit
+  isCorruptedKit,
+  saveKitsToIndexedDB,
+  getKitsFromIndexedDB,
+  mergeKitsByUpdatedAt,
+  getDeletedKitIds,
+  notifyQuotaExceeded,
+  type StudyKitIndexItem
 } from './storageService';
+
+const inMemoryKitsCache = new Map<string, StudyKit[]>();
 
 interface StoredUserRecord extends User {
   passwordHash: string;
@@ -402,114 +410,213 @@ export const authService = {
 
   /**
    * Carga los kits asociados al usuario o a la sesión de invitado de manera síncrona.
-   * Cuenta con fallback transparente a kits heredados o kits iniciales para evitar estados en blanco.
+   * Utiliza la memoria caché rápida, el índice liviano o LocalStorage sin sobreescribir datos existentes.
    */
   getUserKits(userId: string | null): StudyKit[] {
     try {
-      if (!userId) {
-        const key = 'thea_guest_kits';
-        const stored = localStorage.getItem(key);
-        if (stored !== null) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              const clean = parsed.filter(k => !isCorruptedKit(k));
-              if (clean.length > 0) return clean;
-            }
-          } catch {}
-        }
+      const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
 
-        // Fallback 1: Comprobar almacenamiento heredado thea_study_kits_v2
-        const legacy = localStorage.getItem('thea_study_kits_v2');
+      // 1. Memoria rápida inmediata
+      if (inMemoryKitsCache.has(key)) {
+        const mem = inMemoryKitsCache.get(key);
+        if (mem && Array.isArray(mem) && mem.length > 0) {
+          const cleanMem = mem.filter(k => !isCorruptedKit(k));
+          if (cleanMem.length > 0) return cleanMem;
+        }
+      }
+
+      const deletedIds = getDeletedKitIds();
+
+      // 2. Intentar leer kits completos o aligerados de LocalStorage
+      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+      if (stored !== null) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const clean = parsed.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
+            if (clean.length > 0) {
+              inMemoryKitsCache.set(key, clean);
+              return clean;
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Fallback a índice liviano en LocalStorage si los kits completos fueron movidos a IndexedDB
+      const indexKey = userId ? `thea_user_kits_index_${userId}` : 'thea_guest_kits_index';
+      const storedIndex = typeof localStorage !== 'undefined' ? localStorage.getItem(indexKey) : null;
+      if (storedIndex) {
+        try {
+          const indexItems: StudyKitIndexItem[] = JSON.parse(storedIndex);
+          if (Array.isArray(indexItems) && indexItems.length > 0) {
+            const cleanIndex = indexItems.filter(item => item && item.id && !deletedIds.has(item.id));
+            if (cleanIndex.length > 0) {
+              const partialKits: StudyKit[] = cleanIndex.map(item => ({
+                id: item.id,
+                title: item.title,
+                category: item.category || 'General',
+                description: '',
+                icon: 'BookOpen',
+                color: 'from-blue-500 to-indigo-600',
+                questions: [],
+                flashcards: [],
+                studyGuideMarkdown: '',
+                podcast: null,
+                updatedAt: item.updatedAt || Date.now(),
+              }));
+              inMemoryKitsCache.set(key, partialKits);
+              return partialKits;
+            }
+          }
+        } catch {}
+      }
+
+      // 4. Si es modo invitado y no hay datos previos
+      if (!userId) {
+        const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_study_kits_v2') : null;
         if (legacy !== null) {
           try {
             const parsedLegacy = JSON.parse(legacy);
             if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
-              const cleanLegacy = parsedLegacy.filter(k => !isCorruptedKit(k));
+              const cleanLegacy = parsedLegacy.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
               if (cleanLegacy.length > 0) {
-                try {
-                  localStorage.setItem(key, JSON.stringify(cleanLegacy));
-                } catch {}
+                inMemoryKitsCache.set(key, cleanLegacy);
                 return cleanLegacy;
               }
             }
           } catch {}
         }
 
-        // Fallback final: kits de estudio predeterminados de fábrica
         const defaultKits = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
-        this.saveUserKits(null, defaultKits);
+        inMemoryKitsCache.set(key, defaultKits);
         return defaultKits;
       }
 
-      const key = `thea_user_kits_${userId}`;
-      const stored = localStorage.getItem(key);
-      if (stored !== null) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const clean = parsed.filter(k => !isCorruptedKit(k));
-            if (clean.length > 0) return clean;
-          }
-        } catch {}
-      }
-
-      // Fallback para usuario sin kits locales previos: inicializar con kits limpios de fábrica
-      const defaultKits = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
-      this.saveUserKits(userId, defaultKits);
-      return defaultKits;
+      // Para usuario registrado sin datos en LocalStorage: no sobreescribir con kits por defecto
+      return [];
     } catch (e) {
-      console.error('Error al obtener kits de usuario', e);
-      return JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
+      console.error('[authService] Error al obtener kits de usuario:', e);
+      return [];
     }
   },
 
   /**
-   * Restaura los kits asíncronamente desde IndexedDB o LocalStorage con tolerancia a fallos.
-   * Evita pérdidas de datos si LocalStorage fue purgado o reseteado.
+   * Restaura los kits asíncronamente desde IndexedDB con tolerancia a fallos.
+   * Evita pérdidas de datos si LocalStorage fue purgado o se alcanzó la cuota.
    */
   async restoreUserKitsAsync(userId: string | null): Promise<StudyKit[]> {
     try {
       const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
+      const deletedIds = getDeletedKitIds();
 
       // 1. Intentar leer de IndexedDB primero para recuperar kits íntegros con sus activos
-      const idbKits = await getSessionItem<StudyKit[]>(key);
-      if (idbKits && Array.isArray(idbKits) && idbKits.length > 0) {
-        const cleanIdb = idbKits.filter(k => !isCorruptedKit(k));
-        if (cleanIdb.length > 0) {
-          try {
-            localStorage.setItem(key, JSON.stringify(cleanIdb));
-          } catch {}
-          return cleanIdb;
-        }
+      let idbKits = await getKitsFromIndexedDB(key);
+      if (!idbKits || idbKits.length === 0) {
+        idbKits = await getKitsFromIndexedDB('thea_study_kits_v2');
       }
 
-      // 2. Intentar recuperar desde legacy en IndexedDB
-      const legacyIdb = await getSessionItem<StudyKit[]>('thea_study_kits_v2');
-      if (legacyIdb && Array.isArray(legacyIdb) && legacyIdb.length > 0) {
-        const cleanLegacy = legacyIdb.filter(k => !isCorruptedKit(k));
-        if (cleanLegacy.length > 0) {
-          try {
-            localStorage.setItem(key, JSON.stringify(cleanLegacy));
-          } catch {}
-          return cleanLegacy;
-        }
+      const memKits = inMemoryKitsCache.get(key) || [];
+      let merged: StudyKit[] = [];
+
+      if (idbKits && idbKits.length > 0) {
+        // Si memKits tiene elementos completos, fusionar por updatedAt.
+        // Si memKits solo contenía esquemas vacíos del índice, los de IndexedDB prevalecen en detalle.
+        merged = mergeKitsByUpdatedAt(memKits, idbKits, deletedIds);
+      } else if (memKits.length > 0) {
+        merged = memKits.filter(k => !deletedIds.has(k.id));
       }
 
-      // 3. Fallback a lectura síncrona
+      if (merged.length > 0) {
+        inMemoryKitsCache.set(key, merged);
+        this.writeIndexToLocalStorage(userId, merged, false);
+        saveKitsToIndexedDB(key, merged).catch(() => {});
+        return merged;
+      }
+
+      // 2. Fallback síncrono si IndexedDB aún no tenía datos
       const localKits = this.getUserKits(userId);
       if (localKits && localKits.length > 0) {
         return localKits;
       }
 
-      // 4. Kits predeterminados de fábrica garantizados
-      const defaults = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
-      this.saveUserKits(userId, defaults);
-      return defaults;
+      // 3. Si es sesión de invitado nueva, inicializar de fábrica
+      if (!userId) {
+        const defaults = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
+        this.saveUserKits(null, defaults);
+        return defaults;
+      }
+
+      return [];
     } catch (e) {
       console.error('[authService] Error al restaurar kits asíncronamente:', e);
       return this.getUserKits(userId);
     }
+  },
+
+  /**
+   * Escribe el índice ligero en LocalStorage para garantizar disponibilidad inmediata tras reinicio.
+   */
+  writeIndexToLocalStorage(userId: string | null, kits: StudyKit[], pendingDriveSync = true): void {
+    if (typeof localStorage === 'undefined') return;
+    const indexKey = userId ? `thea_user_kits_index_${userId}` : 'thea_guest_kits_index';
+    const index: StudyKitIndexItem[] = kits.map(k => ({
+      id: k.id,
+      title: k.title,
+      updatedAt: k.updatedAt || Date.now(),
+      category: k.category,
+      questionsCount: Array.isArray(k.questions) ? k.questions.length : 0,
+      flashcardsCount: Array.isArray(k.flashcards) ? k.flashcards.length : 0,
+      pendingDriveSync,
+    }));
+    try {
+      localStorage.setItem(indexKey, JSON.stringify(index));
+    } catch (err) {
+      notifyQuotaExceeded(err);
+    }
+  },
+
+  /**
+   * Actualiza el indicador de sincronización en el índice de kits cuando la subida a Drive culmina.
+   */
+  markKitsSyncedWithDrive(userId: string | null, kitIds: string[]): void {
+    if (typeof localStorage === 'undefined' || !userId) return;
+    const indexKey = `thea_user_kits_index_${userId}`;
+    try {
+      const raw = localStorage.getItem(indexKey);
+      if (!raw) return;
+      const index: StudyKitIndexItem[] = JSON.parse(raw);
+      const syncedSet = new Set(kitIds);
+      const updatedIndex = index.map(item => {
+        if (syncedSet.has(item.id)) {
+          return { ...item, pendingDriveSync: false };
+        }
+        return item;
+      });
+      localStorage.setItem(indexKey, JSON.stringify(updatedIndex));
+    } catch {}
+  },
+
+  /**
+   * Vuelca de manera síncrona el estado de kits antes del cierre de pestaña (pagehide / visibilitychange).
+   */
+  flushKitsSync(userId: string | null, kits: StudyKit[]): void {
+    try {
+      this.saveUserKits(userId, kits);
+    } catch (e) {
+      console.warn('[authService] Error en flushKitsSync:', e);
+    }
+  },
+
+  /**
+   * Guarda los kits para el usuario actual o invitado de forma asíncrona asegurando confirmación en IndexedDB.
+   */
+  async saveUserKitsAsync(userId: string | null, kits: StudyKit[]): Promise<void> {
+    this.saveUserKits(userId, kits);
+    const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
+    await Promise.all([
+      saveKitsToIndexedDB(key, kits),
+      saveAssetsFromKits(kits),
+    ]);
   },
 
   /**
@@ -523,48 +630,52 @@ export const authService = {
 
   /**
    * Guarda los kits para el usuario actual o invitado.
-   * Transfiere automáticamente los activos pesados a IndexedDB para no saturar LocalStorage.
+   * Transfiere automáticamente los activos pesados a IndexedDB y almacena un índice ligero en LocalStorage.
    */
   saveUserKits(userId: string | null, kits: StudyKit[]): void {
-    const cleanKits = Array.isArray(kits) ? kits.filter(k => !isCorruptedKit(k)) : [];
+    const deletedIds = getDeletedKitIds();
+    const cleanKits = Array.isArray(kits)
+      ? kits
+          .filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id))
+          .map(k => ({ ...k, updatedAt: k.updatedAt || Date.now() }))
+      : [];
 
-    if (!userId) {
+    const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
+
+    // 1. Memoria de acceso inmediato
+    inMemoryKitsCache.set(key, cleanKits);
+
+    // 2. Escribir índice ligero en LocalStorage
+    this.writeIndexToLocalStorage(userId, cleanKits, true);
+
+    // 3. Intentar guardar versión aligerada en LocalStorage
+    try {
+      const lightweight = stripHeavyAssetsForLocalStorage(cleanKits).map(k => ({
+        ...k,
+        sourceMaterials: k.sourceMaterials?.map(m => ({
+          ...m,
+          rawText: m.rawText && m.rawText.length > 5000 ? m.rawText.slice(0, 5000) : m.rawText,
+        })),
+      }));
+      localStorage.setItem(key, JSON.stringify(lightweight));
+    } catch (err) {
       try {
-        localStorage.setItem('thea_guest_kits', JSON.stringify(cleanKits));
-      } catch (e) {
-        console.warn('Error al guardar kits de invitado en LocalStorage:', e);
-      }
-      saveSessionItem('thea_guest_kits', cleanKits).catch(() => {});
-      saveAssetsFromKits(cleanKits).catch(() => {});
-      return;
+        localStorage.removeItem(key);
+      } catch {}
+      notifyQuotaExceeded(err);
     }
 
-    // Persistir activos en IndexedDB en segundo plano
-    saveAssetsFromKits(cleanKits).catch((err) => {
-      console.warn('[authService] Error al sincronizar activos con IndexedDB:', err);
+    // 4. Guardar inmediatamente en IndexedDB (almacén primario completo)
+    saveKitsToIndexedDB(key, cleanKits).catch((err) => {
+      console.warn('[authService] Error guardando kits en IndexedDB:', err);
     });
 
-    const key = `thea_user_kits_${userId}`;
-    saveSessionItem(key, cleanKits).catch(() => {});
-    try {
-      localStorage.setItem(key, JSON.stringify(cleanKits));
-    } catch (e) {
-      console.warn('Quota excedida al guardar kits completos en LocalStorage, optimizando con IndexedDB...', e);
-      try {
-        // Aligerar datos quitando dataUrls pesados (preservados en IndexedDB)
-        const lightweight = stripHeavyAssetsForLocalStorage(cleanKits).map(k => ({
-          ...k,
-          sourceMaterials: k.sourceMaterials?.map(m => ({
-            ...m,
-            rawText: m.rawText && m.rawText.length > 30000 ? m.rawText.slice(0, 30000) : m.rawText
-          }))
-        }));
-        localStorage.setItem(key, JSON.stringify(lightweight));
-      } catch (fallbackErr) {
-        console.error('Error crítico al persistir kits ligeros:', fallbackErr);
-      }
-    }
+    // 5. Extraer y persistir activos pesados en IndexedDB
+    saveAssetsFromKits(cleanKits).catch((err) => {
+      console.warn('[authService] Error guardando activos en IndexedDB:', err);
+    });
   },
+
 
   /**
    * Obtiene la sesión de Smart Study guardada (memoria total en tiempo real).
@@ -756,7 +867,9 @@ export const authService = {
    */
   clearGuestData(): void {
     try {
+      inMemoryKitsCache.delete('thea_guest_kits');
       localStorage.removeItem('thea_guest_kits');
+      localStorage.removeItem('thea_guest_kits_index');
       localStorage.removeItem('thea_study_kits_v2');
 
       const keysToRemove: string[] = [];
@@ -777,6 +890,7 @@ export const authService = {
       }
 
       removeSessionItem('thea_guest_kits').catch(() => {});
+      removeSessionItem('thea_guest_kits_index').catch(() => {});
       removeSessionItem('thea_study_kits_v2').catch(() => {});
     } catch (e) {
       console.warn('[authService] Error al limpiar datos de invitado:', e);

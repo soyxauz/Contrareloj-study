@@ -2,7 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
 import { BookOpen, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
-import { hydrateKitAssets, isCorruptedKit } from './services/storageService';
+import {
+  hydrateKitAssets,
+  isCorruptedKit,
+  requestPersistentStorage,
+  mergeKitsByUpdatedAt,
+  recordDeletedKitId,
+  recordDeletedKitIds
+} from './services/storageService';
 import { googleDriveService, type DriveSyncState } from './services/googleDriveService';
 import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
 import { savePodcastSettings } from './services/geminiAudioService';
@@ -96,12 +103,9 @@ export const App: React.FC = () => {
       const cleanKits = recoveredKits.filter(k => !isCorruptedKit(k));
       if (cleanKits.length > 0) {
         setKits(prev => {
-          if (prev.length === 0) {
-            isHydratedRef.current = true;
-            return cleanKits;
-          }
+          const merged = mergeKitsByUpdatedAt(prev, cleanKits);
           isHydratedRef.current = true;
-          return prev;
+          return merged;
         });
         setCurrentKit(prev => {
           if (!prev) {
@@ -124,6 +128,56 @@ export const App: React.FC = () => {
       isCancelled = true;
     };
   }, []);
+
+  // Solicitud de persistencia inmutable al navegador
+  useEffect(() => {
+    requestPersistentStorage().then((persisted) => {
+      if (persisted) {
+        console.log('[App] Almacenamiento persistente garantizado.');
+      }
+    });
+  }, []);
+
+  // Alerta de cuota de almacenamiento
+  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleQuota = (e: any) => {
+      const msg = e.detail?.message || 'Espacio local de almacenamiento al limite. Tus datos se preservan en IndexedDB y Google Drive.';
+      setQuotaWarning(msg);
+      setTimeout(() => setQuotaWarning(null), 8000);
+    };
+    window.addEventListener('thea_storage_quota_warning', handleQuota);
+    return () => window.removeEventListener('thea_storage_quota_warning', handleQuota);
+  }, []);
+
+  // Volcado de seguridad (Safety Flush) ante pagehide o cambio de pestaña
+  useEffect(() => {
+    const handleSafetyFlush = () => {
+      try {
+        const activeUser = authService.getCurrentUser();
+        const userId = activeUser ? activeUser.id : null;
+        if (kits && kits.length > 0) {
+          authService.flushKitsSync(userId, kits);
+        }
+      } catch (e) {
+        console.warn('[App] Error en safety flush:', e);
+      }
+    };
+
+    window.addEventListener('pagehide', handleSafetyFlush);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleSafetyFlush();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pagehide', handleSafetyFlush);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [kits]);
 
   const [currentMode, setCurrentMode] = useState<StudyMode>('home');
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
@@ -184,8 +238,7 @@ export const App: React.FC = () => {
   // Sync Study Kits (protegido contra sobreescritura destructiva en arranque)
   useEffect(() => {
     if (isLoggingOutRef.current) return;
-    if (!isHydratedRef.current && kits.length === 0) return;
-    isHydratedRef.current = true;
+    if (!isHydratedRef.current) return;
     try {
       authService.saveUserKits(currentUser ? currentUser.id : null, kits);
     } catch (e) {
@@ -201,8 +254,8 @@ export const App: React.FC = () => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const clean = pulled.filter(k => !isCorruptedKit(k));
           if (clean.length > 0) {
-            setKits(clean);
-            if (!currentKit) setCurrentKit(clean[0]);
+            setKits(prev => mergeKitsByUpdatedAt(prev, clean));
+            setCurrentKit(prev => prev || clean[0]);
           }
         }
         if (typeof window !== 'undefined') {
@@ -218,7 +271,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isLoggingOutRef.current) return;
     if (!currentUser || !googleDriveService.getValidAccessToken()) return;
-    if (!isHydratedRef.current && kits.length === 0) return;
+    if (!isHydratedRef.current) return;
 
     const timer = setTimeout(() => {
       googleDriveService.pushToDrive(currentUser.id, kits).catch((err) => {
@@ -349,7 +402,7 @@ export const App: React.FC = () => {
     if (syncedKits && Array.isArray(syncedKits) && syncedKits.length > 0) {
       const cleanPulled = syncedKits.filter(k => !isCorruptedKit(k));
       if (cleanPulled.length > 0) {
-        setKits(cleanPulled);
+        setKits(prev => mergeKitsByUpdatedAt(prev, cleanPulled));
         authService.saveUserKits(user.id, cleanPulled);
         const firstPulled = cleanPulled[0] || null;
         setCurrentKit(firstPulled);
@@ -381,9 +434,9 @@ export const App: React.FC = () => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const cleanPulled = pulled.filter(k => !isCorruptedKit(k));
           if (cleanPulled.length > 0) {
-            setKits(cleanPulled);
+            setKits(prev => mergeKitsByUpdatedAt(prev, cleanPulled));
             const firstPulled = cleanPulled[0] || null;
-            setCurrentKit(firstPulled);
+            setCurrentKit(prev => prev || firstPulled);
             if (firstPulled) {
               localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
             }
@@ -404,7 +457,7 @@ export const App: React.FC = () => {
       if (res.kits) {
         const clean = res.kits.filter(k => !isCorruptedKit(k));
         if (clean.length > 0) {
-          setKits(clean);
+          setKits(prev => mergeKitsByUpdatedAt(prev, clean));
           if (!currentKit) setCurrentKit(clean[0]);
         }
       }
@@ -456,17 +509,22 @@ export const App: React.FC = () => {
   };
 
   const handleKitCreated = (newKit: StudyKit) => {
-    const updated = [newKit, ...kits.filter(k => k.id !== newKit.id)];
+    const kitWithTime: StudyKit = {
+      ...newKit,
+      updatedAt: Date.now(),
+    };
+    const updated = [kitWithTime, ...kits.filter(k => k.id !== kitWithTime.id)];
     setKits(updated);
-    setCurrentKit(newKit);
-    localStorage.setItem(STORAGE_CURRENT_KIT_KEY, newKit.id);
+    setCurrentKit(kitWithTime);
+    localStorage.setItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
     try {
       authService.saveUserKits(currentUser ? currentUser.id : null, updated);
+      authService.saveUserKitsAsync(currentUser ? currentUser.id : null, updated).catch(() => {});
     } catch (e) {
       console.error('Error al guardar Study Kits:', e);
     }
     if (currentUser) {
-      googleDriveService.pushKitImmediately(currentUser.id, newKit, updated).catch((err) => {
+      googleDriveService.pushKitImmediately(currentUser.id, kitWithTime, updated).catch((err) => {
         console.warn('[App] Error en pushKitImmediately:', err);
       });
     }
@@ -474,11 +532,16 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateKit = (updatedKit: StudyKit) => {
-    setCurrentKit(updatedKit);
+    const kitWithTime: StudyKit = {
+      ...updatedKit,
+      updatedAt: Date.now(),
+    };
+    setCurrentKit(kitWithTime);
     setKits(prev => {
-      const next = prev.map(k => (k.id === updatedKit.id ? updatedKit : k));
+      const next = prev.map(k => (k.id === kitWithTime.id ? kitWithTime : k));
       try {
         authService.saveUserKits(currentUser ? currentUser.id : null, next);
+        authService.saveUserKitsAsync(currentUser ? currentUser.id : null, next).catch(() => {});
       } catch (e) {
         console.error('Error al guardar Study Kits tras actualizar:', e);
       }
@@ -487,12 +550,17 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteKit = (kitId: string) => {
+    recordDeletedKitId(kitId);
     const updated = kits.filter(k => k.id !== kitId);
     setKits(updated);
     try {
       authService.saveUserKits(currentUser ? currentUser.id : null, updated);
+      authService.saveUserKitsAsync(currentUser ? currentUser.id : null, updated).catch(() => {});
     } catch (e) {
       console.error('Error al guardar Study Kits tras eliminar:', e);
+    }
+    if (currentUser) {
+      googleDriveService.pushToDrive(currentUser.id, updated).catch(() => {});
     }
     if (currentKit?.id === kitId) {
       if (updated.length > 0) {
@@ -506,13 +574,18 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteKitsBatch = (kitIds: string[]) => {
+    recordDeletedKitIds(kitIds);
     const idSet = new Set(kitIds);
     const updated = kits.filter(k => !idSet.has(k.id));
     setKits(updated);
     try {
       authService.saveUserKits(currentUser ? currentUser.id : null, updated);
+      authService.saveUserKitsAsync(currentUser ? currentUser.id : null, updated).catch(() => {});
     } catch (e) {
       console.error('Error al guardar Study Kits tras eliminar en lote:', e);
+    }
+    if (currentUser) {
+      googleDriveService.pushToDrive(currentUser.id, updated).catch(() => {});
     }
     if (currentKit && idSet.has(currentKit.id)) {
       if (updated.length > 0) {
@@ -527,18 +600,20 @@ export const App: React.FC = () => {
 
   const handleChangeCategoryBatch = (kitIds: string[], newCategory: string) => {
     const idSet = new Set(kitIds);
+    const now = Date.now();
     const updated = kits.map(k => {
       if (idSet.has(k.id)) {
-        return { ...k, category: newCategory };
+        return { ...k, category: newCategory, updatedAt: now };
       }
       return k;
     });
     setKits(updated);
     if (currentKit && idSet.has(currentKit.id)) {
-      setCurrentKit(prev => (prev ? { ...prev, category: newCategory } : prev));
+      setCurrentKit(prev => (prev ? { ...prev, category: newCategory, updatedAt: now } : prev));
     }
     try {
       authService.saveUserKits(currentUser ? currentUser.id : null, updated);
+      authService.saveUserKitsAsync(currentUser ? currentUser.id : null, updated).catch(() => {});
     } catch (e) {
       console.error('Error al guardar Study Kits tras cambiar materia en lote:', e);
     }
@@ -564,8 +639,26 @@ export const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
+      {/* Alerta de Cuota de Almacenamiento */}
+      {quotaWarning && (
+        <div className="bg-sky-950/80 border-b border-sky-500/40 px-4 py-2.5 text-xs text-sky-200 flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-sky-400 shrink-0" />
+            <span>{quotaWarning}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setQuotaWarning(null)}
+            className="px-2.5 py-1 rounded-md bg-sky-800 hover:bg-sky-700 text-sky-100 font-medium text-xs cursor-pointer transition-colors"
+          >
+            Entendido
+          </button>
+        </div>
+      )}
+
       {/* Reconnect Google Drive Discrete Banner */}
       {currentUser && driveSyncState.status === 'needs_reauth' && (
+
         <div className="bg-amber-950/80 border-b border-amber-500/40 px-4 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3 animate-fadeIn">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />

@@ -445,3 +445,180 @@ export function isCorruptedKit(k: unknown): boolean {
   return false;
 }
 
+/**
+ * Estructura liviana del índice de kits en LocalStorage para arranque instantáneo sin saturar cuota.
+ */
+export interface StudyKitIndexItem {
+  id: string;
+  title: string;
+  updatedAt: number;
+  category?: string;
+  questionsCount: number;
+  flashcardsCount?: number;
+  pendingDriveSync?: boolean;
+}
+
+const DELETED_KITS_KEY = 'thea_deleted_kit_ids';
+
+/**
+ * Obtiene el conjunto de identificadores de kits eliminados explícitamente por el usuario.
+ */
+export function getDeletedKitIds(): Set<string> {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(DELETED_KITS_KEY) : null;
+    if (!raw) return new Set<string>();
+    const arr = JSON.parse(raw);
+    return new Set<string>(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+/**
+ * Registra un identificador en la lista negra de kits eliminados para evitar resurrección en fusiones.
+ */
+export function recordDeletedKitId(id: string): void {
+  if (!id) return;
+  try {
+    const set = getDeletedKitIds();
+    set.add(id);
+    const arr = Array.from(set);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(DELETED_KITS_KEY, JSON.stringify(arr));
+    }
+    saveSessionItem(DELETED_KITS_KEY, arr).catch(() => {});
+  } catch (e) {
+    console.warn('[StorageService] Error al registrar kit eliminado:', e);
+  }
+}
+
+/**
+ * Registra múltiples identificadores en la lista negra de kits eliminados.
+ */
+export function recordDeletedKitIds(ids: string[]): void {
+  if (!ids || ids.length === 0) return;
+  try {
+    const set = getDeletedKitIds();
+    for (const id of ids) {
+      if (id) set.add(id);
+    }
+    const arr = Array.from(set);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(DELETED_KITS_KEY, JSON.stringify(arr));
+    }
+    saveSessionItem(DELETED_KITS_KEY, arr).catch(() => {});
+  } catch (e) {
+    console.warn('[StorageService] Error al registrar kits eliminados en lote:', e);
+  }
+}
+
+/**
+ * Guarda kits completos en IndexedDB esperando a que la transacción culmine (cero demoras / sin pérdidas).
+ */
+export async function saveKitsToIndexedDB(key: string, kits: StudyKit[]): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+
+  const clean = Array.isArray(kits) ? kits.filter(k => !isCorruptedKit(k)) : [];
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SESSION_STORE, 'readwrite');
+      const store = tx.objectStore(SESSION_STORE);
+      store.put({ key, value: clean, updatedAt: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => {
+        console.warn('[StorageService] Error en transacción al guardar kits en IndexedDB:', e);
+        resolve();
+      };
+      tx.onabort = () => resolve();
+    } catch (err) {
+      console.warn('[StorageService] Excepción al guardar kits en IndexedDB:', err);
+      resolve();
+    }
+  });
+}
+
+/**
+ * Recupera kits completos desde IndexedDB para el usuario actual o invitado.
+ */
+export async function getKitsFromIndexedDB(key: string): Promise<StudyKit[] | null> {
+  const res = await getSessionItem<StudyKit[]>(key);
+  if (res && Array.isArray(res) && res.length > 0) {
+    const clean = res.filter(k => !isCorruptedKit(k));
+    if (clean.length > 0) return clean;
+  }
+  return null;
+}
+
+/**
+ * Fusión acumulativa estricta por ID y marca temporal updatedAt (el más reciente gana).
+ * Respeta la lista negra de kits eliminados para no reintroducir kits borrados intencionalmente.
+ */
+export function mergeKitsByUpdatedAt(
+  listA: StudyKit[],
+  listB: StudyKit[],
+  deletedIds?: Set<string>
+): StudyKit[] {
+  const delSet = deletedIds || getDeletedKitIds();
+  const map = new Map<string, StudyKit>();
+
+  const addOrMerge = (kit: StudyKit) => {
+    if (!kit || isCorruptedKit(kit)) return;
+    if (delSet.has(kit.id)) return;
+
+    const existing = map.get(kit.id);
+    if (!existing) {
+      map.set(kit.id, {
+        ...kit,
+        updatedAt: kit.updatedAt || Date.now(),
+      });
+      return;
+    }
+
+    const existingTime = existing.updatedAt || 0;
+    const incomingTime = kit.updatedAt || 0;
+
+    if (incomingTime > existingTime) {
+      map.set(kit.id, {
+        ...existing,
+        ...kit,
+        updatedAt: incomingTime,
+        questions: (kit.questions && kit.questions.length >= (existing.questions?.length || 0)) ? kit.questions : existing.questions,
+        flashcards: (kit.flashcards && kit.flashcards.length >= (existing.flashcards?.length || 0)) ? kit.flashcards : existing.flashcards,
+        assets: (kit.assets && kit.assets.length >= (existing.assets?.length || 0)) ? kit.assets : existing.assets,
+      });
+    } else {
+      map.set(kit.id, {
+        ...kit,
+        ...existing,
+        updatedAt: existingTime || incomingTime || Date.now(),
+      });
+    }
+  };
+
+  if (Array.isArray(listA)) {
+    for (const k of listA) addOrMerge(k);
+  }
+  if (Array.isArray(listB)) {
+    for (const k of listB) addOrMerge(k);
+  }
+
+  return Array.from(map.values());
+}
+
+/**
+ * Emite una notificación cuando la cuota de LocalStorage ha sido alcanzada,
+ * asegurando que la UI alerte al usuario mientras IndexedDB continúa respaldando todo.
+ */
+export function notifyQuotaExceeded(err: unknown): void {
+  console.warn('[StorageService] QuotaExceeded detectada en LocalStorage:', err);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('thea_storage_quota_warning', {
+      detail: {
+        message: 'Almacenamiento LocalStorage al límite. Se preservan todos los kits en memoria persistente e IndexedDB.'
+      }
+    }));
+  }
+}
+

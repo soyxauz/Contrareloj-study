@@ -7,7 +7,9 @@ import {
   saveSessionItem,
   getSessionItem,
   removeSessionItem,
-  isCorruptedKit
+  isCorruptedKit,
+  mergeKitsByUpdatedAt,
+  getDeletedKitIds
 } from './storageService';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, DEFAULT_AI_SETTINGS, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
@@ -1097,13 +1099,28 @@ export const googleDriveService = {
         authService.setRawStoredUsers(Array.from(mergedMap.values()));
       }
 
-      // 4. Procesar e integrar kits de estudio con proteccion anti-vaciado
+      // 4. Procesar e integrar kits de estudio con fusion acumulativa estricta y proteccion anti-vaciado
       let validPulledKits: StudyKit[] | null = null;
       if (Array.isArray(pulledKits)) {
-        const cleanKits = pulledKits.filter(k => !isCorruptedKit(k));
-        if (cleanKits.length > 0) {
-          validPulledKits = cleanKits;
-          authService.saveUserKits(userId, cleanKits);
+        const cleanPulled = pulledKits.filter(k => !isCorruptedKit(k));
+        const deletedIds = getDeletedKitIds();
+        const activePulled = cleanPulled.filter(k => !deletedIds.has(k.id));
+
+        // Obtener kits locales actuales para fusion acumulativa (ningun kit local se pierde)
+        const localKits = authService.getUserKits(userId);
+        const mergedKits = mergeKitsByUpdatedAt(localKits, activePulled, deletedIds);
+
+        if (mergedKits.length > 0) {
+          validPulledKits = mergedKits;
+          await authService.saveUserKitsAsync(userId, mergedKits);
+          authService.markKitsSyncedWithDrive(userId, mergedKits.map(k => k.id));
+
+          // Si la fusion acumulativa genero novedades para la nube o detecto eliminaciones, sincronizar hacia Drive
+          if (mergedKits.length !== cleanPulled.length || deletedIds.size > 0) {
+            setTimeout(() => {
+              this.pushToDrive(userId, mergedKits).catch(() => {});
+            }, 1000);
+          }
         } else {
           console.warn('[GoogleDriveService] Kits descargados de la nube vacios o corruptos; se preservan los kits locales para garantizar datos infinitos.');
         }
@@ -1259,7 +1276,11 @@ export const googleDriveService = {
       return;
     }
 
-    const cleanKits = kits.filter(k => !isCorruptedKit(k));
+    const deletedIds = getDeletedKitIds();
+    const cleanKits: StudyKit[] = kits
+      .filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id))
+      .map(k => ({ ...k, updatedAt: k.updatedAt || Date.now() }));
+
     if (cleanKits.length === 0) {
       console.warn('[GoogleDriveService] Intento de subir kits corruptos a la nube bloqueado.');
       return;
@@ -1285,10 +1306,27 @@ export const googleDriveService = {
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
 
-      // 1. Guardar base de usuarios, kits y progreso en paralelo
-      const localUsers = authService.getRawStoredUsers();
-      const lightweightKits = stripHeavyAssetsForLocalStorage(kits);
+      // 1. Guardar base de usuarios, kits y progreso en paralelo con fusion acumulativa
       const userKitsFileName = `thea_kits_${userId}.json`;
+      const existingDriveKitsFile = await this.findFileInFolder(token, rootFolderId, userKitsFileName);
+      let driveMergedKits: StudyKit[] = cleanKits;
+      if (existingDriveKitsFile) {
+        try {
+          const remoteKits = await this.readJsonFromDrive<StudyKit[]>(token, existingDriveKitsFile.id);
+          if (Array.isArray(remoteKits) && remoteKits.length > 0) {
+            driveMergedKits = mergeKitsByUpdatedAt(remoteKits, cleanKits, deletedIds);
+          }
+        } catch (e) {
+          console.warn('[GoogleDriveService] Error leyendo kits remotos previos:', e);
+        }
+      }
+
+      if (driveMergedKits.length > cleanKits.length) {
+        authService.saveUserKits(userId, driveMergedKits);
+      }
+
+      const localUsers = authService.getRawStoredUsers();
+      const lightweightKits = stripHeavyAssetsForLocalStorage(driveMergedKits);
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
       const userProgressPayload = {
@@ -1307,6 +1345,8 @@ export const googleDriveService = {
         this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', currentPodcastSettings),
       ]);
+
+      authService.markKitsSyncedWithDrive(userId, driveMergedKits.map(k => k.id));
 
       // 2. Subir activos visuales a subcarpeta 'assets/' concurrentemente en lotes de 6
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
@@ -1390,9 +1430,29 @@ export const googleDriveService = {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
 
-      // 1. Guardar de inmediato los JSONs fundamentales en paralelo
-      const lightweightKits = stripHeavyAssetsForLocalStorage(allKits);
+      // 1. Guardar de inmediato los JSONs fundamentales en paralelo con fusion acumulativa
+      const deletedIds = getDeletedKitIds();
+      const cleanKits: StudyKit[] = allKits
+        .filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id))
+        .map(k => ({ ...k, updatedAt: k.updatedAt || Date.now() }));
+
       const userKitsFileName = `thea_kits_${userId}.json`;
+      const existingDriveKitsFile = await this.findFileInFolder(token, rootFolderId, userKitsFileName);
+      let driveMergedKits: StudyKit[] = cleanKits;
+      if (existingDriveKitsFile) {
+        try {
+          const remoteKits = await this.readJsonFromDrive<StudyKit[]>(token, existingDriveKitsFile.id);
+          if (Array.isArray(remoteKits) && remoteKits.length > 0) {
+            driveMergedKits = mergeKitsByUpdatedAt(remoteKits, cleanKits, deletedIds);
+          }
+        } catch {}
+      }
+
+      if (driveMergedKits.length > cleanKits.length) {
+        authService.saveUserKits(userId, driveMergedKits);
+      }
+
+      const lightweightKits = stripHeavyAssetsForLocalStorage(driveMergedKits);
       const localUsers = authService.getRawStoredUsers();
 
       const userSessions = authService.getAllSmartStudySessions(userId);
@@ -1471,6 +1531,7 @@ export const googleDriveService = {
 
       const now = Date.now();
       localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      authService.markKitsSyncedWithDrive(userId, driveMergedKits.map(k => k.id));
       updateState({
         status: 'synced',
         lastSyncTime: now,
