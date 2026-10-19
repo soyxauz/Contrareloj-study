@@ -608,17 +608,10 @@ export function mergeKitsByUpdatedAt(
 }
 
 /**
- * Emite una notificación cuando la cuota de LocalStorage ha sido alcanzada,
- * asegurando que la UI alerte al usuario mientras IndexedDB continúa respaldando todo.
+ * Gestiona silenciosamente cuando la cuota de LocalStorage ha sido alcanzada,
+ * apoyándose automáticamente en IndexedDB sin interrumpir al usuario en la interfaz.
  */
 export function notifyQuotaExceeded(err: unknown): void {
-  console.warn('[StorageService] QuotaExceeded detectada en LocalStorage:', err);
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('thea_storage_quota_warning', {
-      detail: {
-        message: 'Almacenamiento LocalStorage al límite. Se preservan todos los kits en memoria persistente e IndexedDB.'
-      }
-    }));
-  }
+  console.warn('[StorageService] QuotaExceeded gestionada silenciosamente. Los datos permanecen íntegros en IndexedDB:', err);
 }
 

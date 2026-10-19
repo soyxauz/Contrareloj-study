@@ -138,18 +138,6 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  // Alerta de cuota de almacenamiento
-  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleQuota = (e: any) => {
-      const msg = e.detail?.message || 'Espacio local de almacenamiento al limite. Tus datos se preservan en IndexedDB y Google Drive.';
-      setQuotaWarning(msg);
-      setTimeout(() => setQuotaWarning(null), 8000);
-    };
-    window.addEventListener('thea_storage_quota_warning', handleQuota);
-    return () => window.removeEventListener('thea_storage_quota_warning', handleQuota);
-  }, []);
 
   // Volcado de seguridad (Safety Flush) ante pagehide o cambio de pestaña
   useEffect(() => {
@@ -639,22 +627,6 @@ export const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      {/* Alerta de Cuota de Almacenamiento */}
-      {quotaWarning && (
-        <div className="bg-sky-950/80 border-b border-sky-500/40 px-4 py-2.5 text-xs text-sky-200 flex items-center justify-between gap-3 animate-fadeIn">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-sky-400 shrink-0" />
-            <span>{quotaWarning}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setQuotaWarning(null)}
-            className="px-2.5 py-1 rounded-md bg-sky-800 hover:bg-sky-700 text-sky-100 font-medium text-xs cursor-pointer transition-colors"
-          >
-            Entendido
-          </button>
-        </div>
-      )}
 
       {/* Reconnect Google Drive Discrete Banner */}
       {currentUser && driveSyncState.status === 'needs_reauth' && (
