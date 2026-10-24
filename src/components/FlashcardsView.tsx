@@ -484,6 +484,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     savedProgress?.masteryMap ? { ...savedProgress.masteryMap } : {}
   );
 
+  const onUpdateKitRef = useRef(onUpdateKit);
+  onUpdateKitRef.current = onUpdateKit;
+
+  const kitRef = useRef(kit);
+  kitRef.current = kit;
+
   const debounceKitTimerRef = useRef<any>(null);
   const pendingKitUpdateRef = useRef<{ cards: Flashcard[]; archived: Flashcard[] } | null>(null);
 
@@ -492,16 +498,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       clearTimeout(debounceKitTimerRef.current);
       debounceKitTimerRef.current = null;
     }
-    if (pendingKitUpdateRef.current && onUpdateKit) {
+    if (pendingKitUpdateRef.current && onUpdateKitRef.current) {
       const { cards: nextCards, archived } = pendingKitUpdateRef.current;
       pendingKitUpdateRef.current = null;
-      onUpdateKit({
-        ...kit,
+      onUpdateKitRef.current({
+        ...kitRef.current,
         flashcards: nextCards,
         archivedFlashcards: archived,
       });
     }
-  }, [kit, onUpdateKit]);
+  }, []);
 
   // Restaurar asíncronamente desde IndexedDB si LocalStorage fue purgado o tiene versión anterior
   useEffect(() => {
@@ -556,7 +562,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       flushKitUpdate();
       googleDriveService.flushAutoSync();
     };
-  }, [flushKitUpdate]);
+  }, []);
   const [isFlipped, setIsFlipped] = useState(false);
   const [gameMode, setGameMode] = useState<'study' | 'guess-who'>('study');
   const [isGenerating, setIsGenerating] = useState(false);
