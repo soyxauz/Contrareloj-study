@@ -416,8 +416,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         apiKey: getGroqApiKey(),
         language: 'es',
         prompt: kit.title,                        // mejora términos técnicos
-        autoStopOnSilence: true,                  // ¡Auto-detección activa para responder solo!
-        silenceMs: 600,                           // 0.60s de silencio tras hablar activa respuesta inmediata
+        autoStopOnSilence: true,                  // Auto-detección activa para responder solo
+        silenceMs: 1500,                          // 1.5s de silencio tras hablar para permitir pausas naturales
         onVolume: setMicLevel,
         onTranscribing: () => {
           listeningRef.current = false;
