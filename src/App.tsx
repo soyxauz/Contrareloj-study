@@ -123,8 +123,17 @@ export const App: React.FC = () => {
 
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
   const [kits, setKits] = useState<StudyKit[]>(() => {
-    const initialKits = authService.getUserKits(currentUser ? currentUser.id : null);
-    return initialKits.filter(k => !isCorruptedKit(k));
+    const initialKits = authService.getUserKits(currentUser ? currentUser.id : null).filter(k => !isCorruptedKit(k));
+    const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+    if (savedCurrentId) {
+      const activeIdx = initialKits.findIndex(k => k.id === savedCurrentId);
+      if (activeIdx > 0) {
+        const active = initialKits[activeIdx];
+        const rest = initialKits.filter((_, i) => i !== activeIdx);
+        return [active, ...rest];
+      }
+    }
+    return initialKits;
   });
 
   // Selección inicial del kit activo
@@ -155,6 +164,15 @@ export const App: React.FC = () => {
         setKits(prev => {
           const merged = mergeKitsByUpdatedAt(prev, cleanKits);
           isHydratedRef.current = true;
+          const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+          if (savedCurrentId) {
+            const activeIdx = merged.findIndex(k => k.id === savedCurrentId);
+            if (activeIdx > 0) {
+              const active = merged[activeIdx];
+              const rest = merged.filter((_, i) => i !== activeIdx);
+              return [active, ...rest];
+            }
+          }
           return merged;
         });
         setCurrentKit(prev => {
@@ -717,13 +735,21 @@ export const App: React.FC = () => {
       purgeAssetMemoryCache();
       revokeAllAzureAudioUrls();
       revokeAllPodcastAudioUrls();
-      setKits(prev => prev.map(k => (k.id === kit.id ? k : stripAssetDataUrlsFromKit(k))));
     }
 
     const fullKit = kits.find(k => k.id === kit.id);
     const bestKit = (fullKit && (fullKit.questions?.length || 0) > (kit.questions?.length || 0)) ? fullKit : kit;
     setCurrentKit(bestKit);
     localStorage.setItem(STORAGE_CURRENT_KIT_KEY, bestKit.id);
+
+    // Mover siempre el kit seleccionado al principio de la lista
+    setKits(prev => {
+      const activeIdx = prev.findIndex(k => k.id === bestKit.id);
+      if (activeIdx <= 0) return prev;
+      const target = prev[activeIdx];
+      const reordered = [target, ...prev.filter((_, i) => i !== activeIdx)];
+      return reordered;
+    });
 
     if (pushToHistory && currentKit?.id !== bestKit.id) {
       window.history.pushState({
@@ -763,7 +789,11 @@ export const App: React.FC = () => {
       updatedAt: Date.now(),
     };
     setCurrentKit(kitWithTime);
-    setKits(prev => prev.map(k => (k.id === kitWithTime.id ? kitWithTime : k)));
+    // Mover el kit actualizado al principio de la lista
+    setKits(prev => {
+      const rest = prev.filter(k => k.id !== kitWithTime.id);
+      return [kitWithTime, ...rest];
+    });
 
     try {
       const userId = currentUser ? currentUser.id : null;

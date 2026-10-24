@@ -356,11 +356,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return getAllAvailableMaterias(kits, userId);
   }, [kits, materiaVersion, userId]);
 
-  // Kits filtrados por la materia seleccionada
+  // Kits filtrados por la materia seleccionada, ubicando siempre al principio el último kit abierto o activo
   const filteredKits = React.useMemo(() => {
-    if (selectedMateria === 'all') return kits;
-    return kits.filter(k => (k.category || 'General').trim().toLowerCase() === selectedMateria.trim().toLowerCase());
-  }, [kits, selectedMateria]);
+    const baseKits = selectedMateria === 'all'
+      ? kits
+      : kits.filter(k => (k.category || 'General').trim().toLowerCase() === selectedMateria.trim().toLowerCase());
+
+    if (!currentKit) return baseKits;
+
+    const activeIdx = baseKits.findIndex(k => k.id === currentKit.id);
+    if (activeIdx <= 0) return baseKits;
+
+    const activeKit = baseKits[activeIdx];
+    const rest = baseKits.filter((_, i) => i !== activeIdx);
+    return [activeKit, ...rest];
+  }, [kits, selectedMateria, currentKit]);
 
   const renderKitIcon = (iconName: string, colorHex?: string) => {
     const style = colorHex ? { color: colorHex } : undefined;
