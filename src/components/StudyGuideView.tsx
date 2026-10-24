@@ -75,6 +75,7 @@ import { generateAIStudyGuide, stripExecutiveSummaryPreamble } from '../services
 import { FormattedText } from './FormattedText';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { hydrateKitAssets } from '../services/storageService';
+import { StudyGuideScanner } from './StudyGuideScanner';
 
 interface StudyGuideViewProps {
   kit: StudyKit;
@@ -147,8 +148,10 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   }, [kit.id]);
 
   const handleGenerateStudyGuide = async (depthToUse: StudyGuideDepth = selectedDepth) => {
+    setShowDepthModal(false);
+    setSelectedDepth(depthToUse);
     setIsGenerating(true);
-    setGenerationProgress({ message: 'Estructurando la guía con IA sin límite de caracteres...', percent: 5 });
+    setGenerationProgress({ message: 'Iniciando escáner e indexación multi-fase con IA...', percent: 5 });
     try {
       const fullText =
         (kit.sourceText && kit.sourceText.length > 100)
@@ -536,7 +539,15 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       {/* ── TAB 1: GUÍA TEÓRICA ────────────────────────────────────────────── */}
       {activeTab === 'guide' && (
         <>
-          {!markdown || markdown.trim().length === 0 ? (
+          {isGenerating ? (
+            <StudyGuideScanner
+              title={kit.title}
+              category={kit.category}
+              depth={selectedDepth}
+              progress={generationProgress}
+              sampleText={kit.sourceText || kit.description || ''}
+            />
+          ) : !markdown || markdown.trim().length === 0 ? (
             <div className="py-10 px-6 sm:px-10 rounded-3xl bg-thea-surface border border-thea-border max-w-4xl mx-auto shadow-2xl animate-fadeIn space-y-8">
               <div className="text-center max-w-2xl mx-auto">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-violet-600/20 border border-violet-500/30 flex items-center justify-center mx-auto mb-4 text-amber-400 shadow-inner">
@@ -605,59 +616,21 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 })}
               </div>
 
-              {/* Botón de Generación y Barra de Progreso Multi-Fase */}
-              <div className="space-y-4 pt-2">
-                {isGenerating ? (
-                  <div className="p-5 rounded-2xl bg-black/40 border border-violet-500/40 text-center space-y-3 animate-fadeIn">
-                    <div className="flex items-center justify-center gap-3 text-sm font-bold text-white">
-                      <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
-                      <span>{generationProgress.message || 'Generando tratado exhaustivo con IA...'}</span>
-                    </div>
-
-                    <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-white/10 p-0.5">
-                      <div
-                        className="bg-gradient-to-r from-amber-400 via-violet-500 to-indigo-500 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.max(8, generationProgress.percent)}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] text-slate-400 px-1 font-semibold">
-                      <span>Procesando sin límite de caracteres ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.multiplier})</span>
-                      <span className="text-amber-300 font-bold">{generationProgress.percent}%</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => handleGenerateStudyGuide(selectedDepth)}
-                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-violet-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-900/30 transition-all transform hover:-translate-y-0.5 active:scale-95 cursor-pointer"
-                    >
-                      <Sparkles className="w-5 h-5 text-slate-950" />
-                      <span>
-                        Generar Guía {DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.name} ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.multiplier})
-                      </span>
-                    </button>
-                  </div>
-                )}
+              {/* Botón de Generación */}
+              <div className="flex justify-center pt-2">
+                <button
+                  onClick={() => handleGenerateStudyGuide(selectedDepth)}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-violet-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-900/30 transition-all transform hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+                >
+                  <Sparkles className="w-5 h-5 text-slate-950" />
+                  <span>
+                    Generar Guía {DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.name} ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.multiplier})
+                  </span>
+                </button>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Barra de progreso superior en caso de estar regenerando */}
-              {isGenerating && (
-                <div className="p-4 rounded-2xl bg-black/60 border border-violet-500/50 text-center space-y-2 animate-fadeIn mb-4">
-                  <div className="flex items-center justify-center gap-2.5 text-xs sm:text-sm font-bold text-white">
-                    <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                    <span>{generationProgress.message || 'Regenerando con nuevo nivel de profundidad...'}</span>
-                  </div>
-                  <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/10">
-                    <div
-                      className="bg-gradient-to-r from-amber-400 via-violet-500 to-indigo-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(8, generationProgress.percent)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
               <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-10 shadow-xl">
                 <FormattedText text={stripExecutiveSummaryPreamble(markdown)} />
               </div>

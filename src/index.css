@@ -134,4 +134,30 @@ html {
   scrollbar-width: none;
 }
 
+/* Animaciones para el Escáner Holográfico de la Guía de Estudio */
+@keyframes laserSweep {
+  0% {
+    top: 2%;
+    opacity: 0.85;
+  }
+  50% {
+    top: 96%;
+    opacity: 1;
+  }
+  100% {
+    top: 2%;
+    opacity: 0.85;
+  }
+}
+
+.animate-laser-sweep {
+  animation: laserSweep 3.2s ease-in-out infinite;
+}
+
+.bg-cyber-grid {
+  background-image: linear-gradient(to right, rgba(139, 92, 246, 0.08) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(139, 92, 246, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 
