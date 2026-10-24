@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   getAISettings,
   saveAISettings,
@@ -21,6 +21,7 @@ import {
   saveGroqModel,
   getOralAISettings,
 } from '../services/aiService';
+import { validateBaseUrl, validateGroqApiKey } from '../utils/validation';
 import {
   Bot,
   X,
@@ -94,9 +95,44 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   }, [isOpen]);
 
-  // Prueba automatica de conexion tan pronto se ingresa la clave de API
+  // Validaciones reactivas en tiempo real
+  const isGroq = selectedPresetId === 'groq' || Boolean(settings.baseUrl?.includes('api.groq.com'));
+
+  const urlValidation = useMemo(() => {
+    return validateBaseUrl(settings.baseUrl || '');
+  }, [settings.baseUrl]);
+
+  const keyValidation = useMemo(() => {
+    const cleanKey = settings.apiKey?.trim() || '';
+    if (isGroq) {
+      return validateGroqApiKey(cleanKey, false);
+    }
+    const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
+    if (!isLocal && !cleanKey) {
+      return { isValid: false, error: 'Se requiere una API Key para Ollama Cloud.' };
+    }
+    return { isValid: true };
+  }, [isGroq, settings.baseUrl, settings.apiKey]);
+
+  const modelValidation = useMemo(() => {
+    if (!settings.model || !settings.model.trim()) {
+      return { isValid: false, error: 'El nombre del modelo LLM no puede estar vacío.' };
+    }
+    return { isValid: true };
+  }, [settings.model]);
+
+  const isFormValid = urlValidation.isValid && keyValidation.isValid && modelValidation.isValid;
+
+  // Prueba automatica de conexion tan pronto se ingresa la clave de API y la configuracion sea valida
   useEffect(() => {
     if (!isOpen) return;
+    if (!urlValidation.isValid || !keyValidation.isValid) {
+      if (settings.verified) {
+        setSettings(prev => ({ ...prev, verified: false }));
+      }
+      return;
+    }
+
     const cleanKey = settings.apiKey?.trim() || '';
     const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
 
@@ -108,7 +144,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       return;
     }
 
-    // Si tiene una clave con al menos 4 caracteres o es local, probar automaticamente
+    // Si tiene una clave valida o es local, probar automaticamente
     if (cleanKey.length >= 4 || isLocal) {
       const timer = setTimeout(async () => {
         setIsTesting(true);
@@ -143,11 +179,24 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
       return () => clearTimeout(timer);
     }
-  }, [settings.apiKey, settings.baseUrl, settings.model, isOpen, selectedPresetId]);
+  }, [settings.apiKey, settings.baseUrl, settings.model, isOpen, selectedPresetId, urlValidation.isValid, keyValidation.isValid]);
 
   if (!isOpen) return null;
 
   const handleTestConnection = async () => {
+    if (!urlValidation.isValid) {
+      setTestResult({ success: false, message: urlValidation.error || 'URL inválida.' });
+      return;
+    }
+    if (!keyValidation.isValid) {
+      setTestResult({ success: false, message: keyValidation.error || 'API Key inválida.' });
+      return;
+    }
+    if (!modelValidation.isValid) {
+      setTestResult({ success: false, message: modelValidation.error || 'Nombre de modelo requerido.' });
+      return;
+    }
+
     setIsTesting(true);
     setTestResult(null);
     try {
@@ -213,6 +262,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   };
 
   const handleSave = async () => {
+    if (!isFormValid) {
+      return;
+    }
+
     if (selectedPresetId === 'ollama-cloud') {
       if (settings.apiKey !== undefined) saveOllamaApiKey(settings.apiKey);
       if (settings.baseUrl) saveOllamaBaseUrl(settings.baseUrl);
@@ -448,8 +501,18 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   }
                 }}
                 placeholder={selectedPresetId === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://ollama.com/v1'}
-                className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
+                className={`w-full px-3 py-2 rounded-xl bg-thea-bg border text-white text-xs font-mono focus:outline-none transition-colors ${
+                  !urlValidation.isValid
+                    ? 'border-rose-500 focus:border-rose-500'
+                    : 'border-thea-border focus:border-violet-500'
+                }`}
               />
+              {!urlValidation.isValid && (
+                <p className="mt-1.5 text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-fadeIn">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                  <span>{urlValidation.error}</span>
+                </p>
+              )}
             </div>
 
             {/* API Key */}
@@ -511,7 +574,11 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                     }
                   }}
                   placeholder={activePreset?.keyPlaceholder || 'Ingresa tu API Key'}
-                  className="w-full px-3 py-2 pr-10 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
+                  className={`w-full px-3 py-2 pr-10 rounded-xl bg-thea-bg border text-white text-xs font-mono focus:outline-none transition-colors ${
+                    !keyValidation.isValid
+                      ? 'border-rose-500 focus:border-rose-500'
+                      : 'border-thea-border focus:border-violet-500'
+                  }`}
                 />
                 <button
                   type="button"
@@ -521,32 +588,38 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <div className="mt-1.5 text-[11px]">
-                {isTesting ? (
-                  <span className="text-violet-300 flex items-center gap-1.5 font-medium animate-pulse">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-400 shrink-0" />
-                    Probando automáticamente clave de API (200 OK)...
-                  </span>
-                ) : settings.verified ? (
-                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    API verificada y activa (200 OK). ¡Todo desbloqueado y a todo color!
-                  </span>
-                ) : settings.apiKey && settings.apiKey.trim().length > 0 ? (
-                  <span className="text-amber-400 flex items-center gap-1 font-medium">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    Clave ingresada no verificada. Espera la prueba automática o presiona &quot;Probar Conexión&quot;.
-                  </span>
-                ) : (
-                  <span className="text-amber-400 flex items-center gap-1 font-medium">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    Sin clave API: Ingresa tu clave para que se pruebe automáticamente.
-                  </span>
-                )}
-              </div>
+
+              {!keyValidation.isValid ? (
+                <p className="mt-1.5 text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-fadeIn">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                  <span>{keyValidation.error}</span>
+                </p>
+              ) : (
+                <div className="mt-1.5 text-[11px]">
+                  {isTesting ? (
+                    <span className="text-violet-300 flex items-center gap-1.5 font-medium animate-pulse">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-400 shrink-0" />
+                      Probando automáticamente clave de API (200 OK)...
+                    </span>
+                  ) : settings.verified ? (
+                    <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      API verificada y activa (200 OK). ¡Todo desbloqueado y a todo color!
+                    </span>
+                  ) : settings.apiKey && settings.apiKey.trim().length > 0 ? (
+                    <span className="text-amber-400 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      Clave ingresada no verificada. Espera la prueba automática o presiona &quot;Probar Conexión&quot;.
+                    </span>
+                  ) : (
+                    <span className="text-amber-400 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      Sin clave API: Ingresa tu clave para que se pruebe automáticamente.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-
-
 
             {/* Model Name */}
             <div>
@@ -566,8 +639,18 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   }
                 }}
                 placeholder={selectedPresetId === 'groq' ? 'openai/gpt-oss-120b' : 'gemma4:31b'}
-                className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border text-white text-xs font-mono focus:outline-none focus:border-violet-500"
+                className={`w-full px-3 py-2 rounded-xl bg-thea-bg border text-white text-xs font-mono focus:outline-none transition-colors ${
+                  !modelValidation.isValid
+                    ? 'border-rose-500 focus:border-rose-500'
+                    : 'border-thea-border focus:border-violet-500'
+                }`}
               />
+              {!modelValidation.isValid && (
+                <p className="mt-1.5 text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-fadeIn">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                  <span>{modelValidation.error}</span>
+                </p>
+              )}
 
               {/* Detected models chips if test succeeded */}
               {testResult?.models && testResult.models.length > 0 && (
@@ -624,8 +707,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={isTesting}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all disabled:opacity-50"
+              disabled={isTesting || !isFormValid}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isTesting ? (
                 <>
@@ -654,7 +737,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-violet-900/30 transition-all"
+            disabled={!isFormValid}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-violet-900/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isSaved ? (
               <>

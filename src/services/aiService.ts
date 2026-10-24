@@ -64,8 +64,12 @@ export const AI_PRESETS: AIPreset[] = [
 /** Modelo de respaldo para Groq cuando el principal da límite de tasa (429) o error de servidor (5xx) */
 const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 
-export const DEFAULT_GROQ_KEY = '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';
-export const DEFAULT_GROK_KEY = '';
+export const DEFAULT_GROQ_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GROQ_API_KEY)
+  ? String((import.meta as any).env.VITE_GROQ_API_KEY).trim()
+  : '';
+export const DEFAULT_GROK_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GROK_API_KEY)
+  ? String((import.meta as any).env.VITE_GROK_API_KEY).trim()
+  : '';
 
 const STORAGE_KEY = 'thea_ai_settings';
 const GROK_STORAGE_KEY = 'thea_grok_settings';

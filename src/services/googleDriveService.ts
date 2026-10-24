@@ -41,7 +41,6 @@ const STORAGE_LAST_SYNC_KEY = 'thea_gdrive_last_sync';
 
 const DRIVE_ROOT_FOLDER = 'TheaPlus_CloudData';
 const DRIVE_ASSETS_FOLDER = 'assets';
-const DEFAULT_CLIENT_ID = '103271853273-fkfvub7h8glajislelbknreqendh0lmq.apps.googleusercontent.com';
 
 // Listener registry for live UI indicators
 type SyncListener = (state: DriveSyncState) => void;
@@ -293,7 +292,7 @@ export const googleDriveService = {
     if (localId && localId.trim().length > 0) {
       return localId.trim();
     }
-    return DEFAULT_CLIENT_ID;
+    return '';
   },
 
   /**
