@@ -49,14 +49,14 @@ export const AI_PRESETS: AIPreset[] = [
   },
   {
     id: 'groq',
-    name: 'Motor Oral (Grok / Groq)',
+    name: 'Groq Cloud (Motor de Voz)',
     provider: 'openai-compatible',
-    baseUrl: 'https://api.x.ai/v1',
-    model: 'grok-2-mini',
-    keyPlaceholder: 'Pega tu clave grok_..., xai-... o gsk_...',
-    keyUrl: 'https://grok.com',
-    description: 'Motor oral exclusivo para inferencia rápida en Lección Oral y Conversación con voz (admite Grok y Groq).',
-    badge: 'Motor Oral Exclusivo',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'openai/gpt-oss-120b',
+    keyPlaceholder: 'gsk_...',
+    keyUrl: 'https://console.groq.com/keys',
+    description: 'Motor oral de voz ultra acelerado para Lección Oral, Whisper y Conversación interactiva.',
+    badge: 'Motor de Voz Exclusivo',
     freeTier: true,
   },
 ];
@@ -66,7 +66,7 @@ const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 
 export const DEFAULT_GROQ_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GROQ_API_KEY)
   ? String((import.meta as any).env.VITE_GROQ_API_KEY).trim()
-  : '';
+  : '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';
 export const DEFAULT_GROK_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GROK_API_KEY)
   ? String((import.meta as any).env.VITE_GROK_API_KEY).trim()
   : 'grok_9c95899ccc67881cc8e5098ae3076e9b_669a4867432243493bdaf2d8e6bfd18f449b542cbcf64e7bd083c06ba6a73b00';
@@ -99,12 +99,12 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   ollamaBaseUrl: 'https://ollama.com/v1',
   ollamaApiKey: '',
   ollamaModel: 'gemma4:31b',
-  groqBaseUrl: 'https://api.x.ai/v1',
-  groqApiKey: DEFAULT_GROK_KEY || DEFAULT_GROQ_KEY,
-  groqModel: 'grok-2-mini',
-  grokBaseUrl: 'https://api.x.ai/v1',
-  grokApiKey: DEFAULT_GROK_KEY,
-  grokModel: 'grok-2-mini',
+  groqBaseUrl: 'https://api.groq.com/openai/v1',
+  groqApiKey: DEFAULT_GROQ_KEY,
+  groqModel: 'openai/gpt-oss-120b',
+  grokBaseUrl: 'https://api.groq.com/openai/v1',
+  grokApiKey: DEFAULT_GROQ_KEY,
+  grokModel: 'openai/gpt-oss-120b',
 };
 
 export function getOllamaBaseUrl(): string {
@@ -261,18 +261,18 @@ export function getAISettings(): AISettings {
     parsed.ollamaModel ||
     (parsed.model && !parsed.model.includes('gpt-oss') && !parsed.model.includes('llama-3.3') ? parsed.model : 'gemma4:31b');
 
-  // 2. Resolver configuracion oral (GROK / GROQ - Motor Oral exclusivo para Leccion y Conversacion Oral)
-  const grokStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_grok_api_key') : null;
+  // 2. Resolver configuracion oral (GROQ / GROK - Motor Oral exclusivo para Leccion y Conversacion Oral)
   const groqStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_api_key') : null;
+  const grokStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_grok_api_key') : null;
 
   const effectiveOralKey =
-    grokStorageKey ||
     groqStorageKey ||
-    parsed.grokApiKey ||
+    grokStorageKey ||
     parsed.groqApiKey ||
+    parsed.grokApiKey ||
     (parsed.apiKey && (parsed.apiKey.startsWith('gsk_') || parsed.apiKey.startsWith('grok_') || parsed.apiKey.startsWith('xai-')) ? parsed.apiKey : '') ||
-    DEFAULT_GROK_KEY ||
-    DEFAULT_GROQ_KEY;
+    DEFAULT_GROQ_KEY ||
+    DEFAULT_GROK_KEY;
 
   const isGrok = Boolean(effectiveOralKey && (effectiveOralKey.startsWith('grok_') || effectiveOralKey.startsWith('xai-')));
 
@@ -316,9 +316,9 @@ export const getGeneralAISettings = getAISettings;
 /** Retorna la configuracion oral de IA (Grok / Groq para Leccion Oral y Conversacion con Thea) */
 export function getOralAISettings(): AISettings {
   const general = getAISettings();
-  const grokKey = getGrokApiKey();
   const groqKey = getGroqApiKey();
-  const oralKey = grokKey || groqKey || general.grokApiKey || general.groqApiKey || DEFAULT_GROK_KEY || DEFAULT_GROQ_KEY;
+  const grokKey = getGrokApiKey();
+  const oralKey = groqKey || grokKey || general.groqApiKey || general.grokApiKey || DEFAULT_GROQ_KEY || DEFAULT_GROK_KEY;
   const isGrok = Boolean(oralKey && (oralKey.startsWith('grok_') || oralKey.startsWith('xai-')));
 
   const oralModel = isGrok
@@ -545,20 +545,20 @@ export function saveOllamaApiKey(key: string): void {
 
 export function getGroqApiKey(): string {
   if (typeof localStorage !== 'undefined') {
-    const direct = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key');
+    const direct = localStorage.getItem('thea_groq_api_key') || localStorage.getItem('thea_grok_api_key');
     if (direct && direct.trim().length > 0) return direct.trim();
   }
   const current = getAISettings();
-  if (current.grokApiKey && current.grokApiKey.trim().length > 0) {
-    return current.grokApiKey.trim();
-  }
   if (current.groqApiKey && current.groqApiKey.trim().length > 0) {
     return current.groqApiKey.trim();
+  }
+  if (current.grokApiKey && current.grokApiKey.trim().length > 0) {
+    return current.grokApiKey.trim();
   }
   if (current.apiKey && (current.apiKey.startsWith('gsk_') || current.apiKey.startsWith('grok_') || current.apiKey.startsWith('xai-') || current.baseUrl?.includes('api.groq.com') || current.baseUrl?.includes('api.x.ai'))) {
     return current.apiKey.trim();
   }
-  return DEFAULT_GROK_KEY || DEFAULT_GROQ_KEY;
+  return DEFAULT_GROQ_KEY || DEFAULT_GROK_KEY;
 }
 
 export function saveGroqApiKey(key: string): void {
