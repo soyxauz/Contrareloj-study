@@ -147,6 +147,7 @@ export interface PodcastGenerationOptions {
   format?: PodcastFormat;
   duration?: PodcastDuration;
   orientation?: string;
+  previousPodcast?: PodcastEpisode;
 }
 
 export interface PodcastEpisode {

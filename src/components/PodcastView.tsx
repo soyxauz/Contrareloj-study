@@ -118,8 +118,8 @@ export const PODCAST_DURATION_OPTIONS: {
   {
     id: 'long',
     title: 'Largo',
-    subtitle: '+8 minutos',
-    detail: '24 a 32 turnos exhaustivos (~1400 palabras), debate y profundización a fondo.',
+    subtitle: '10 a 30 minutos',
+    detail: 'Explicación exhaustiva y profunda (10 a 30 min, hasta 43 min máx). Desglose paso a paso sin bajar de 10 min.',
   },
 ];
 
@@ -1623,14 +1623,25 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
 
     try {
+      const fullSourceText = [
+        kit.sourceText,
+        kit.studyGuideMarkdown,
+        ...(kit.sourceMaterials?.map((m) => m.rawText) || []),
+        kit.description,
+      ]
+        .filter(Boolean)
+        .join('\n\n---\n\n')
+        .slice(0, 70000);
+
       const generated = await generateAIPodcast(
-        kit.sourceText || kit.description,
+        fullSourceText,
         kit.title,
         kit.category,
         {
           format: activeFormat,
           duration: activeDuration,
           orientation: activeOrientation,
+          previousPodcast: kit.podcast || undefined,
         }
       );
       if (generated && onUpdateKit) {
@@ -2776,7 +2787,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                       ? 'Corto (-2 min)'
                       : podcast.durationMode === 'normal'
                       ? 'Normal (4-6 min)'
-                      : 'Largo (+8 min)'}
+                      : 'Largo (10-30 min)'}
                   </span>
                 )}
               </div>

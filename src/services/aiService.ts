@@ -773,7 +773,8 @@ export async function testAIConnection(override?: AISettings): Promise<{
 export async function queryAICompletion(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   jsonMode: boolean = false,
-  override?: AISettings
+  override?: AISettings,
+  options?: { temperature?: number; max_tokens?: number }
 ): Promise<string> {
   const settings = override || getAISettings();
   if (!settings.enabled) {
@@ -816,8 +817,12 @@ export async function queryAICompletion(
   const body: Record<string, unknown> = {
     model: targetModel,
     messages,
-    temperature: 0.3,
+    temperature: options?.temperature !== undefined ? options.temperature : 0.3,
   };
+
+  if (options?.max_tokens) {
+    body['max_tokens'] = options.max_tokens;
+  }
 
   if (jsonMode) {
     body['response_format'] = { type: 'json_object' };
@@ -2112,7 +2117,7 @@ Incluye:
   return '';
 }
 
-/** Generación de Episodio de Podcast bajo demanda con opciones avanzadas de Formato y Duración */
+/** Generación de Episodio de Podcast bajo demanda con opciones avanzadas de Formato, Duración y Diferenciación */
 export async function generateAIPodcast(
   rawText: string,
   title: string,
@@ -2127,62 +2132,95 @@ export async function generateAIPodcast(
   const selectedDuration: PodcastDuration = options.duration || 'normal';
   const customOrientation = options.orientation?.trim() || '';
 
+  // Escanear material de estudio completo hasta 70.000 caracteres
+  const fullMaterial = (rawText || '').slice(0, 70000);
+
   const settings = getAISettings();
-  const langDetection = detectDocumentLanguage(rawText);
+  const langDetection = detectDocumentLanguage(fullMaterial);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
+
+  // Detectar si el usuario exigió explícitamente máxima profundidad y hablar de todo literalmente
+  const isExhaustiveRequested =
+    selectedFormat === 'detailed' ||
+    /(todo|literalmente|detallado|exhaustivo|a fondo|completo|profundo|minucioso|cada punto|sin resumir)/i.test(customOrientation);
 
   let formatDirective = '';
   switch (selectedFormat) {
     case 'brief':
       formatDirective = `FORMATO: BREVE (RESUMEN EJECUTIVO Y DIRECTO).
-- Objetivo: Un resumen breve que sirva para que el estudiante capte rápidamente las ideas principales de sus fuentes.
-- Estilo: Dinámico, ágil, sin rodeos ni preámbulos introductorios largos.
+- Objetivo: Un resumen breve y dinámico para que el estudiante capte velozmente los pilares del tema.
+- Estilo: Ágil, vibrante, sin rodeos ni preámbulos introductorios largos.
 - Foco: Definiciones fundamentales, conclusiones clave y conceptos esenciales condensados.`;
       break;
     case 'critique':
       formatDirective = `FORMATO: CRÍTICA Y EVALUACIÓN EXPERTA.
-- Objetivo: Una revisión experta de las fuentes, con comentarios constructivos para ayudar al estudiante a dominar el material y evitar trampas conceptuales.
+- Objetivo: Una revisión experta del material, con comentarios analíticos constructivos para dominar el tema y evitar trampas conceptuales.
 - Estilo: Analítico, riguroso, pedagógico y mentorizador.
-- Foco: Puntos fuertes del tema, errores habituales en exámenes, malentendidos comunes y consejos prácticos para alcanzar maestría.`;
+- Foco: Puntos fuertes, errores típicos en exámenes, sesgos habituales y consejos de dominio práctico.`;
       break;
     case 'debate':
       formatDirective = `FORMATO: DEBATE REFLEXIVO Y PERSPECTIVAS CONTRAPUESTAS.
-- Objetivo: Un debate reflexivo entre dos presentadores que arroja luz sobre diferentes perspectivas de las fuentes.
-- Estilo: Dialéctico, respetuoso, intelectualmente estimulante y ágil.
-- Foco: Sofia y Alex/Mateo sostienen visiones complementarias o en tensión dialéctica (ejemplo: teoría vs. aplicación práctica, método convencional vs. alternativo, ventajas vs. inconvenientes). Se retan cordialmente con preguntas incisivas y sintetizan conclusiones comunes.`;
+- Objetivo: Un debate intelectualmente estimulante entre Sofia y Alex que explore tensiones y diferentes ángulos del tema.
+- Estilo: Dialéctico, respetuoso, incisivo y ágil.
+- Foco: Sofia y Alex sostienen visiones complementarias o en tensión (teoría vs práctica, enfoque tradicional vs moderno). Se retan cordialmente y sintetizan conclusiones comunes.`;
       break;
     case 'detailed':
     default:
-      formatDirective = `FORMATO: INFORMACIÓN DETALLADA (ANÁLISIS PROFUNDO).
-- Objetivo: Una animada conversación entre dos presentadores que analizan y conectan temas de las fuentes a profundidad.
-- Estilo: Conversacional, pedagógico, entusiasta y exhaustivo.
-- Foco: Desglose completo de conceptos, analogías cotidianas intuitivas, conexiones entre temas y explicación clara del 'por qué' de cada principio.`;
+      formatDirective = `FORMATO: INFORMACIÓN DETALLADA Y EXHAUSTIVA (ANÁLISIS PROFUNDO).
+- Objetivo: Una animada conversación entre dos presentadores que analizan y conectan temas de las fuentes a profundidad total.
+- Cobertura Total: Si el tema es amplio o se pide detalle, DEBES hablar de TODO literalmente: conceptos, fórmulas, pasos secuenciales, causas, consecuencias, autores y fechas sin omitir ningún subtema.
+- Prohibido: No usar frases superficiales o evasivas como "y muchos puntos más" o "a grandes rasgos". Desglosar el funcionamiento íntimo de cada principio.
+- Estilo: Riguroso, pedagógico, entusiasta y sumamente minucioso.`;
       break;
   }
 
   let durationDirective = '';
-  let targetTurnCount = '14 a 18';
+  let targetTurnCount = '14 a 18 turnos equilibrados';
   let defaultDurationLabel = '4:30 min';
+
   switch (selectedDuration) {
     case 'short':
-      targetTurnCount = '6 a 8';
+      targetTurnCount = '6 a 8 turnos concisos';
       defaultDurationLabel = '2:00 min';
       durationDirective = `DURACIÓN: CORTO (-2 MINUTOS).
-- Extensión requerida: Genera exactamente entre 6 y 8 turnos de diálogo en total.
+- Extensión requerida: Genera entre 6 y 8 turnos de diálogo en total.
 - La duración estimada en el JSON debe ser "2:00 min".
-- Longitud de los turnos: concisos, directos al punto (1 a 2 frases por turno, aproximadamente 200 - 300 palabras en total).`;
+- Longitud de los turnos: concisos, directos al grano (aproximadamente 200 - 300 palabras en total).`;
       break;
-    case 'long':
-      targetTurnCount = '24 a 32';
-      defaultDurationLabel = '8:30 min';
-      durationDirective = `DURACIÓN: LARGO (+8 MINUTOS SEGÚN EL CONTENIDO).
-- Extensión requerida: Genera entre 24 y 32 turnos de diálogo profundos y completos.
-- La duración estimada en el JSON debe ser "8:30 min".
-- Longitud de los turnos: explicaciones enriquecidas paso a paso (aproximadamente 1200 - 1600 palabras en total).`;
+    case 'long': {
+      let dynamicDurationMin = 12;
+      let dynamicDurationMax = 28;
+      defaultDurationLabel = '20:00 min';
+      targetTurnCount = '32 a 48 turnos desarrollados y sustanciales';
+
+      if (fullMaterial.length > 40000 || /4[0-3]|cuarenta/i.test(customOrientation)) {
+        dynamicDurationMin = 25;
+        dynamicDurationMax = 43;
+        defaultDurationLabel = '35:00 min';
+        targetTurnCount = '45 a 60 turnos desarrollados y sustanciales';
+      } else if (fullMaterial.length > 20000 || isExhaustiveRequested) {
+        dynamicDurationMin = 16;
+        dynamicDurationMax = 30;
+        defaultDurationLabel = '24:00 min';
+        targetTurnCount = '36 a 50 turnos desarrollados y sustanciales';
+      } else {
+        dynamicDurationMin = 10;
+        dynamicDurationMax = 20;
+        defaultDurationLabel = '15:00 min';
+        targetTurnCount = '28 a 40 turnos desarrollados y sustanciales';
+      }
+
+      durationDirective = `DURACIÓN: LARGO (10 A 30 MINUTOS, HASTA TOPE DE 43 MINUTOS SEGÚN EL TEMA).
+- REGLA DE TIEMPO ESTRICTA: El podcast NO DEBE BAJAR DE 10 MINUTOS (duración mínima 10:00 min).
+- Objetivo de duración para este material: entre ${dynamicDurationMin} y ${dynamicDurationMax} minutos (procurando mantenerse habitualmente entre 15 y 30 minutos, con un tope máximo de hasta 43 minutos si el volumen del material o la petición del usuario lo justifican).
+- Extensión requerida: Genera entre ${targetTurnCount}.
+- Densidad de cada turno: Cada intervención debe ser extensa y sustancial (párrafos enriquecidos de 70 a 130 palabras, con explicaciones paso a paso, ejemplos prácticos, analogías cotidianas y debate a fondo).
+- La duración estimada en el JSON debe ser entre "${dynamicDurationMin}:00 min" y "${dynamicDurationMax}:00 min" (ejemplo: "${defaultDurationLabel}").`;
       break;
+    }
     case 'normal':
     default:
-      targetTurnCount = '14 a 18';
+      targetTurnCount = '14 a 18 turnos equilibrados';
       defaultDurationLabel = '4:30 min';
       durationDirective = `DURACIÓN: NORMAL (4 A 6 MINUTOS).
 - Extensión requerida: Genera entre 14 y 18 turnos de diálogo equilibrados.
@@ -2191,13 +2229,65 @@ export async function generateAIPodcast(
       break;
   }
 
-  const orientationDirective = customOrientation
-    ? `\nORIENTACIÓN Y ENFOQUE PERSONALIZADO SOLICITADO:\n"${customOrientation}"\nAjusta estrictamente las prioridades, ejemplos y énfasis de los presentadores a esta indicación.\n`
-    : '';
+  // Directiva de mandato prioritario del usuario
+  let orientationDirective = '';
+  if (customOrientation) {
+    orientationDirective = `
+MANDATO PRIORITARIO DEL USUARIO:
+El usuario ha establecido explícitamente las siguientes instrucciones de orientación:
+"${customOrientation}"
+ESTA ES LA MÁXIMA PRIORIDAD DEL EPISODIO: Sofia y Alex deben ajustar el guión, las preguntas clave, el tono y los temas tratados para cumplir estrictamente con esta indicación.
+`;
+  }
 
-  const systemPrompt = `Eres el productor ejecutivo del podcast educativo Contrareloj Review.
-A partir del texto proporcionado, genera un episodio de repaso dinámico, entretenido y riguroso entre Sofia (Host entusiasta) y Alex (Tutor pedagógico experto).
+  if (isExhaustiveRequested) {
+    orientationDirective += `
+DIRECTIVA DE COBERTURA TOTAL ("HABLAR DE TODO LITERALMENTE"):
+El usuario ha exigido un nivel de detalle MÁXIMO. Debes abordar exhaustivamente TODO lo que contiene el material fuente:
+- Recorre sistemáticamente cada subtema, fórmula, definición, fecha y autor.
+- Sofia y Alex deben desglosar el 'cómo' y el 'por qué' de cada principio con precisión milimétrica sin recortar contenido.
+`;
+  }
+
+  // Directiva de diferenciación y no-repetición respecto al episodio previo
+  let previousEpisodeDirective = '';
+  if (options.previousPodcast) {
+    const prev = options.previousPodcast;
+    const prevTitle = prev.title || '';
+    const prevFirstLine = prev.dialogue?.[0]?.text || '';
+    const prevFirstSpeaker = prev.dialogue?.[0]?.speaker || 'Sofia';
+    const prevSample = prev.dialogue?.slice(0, 3).map((d) => `${d.speaker}: "${d.text}"`).join(' | ') || '';
+
+    previousEpisodeDirective = `
+REGLA ESTRICTA DE DIFERENCIACIÓN (NO REPETIR EL EPISODIO ANTERIOR):
+Ya existe un episodio previo generado para este material titulado "${prevTitle}".
+En el episodio anterior, comenzó ${prevFirstSpeaker} diciendo: "${prevFirstLine}".
+Primeras intervenciones del episodio previo: ${prevSample}
+
+OBLIGACIONES DE VARIEDAD FRESCA:
+1. PROHIBIDO REPETIR: No uses la misma frase de apertura ni las mismas analogías, metáforas o chistes que en el episodio anterior.
+2. ESTRUCTURA DIFERENTE: No sigas la misma secuencia temática. Aborda el contenido desde otro ángulo conceptual, con nuevas preguntas intrigantes y otra óptica de análisis.
+3. INVERTIR O VARIAR QUIÉN HABLA PRIMERO: Haz que empiece ${prevFirstSpeaker === 'Sofia' ? 'Alex' : 'Sofia'}, o inicia directamente 'in medias res' discutiendo un dilema o caso fascinante sin introducciones típicas.
+4. METÁFORAS NOVEDOSAS: Todas las comparaciones pedagógicas deben ser completamente distintas a las del episodio previo.
+`;
+  }
+
+  // Variedad de estilos de apertura para evitar que todos los podcasts suenen iguales
+  const openingStyles = [
+    'Apertura in medias res: Entrar directamente al núcleo de un dilema o enigma fascinante sin introducciones formales.',
+    'Apertura socrática: Uno de los presentadores formula una pregunta provocadora o contraintuitiva sobre el tema.',
+    'Apertura con paradoja cotidiana: Iniciar con un problema real que despierta curiosidad inmediata antes de desvelar la teoría.',
+    'Apertura con trampas conceptuales: Iniciar advirtiendo sobre el error más común y peligroso que la gente comete con este tema.',
+    'Apertura dialéctica: Plantear un debate con dos posturas encontradas que se reconciliarán a lo largo del análisis.'
+  ];
+  const randomOpeningStyle = openingStyles[Math.floor(Math.random() * openingStyles.length)];
+
+  const systemPrompt = `Eres el productor ejecutivo y guionista principal del podcast educativo Contrareloj Review.
+A partir del texto proporcionado, genera un episodio de repaso dinámico, enriquecido, riguroso y conversacional entre Sofia (Host entusiasta y perspicaz) y Alex (Tutor pedagógico experto).
 Deben discutir los puntos centrales del tema con naturalidad, analogías y claridad 100% en español.
+
+ESTILO DE APERTURA PARA ESTE EPISODIO:
+${randomOpeningStyle}
 
 DIRECTRICES ESPECÍFICAS DE FORMATO Y DURACIÓN:
 ${formatDirective}
@@ -2205,6 +2295,9 @@ ${formatDirective}
 ${durationDirective}
 
 ${orientationDirective}
+
+${previousEpisodeDirective}
+
 ${translationDirective}
 
 Responde ÚNICAMENTE con un JSON con la estructura:
@@ -2213,13 +2306,13 @@ Responde ÚNICAMENTE con un JSON con la estructura:
     "title": "Repaso: ${title}",
     "duration": "${defaultDurationLabel}",
     "dialogue": [
-      { "speaker": "Sofia", "time": "0:00", "text": "¡Bienvenidos! Hoy analizaremos los puntos clave de..." },
-      { "speaker": "Alex", "time": "0:15", "text": "Exacto, Sofia. Lo fundamental que debemos comprender es..." }
+      { "speaker": "Sofia", "time": "0:00", "text": "..." },
+      { "speaker": "Alex", "time": "0:45", "text": "..." }
     ]
   }
-} `;
+}`;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 9000)}${customOrientation ? `\n\nOrientación requerida para el podcast:\n${customOrientation}` : ''}\n\nGenera el podcast con formato "${selectedFormat}" y duración "${selectedDuration}" (${targetTurnCount} turnos de diálogo 100% en español):`;
+  const userPrompt = `Material de estudio ("${title}" - ${category}) [Extensión: ${fullMaterial.length} caracteres]:\n\n${fullMaterial}${customOrientation ? `\n\nInstrucción obligatoria del usuario:\n${customOrientation}` : ''}\n\nGenera el episodio de podcast con formato "${selectedFormat}" y duración "${selectedDuration}" (${targetTurnCount} 100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -2228,26 +2321,88 @@ Responde ÚNICAMENTE con un JSON con la estructura:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        true
+        true,
+        undefined,
+        { temperature: 0.75, max_tokens: 8192 }
       );
-      const match = res.match(/\{[\s\S]*\}/);
+
+      // Extracción y recuperación tolerante de JSON
+      let parsed: any = null;
+      const cleanRes = res.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      const match = cleanRes.match(/\{[\s\S]*\}/);
       if (match) {
-        const parsed = JSON.parse(match[0]);
-        if (parsed.podcast && Array.isArray(parsed.podcast.dialogue)) {
-          return {
-            id: `pod-ai-${Date.now()}`,
-            title: parsed.podcast.title || `Repaso: ${title}`,
-            duration: parsed.podcast.duration || defaultDurationLabel,
-            hosts: [
-              { name: 'Sofia', role: 'Host', avatar: 'S' },
-              { name: 'Alex', role: 'Tutor IA', avatar: 'A' },
-            ],
-            dialogue: parsed.podcast.dialogue,
-            format: selectedFormat,
-            durationMode: selectedDuration,
-            orientation: customOrientation,
-          };
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          try {
+            const dialogueIdx = match[0].indexOf('"dialogue"');
+            if (dialogueIdx !== -1) {
+              const before = match[0].slice(0, dialogueIdx);
+              const after = match[0].slice(dialogueIdx);
+              const lastClosing = after.lastIndexOf('}');
+              if (lastClosing !== -1) {
+                const repaired = `${before}${after.slice(0, lastClosing + 1)}]}}`;
+                parsed = JSON.parse(repaired);
+              }
+            }
+          } catch (repairErr) {
+            console.warn('[Podcast AI] No se pudo reparar JSON truncado:', repairErr);
+          }
         }
+      }
+
+      if (parsed?.podcast && Array.isArray(parsed.podcast.dialogue) && parsed.podcast.dialogue.length > 0) {
+        // Normalización continua de marcas de tiempo basada en conteo de palabras
+        let accumulatedSecs = 0;
+        const normalizedDialogue = parsed.podcast.dialogue.map((item: any, idx: number) => {
+          const currentSecs = accumulatedSecs;
+          const mins = Math.floor(currentSecs / 60);
+          const secs = Math.floor(currentSecs % 60);
+          const timeFormatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+          const text = (item.text || '').trim();
+          const wordCount = text.split(/\s+/).filter(Boolean).length;
+          // ~140 palabras por minuto (~0.43s por palabra) + pausa conversacional de 1.2s
+          const turnDuration = Math.max(4, Math.round(wordCount * 0.43 + 1.2));
+          accumulatedSecs += turnDuration;
+
+          return {
+            speaker: item.speaker || (idx % 2 === 0 ? 'Sofia' : 'Alex'),
+            text,
+            time: timeFormatted,
+          };
+        });
+
+        // Duración final calculada
+        let finalDuration = parsed.podcast.duration || defaultDurationLabel;
+        if (selectedDuration === 'long') {
+          // El podcast largo debe situarse entre 10 y 30 min (con tope de 43 min)
+          const computedMins = Math.max(10, Math.min(43, Math.round(accumulatedSecs / 60)));
+          const computedSecs = accumulatedSecs % 60;
+          finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
+        } else if (selectedDuration === 'short') {
+          const computedMins = Math.max(1, Math.min(3, Math.round(accumulatedSecs / 60)));
+          const computedSecs = accumulatedSecs % 60;
+          finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
+        } else {
+          const computedMins = Math.max(3, Math.min(8, Math.round(accumulatedSecs / 60)));
+          const computedSecs = accumulatedSecs % 60;
+          finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
+        }
+
+        return {
+          id: `pod-ai-${Date.now()}`,
+          title: parsed.podcast.title || `Repaso: ${title}`,
+          duration: finalDuration,
+          hosts: [
+            { name: 'Sofia', role: 'Host', avatar: 'S' },
+            { name: 'Alex', role: 'Tutor IA', avatar: 'A' },
+          ],
+          dialogue: normalizedDialogue,
+          format: selectedFormat,
+          durationMode: selectedDuration,
+          orientation: customOrientation,
+        };
       }
     } catch (e) {
       console.warn('[Podcast AI] Error generando podcast con IA:', e);
