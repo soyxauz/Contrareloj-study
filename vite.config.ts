@@ -1,5 +1,241 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+
+function googleAuthPlugin(env: Record<string, string>): Plugin {
+  return {
+    name: 'google-auth-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/auth/google', async (req, res, next) => {
+        const url = req.url || '';
+        const parsedUrl = new URL(url, 'http://localhost');
+        const pathname = parsedUrl.pathname;
+
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 200;
+          res.end();
+          return;
+        }
+
+        if (pathname === '/status' || pathname === '') {
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          const hasClientId = Boolean(
+            env.GOOGLE_CLIENT_ID ||
+            env.VITE_GOOGLE_CLIENT_ID ||
+            process.env.GOOGLE_CLIENT_ID ||
+            process.env.VITE_GOOGLE_CLIENT_ID
+          );
+          const hasClientSecret = Boolean(
+            env.GOOGLE_CLIENT_SECRET ||
+            env.VITE_GOOGLE_CLIENT_SECRET ||
+            process.env.GOOGLE_CLIENT_SECRET ||
+            process.env.VITE_GOOGLE_CLIENT_SECRET
+          );
+          res.end(JSON.stringify({
+            available: true,
+            hasClientId,
+            hasClientSecret,
+            flowSupported: 'authorization_code'
+          }));
+          return;
+        }
+
+        if (pathname === '/token' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const data = body ? JSON.parse(body) : {};
+              const code = String(data.code || '').trim();
+              const redirectUri = String(data.redirect_uri || 'postmessage').trim();
+              const clientId = String(
+                data.clientId ||
+                env.GOOGLE_CLIENT_ID ||
+                env.VITE_GOOGLE_CLIENT_ID ||
+                process.env.GOOGLE_CLIENT_ID ||
+                process.env.VITE_GOOGLE_CLIENT_ID ||
+                ''
+              ).trim();
+              const clientSecret = String(
+                data.clientSecret ||
+                env.GOOGLE_CLIENT_SECRET ||
+                env.VITE_GOOGLE_CLIENT_SECRET ||
+                process.env.GOOGLE_CLIENT_SECRET ||
+                process.env.VITE_GOOGLE_CLIENT_SECRET ||
+                ''
+              ).trim();
+
+              if (!code) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Código de autorización requerido.' }));
+                return;
+              }
+
+              if (!clientId) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Client ID no configurado.' }));
+                return;
+              }
+
+              if (!clientSecret) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Client Secret no configurado.' }));
+                return;
+              }
+
+              const params = new URLSearchParams({
+                code,
+                client_id: clientId,
+                client_secret: clientSecret,
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code'
+              });
+
+              const googleRes = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'Accept': 'application/json'
+                },
+                body: params.toString()
+              });
+
+              const resJson: any = await googleRes.json();
+              if (!googleRes.ok || resJson.error) {
+                res.statusCode = googleRes.status || 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  success: false,
+                  error: resJson.error_description || resJson.error || 'Error canjeando código con Google.',
+                  details: resJson
+                }));
+                return;
+              }
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({
+                success: true,
+                access_token: resJson.access_token,
+                refresh_token: resJson.refresh_token || null,
+                expires_in: resJson.expires_in || 3600,
+                scope: resJson.scope || '',
+                token_type: resJson.token_type || 'Bearer'
+              }));
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: msg }));
+            }
+          });
+          return;
+        }
+
+        if (pathname === '/refresh' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const data = body ? JSON.parse(body) : {};
+              const refreshToken = String(data.refresh_token || '').trim();
+              const clientId = String(
+                data.clientId ||
+                env.GOOGLE_CLIENT_ID ||
+                env.VITE_GOOGLE_CLIENT_ID ||
+                process.env.GOOGLE_CLIENT_ID ||
+                process.env.VITE_GOOGLE_CLIENT_ID ||
+                ''
+              ).trim();
+              const clientSecret = String(
+                data.clientSecret ||
+                env.GOOGLE_CLIENT_SECRET ||
+                env.VITE_GOOGLE_CLIENT_SECRET ||
+                process.env.GOOGLE_CLIENT_SECRET ||
+                process.env.VITE_GOOGLE_CLIENT_SECRET ||
+                ''
+              ).trim();
+
+              if (!refreshToken) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Refresh token requerido.' }));
+                return;
+              }
+
+              if (!clientId) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Client ID no configurado.' }));
+                return;
+              }
+
+              if (!clientSecret) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Client Secret no configurado.' }));
+                return;
+              }
+
+              const params = new URLSearchParams({
+                refresh_token: refreshToken,
+                client_id: clientId,
+                client_secret: clientSecret,
+                grant_type: 'refresh_token'
+              });
+
+              const googleRes = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'Accept': 'application/json'
+                },
+                body: params.toString()
+              });
+
+              const resJson: any = await googleRes.json();
+              if (!googleRes.ok || resJson.error) {
+                res.statusCode = googleRes.status || 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  success: false,
+                  error: resJson.error_description || resJson.error || 'Error renovando access token con Google.',
+                  details: resJson
+                }));
+                return;
+              }
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({
+                success: true,
+                access_token: resJson.access_token,
+                expires_in: resJson.expires_in || 3600,
+                scope: resJson.scope || '',
+                token_type: resJson.token_type || 'Bearer'
+              }));
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: msg }));
+            }
+          });
+          return;
+        }
+
+        next();
+      });
+    }
+  };
+}
 
 function aiProxyPlugin(): Plugin {
   return {
@@ -91,34 +327,37 @@ function edgeTtsPlugin(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: './',
-  plugins: [react(), aiProxyPlugin(), edgeTtsPlugin()],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('katex')) {
-              return 'vendor-katex';
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
+    base: './',
+    plugins: [react(), aiProxyPlugin(), edgeTtsPlugin(), googleAuthPlugin(env)],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('katex')) {
+                return 'vendor-katex';
+              }
+              if (id.includes('pdfjs-dist')) {
+                return 'vendor-pdf';
+              }
+              if (id.includes('jszip')) {
+                return 'vendor-jszip';
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-lucide';
+              }
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'vendor-react';
+              }
             }
-            if (id.includes('pdfjs-dist')) {
-              return 'vendor-pdf';
-            }
-            if (id.includes('jszip')) {
-              return 'vendor-jszip';
-            }
-            if (id.includes('lucide-react')) {
-              return 'vendor-lucide';
-            }
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-          }
+          },
         },
       },
+      chunkSizeWarningLimit: 600,
     },
-    chunkSizeWarningLimit: 600,
-  },
-})
+  };
+});
 

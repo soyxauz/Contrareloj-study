@@ -11,6 +11,7 @@ import {
   Key,
   ChevronDown,
   ChevronUp,
+  ShieldCheck,
 } from 'lucide-react';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
 import { validateGoogleClientId } from '../utils/validation';
@@ -39,6 +40,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [clientIdInput, setClientIdInput] = useState<string>(() => googleDriveService.getClientId());
+  const [clientSecretInput, setClientSecretInput] = useState<string>(() => googleDriveService.getClientSecret());
   const [showConfig, setShowConfig] = useState<boolean>(() => !googleDriveService.hasClientId());
   const [isSavedKey, setIsSavedKey] = useState(false);
 
@@ -53,9 +55,10 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     return validateGoogleClientId(clientIdInput, false);
   }, [clientIdInput]);
 
-  const handleSaveClientId = () => {
+  const handleSaveCredentials = () => {
     if (!clientIdValidation.isValid) return;
     googleDriveService.setClientId(clientIdInput.trim());
+    googleDriveService.setClientSecret(clientSecretInput.trim());
     setIsSavedKey(true);
     setTimeout(() => setIsSavedKey(false), 2000);
   };
@@ -70,6 +73,9 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         return;
       }
       googleDriveService.setClientId(clientIdInput.trim());
+    }
+    if (clientSecretInput.trim() && !googleDriveService.getClientSecret()) {
+      googleDriveService.setClientSecret(clientSecretInput.trim());
     }
 
     setIsProcessing(true);
@@ -235,6 +241,19 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
             </div>
 
             <div className="pt-2 border-t border-thea-border/60 text-xs text-slate-300 space-y-1">
+              <div className="flex justify-between items-center py-0.5">
+                <span className="text-slate-400">Persistencia de sesión:</span>
+                {syncState.hasRefreshToken ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Permanente (Refresh Token)</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-700/40 text-slate-300 border border-slate-600/40">
+                    <span>Estándar (1 hora)</span>
+                  </span>
+                )}
+              </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Carpeta remota en Drive:</span>
                 <span className="font-mono text-emerald-300">TheaPlus_CloudData</span>
@@ -296,7 +315,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           </div>
         )}
 
-        {/* Client ID Configuration Section */}
+        {/* Client ID & Secret Configuration Section */}
         <div className="bg-thea-surfaceLight/40 border border-thea-border/80 rounded-2xl p-4 space-y-3 mb-3">
           <button
             type="button"
@@ -305,10 +324,10 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           >
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-emerald-400" />
-              <span>Configuración de Google OAuth Client ID</span>
+              <span>Configuración OAuth y Sesión Permanente</span>
               {googleDriveService.hasClientId() && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Activo
+                  {syncState.hasRefreshToken ? 'Permanente' : 'Activo'}
                 </span>
               )}
             </div>
@@ -316,11 +335,9 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           </button>
 
           {showConfig && (
-            <div className="pt-2 border-t border-thea-border/60 space-y-2.5 animate-fadeIn">
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Client ID de Google Cloud Console. Debe terminar con <code className="text-emerald-300 font-mono">.apps.googleusercontent.com</code>.
-              </p>
+            <div className="pt-2 border-t border-thea-border/60 space-y-3 animate-fadeIn">
               <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Google Client ID</label>
                 <input
                   type="text"
                   value={clientIdInput}
@@ -352,14 +369,31 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                   </p>
                 )}
               </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Google Client Secret <span className="text-[10px] text-slate-400 font-normal">(Opcional, habilita Refresh Token permanente)</span>
+                </label>
+                <input
+                  type="password"
+                  value={clientSecretInput}
+                  onChange={(e) => setClientSecretInput(e.target.value)}
+                  placeholder="GOCSPX-ejemploClaveSecretaGoogle"
+                  className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border focus:border-emerald-500 text-white text-xs font-mono focus:outline-none transition-colors"
+                />
+                <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+                  Permite renovar sesiones de servidor a servidor sin interrupciones por meses. También puede configurarse en el archivo .env o en Vercel como GOOGLE_CLIENT_SECRET.
+                </p>
+              </div>
+
               <div className="flex justify-end pt-1">
                 <button
                   type="button"
-                  onClick={handleSaveClientId}
+                  onClick={handleSaveCredentials}
                   disabled={!clientIdValidation.isValid}
                   className="px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  {isSavedKey ? 'Guardado en navegador' : 'Guardar Client ID'}
+                  {isSavedKey ? 'Credenciales guardadas' : 'Guardar Credenciales'}
                 </button>
               </div>
             </div>

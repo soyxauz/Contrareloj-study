@@ -31,11 +31,17 @@ export interface DriveSyncState {
   userName: string | null;
   avatarUrl: string | null;
   filesSyncedCount: number;
+  hasRefreshToken?: boolean;
+  authType?: 'serverless_refresh' | 'client_implicit';
+  isServerlessConfigured?: boolean;
 }
 
 const STORAGE_CLIENT_ID_KEY = 'thea_gdrive_client_id';
+const STORAGE_CLIENT_SECRET_KEY = 'thea_gdrive_client_secret';
 const STORAGE_TOKEN_KEY = 'thea_gdrive_token';
 const STORAGE_TOKEN_EXP_KEY = 'thea_gdrive_token_exp';
+const STORAGE_REFRESH_TOKEN_KEY = 'thea_gdrive_refresh_token';
+const STORAGE_AUTH_TYPE_KEY = 'thea_gdrive_auth_type';
 const STORAGE_PROFILE_KEY = 'thea_gdrive_profile';
 const STORAGE_LAST_SYNC_KEY = 'thea_gdrive_last_sync';
 
@@ -54,6 +60,7 @@ let currentState: DriveSyncState = {
   userName: null,
   avatarUrl: null,
   filesSyncedCount: 0,
+  hasRefreshToken: false,
 };
 
 let proactiveRefreshTimer: any = null;
@@ -64,6 +71,9 @@ try {
   const rawProfile = localStorage.getItem(STORAGE_PROFILE_KEY);
   const token = localStorage.getItem(STORAGE_TOKEN_KEY);
   const expStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
+  const refreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+  const authType = localStorage.getItem(STORAGE_AUTH_TYPE_KEY) as 'serverless_refresh' | 'client_implicit' | null;
+
   if (lastSync) {
     currentState.lastSyncTime = parseInt(lastSync, 10);
   }
@@ -72,8 +82,13 @@ try {
     currentState.userEmail = prof.email || null;
     currentState.userName = prof.name || null;
     currentState.avatarUrl = prof.avatarUrl || null;
+    currentState.hasRefreshToken = Boolean(refreshToken);
+    currentState.authType = authType || (refreshToken ? 'serverless_refresh' : 'client_implicit');
 
-    if (token && expStr) {
+    if (refreshToken) {
+      currentState.status = 'synced';
+      currentState.errorMessage = null;
+    } else if (token && expStr) {
       const exp = parseInt(expStr, 10);
       if (Date.now() > exp - 60000) {
         currentState.status = 'needs_reauth';
@@ -113,17 +128,23 @@ function updateState(partial: Partial<DriveSyncState>): void {
  */
 async function restoreDriveStateFromIndexedDB(): Promise<void> {
   try {
-    const [id, prof, token, exp, lastSync] = await Promise.all([
+    const [id, secret, prof, token, exp, rToken, aType, lastSync] = await Promise.all([
       getSessionItem<string>(STORAGE_CLIENT_ID_KEY),
+      getSessionItem<string>(STORAGE_CLIENT_SECRET_KEY),
       getSessionItem<any>(STORAGE_PROFILE_KEY),
       getSessionItem<string>(STORAGE_TOKEN_KEY),
       getSessionItem<string>(STORAGE_TOKEN_EXP_KEY),
+      getSessionItem<string>(STORAGE_REFRESH_TOKEN_KEY),
+      getSessionItem<'serverless_refresh' | 'client_implicit'>(STORAGE_AUTH_TYPE_KEY),
       getSessionItem<string>(STORAGE_LAST_SYNC_KEY),
     ]);
 
     let changed = false;
     if (id && !localStorage.getItem(STORAGE_CLIENT_ID_KEY)) {
       localStorage.setItem(STORAGE_CLIENT_ID_KEY, id);
+    }
+    if (secret && !localStorage.getItem(STORAGE_CLIENT_SECRET_KEY)) {
+      localStorage.setItem(STORAGE_CLIENT_SECRET_KEY, secret);
     }
     if (prof && !localStorage.getItem(STORAGE_PROFILE_KEY)) {
       localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(prof));
@@ -138,13 +159,30 @@ async function restoreDriveStateFromIndexedDB(): Promise<void> {
     if (exp && !localStorage.getItem(STORAGE_TOKEN_EXP_KEY)) {
       localStorage.setItem(STORAGE_TOKEN_EXP_KEY, exp);
     }
+    if (rToken && !localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY)) {
+      localStorage.setItem(STORAGE_REFRESH_TOKEN_KEY, rToken);
+      currentState.hasRefreshToken = true;
+      changed = true;
+    }
+    if (aType && !localStorage.getItem(STORAGE_AUTH_TYPE_KEY)) {
+      localStorage.setItem(STORAGE_AUTH_TYPE_KEY, aType);
+      currentState.authType = aType;
+      changed = true;
+    }
     if (lastSync && !localStorage.getItem(STORAGE_LAST_SYNC_KEY)) {
       localStorage.setItem(STORAGE_LAST_SYNC_KEY, lastSync);
       currentState.lastSyncTime = parseInt(lastSync, 10);
       changed = true;
     }
 
-    if (changed) {
+    const hasRefresh = Boolean(rToken || localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY));
+    if (hasRefresh) {
+      currentState.hasRefreshToken = true;
+      currentState.authType = 'serverless_refresh';
+      currentState.status = 'synced';
+      currentState.errorMessage = null;
+      notifyState();
+    } else if (changed) {
       const currentToken = localStorage.getItem(STORAGE_TOKEN_KEY);
       const currentExpStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
       if (currentToken && currentExpStr) {
@@ -311,6 +349,98 @@ export const googleDriveService = {
   },
 
   /**
+   * Obtiene el Client Secret configurado (desde .env o localStorage).
+   */
+  getClientSecret(): string {
+    const envSecret = (import.meta as any).env?.GOOGLE_CLIENT_SECRET || (import.meta as any).env?.VITE_GOOGLE_CLIENT_SECRET;
+    if (envSecret && typeof envSecret === 'string' && envSecret.trim().length > 0) {
+      return envSecret.trim();
+    }
+    const localSecret = localStorage.getItem(STORAGE_CLIENT_SECRET_KEY);
+    if (localSecret && localSecret.trim().length > 0) {
+      return localSecret.trim();
+    }
+    return '';
+  },
+
+  /**
+   * Guarda un nuevo Client Secret en localStorage e IndexedDB para habilitar refresh token permanente.
+   */
+  setClientSecret(secret: string): void {
+    const clean = secret.trim();
+    if (clean) {
+      localStorage.setItem(STORAGE_CLIENT_SECRET_KEY, clean);
+      saveSessionItem(STORAGE_CLIENT_SECRET_KEY, clean).catch(() => {});
+    } else {
+      localStorage.removeItem(STORAGE_CLIENT_SECRET_KEY);
+      removeSessionItem(STORAGE_CLIENT_SECRET_KEY).catch(() => {});
+    }
+    this.checkServerlessStatus().catch(() => {});
+  },
+
+  /**
+   * Recupera el refresh token permanente si está almacenado en el navegador.
+   */
+  getRefreshToken(): string | null {
+    return localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+  },
+
+  /**
+   * Guarda el refresh token en LocalStorage e IndexedDB para asegurar persistencia por meses.
+   */
+  setRefreshToken(token: string): void {
+    const clean = token.trim();
+    if (clean) {
+      localStorage.setItem(STORAGE_REFRESH_TOKEN_KEY, clean);
+      saveSessionItem(STORAGE_REFRESH_TOKEN_KEY, clean).catch(() => {});
+      updateState({ hasRefreshToken: true, authType: 'serverless_refresh' });
+    } else {
+      localStorage.removeItem(STORAGE_REFRESH_TOKEN_KEY);
+      removeSessionItem(STORAGE_REFRESH_TOKEN_KEY).catch(() => {});
+      updateState({ hasRefreshToken: false });
+    }
+  },
+
+  /**
+   * Establece el tipo de autenticación en uso ('serverless_refresh' o 'client_implicit').
+   */
+  setAuthType(type: 'serverless_refresh' | 'client_implicit'): void {
+    localStorage.setItem(STORAGE_AUTH_TYPE_KEY, type);
+    saveSessionItem(STORAGE_AUTH_TYPE_KEY, type).catch(() => {});
+    updateState({ authType: type });
+  },
+
+  /**
+   * Verifica la disponibilidad del backend serverless de autenticación (/api/auth/google/status).
+   */
+  async checkServerlessStatus(): Promise<{ available: boolean; hasClientId: boolean; hasClientSecret: boolean }> {
+    try {
+      const res = await fetch('/api/auth/google/status', { method: 'GET' });
+      if (res.ok) {
+        const data = await res.json();
+        const hasLocalSecret = Boolean(this.getClientSecret());
+        const hasSecret = Boolean(data.hasClientSecret || hasLocalSecret);
+        const isReady = Boolean(data.available && hasSecret);
+        updateState({ isServerlessConfigured: isReady });
+        return {
+          available: Boolean(data.available),
+          hasClientId: Boolean(data.hasClientId || this.hasClientId()),
+          hasClientSecret: hasSecret,
+        };
+      }
+    } catch {
+      // Backend serverless no alcanzable (ej. preview puramente estático)
+    }
+    const hasLocalSecret = Boolean(this.getClientSecret());
+    updateState({ isServerlessConfigured: hasLocalSecret });
+    return {
+      available: false,
+      hasClientId: this.hasClientId(),
+      hasClientSecret: hasLocalSecret,
+    };
+  },
+
+  /**
    * Verifica si existe un Client ID listo para operar.
    */
   hasClientId(): boolean {
@@ -346,12 +476,48 @@ export const googleDriveService = {
 
   /**
    * Intenta renovar el token de acceso de Google de forma silenciosa sin interrumpir al usuario.
-   * Utiliza el hint del perfil del usuario para resolver la cuenta en segundo plano de manera transparente.
+   * Prioridad 1: Vía backend serverless con refresh_token permanente (servidor a servidor).
+   * Prioridad 2: Fallback vía Google Identity Services (GIS) en el cliente.
    */
   async attemptSilentTokenRefresh(): Promise<string | null> {
     const clientId = this.getClientId();
     if (!clientId) return null;
 
+    // 1. Canje transparente vía Backend Serverless con refresh_token permanente
+    const refreshToken = this.getRefreshToken();
+    if (refreshToken) {
+      try {
+        const clientSecret = this.getClientSecret();
+        const res = await fetch('/api/auth/google/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            refresh_token: refreshToken,
+            clientId,
+            clientSecret: clientSecret || undefined,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.access_token) {
+            const expiresIn = data.expires_in ? parseInt(data.expires_in, 10) : 3600;
+            this.setAccessToken(data.access_token, expiresIn);
+            updateState({
+              status: 'synced',
+              errorMessage: null,
+              hasRefreshToken: true,
+              authType: 'serverless_refresh',
+            });
+            return data.access_token;
+          }
+        }
+      } catch (err) {
+        console.warn('[GoogleDriveService] Renovación serverless no disponible, recurriendo a fallback:', err);
+      }
+    }
+
+    // 2. Fallback con Google Identity Services en el navegador
     try {
       await ensureGsiLoaded();
 
@@ -399,8 +565,6 @@ export const googleDriveService = {
           }
 
           const client = (window as any).google.accounts.oauth2.initTokenClient(clientConfig);
-
-          // Solicitar token silenciosamente sin forzar selector si la sesión del navegador sigue activa
           const reqOpts: any = { prompt: '' };
           if (userEmail) {
             reqOpts.hint = userEmail;
@@ -425,7 +589,7 @@ export const googleDriveService = {
     }
 
     if (!token) {
-      if (this.isLinked()) {
+      if (this.isLinked() && !this.getRefreshToken()) {
         updateState({
           status: 'needs_reauth',
           errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
@@ -463,20 +627,26 @@ export const googleDriveService = {
    */
   disconnect(): void {
     const token = localStorage.getItem(STORAGE_TOKEN_KEY);
-    if (token && (window as any).google?.accounts?.oauth2?.revoke) {
+    const refreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+    if ((window as any).google?.accounts?.oauth2?.revoke) {
       try {
-        (window as any).google.accounts.oauth2.revoke(token, () => {});
+        if (token) (window as any).google.accounts.oauth2.revoke(token, () => {});
+        if (refreshToken) (window as any).google.accounts.oauth2.revoke(refreshToken, () => {});
       } catch {
         // Ignorar fallo de revocación
       }
     }
     localStorage.removeItem(STORAGE_TOKEN_KEY);
     localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
+    localStorage.removeItem(STORAGE_REFRESH_TOKEN_KEY);
+    localStorage.removeItem(STORAGE_AUTH_TYPE_KEY);
     localStorage.removeItem(STORAGE_PROFILE_KEY);
     localStorage.removeItem(STORAGE_LAST_SYNC_KEY);
 
     removeSessionItem(STORAGE_TOKEN_KEY).catch(() => {});
     removeSessionItem(STORAGE_TOKEN_EXP_KEY).catch(() => {});
+    removeSessionItem(STORAGE_REFRESH_TOKEN_KEY).catch(() => {});
+    removeSessionItem(STORAGE_AUTH_TYPE_KEY).catch(() => {});
     removeSessionItem(STORAGE_PROFILE_KEY).catch(() => {});
     removeSessionItem(STORAGE_LAST_SYNC_KEY).catch(() => {});
 
@@ -491,19 +661,15 @@ export const googleDriveService = {
       lastSyncTime: null,
       errorMessage: null,
       filesSyncedCount: 0,
+      hasRefreshToken: false,
+      authType: undefined,
     });
   },
 
   /**
-   * Inicia el flujo OAuth popup con Google Identity Services para autorizar Google Drive.
+   * Flujo implícito popup directo con Google Identity Services (fallback cuando no hay backend configurado).
    */
-  async requestGoogleAccess(): Promise<string> {
-    const clientId = this.getClientId();
-    if (!clientId) {
-      updateState({ status: 'needs_client_id', errorMessage: 'Configura tu Google Client ID para continuar.' });
-      throw new Error('CLIENT_ID_MISSING');
-    }
-
+  async requestGoogleAccessImplicit(clientId: string): Promise<string> {
     await ensureGsiLoaded();
 
     return new Promise((resolve, reject) => {
@@ -523,6 +689,7 @@ export const googleDriveService = {
             if (response.access_token) {
               const expiresIn = response.expires_in ? parseInt(response.expires_in, 10) : 3600;
               this.setAccessToken(response.access_token, expiresIn);
+              this.setAuthType('client_implicit');
               resolve(response.access_token);
             } else {
               reject(new Error('No se recibió token de acceso de Google.'));
@@ -542,6 +709,92 @@ export const googleDriveService = {
         reject(err);
       }
     });
+  },
+
+  /**
+   * Inicia el flujo OAuth con Google.
+   * Utiliza de manera preferente el Authorization Code Flow con backend serverless y refresh_token permanente.
+   * Si el backend o el client_secret no están disponibles, realiza fallback transparente al flujo implícito.
+   */
+  async requestGoogleAccess(): Promise<string> {
+    const clientId = this.getClientId();
+    if (!clientId) {
+      updateState({ status: 'needs_client_id', errorMessage: 'Configura tu Google Client ID para continuar.' });
+      throw new Error('CLIENT_ID_MISSING');
+    }
+
+    await ensureGsiLoaded();
+
+    const serverlessStatus = await this.checkServerlessStatus();
+    const canUseServerless = serverlessStatus.available && (serverlessStatus.hasClientSecret || Boolean(this.getClientSecret()));
+
+    if (canUseServerless && (window as any).google?.accounts?.oauth2?.initCodeClient) {
+      try {
+        return await new Promise<string>((resolve, reject) => {
+          try {
+            const codeClient = (window as any).google.accounts.oauth2.initCodeClient({
+              client_id: clientId,
+              scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+              ux_mode: 'popup',
+              callback: async (response: any) => {
+                if (response.error) {
+                  console.error('[GoogleDriveService] Error en code popup:', response);
+                  this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+                  return;
+                }
+
+                if (response.code) {
+                  try {
+                    const exchangeRes = await fetch('/api/auth/google/token', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        code: response.code,
+                        redirect_uri: 'postmessage',
+                        clientId,
+                        clientSecret: this.getClientSecret() || undefined,
+                      }),
+                    });
+
+                    const data = await exchangeRes.json();
+                    if (!exchangeRes.ok || !data.success || !data.access_token) {
+                      throw new Error(data.error || 'No se pudo canjear el código de autorización.');
+                    }
+
+                    const expiresIn = data.expires_in ? parseInt(data.expires_in, 10) : 3600;
+                    this.setAccessToken(data.access_token, expiresIn);
+                    if (data.refresh_token) {
+                      this.setRefreshToken(data.refresh_token);
+                    }
+                    this.setAuthType('serverless_refresh');
+                    resolve(data.access_token);
+                  } catch (exchangeErr: any) {
+                    console.warn('[GoogleDriveService] Error en canje serverless, aplicando fallback implícito:', exchangeErr);
+                    this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+                  }
+                } else {
+                  this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+                }
+              },
+              error_callback: (err: any) => {
+                console.warn('[GoogleDriveService] Error callback initCodeClient, aplicando fallback:', err);
+                this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+              },
+            });
+
+            codeClient.requestCode();
+          } catch (initErr) {
+            console.warn('[GoogleDriveService] Error al instanciar initCodeClient, aplicando fallback:', initErr);
+            this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+          }
+        });
+      } catch (codeErr) {
+        console.warn('[GoogleDriveService] Fallback final a flujo implícito:', codeErr);
+        return this.requestGoogleAccessImplicit(clientId);
+      }
+    }
+
+    return this.requestGoogleAccessImplicit(clientId);
   },
 
   /**
