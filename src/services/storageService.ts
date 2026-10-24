@@ -332,8 +332,15 @@ export async function getAssetsMap(ids: string[]): Promise<Map<string, DocumentA
   });
 }
 
+export type DriveAssetDownloader = (assetIds: string[]) => Promise<Map<string, DocumentAsset>>;
+let driveAssetDownloader: DriveAssetDownloader | null = null;
+
+export function registerDriveAssetDownloader(downloader: DriveAssetDownloader): void {
+  driveAssetDownloader = downloader;
+}
+
 /**
- * Hidrata un kit restaurando los dataUrls de los activos desde IndexedDB.
+ * Hidrata un kit restaurando los dataUrls de los activos desde IndexedDB o descargándolos de Drive si faltan.
  */
 export async function hydrateKitAssets(kit: StudyKit): Promise<StudyKit> {
   const assetIds: string[] = [];
@@ -357,6 +364,24 @@ export async function hydrateKitAssets(kit: StudyKit): Promise<StudyKit> {
   if (assetIds.length === 0) return kit;
 
   const assetsMap = await getAssetsMap(assetIds);
+
+  // Si algunos activos no se encontraron en IndexedDB, descargarlos prioritariamente de Google Drive
+  const stillMissing = assetIds.filter(id => !assetsMap.has(id) || !assetsMap.get(id)?.dataUrl);
+  if (stillMissing.length > 0 && driveAssetDownloader) {
+    try {
+      const driveMap = await driveAssetDownloader(stillMissing);
+      if (driveMap && driveMap.size > 0) {
+        driveMap.forEach((asset, id) => {
+          if (asset && asset.dataUrl) {
+            assetsMap.set(id, asset);
+            assetMemoryCache.set(id, asset);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[StorageService] Error descargando activos prioritarios desde Drive:', err);
+    }
+  }
 
   const hydratedAssets = kit.assets?.map((a) => {
     if (!a.dataUrl && assetsMap.has(a.id)) {
@@ -606,6 +631,10 @@ export function mergeKitsByUpdatedAt(
       ? (incomingTime >= existingTime ? kit.studyGuideMarkdown : (existing.studyGuideMarkdown || kit.studyGuideMarkdown))
       : (existing.studyGuideMarkdown || '');
 
+    const mergedPodcast = (incomingTime >= existingTime && kit.podcast)
+      ? kit.podcast
+      : (existing.podcast || kit.podcast || null);
+
     if (incomingTime >= existingTime) {
       map.set(kit.id, {
         ...existing,
@@ -615,6 +644,7 @@ export function mergeKitsByUpdatedAt(
         flashcards: mergedFlashcards,
         assets: mergedAssets,
         studyGuideMarkdown: mergedGuide,
+        podcast: mergedPodcast,
       });
     } else {
       map.set(kit.id, {
@@ -625,6 +655,7 @@ export function mergeKitsByUpdatedAt(
         flashcards: mergedFlashcards,
         assets: mergedAssets,
         studyGuideMarkdown: mergedGuide,
+        podcast: mergedPodcast,
       });
     }
   };

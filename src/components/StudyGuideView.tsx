@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { StudyKit, DocumentAsset } from '../types';
 import {
   Sparkles,
   Wand2,
   Volume2,
+  VolumeX,
   Copy,
   Check,
   FileText,
@@ -18,7 +19,8 @@ import {
 } from 'lucide-react';
 import { generateAIStudyGuide } from '../services/aiService';
 import { FormattedText } from './FormattedText';
-import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
+import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
+import { hydrateKitAssets } from '../services/storageService';
 
 interface StudyGuideViewProps {
   kit: StudyKit;
@@ -26,6 +28,7 @@ interface StudyGuideViewProps {
 }
 
 export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit }) => {
+  const [currentKitState, setCurrentKitState] = useState<StudyKit>(kit);
   const [activeTab, setActiveTab] = useState<'guide' | 'gallery'>('guide');
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
   const [markdown, setMarkdown] = useState(kit.studyGuideMarkdown);
@@ -34,7 +37,47 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   const [isApplying, setIsApplying] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  useEffect(() => {
+    setCurrentKitState(kit);
+    setMarkdown(kit.studyGuideMarkdown);
+  }, [kit]);
+
+  // Hidratar activos desde IndexedDB o Google Drive si faltan figuras en la guía
+  useEffect(() => {
+    let isMounted = true;
+    const hasMissing =
+      kit.assets?.some(a => !a.dataUrl) ||
+      kit.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
+
+    if (hasMissing) {
+      hydrateKitAssets(kit)
+        .then(hydrated => {
+          if (!isMounted) return;
+          setCurrentKitState(hydrated);
+          if (onUpdateKit) onUpdateKit(hydrated);
+        })
+        .catch(() => {});
+    }
+
+    const handleAssetsSynced = () => {
+      hydrateKitAssets(kit)
+        .then(hydrated => {
+          if (!isMounted) return;
+          setCurrentKitState(hydrated);
+          if (onUpdateKit) onUpdateKit(hydrated);
+        })
+        .catch(() => {});
+    };
+
+    window.addEventListener('thea_assets_synced', handleAssetsSynced);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('thea_assets_synced', handleAssetsSynced);
+    };
+  }, [kit.id]);
 
   const handleGenerateStudyGuide = async () => {
     setIsGenerating(true);
@@ -114,47 +157,156 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   };
 
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioStopRequestedRef = useRef<boolean>(false);
+
+  const splitSentences = (text: string): string[] => {
+    const clean = text
+      .replace(/[#*`>$\-_~[\]()]/g, ' ')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!clean) return [];
+
+    const rawMatches = clean.match(/[^.!?;\n]+[.!?;\n]+|[^.!?;\n]+$/g) || [clean];
+    const sentences: string[] = [];
+    for (const raw of rawMatches) {
+      const s = raw.trim();
+      if (!s) continue;
+      if (s.length > 150) {
+        const subChunks = s.match(/[^,:]+[,:]+|[^,:]+$/g) || [s];
+        for (const sc of subChunks) {
+          const scTrim = sc.trim();
+          if (scTrim) sentences.push(scTrim);
+        }
+      } else {
+        sentences.push(s);
+      }
+    }
+    return sentences;
+  };
+
+  const stopAudio = () => {
+    audioStopRequestedRef.current = true;
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
+    setIsSpeaking(false);
+    setIsAudioLoading(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, []);
 
   const handleReadAloud = async () => {
-    if (isSpeaking) {
-      if (activeAudioRef.current) {
-        activeAudioRef.current.pause();
-        activeAudioRef.current = null;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      setIsSpeaking(false);
+    if (isSpeaking || isAudioLoading) {
+      stopAudio();
       return;
     }
 
-    const cleanText = markdown.replace(/[#*`>$]/g, '').trim().slice(0, 1200);
-    if (!cleanText) return;
+    const sentences = splitSentences(markdown.slice(0, 2500));
+    if (sentences.length === 0) return;
 
+    audioStopRequestedRef.current = false;
+    setIsAudioLoading(true);
     setIsSpeaking(true);
-    try {
-      const url = await synthesizeAzureEdgeSpeech(cleanText, 'es-ES-ElviraNeural');
-      const audio = new Audio(url);
-      activeAudioRef.current = audio;
-      audio.onended = () => {
-        setIsSpeaking(false);
-        activeAudioRef.current = null;
-      };
-      audio.onerror = () => {
-        setIsSpeaking(false);
-        activeAudioRef.current = null;
-      };
-      await audio.play();
-    } catch {
+
+    const voice = 'es-ES-ElviraNeural';
+
+    let fallbackTimer: any = null;
+
+    const playWithLocalFallback = () => {
+      if (audioStopRequestedRef.current) return;
+      setIsAudioLoading(false);
       if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(cleanText);
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(sentences.join(' '));
         utterance.lang = 'es-ES';
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
+        utterance.rate = 1.05;
+        utterance.onend = () => {
+          setIsSpeaking(false);
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+        };
         window.speechSynthesis.speak(utterance);
       } else {
         setIsSpeaking(false);
       }
+    };
+
+    // Disparar síntesis local si Azure Edge se demora más de 1800ms
+    fallbackTimer = setTimeout(() => {
+      console.warn('[StudyGuideView] Azure Edge tardó más de 1800ms; reproduciendo de inmediato con síntesis local.');
+      playWithLocalFallback();
+    }, 1800);
+
+    try {
+      // 1. Sintetizar la primera frase inmediatamente (sub-300ms)
+      const firstUrl = await synthesizeAzureEdgeSpeech(sentences[0], voice);
+      clearTimeout(fallbackTimer);
+
+      if (audioStopRequestedRef.current) return;
+
+      const firstAudio = new Audio(firstUrl);
+      activeAudioRef.current = firstAudio;
+      setIsAudioLoading(false);
+
+      // Pre-cargar la segunda y tercera frase concurrentemente en segundo plano
+      if (sentences.length > 1) {
+        prefetchAzureEdgeSpeech(sentences[1], voice);
+      }
+      if (sentences.length > 2) {
+        prefetchAzureEdgeSpeech(sentences[2], voice);
+      }
+
+      let currentSentenceIdx = 0;
+
+      const playNextSentence = async () => {
+        if (audioStopRequestedRef.current) return;
+        currentSentenceIdx++;
+        if (currentSentenceIdx >= sentences.length) {
+          setIsSpeaking(false);
+          activeAudioRef.current = null;
+          return;
+        }
+
+        const lookaheadIdx = currentSentenceIdx + 2;
+        if (lookaheadIdx < sentences.length) {
+          prefetchAzureEdgeSpeech(sentences[lookaheadIdx], voice);
+        }
+
+        try {
+          const nextUrl = await synthesizeAzureEdgeSpeech(sentences[currentSentenceIdx], voice);
+          if (audioStopRequestedRef.current) return;
+
+          const nextAudio = new Audio(nextUrl);
+          activeAudioRef.current = nextAudio;
+          nextAudio.onended = playNextSentence;
+          nextAudio.onerror = playNextSentence;
+          await nextAudio.play();
+        } catch {
+          playNextSentence();
+        }
+      };
+
+      firstAudio.onended = playNextSentence;
+      firstAudio.onerror = () => {
+        clearTimeout(fallbackTimer);
+        playWithLocalFallback();
+      };
+      await firstAudio.play();
+    } catch {
+      clearTimeout(fallbackTimer);
+      playWithLocalFallback();
     }
   };
 
@@ -191,11 +343,17 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               <button
                 onClick={handleReadAloud}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border border-thea-border text-xs font-medium transition-colors ${
-                  isSpeaking ? 'bg-violet-600 text-white' : 'bg-thea-surface text-slate-300 hover:text-white hover:bg-thea-surfaceLight'
+                  isSpeaking ? 'bg-violet-600 text-white shadow-md' : 'bg-thea-surface text-slate-300 hover:text-white hover:bg-thea-surfaceLight'
                 }`}
               >
-                <Volume2 className="w-4 h-4" />
-                <span>{isSpeaking ? 'Detener Voz' : 'Leer en Voz Alta'}</span>
+                {isAudioLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-violet-300" />
+                ) : isSpeaking ? (
+                  <VolumeX className="w-4 h-4" />
+                ) : (
+                  <Volume2 className="w-4 h-4" />
+                )}
+                <span>{isAudioLoading ? 'Iniciando voz...' : isSpeaking ? 'Detener Voz' : 'Leer en Voz Alta'}</span>
               </button>
 
               <button
@@ -234,7 +392,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         >
           <ImageIcon className="w-4 h-4 text-amber-400" />
           <span>Galería de Figuras y Esquemas</span>
-          {kit.assets && kit.assets.length > 0 && (
+          {currentKitState.assets && currentKitState.assets.length > 0 && (
             <span
               className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
                 activeTab === 'gallery'
@@ -242,7 +400,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                   : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
               }`}
             >
-              {kit.assets.length}
+              {currentKitState.assets.length}
             </span>
           )}
         </button>
@@ -289,7 +447,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       {/* ── TAB 2: GALERÍA VISUAL DE FIGURAS Y ESQUEMAS ───────────────────── */}
       {activeTab === 'gallery' && (
         <div className="space-y-6 animate-fadeIn">
-          {!kit.assets || kit.assets.length === 0 ? (
+          {!currentKitState.assets || currentKitState.assets.length === 0 ? (
             <div className="text-center py-16 px-6 rounded-3xl bg-thea-surface border border-thea-border max-w-lg mx-auto shadow-xl">
               <div className="w-16 h-16 rounded-2xl bg-thea-surfaceLight border border-thea-border flex items-center justify-center mx-auto mb-4 text-slate-400">
                 <ImageIcon className="w-8 h-8" />
@@ -305,7 +463,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Layers className="w-4 h-4 text-violet-400" />
-                    <span>Diagramas, Esquemas y Figuras del Documento ({kit.assets.length})</span>
+                    <span>Diagramas, Esquemas y Figuras del Documento ({currentKitState.assets.length})</span>
                   </h3>
                   <p className="text-xs text-slate-400">
                     Recursos visuales extraídos del archivo original listos para inspección o descarga.
@@ -314,7 +472,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {kit.assets.map((asset, idx) => (
+                {currentKitState.assets.map((asset, idx) => (
                   <div
                     key={asset.id || idx}
                     className="bg-thea-surface border border-thea-border hover:border-violet-500/60 rounded-2xl overflow-hidden transition-all shadow-md group flex flex-col justify-between"

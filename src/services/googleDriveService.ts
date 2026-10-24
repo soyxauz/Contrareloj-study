@@ -9,7 +9,8 @@ import {
   removeSessionItem,
   isCorruptedKit,
   mergeKitsByUpdatedAt,
-  getDeletedKitIds
+  getDeletedKitIds,
+  registerDriveAssetDownloader
 } from './storageService';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, DEFAULT_AI_SETTINGS, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
@@ -1757,4 +1758,22 @@ export const googleDriveService = {
       }
     }
   },
+
+  /**
+   * Programa la sincronización automática hacia Google Drive con debounce configurable.
+   */
+  scheduleAutoSync(userId: string, kits: StudyKit[], delayMs: number = 1500): void {
+    if (!userId || userId === 'guest') return;
+    if (globalDriveDebounceTimer) clearTimeout(globalDriveDebounceTimer);
+    globalDriveDebounceTimer = setTimeout(() => {
+      this.pushToDrive(userId, kits).catch(err => {
+        console.warn('[GoogleDriveService] Error en scheduleAutoSync:', err);
+      });
+    }, delayMs);
+  },
 };
+
+let globalDriveDebounceTimer: any = null;
+
+// Registrar el descargador prioritario de activos en storageService para hidratar imágenes automáticamente
+registerDriveAssetDownloader((assetIds) => googleDriveService.prioritizeAssetsDownload(assetIds));

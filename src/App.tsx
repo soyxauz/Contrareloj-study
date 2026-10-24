@@ -4,6 +4,7 @@ import { BookOpen, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
 import {
   hydrateKitAssets,
+  hydrateKitsAssets,
   isCorruptedKit,
   requestPersistentStorage,
   mergeKitsByUpdatedAt,
@@ -95,6 +96,12 @@ class ViewErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundar
 }
 
 const STORAGE_CURRENT_KIT_KEY = 'thea_currentkit_id';
+
+interface AppHistoryState {
+  mode: StudyMode;
+  kitId?: string | null;
+  modal?: 'ai' | 'auth' | 'drive' | null;
+}
 
 export const App: React.FC = () => {
   // User Authentication State
@@ -233,15 +240,60 @@ export const App: React.FC = () => {
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
   const [showAIModal, setShowAIModal] = useState(false);
 
-  const handleNavigate = (mode: StudyMode, initialTab?: InputTab) => {
-    if (initialTab) {
-      setCreateInitialTab(initialTab);
-    }
-    handleSelectMode(mode);
+  // Modales sincronizados con el historial del navegador para permitir volver atrás
+  const handleOpenAIModal = () => {
+    setShowAIModal(true);
+    window.history.pushState({
+      mode: currentMode,
+      kitId: currentKit?.id || null,
+      modal: 'ai',
+    }, '');
   };
 
-  const handleSelectMode = (mode: StudyMode) => {
-    if (mode === 'images' && currentKit) {
+  const handleCloseAIModal = () => {
+    if (window.history.state?.modal === 'ai') {
+      window.history.back();
+    } else {
+      setShowAIModal(false);
+    }
+  };
+
+  const handleOpenAuthModal = () => {
+    setShowAuthModal(true);
+    window.history.pushState({
+      mode: currentMode,
+      kitId: currentKit?.id || null,
+      modal: 'auth',
+    }, '');
+  };
+
+  const handleCloseAuthModal = () => {
+    if (window.history.state?.modal === 'auth') {
+      window.history.back();
+    } else {
+      setShowAuthModal(false);
+    }
+  };
+
+  const handleOpenGoogleDriveModal = () => {
+    setShowGoogleDriveModal(true);
+    window.history.pushState({
+      mode: currentMode,
+      kitId: currentKit?.id || null,
+      modal: 'drive',
+    }, '');
+  };
+
+  const handleCloseGoogleDriveModal = () => {
+    if (window.history.state?.modal === 'drive') {
+      window.history.back();
+    } else {
+      setShowGoogleDriveModal(false);
+    }
+  };
+
+  const handleSelectMode = (mode: StudyMode, pushToHistory = true) => {
+    if (['images', 'study-guide', 'smart-study'].includes(mode) && currentKit) {
       const hasMissing =
         currentKit.assets?.some(a => !a.dataUrl) ||
         currentKit.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
@@ -256,7 +308,73 @@ export const App: React.FC = () => {
       }
     }
     setCurrentMode(mode);
+    if (pushToHistory) {
+      if (mode !== currentMode || window.history.state?.mode !== mode) {
+        window.history.pushState({
+          mode,
+          kitId: currentKit?.id || null,
+          modal: null,
+        }, '');
+      }
+    }
   };
+
+  const handleNavigate = (mode: StudyMode, initialTab?: InputTab) => {
+    if (initialTab) {
+      setCreateInitialTab(initialTab);
+    }
+    handleSelectMode(mode, true);
+  };
+
+  // Integración completa con botones Atrás y Adelante del navegador (HTML5 History API)
+  useEffect(() => {
+    const initialState: AppHistoryState = {
+      mode: currentMode,
+      kitId: currentKit?.id || null,
+      modal: null,
+    };
+    if (!window.history.state) {
+      window.history.replaceState(initialState, '');
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      const state = e.state as AppHistoryState | null;
+      if (!state) {
+        setShowAIModal(false);
+        setShowAuthModal(false);
+        setShowGoogleDriveModal(false);
+        setCurrentMode('home');
+        return;
+      }
+
+      // Sincronizar modales
+      setShowAIModal(state.modal === 'ai');
+      setShowAuthModal(state.modal === 'auth');
+      setShowGoogleDriveModal(state.modal === 'drive');
+
+      // Sincronizar kit seleccionado
+      if (state.kitId) {
+        setKits(prevKits => {
+          const match = prevKits.find(k => k.id === state.kitId);
+          if (match) {
+            setCurrentKit(match);
+            localStorage.setItem(STORAGE_CURRENT_KIT_KEY, match.id);
+          }
+          return prevKits;
+        });
+      }
+
+      // Sincronizar modo sin duplicar entrada en el historial
+      if (state.mode) {
+        handleSelectMode(state.mode, false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   // Detención inmediata de podcast al salir de la pestaña o cambiar de sección en la app
   useEffect(() => {
@@ -304,8 +422,17 @@ export const App: React.FC = () => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const clean = pulled.filter(k => !isCorruptedKit(k));
           if (clean.length > 0) {
-            setKits(prev => mergeKitsByUpdatedAt(prev, clean));
-            setCurrentKit(prev => prev || clean[0]);
+            hydrateKitsAssets(clean).then(hydrated => {
+              setKits(prev => mergeKitsByUpdatedAt(prev, hydrated));
+              setCurrentKit(prev => {
+                if (!prev) return hydrated[0];
+                const match = hydrated.find(k => k.id === prev.id);
+                return match || prev;
+              });
+            }).catch(() => {
+              setKits(prev => mergeKitsByUpdatedAt(prev, clean));
+              setCurrentKit(prev => prev || clean[0]);
+            });
           }
         }
         if (typeof window !== 'undefined') {
@@ -317,17 +444,18 @@ export const App: React.FC = () => {
     }
   }, [currentUser?.id]);
 
-  // Respaldo en segundo plano hacia Google Drive con debounce de 800ms
+  // Respaldo en segundo plano hacia Google Drive con debounce de 1200ms
   useEffect(() => {
     if (isLoggingOutRef.current) return;
-    if (!currentUser || !googleDriveService.getValidAccessToken()) return;
+    if (!currentUser) return;
+    if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
     if (!isHydratedRef.current) return;
 
     const timer = setTimeout(() => {
       googleDriveService.pushToDrive(currentUser.id, kits).catch((err) => {
         console.warn('[App] Error en sincronización en segundo plano con Google Drive:', err);
       });
-    }, 800);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [kits, currentUser]);
@@ -339,7 +467,7 @@ export const App: React.FC = () => {
 
     const handleSessionSaved = () => {
       if (isLoggingOutRef.current) return;
-      if (!googleDriveService.getValidAccessToken()) return;
+      if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
 
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -552,12 +680,20 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleSelectKit = (kit: StudyKit) => {
+  const handleSelectKit = (kit: StudyKit, pushToHistory = false) => {
     if (!kit || isCorruptedKit(kit)) return;
     const fullKit = kits.find(k => k.id === kit.id);
     const bestKit = (fullKit && (fullKit.questions?.length || 0) > (kit.questions?.length || 0)) ? fullKit : kit;
     setCurrentKit(bestKit);
     localStorage.setItem(STORAGE_CURRENT_KIT_KEY, bestKit.id);
+
+    if (pushToHistory && currentKit?.id !== bestKit.id) {
+      window.history.pushState({
+        mode: currentMode,
+        kitId: bestKit.id,
+        modal: null,
+      }, '');
+    }
   };
 
   const handleKitCreated = (newKit: StudyKit) => {
@@ -580,7 +716,7 @@ export const App: React.FC = () => {
         console.warn('[App] Error en pushKitImmediately:', err);
       });
     }
-    setCurrentMode('smart-study');
+    handleSelectMode('smart-study', true);
   };
 
   const handleUpdateKit = (updatedKit: StudyKit) => {
@@ -683,11 +819,11 @@ export const App: React.FC = () => {
         onSelectKit={handleSelectKit}
         currentMode={currentMode}
         onSelectMode={handleSelectMode}
-        onOpenAISettings={() => setShowAIModal(true)}
-        onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
+        onOpenAISettings={handleOpenAIModal}
+        onOpenGoogleDrive={handleOpenGoogleDriveModal}
         showModeTabs={showModeTabs}
         currentUser={currentUser}
-        onOpenAuth={() => setShowAuthModal(true)}
+        onOpenAuth={handleOpenAuthModal}
         onLogout={handleLogout}
       />
 
@@ -725,8 +861,8 @@ export const App: React.FC = () => {
             onChangeCategoryBatch={handleChangeCategoryBatch}
             onResetDefaultKits={handleResetDefaults}
             userId={currentUser?.id || null}
-            onOpenAISettings={() => setShowAIModal(true)}
-            onOpenAuth={() => setShowAuthModal(true)}
+            onOpenAISettings={handleOpenAIModal}
+            onOpenAuth={handleOpenAuthModal}
           />
         )}
         {currentMode === 'create' && (
@@ -734,7 +870,7 @@ export const App: React.FC = () => {
             <CreateStudyKitView
               onKitCreated={handleKitCreated}
               initialTab={createInitialTab}
-              onOpenAISettings={() => setShowAIModal(true)}
+              onOpenAISettings={handleOpenAIModal}
               userId={currentUser?.id || null}
             />
           </React.Suspense>
@@ -764,7 +900,7 @@ export const App: React.FC = () => {
               <AskTheaView
                 key={currentKit.id}
                 kit={currentKit}
-                onOpenAISettings={() => setShowAIModal(true)}
+                onOpenAISettings={handleOpenAIModal}
                 onNavigateToOral={() => setCurrentMode('oral-lesson')}
               />
             )}
@@ -772,7 +908,7 @@ export const App: React.FC = () => {
               <OralLessonView
                 key={currentKit.id}
                 kit={currentKit}
-                onOpenAISettings={() => setShowAIModal(true)}
+                onOpenAISettings={handleOpenAIModal}
                 onNavigateToChat={() => setCurrentMode('ask-thea')}
               />
             )}
@@ -788,7 +924,7 @@ export const App: React.FC = () => {
                 userId={currentUser?.id || null}
                 onNavigateToSmartStudy={(kit) => {
                   handleSelectKit(kit);
-                  setCurrentMode('smart-study');
+                  handleSelectMode('smart-study', true);
                 }}
               />
             )}
@@ -834,7 +970,7 @@ export const App: React.FC = () => {
         <React.Suspense fallback={null}>
           <AISettingsModal
             isOpen={showAIModal}
-            onClose={() => setShowAIModal(false)}
+            onClose={handleCloseAIModal}
           />
         </React.Suspense>
       )}
@@ -844,9 +980,9 @@ export const App: React.FC = () => {
         <React.Suspense fallback={null}>
           <AuthModal
             isOpen={showAuthModal}
-            onClose={() => setShowAuthModal(false)}
+            onClose={handleCloseAuthModal}
             onAuthSuccess={handleAuthSuccess}
-            onOpenGoogleDriveSetup={() => setShowGoogleDriveModal(true)}
+            onOpenGoogleDriveSetup={handleOpenGoogleDriveModal}
           />
         </React.Suspense>
       )}
@@ -856,7 +992,7 @@ export const App: React.FC = () => {
         <React.Suspense fallback={null}>
           <GoogleDriveModal
             isOpen={showGoogleDriveModal}
-            onClose={() => setShowGoogleDriveModal(false)}
+            onClose={handleCloseGoogleDriveModal}
             currentUser={currentUser}
             kits={kits}
             onAuthSuccess={handleAuthSuccess}
@@ -883,9 +1019,9 @@ export const App: React.FC = () => {
       <MobileBottomNav
         currentMode={currentMode}
         onSelectMode={(mode) => handleNavigate(mode)}
-        onOpenAISettings={() => setShowAIModal(true)}
-        onOpenAuth={() => setShowAuthModal(true)}
-        onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
+        onOpenAISettings={handleOpenAIModal}
+        onOpenAuth={handleOpenAuthModal}
+        onOpenGoogleDrive={handleOpenGoogleDriveModal}
         currentUser={currentUser}
         currentKit={currentKit}
       />
