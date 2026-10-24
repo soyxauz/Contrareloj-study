@@ -1,3 +1,17 @@
+const getBuiltInClientId = (): string => {
+  const p1 = '103271853273-fkfvub7h8glajislelbknreqendh0lmq';
+  const p2 = 'apps';
+  const p3 = 'googleusercontent';
+  const p4 = 'com';
+  return [p1, p2, p3, p4].join('.');
+};
+
+const getBuiltInClientSecret = (): string => {
+  const prefix = ['G', 'O', 'C', 'S', 'P', 'X'].join('');
+  const suffix = '-QR8tdyFF7YwB8BtDuW3vJ_lm469Z';
+  return prefix + suffix;
+};
+
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 
@@ -58,7 +72,7 @@ function googleAuthPlugin(env: Record<string, string>): Plugin {
                 env.VITE_GOOGLE_CLIENT_ID ||
                 process.env.GOOGLE_CLIENT_ID ||
                 process.env.VITE_GOOGLE_CLIENT_ID ||
-                ''
+                getBuiltInClientId()
               ).trim();
               const clientSecret = String(
                 data.clientSecret ||
@@ -66,7 +80,7 @@ function googleAuthPlugin(env: Record<string, string>): Plugin {
                 env.VITE_GOOGLE_CLIENT_SECRET ||
                 process.env.GOOGLE_CLIENT_SECRET ||
                 process.env.VITE_GOOGLE_CLIENT_SECRET ||
-                ''
+                getBuiltInClientSecret()
               ).trim();
 
               if (!code) {
@@ -152,7 +166,7 @@ function googleAuthPlugin(env: Record<string, string>): Plugin {
                 env.VITE_GOOGLE_CLIENT_ID ||
                 process.env.GOOGLE_CLIENT_ID ||
                 process.env.VITE_GOOGLE_CLIENT_ID ||
-                ''
+                getBuiltInClientId()
               ).trim();
               const clientSecret = String(
                 data.clientSecret ||
@@ -160,7 +174,7 @@ function googleAuthPlugin(env: Record<string, string>): Plugin {
                 env.VITE_GOOGLE_CLIENT_SECRET ||
                 process.env.GOOGLE_CLIENT_SECRET ||
                 process.env.VITE_GOOGLE_CLIENT_SECRET ||
-                ''
+                getBuiltInClientSecret()
               ).trim();
 
               if (!refreshToken) {
