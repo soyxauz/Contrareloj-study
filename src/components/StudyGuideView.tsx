@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { StudyKit, DocumentAsset } from '../types';
+import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
   Sparkles,
   Wand2,
@@ -17,6 +17,59 @@ import {
   X,
   BookOpen
 } from 'lucide-react';
+
+export const DEPTH_OPTIONS: Array<{
+  id: StudyGuideDepth;
+  name: string;
+  multiplier: string;
+  badge: string;
+  desc: string;
+  features: string[];
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  {
+    id: 'essential',
+    name: 'Esencial',
+    multiplier: '1x Extensión',
+    badge: 'Concisa y Rápida',
+    desc: 'Núcleos conceptuales basales, definiciones clave y cuadros rápidos para consolidación veloz antes de un examen.',
+    features: [
+      'Resumen ejecutivo de alto impacto',
+      'Definiciones y axiomas nucleares',
+      'Cuadro comparativo sintetizado',
+      'Mnemotecnias basales de retención'
+    ],
+    icon: BookOpen,
+  },
+  {
+    id: 'complete',
+    name: 'Completa',
+    multiplier: '2x Extensión',
+    badge: 'Doble de Profundidad',
+    desc: 'Desarrollo sistemático diapositiva por diapositiva con tablas comparativas completas y relaciones causales.',
+    features: [
+      'Recorrido exhaustivo sección por sección',
+      'Desglose causal y fisiopatológico',
+      'Tablas comparativas extensas',
+      'Perlas analíticas de examen'
+    ],
+    icon: Layers,
+  },
+  {
+    id: 'ultra',
+    name: 'Ultra-Exhaustiva',
+    multiplier: '3x Extensión',
+    badge: 'Tratado Académico Máximo',
+    desc: 'Tratado exhaustivo sin límites que cubre estrictamente todo el documento, casos de examen, tablas matriciales y mnemotecnias avanzadas.',
+    features: [
+      'Cobertura estricta de cada diapositiva/página',
+      'Glosario técnico profundo y epistemología',
+      'Grandes cuadros matriciales y diferenciales',
+      'Casos clínicos/prácticos y preguntas trampa'
+    ],
+    icon: Sparkles,
+  },
+];
 import { generateAIStudyGuide } from '../services/aiService';
 import { FormattedText } from './FormattedText';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
@@ -32,17 +85,28 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   const [activeTab, setActiveTab] = useState<'guide' | 'gallery'>('guide');
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
   const [markdown, setMarkdown] = useState(kit.studyGuideMarkdown);
+  const [selectedDepth, setSelectedDepth] = useState<StudyGuideDepth>(kit.studyGuideDepth || 'ultra');
   const [showSmartEditModal, setShowSmartEditModal] = useState(false);
+  const [showDepthModal, setShowDepthModal] = useState(false);
+  const [modalDepthChoice, setModalDepthChoice] = useState<StudyGuideDepth>(kit.studyGuideDepth || 'ultra');
   const [customPrompt, setCustomPrompt] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<{ message: string; percent: number }>({
+    message: '',
+    percent: 0,
+  });
 
   useEffect(() => {
     setCurrentKitState(kit);
     setMarkdown(kit.studyGuideMarkdown);
+    if (kit.studyGuideDepth) {
+      setSelectedDepth(kit.studyGuideDepth);
+      setModalDepthChoice(kit.studyGuideDepth);
+    }
   }, [kit]);
 
   // Hidratar activos desde IndexedDB o Google Drive si faltan figuras en la guía
@@ -79,8 +143,9 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
     };
   }, [kit.id]);
 
-  const handleGenerateStudyGuide = async () => {
+  const handleGenerateStudyGuide = async (depthToUse: StudyGuideDepth = selectedDepth) => {
     setIsGenerating(true);
+    setGenerationProgress({ message: 'Estructurando la guía con IA sin límite de caracteres...', percent: 5 });
     try {
       const fullText =
         (kit.sourceText && kit.sourceText.length > 100)
@@ -94,18 +159,26 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       const generated = await generateAIStudyGuide(
         fullText,
         kit.title,
-        kit.category
+        kit.category,
+        depthToUse,
+        (msg, pct) => {
+          setGenerationProgress({ message: msg, percent: pct });
+        }
       );
       if (generated) {
         setMarkdown(generated);
+        setSelectedDepth(depthToUse);
+        setModalDepthChoice(depthToUse);
         if (onUpdateKit) {
-          onUpdateKit({ ...kit, studyGuideMarkdown: generated });
+          onUpdateKit({ ...kit, studyGuideMarkdown: generated, studyGuideDepth: depthToUse });
         }
       }
     } catch (e) {
       console.error(e);
     } finally {
       setIsGenerating(false);
+      setGenerationProgress({ message: '', percent: 0 });
+      setShowDepthModal(false);
     }
   };
 
@@ -326,9 +399,9 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600 text-white">
-              GUÍA ADAPTATIVA
+              GUÍA {selectedDepth === 'ultra' ? 'ULTRA-EXHAUSTIVA (3X)' : selectedDepth === 'complete' ? 'COMPLETA (2X)' : 'ESENCIAL (1X)'}
             </span>
-            <span className="text-xs text-slate-400 font-medium">Auto-generada y editable</span>
+            <span className="text-xs text-slate-400 font-medium">Sin límite de caracteres • Auto-generada</span>
           </div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <FileText className="w-6 h-6 text-violet-400" />
@@ -340,13 +413,27 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         <div className="flex items-center gap-2 flex-wrap">
           {activeTab === 'guide' && (
             <>
+              {/* Selector de Extensión / Regenerar */}
+              <button
+                onClick={() => {
+                  setModalDepthChoice(selectedDepth);
+                  setShowDepthModal(true);
+                }}
+                disabled={isGenerating}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/40 text-violet-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Cambiar nivel de extensión (1x, 2x o 3x) o regenerar la guía"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Extensión ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.name || '3x'})</span>
+              </button>
+
               {/* Smart Edit */}
               <button
                 onClick={() => setShowSmartEditModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-violet-900/30 transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-violet-900/30 transition-all cursor-pointer"
               >
                 <Wand2 className="w-4 h-4" />
-                <span>Smart Edit con IA</span>
+                <span>Smart Edit</span>
               </button>
 
               <button
@@ -419,35 +506,130 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       {activeTab === 'guide' && (
         <>
           {!markdown || markdown.trim().length === 0 ? (
-            <div className="text-center py-16 px-6 rounded-3xl bg-thea-surface border border-thea-border max-w-xl mx-auto shadow-xl animate-fadeIn">
-              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mx-auto mb-5 text-amber-400">
-                <Sparkles className="w-8 h-8" />
+            <div className="py-10 px-6 sm:px-10 rounded-3xl bg-thea-surface border border-thea-border max-w-4xl mx-auto shadow-2xl animate-fadeIn space-y-8">
+              <div className="text-center max-w-2xl mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-violet-600/20 border border-violet-500/30 flex items-center justify-center mx-auto mb-4 text-amber-400 shadow-inner">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
+                  Configurar Nivel de Extensión de la Guía
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Sin límites de caracteres. Elige la profundidad pedagógica con la que deseas que la IA recorra y desglose todo el documento:
+                </p>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Guía de Estudio Pendiente</h2>
-              <p className="text-sm text-slate-300 mb-8 leading-relaxed">
-                Este Study Kit fue creado priorizando la generación de preguntas. Puedes generar ahora su guía de estudio estructurada en Markdown con resúmenes, núcleos conceptuales y mnemotecnias.
-              </p>
-              <button
-                onClick={handleGenerateStudyGuide}
-                disabled={isGenerating}
-                className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 disabled:opacity-50 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-900/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-              >
+
+              {/* ── SELECTOR DE 3 NIVELES DE EXTENSIÓN ── */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {DEPTH_OPTIONS.map((opt) => {
+                  const isSelected = selectedDepth === opt.id;
+                  const Icon = opt.icon;
+                  return (
+                    <div
+                      key={opt.id}
+                      onClick={() => !isGenerating && setSelectedDepth(opt.id)}
+                      className={`relative p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group ${
+                        isSelected
+                          ? 'bg-gradient-to-b from-[#25184a] to-[#170e33] border-violet-500 ring-2 ring-violet-400/50 shadow-lg shadow-violet-900/30'
+                          : 'bg-[#150f2e]/80 border-thea-border/80 hover:border-violet-500/50 hover:bg-[#1a133b]'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                            isSelected ? 'bg-violet-600 text-white' : 'bg-white/5 text-slate-300 group-hover:text-white'
+                          }`}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                            isSelected ? 'bg-amber-400 text-slate-950' : 'bg-white/10 text-slate-300'
+                          }`}>
+                            {opt.multiplier}
+                          </span>
+                        </div>
+
+                        <h3 className="font-bold text-base text-white mb-1 flex items-center gap-1.5 flex-wrap">
+                          <span>{opt.name}</span>
+                          {opt.id === 'ultra' && (
+                            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                              Recomendado
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-xs text-slate-300 leading-relaxed mb-4">
+                          {opt.desc}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 border-t border-white/10 space-y-1.5 text-[11px]">
+                        {opt.features.map((f, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <Check className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className={isSelected ? 'text-slate-200' : 'text-slate-400'}>{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Botón de Generación y Barra de Progreso Multi-Fase */}
+              <div className="space-y-4 pt-2">
                 {isGenerating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Estructurando Guía Académica con IA...</span>
-                  </>
+                  <div className="p-5 rounded-2xl bg-black/40 border border-violet-500/40 text-center space-y-3 animate-fadeIn">
+                    <div className="flex items-center justify-center gap-3 text-sm font-bold text-white">
+                      <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                      <span>{generationProgress.message || 'Generando tratado exhaustivo con IA...'}</span>
+                    </div>
+
+                    <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-white/10 p-0.5">
+                      <div
+                        className="bg-gradient-to-r from-amber-400 via-violet-500 to-indigo-500 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(8, generationProgress.percent)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center text-[11px] text-slate-400 px-1 font-semibold">
+                      <span>Procesando sin límite de caracteres ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.multiplier})</span>
+                      <span className="text-amber-300 font-bold">{generationProgress.percent}%</span>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    <span>Generar Guía de Estudio con IA</span>
-                  </>
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => handleGenerateStudyGuide(selectedDepth)}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-violet-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-900/30 transition-all transform hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+                    >
+                      <Sparkles className="w-5 h-5 text-slate-950" />
+                      <span>
+                        Generar Guía {DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.name} ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.multiplier})
+                      </span>
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
             </div>
           ) : (
-            <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-10 shadow-xl">
-              <FormattedText text={markdown} />
+            <div className="space-y-4">
+              {/* Barra de progreso superior en caso de estar regenerando */}
+              {isGenerating && (
+                <div className="p-4 rounded-2xl bg-black/60 border border-violet-500/50 text-center space-y-2 animate-fadeIn mb-4">
+                  <div className="flex items-center justify-center gap-2.5 text-xs sm:text-sm font-bold text-white">
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                    <span>{generationProgress.message || 'Regenerando con nuevo nivel de profundidad...'}</span>
+                  </div>
+                  <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/10">
+                    <div
+                      className="bg-gradient-to-r from-amber-400 via-violet-500 to-indigo-500 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.max(8, generationProgress.percent)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-10 shadow-xl">
+                <FormattedText text={markdown} />
+              </div>
             </div>
           )}
         </>
@@ -695,6 +877,80 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               >
                 {isApplying ? <Sparkles className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                 <span>{isApplying ? 'Aplicando cambios...' : 'Aplicar Instrucción'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: CAMBIAR EXTENSIÓN / REGENERAR GUÍA ── */}
+      {showDepthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl relative">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-violet-600 flex items-center justify-center text-slate-950 font-bold">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white">Nivel de Extensión de la Guía</h3>
+                  <p className="text-xs text-slate-400">Selecciona el nivel de profundidad para regenerar la guía de estudio:</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDepthModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 my-6">
+              {DEPTH_OPTIONS.map((opt) => {
+                const isSelected = modalDepthChoice === opt.id;
+                const Icon = opt.icon;
+                return (
+                  <div
+                    key={opt.id}
+                    onClick={() => setModalDepthChoice(opt.id)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-gradient-to-b from-[#281850] to-[#170e33] border-violet-500 ring-2 ring-violet-400/50 shadow-md'
+                        : 'bg-[#150f2e]/80 border-thea-border/80 hover:border-violet-500/50 hover:bg-[#1a133b]'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-300' : 'text-slate-400'}`} />
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          isSelected ? 'bg-amber-400 text-slate-950' : 'bg-white/10 text-slate-300'
+                        }`}>
+                          {opt.multiplier}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-white mb-1">{opt.name}</h4>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{opt.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-thea-border">
+              <button
+                disabled={isGenerating}
+                onClick={() => setShowDepthModal(false)}
+                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={isGenerating}
+                onClick={() => handleGenerateStudyGuide(modalDepthChoice)}
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-amber-900/40 cursor-pointer active:scale-95"
+              >
+                <Sparkles className="w-4 h-4 text-slate-950" />
+                <span>Regenerar Guía ({DEPTH_OPTIONS.find(o => o.id === modalDepthChoice)?.name})</span>
               </button>
             </div>
           </div>

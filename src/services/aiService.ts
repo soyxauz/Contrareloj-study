@@ -1,4 +1,4 @@
-import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions, GuessWhoCase } from '../types';
+import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions, GuessWhoCase, StudyGuideDepth } from '../types';
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 
 export interface AISettings {
@@ -2214,74 +2214,278 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   return [];
 }
 
-/** Generación de Guía de Estudio bajo demanda con cobertura exhaustiva de todo el documento */
+/** Generación de Guía de Estudio bajo demanda con 3 niveles de extensión (1x, 2x, 3x) y generación modular continua */
 export async function generateAIStudyGuide(
   rawText: string,
   title: string,
-  category: string
+  category: string,
+  depth: StudyGuideDepth = 'ultra',
+  onProgress?: (message: string, percent: number) => void
 ): Promise<string> {
   const settings = getAISettings();
   const cleanInput = (rawText || '').trim();
   const langDetection = detectDocumentLanguage(cleanInput);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
-Tu misión es generar una GUÍA DE ESTUDIO MAGNA, SUMAMENTE DETALLADA Y EXHAUSTIVA en Markdown que cubra ESTRICTAMENTE TODO EL DOCUMENTO proporcionado, sin omitir ninguna diapositiva, sección, mecanismo, fármaco, clasificación o detalle técnico.
+  if (!settings.enabled) {
+    return '';
+  }
+
+  // --- MODO 1: ESENCIAL (1x - Síntesis y núcleos conceptuales rápidos) ---
+  if (depth === 'essential') {
+    onProgress?.('Generando Guía Esencial: síntesis de núcleos y conceptos clave...', 40);
+
+    const systemPrompt = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
+Tu misión es generar una GUÍA DE ESTUDIO ESENCIAL Y DE ALTO IMPACTO (1x) en Markdown.
+Condensa los pilares teóricos, núcleos conceptuales ineludibles, definiciones clave y cuadros rápidos para consolidación veloz.
 
 ${translationDirective}
 
-INSTRUCCIONES CRÍTICAS DE EXHAUSTIVIDAD OBLIGATORIA:
-1. COBERTURA TOTAL Y ESTRICTA: Está terminantemente prohibido hacer resúmenes superficiales o saltarse diapositivas/secciones intermedias o finales. Debes recorrer sistemáticamente todo el material desde la primera diapositiva/página hasta la última.
-2. MÁXIMO RIGOR Y DETALLE: No te limites a nombrar conceptos; desglosa los mecanismos fisiológicos, vías moleculares, fórmulas, dosis relativas, indicaciones clínicas, efectos adversos y relaciones de causa-efecto de cada elemento presente.
-3. TABLAS COMPARATIVAS DETALLADAS: Genera tablas completas en formato Markdown (| Columna 1 | Columna 2 | Columna 3 |) sin líneas vacías entre filas para contrastar clasificaciones, diferencias diagnósticas o características distintivas.
-4. ESTRUCTURA DIDÁCTICA EXHAUSTIVA OBLIGATORIA:
-# Guía de Estudio Integral: ${title}
-> **Resumen Ejecutivo:** Visión panorámica y trascendencia académica del tema.
+ESTRUCTURA DIDÁCTICA EXIGIDA:
+# Guía de Estudio Esencial: ${title}
+> **Resumen Ejecutivo:** Visión condensada y trascendencia del tema en el examen.
 
-## 1. Fundamentos y Marco Teórico Integral
-(Principios basales, taxonomía y definiciones esenciales)
+## 1. Núcleos Conceptuales y Definiciones Clave
+(Definiciones precisas de los términos basales del material)
 
-## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección / Diapositiva por Diapositiva)
-(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original, desglosando cada fármaco o concepto individualmente)
+## 2. Vías y Mecanismos Críticos
+(Relaciones de causa-efecto esenciales y puntos de inflexión conceptual)
 
-## 3. Cuadros Comparativos, Clasificaciones y Vías de Acción
-(Tablas comparativas extensas que contrasten todos los elementos del tema)
+## 3. Cuadro Comparativo de Alto Rendimiento
+(Tabla Markdown con las principales distinciones entre elementos del tema)
 
-## 4. Perlas de Examen, Casos Prácticos y Errores Habituales
-(Diferenciaciones sutiles, preguntas trampa típicas de examen y razonamiento analítico)
+## 4. Mnemotecnias y Claves de Examen
+(Reglas nemotécnicas directas y perlas para responder preguntas trampa)`;
 
-## 5. Mnemotecnias y Síntesis de Alto Rendimiento
-(Reglas nemotécnicas, cuadros nemónicos y resumen de consolidación rápida)`;
+    const userPrompt = `DOCUMENTO BASE ("${title}" - ${category}):
+${cleanInput}
 
-  const maxInputChars = 85000;
-  const processedInput = cleanInput.length > maxInputChars
-    ? cleanInput.slice(0, maxInputChars) + `\n\n[... Resto del documento condensado: total ${cleanInput.length} caracteres]`
-    : cleanInput;
+Genera la Guía de Estudio Esencial en español (Markdown):`;
 
-  const userPrompt = `DOCUMENTO ORIGINAL COMPLETO ("${title}" - ${category}):
-
-${processedInput}
-
-Genera la Guía de Estudio exhaustiva en español (Markdown). Cubre estrictamente todo el documento de principio a fin con el máximo nivel de profundidad y detalle:`;
-
-  if (settings.enabled) {
     try {
       const res = await queryAICompletion(
         [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        false
+        false,
+        undefined,
+        { max_tokens: 4096 }
       );
-      if (res && res.trim().length > 100) {
-        return res.trim();
-      }
+      onProgress?.('Guía Esencial completada.', 100);
+      return res?.trim() || '';
     } catch (e) {
-      console.warn('[StudyGuide AI] Error generando guía con IA:', e);
+      console.warn('[StudyGuide AI] Error en guía esencial:', e);
+      return '';
     }
   }
 
-  return '';
+  // --- MODO 2: COMPLETA (2x - Desarrollo sección por sección y tablas comparativas) ---
+  if (depth === 'complete') {
+    onProgress?.('Fase 1/2: Desarrollando marco teórico y desglose sección por sección (2x)...', 25);
+
+    // Fase 1: Marco Teórico y Desarrollo Sistemático
+    const phase1System = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
+Tu misión es redactar la PRIMERA PARTE (Fase 1) de una GUÍA DE ESTUDIO COMPLETA Y DETALLADA (2x) en Markdown.
+Esta fase debe cubrir con exhaustividad los fundamentos teóricos y el recorrido sistemático sección por sección / diapositiva por diapositiva.
+
+${translationDirective}
+
+ESTRUCTURA DE LA FASE 1:
+# Guía de Estudio Completa: ${title}
+> **Resumen Ejecutivo:** Análisis panorámico y alcance académico.
+
+## 1. Fundamentos y Marco Teórico Integral
+(Principios basales, taxonomía, definiciones formales y antecedentes)
+
+## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección / Diapositiva por Diapositiva)
+(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original, desglosando cada fármaco, mecanismo o concepto individualmente con rigor causal)`;
+
+    const phase1User = `DOCUMENTO ORIGINAL ("${title}" - ${category}):
+${cleanInput}
+
+Redacta la Fase 1 de la Guía de Estudio Completa en español (Markdown). Cubre minuciosamente cada sección:`;
+
+    let part1 = '';
+    try {
+      part1 = await queryAICompletion(
+        [
+          { role: 'system', content: phase1System },
+          { role: 'user', content: phase1User }
+        ],
+        false,
+        undefined,
+        { max_tokens: 6144 }
+      );
+    } catch (e) {
+      console.warn('[StudyGuide AI] Error en Fase 1 de guía completa:', e);
+    }
+
+    onProgress?.('Fase 2/2: Creando cuadros comparativos extensos, perlas y mnemotecnias...', 70);
+
+    // Fase 2: Cuadros comparativos, perlas de examen y mnemotecnias
+    const phase2System = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
+Tu misión es redactar la SEGUNDA PARTE (Fase 2) de la GUÍA DE ESTUDIO COMPLETA (2x) en Markdown.
+Debes crear tablas comparativas exhaustivas, casos prácticos, perlas clínicas/analíticas y mnemotecnias avanzadas que complementen la Fase 1.
+
+${translationDirective}
+
+ESTRUCTURA DE LA FASE 2:
+## 3. Cuadros Comparativos, Clasificaciones y Vías de Acción
+(Tablas comparativas extensas en Markdown contrastando todas las entidades, fármacos o categorías del tema)
+
+## 4. Perlas de Examen, Casos Prácticos y Errores Habituales
+(Diferenciaciones sutiles, preguntas trampa típicas de examen, análisis diferencial y razonamiento analítico)
+
+## 5. Mnemotecnias y Síntesis de Alto Rendimiento
+(Reglas nemotécnicas estructuradas, acrónimos mnemónicos y resumen de consolidación rápida)`;
+
+    const phase2User = `DOCUMENTO ORIGINAL ("${title}" - ${category}):
+${cleanInput}
+
+Redacta la Fase 2 (Tablas comparativas, perlas de examen y mnemotecnias) en español (Markdown):`;
+
+    let part2 = '';
+    try {
+      part2 = await queryAICompletion(
+        [
+          { role: 'system', content: phase2System },
+          { role: 'user', content: phase2User }
+        ],
+        false,
+        undefined,
+        { max_tokens: 6144 }
+      );
+    } catch (e) {
+      console.warn('[StudyGuide AI] Error en Fase 2 de guía completa:', e);
+    }
+
+    onProgress?.('Guía Completa (2x) consolidada con éxito.', 100);
+    const combined2x = [part1.trim(), part2.trim()].filter(p => p.length > 50).join('\n\n---\n\n');
+    return combined2x || part1 || part2 || '';
+  }
+
+  // --- MODO 3: ULTRA-EXHAUSTIVA (3x - Tratado académico profundo sin límites) ---
+  onProgress?.('Fase 1/3: Fundamentación estructural, marco epistémico y glosario profundo...', 15);
+
+  // Fase 1: Marco Epistémico, Fundamentación Fisiopatológica/Estructural y Glosario Exhaustivo
+  const p1System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
+Tu misión es redactar el MÓDULO 1 de una GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
+Este módulo debe ser de máxima profundidad científica y académica, sin recortar ni condensar nada.
+
+${translationDirective}
+
+ESTRUCTURA DEL MÓDULO 1:
+# Tratado y Guía de Estudio Magna: ${title}
+> **Resumen Ejecutivo y Visión Epistémica:** Contextualización profunda, relevancia disciplinar y mapa conceptual del documento.
+
+## 1. Fundamentos Teóricos, Marco Conceptual y Fisiopatológico / Estructural
+(Principios basales, leyes o axiomas que rigen el tema, taxonomía detallada y causalidad profunda)
+
+## 2. Glosario Técnico Exhaustivo y Nomenclatura Especializada
+(Definición rigurosa, etimología conceptual y contexto clínico/teórico de cada término técnico mencionado en el material)`;
+
+  const p1User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
+${cleanInput}
+
+Redacta el Módulo 1 con máxima amplitud y rigor en español (Markdown):`;
+
+  let mod1 = '';
+  try {
+    mod1 = await queryAICompletion(
+      [
+        { role: 'system', content: p1System },
+        { role: 'user', content: p1User }
+      ],
+      false,
+      undefined,
+      { max_tokens: 6144 }
+    );
+  } catch (e) {
+    console.warn('[StudyGuide AI] Error en Módulo 1 ultra:', e);
+  }
+
+  onProgress?.('Fase 2/3: Recorrido minucioso diapositiva por diapositiva / sección por sección (3x)...', 45);
+
+  // Fase 2: Recorrido exhaustivo diapositiva por diapositiva / sección por sección
+  const p2System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
+Tu misión es redactar el MÓDULO 2 de la GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
+DEBES RECORRER CADA DIAPOSITIVA Y SECCIÓN DEL DOCUMENTO ORIGINAL SIN SALTARTE NINGUNA.
+Desglosa cada concepto, fórmula, fármaco, reacción o estructura con detalle anatómico/molecular/conceptual.
+
+${translationDirective}
+
+ESTRUCTURA DEL MÓDULO 2:
+## 3. Desarrollo Sistemático Minucioso (Diapositiva por Diapositiva / Sección por Sección)
+(Análisis exhaustivo punto por punto:
+- Diapositiva / Sección: Título y objetivo
+- Mecanismo detallado / Fisiología / Derivación matemática
+- Implicaciones prácticas / Clínicas / Aplicaciones reales
+- Interacciones, casos límite y excepciones)`;
+
+  const p2User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
+${cleanInput}
+
+Redacta el Módulo 2 con desarrollo exhaustivo diapositiva por diapositiva en español (Markdown):`;
+
+  let mod2 = '';
+  try {
+    mod2 = await queryAICompletion(
+      [
+        { role: 'system', content: p2System },
+        { role: 'user', content: p2User }
+      ],
+      false,
+      undefined,
+      { max_tokens: 8192 }
+    );
+  } catch (e) {
+    console.warn('[StudyGuide AI] Error en Módulo 2 ultra:', e);
+  }
+
+  onProgress?.('Fase 3/3: Creando grandes tablas matriciales, casos clínicos de examen y mnemotecnias...', 80);
+
+  // Fase 3: Tablas matriciales, casos clínicos/prácticos de examen, preguntas trampa y mnemotecnias avanzadas
+  const p3System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
+Tu misión es redactar el MÓDULO 3 de la GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
+Construye las tablas comparativas más exhaustivas posibles, casos de examen analítico y mnemotecnias de consolidación.
+
+${translationDirective}
+
+ESTRUCTURA DEL MÓDULO 3:
+## 4. Cuadros Comparativos Matriciales y Algoritmos Diferenciales
+(Grandes tablas Markdown completas que contrasten todos los elementos del tema sin omitir filas ni columnas)
+
+## 5. Casos Prácticos de Examen, Perlas Clínicas y Preguntas Trampa Frecuentes
+(Casos de razonamiento complejo, diagnósticos diferenciales, errores habituales y cómo resolver preguntas de nivel experto)
+
+## 6. Mnemotecnias Avanzadas y Síntesis de Retención de Máximo Rendimiento
+(Acrónimos, analogías estructuradas y mapas nemotécnicos para fijar todo el contenido en memoria de largo plazo)`;
+
+  const p3User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
+${cleanInput}
+
+Redacta el Módulo 3 (Grandes tablas matriciales, casos prácticos, perlas y mnemotecnias) en español (Markdown):`;
+
+  let mod3 = '';
+  try {
+    mod3 = await queryAICompletion(
+      [
+        { role: 'system', content: p3System },
+        { role: 'user', content: p3User }
+      ],
+      false,
+      undefined,
+      { max_tokens: 8192 }
+    );
+  } catch (e) {
+    console.warn('[StudyGuide AI] Error en Módulo 3 ultra:', e);
+  }
+
+  onProgress?.('Tratado y Guía Magna Ultra-Exhaustiva (3x) consolidada con éxito.', 100);
+
+  const sections = [mod1.trim(), mod2.trim(), mod3.trim()].filter(s => s.length > 50);
+  return sections.join('\n\n---\n\n') || mod1 || mod2 || mod3 || '';
 }
 
 /** Generación de Episodio de Podcast bajo demanda con opciones avanzadas de Formato, Duración y Diferenciación */

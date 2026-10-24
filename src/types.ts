@@ -153,6 +153,7 @@ export interface GuessWhoCase {
 
 export type PodcastFormat = 'detailed' | 'brief' | 'critique' | 'debate';
 export type PodcastDuration = 'short' | 'normal' | 'long';
+export type StudyGuideDepth = 'essential' | 'complete' | 'ultra';
 
 export interface PodcastGenerationOptions {
   format?: PodcastFormat;
@@ -182,6 +183,7 @@ export interface StudyKit {
   questions: Question[];
   flashcards: Flashcard[];
   studyGuideMarkdown: string;
+  studyGuideDepth?: StudyGuideDepth;
   podcast: PodcastEpisode | null;
   sourceText?: string;
   sourceMaterials?: { id: string; name: string; size?: number; type?: string; rawText?: string }[];
