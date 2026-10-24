@@ -1,4 +1,4 @@
-import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions, GuessWhoCase, StudyGuideDepth } from '../types';
+import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions, GuessWhoCase, StudyGuideDepth, GoogleOverview } from '../types';
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 
 export interface AISettings {
@@ -127,6 +127,66 @@ export function getOllamaBaseUrl(): string {
     } catch {}
   }
   return DEFAULT_AI_SETTINGS.baseUrl;
+}
+
+/**
+ * Limpia y normaliza una viñeta de retroalimentación tipo búsqueda:
+ * elimina comas o signos de puntuación huérfanos iniciales, prefijos internos de prompts
+ * y asteriscos rotos de formato Markdown.
+ */
+export function cleanExplanationBullet(text: string): string {
+  if (!text) return '';
+  const isDocReference = /^(?:referencia en el texto|referencia textual)[:\s*-]*/i.test(text.trim());
+  let cleaned = text
+    .replace(/^(?:desmonte del error previo|referencia en el texto|referencia textual|descarte de opciones|discriminación de distractores|fundamentación académica|explicación lógica)[:\s*-]*/gi, '')
+    .replace(/^[\s•*,\-:;"]+/, '')
+    .replace(/[\s"]+$/, '')
+    .replace(/\*{2,}/g, '')
+    .trim();
+  if (!cleaned) return '';
+  if (isDocReference && cleaned.length < 80) {
+    return `Fundamento y marco conceptual correspondiente a ${cleaned.charAt(0).toLowerCase() + cleaned.slice(1)}.`;
+  }
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+/**
+ * Formula una justificación externa tipo Google Search Overview con exactamente 3 viñetas pedagógicas
+ * y enlaces de búsqueda interactiva (Google / Wikipedia), sin citas de diapositivas o frases del documento.
+ */
+export function formatTheaSearchOverview(
+  retro: any,
+  defaultQuery: string
+): { explanation: string; googleOverview: GoogleOverview } {
+  const busqueda = retro?.busqueda_google || {};
+  const query = String(busqueda.consulta || defaultQuery || 'Fundamento científico').trim();
+
+  let rawBullets: string[] = [];
+  if (Array.isArray(busqueda.tres_vinetas) && busqueda.tres_vinetas.length >= 2) {
+    rawBullets = busqueda.tres_vinetas.slice(0, 3).map((b: any) => cleanExplanationBullet(String(b)));
+  } else {
+    const b1 = cleanExplanationBullet(retro?.explicacion_logica || 'Principio fundamental verificado en la literatura académica.');
+    const b2 = cleanExplanationBullet(retro?.por_que_fallan_las_otras || retro?.desmonte_del_error || 'Mecanismo causal y vía fisiopatológica comprobada.');
+    const b3 = 'Diferenciación conceptual frente a los errores y alternativas incorrectas frecuentes.';
+    rawBullets = [b1, b2, b3];
+  }
+
+  while (rawBullets.length < 3) {
+    rawBullets.push('Principio y evidencia corroborados en la literatura científica.');
+  }
+
+  const cleanBullets = rawBullets.slice(0, 3).map(b => b.charAt(0).toUpperCase() + b.slice(1));
+  const googleOverview: GoogleOverview = {
+    query,
+    bullets: cleanBullets,
+    imageSearchTerm: String(busqueda.termino_imagen || query).trim(),
+    searchUrl: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+    wikipediaUrl: `https://es.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query)}`
+  };
+
+  const explanation = cleanBullets.map(b => `• ${b}`).join('\n\n');
+
+  return { explanation, googleOverview };
 }
 
 export function saveOllamaBaseUrl(url: string): void {
@@ -1274,20 +1334,22 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       "banco_etiquetas": ["Estructura A", "Estructura B", "Distractor A", "Distractor B"],
       "retroalimentacion": {
         "busqueda_google": {
-          "consulta": "Búsqueda textual exacta y natural en Google para verificar la respuesta (ej: mecanismo de accion furosemida asa de henle)",
+          "consulta": "Búsqueda textual exacta y natural en Google/Wikipedia para verificar la respuesta (ej: mecanismo de accion de la furosemida en el asa de henle)",
           "tres_vinetas": [
-            "Afirmación directa nuclear que confirma con precisión la respuesta correcta.",
-            "Principio o mecanismo causal/fisiológico clave que la fundamenta.",
-            "Conclusión distintiva o impacto clínico/práctico frente a las demás alternativas."
+            "Afirmación directa y nuclear que confirma con precisión científica la respuesta correcta.",
+            "Principio causal, proceso fisiológico o fundamentación analítica demostrada que la sustenta.",
+            "Diferenciación distintiva de por qué fallan los distractores o errores comunes."
           ],
-          "termino_imagen": "Palabras clave concisas para imagen o diagrama relevante (ej: cotransportador Na K 2Cl asa de henle nefrona)"
-        },
-        "referencia_al_texto": "Cita o paráfrasis que sustenta la respuesta.",
-        "explicacion_logica": "Por qué es la respuesta correcta.",
-        "por_que_fallan_las_otras": "Por qué fallan los distractores."
+          "termino_imagen": "Palabras clave concisas para buscar diagrama explicativo en la web (ej: cotransportador Na K 2Cl asa de henle)"
+        }
       }
     }
-}`;
+  ]
+}
+
+REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
+- NO cites fragmentos, diapositivas, títulos de páginas ni uses la frase 'Referencia en el texto'.
+- La justificación DEBE formularse como una búsqueda enciclopédica externa en Google/Wikipedia con exactamente 3 viñetas completas, gramaticalmente perfectas y con rigor científico universal.`;
 
   let sourceRepresentation = '';
   if (chunks && chunks.length > 0) {
@@ -1472,47 +1534,12 @@ Genera el JSON completo respetando la estructura exigida:`;
       const isCase = Boolean(p.es_caso || p.es_caso_o_escenario || /\b(caso|supuesto|paciente|tribunal|viñeta)\b/i.test(fullQuestion));
       fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-      const retro = p.retroalimentacion || {};
-      const busqueda = retro.busqueda_google || {};
-      const explanationParts: string[] = [];
-
-      // Estructurar Búsqueda de Google con 3 viñetas destacadas
       const query = String(
-        busqueda.consulta ||
-        (p.concepto_evaluado ? `¿Cómo funciona ${p.concepto_evaluado}?` : 'Fundamento conceptual')
+        p.retroalimentacion?.busqueda_google?.consulta ||
+        (p.concepto_evaluado ? `¿Cómo funciona ${p.concepto_evaluado}?` : p.pregunta || 'Fundamento conceptual')
       ).trim();
 
-      let bullets: string[] = [];
-      if (Array.isArray(busqueda.tres_vinetas) && busqueda.tres_vinetas.length >= 2) {
-        bullets = busqueda.tres_vinetas.slice(0, 3).map((b: any) => String(b).trim());
-      } else {
-        bullets = [
-          retro.explicacion_logica ? String(retro.explicacion_logica).slice(0, 160).trim() : 'Respuesta fundamentada en el marco conceptual.',
-          retro.referencia_al_texto ? `Referencia textual: "${String(retro.referencia_al_texto).slice(0, 160).trim()}"` : 'El principio se sustenta en la evidencia causal directa del material.',
-          retro.por_que_fallan_las_otras ? String(retro.por_que_fallan_las_otras).slice(0, 160).trim() : 'Las demás alternativas alteran el orden de causalidad o la anatomía funcional.'
-        ];
-      }
-      while (bullets.length < 3) {
-        bullets.push('Conclusión corroborada por el marco conceptual del documento de estudio.');
-      }
-
-      const googleOverviewMd = [
-        `### Búsqueda en Google: "${query}"`,
-        `> **Resumen del Buscador (Puntos Clave):**`,
-        ...bullets.map(b => `> • ${b}`),
-      ].join('\n');
-
-      explanationParts.push(googleOverviewMd);
-
-      if (retro.explicacion_logica) {
-        explanationParts.push(`**Fundamentación Académica:**\n${String(retro.explicacion_logica).trim()}`);
-      }
-      if (retro.referencia_al_texto) {
-        explanationParts.push(`**Referencia en el texto:** "${String(retro.referencia_al_texto).trim()}"`);
-      }
-      if (retro.por_que_fallan_las_otras) {
-        explanationParts.push(`**Descarte de opciones:**\n${String(retro.por_que_fallan_las_otras).trim()}`);
-      }
+      const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query);
 
       // RAG Traceability linkage
       let sourceChunkId = p.chunk_id_origen || undefined;
@@ -1522,7 +1549,7 @@ Genera el JSON completo respetando la estructura exigida:`;
       if (chunks && chunks.length > 0) {
         let matchedChunk = chunks.find(c => c.id === p.chunk_id_origen);
         if (!matchedChunk) {
-          const textToSearch = (p.pregunta || '') + ' ' + (retro.referencia_al_texto || '');
+          const textToSearch = (p.pregunta || '') + ' ' + (p.retroalimentacion?.referencia_al_texto || '');
           matchedChunk = chunks.find(c => textToSearch.toLowerCase().includes(c.text.slice(0, 30).toLowerCase())) || chunks[idx % chunks.length];
         }
         if (matchedChunk) {
@@ -1576,12 +1603,8 @@ Genera el JSON completo respetando la estructura exigida:`;
         imageHotspots,
         imageWordBank,
         diagramTitle,
-        explanation: explanationParts.join('\n\n') || 'Explicación fundamentada en el material de estudio.',
-        googleOverview: {
-          query,
-          bullets,
-          imageSearchTerm: String(busqueda.termino_imagen || p.concepto_evaluado || '').trim(),
-        },
+        explanation,
+        googleOverview,
         sourceChunkId,
         sourceChunkText,
         sourcePageOrSlide,
@@ -2127,9 +2150,15 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       },
       "respuesta_correcta": "B",
       "retroalimentacion": {
-        "referencia_al_texto": "Cita que desmiente la opción falsa.",
-        "explicacion_logica": "Por qué la opción B es la falsa e incorrecta.",
-        "por_que_fallan_las_otras": "Por qué las opciones A, C y D son verdaderas."
+        "busqueda_google": {
+          "consulta": "Búsqueda textual en Google/Wikipedia para verificar el principio evaluado (ej: diferencias entre ...)",
+          "tres_vinetas": [
+            "Principio verídico directo comprobado en la literatura científica.",
+            "Explicación del error conceptual o alteración de la opción falsa.",
+            "Fundamento de por qué las opciones restantes sí son válidas."
+          ],
+          "termino_imagen": "Término conciso para diagrama web"
+        }
       }
     },
     {
@@ -2140,9 +2169,15 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       "opciones_multiples": ["Afirmación Verdadera 1", "Afirmación FALSA 1", "Afirmación Verdadera 2", "Afirmación FALSA 2", "Afirmación Verdadera 3"],
       "indices_correctos": [1, 3],
       "retroalimentacion": {
-        "referencia_al_texto": "Fundamento del texto.",
-        "explicacion_logica": "Por qué las opciones 1 y 3 son falsas.",
-        "por_que_fallan_las_otras": "Por qué las demás son correctas."
+        "busqueda_google": {
+          "consulta": "Búsqueda en Google/Wikipedia sobre errores frecuentes de [concepto]",
+          "tres_vinetas": [
+            "Principio correcto comprobado.",
+            "Motivo por el que las afirmaciones seleccionadas son falsas.",
+            "Fundamento de las alternativas verídicas."
+          ],
+          "termino_imagen": "Término para diagrama"
+        }
       }
     }
   ]
@@ -2186,12 +2221,8 @@ Responde ÚNICAMENTE con un JSON con la estructura:
             correctIndex = letter === 'B' ? 1 : letter === 'C' ? 2 : letter === 'D' ? 3 : 0;
           }
 
-          const fb = p.retroalimentacion || {};
-          const explanation = [
-            fb.explicacion_logica,
-            fb.por_que_fallan_las_otras,
-            fb.referencia_al_texto ? `Referencia: ${fb.referencia_al_texto}` : '',
-          ].filter(Boolean).join('\n\n') || p.explicacion || 'Identificación del concepto falso o erróneo.';
+          const query = String(p.concepto_evaluado || title).trim();
+          const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query);
 
           return {
             id: `q-false-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2203,6 +2234,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
             difficulty,
             topic: p.concepto_evaluado || title,
             explanation,
+            googleOverview,
           };
         });
       }
@@ -3150,9 +3182,15 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
   },
   "respuesta_correcta": "Letra (A, B, C o D)",
   "retroalimentacion": {
-    "explicacion_logica": "Fundamento lógico de la respuesta correcta.",
-    "desmonte_del_error": "Explicación de por qué la confusión previa queda resuelta.",
-    "referencia_al_texto": "Cita o referencia al principio del material de estudio."
+    "busqueda_google": {
+      "consulta": "Búsqueda en Google/Wikipedia para verificar el principio evaluado (ej: mecanismo fisiológico de ${concept})",
+      "tres_vinetas": [
+        "Principio o mecanismo científico exacto que resuelve la confusión previa.",
+        "Fundamento causal y vía de acción analítica comprobada.",
+        "Diferenciación conceptual frente a los distractores y errores frecuentes."
+      ],
+      "termino_imagen": "Palabras clave concisas para buscar diagrama explicativo en la web"
+    }
   }
 }`;
 
@@ -3207,17 +3245,12 @@ Genera la pregunta socrática reformulada en formato JSON:`;
   const isCase = /\b(caso|supuesto|paciente|clínic|escenario)\b/i.test(fullQuestion);
   fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-  const retro = parsed.retroalimentacion || {};
-  const explanationParts: string[] = [];
-  if (retro.explicacion_logica) {
-    explanationParts.push(String(retro.explicacion_logica).trim());
-  }
-  if (retro.desmonte_del_error) {
-    explanationParts.push(`**Desmonte del error previo:** ${String(retro.desmonte_del_error).trim()}`);
-  }
-  if (retro.referencia_al_texto) {
-    explanationParts.push(`**Referencia en el texto:** "${String(retro.referencia_al_texto).trim()}"`);
-  }
+  const query = String(
+    parsed.retroalimentacion?.busqueda_google?.consulta ||
+    (concept ? `¿Cómo funciona ${concept}?` : parsed.pregunta || 'Refuerzo socrático')
+  ).trim();
+
+  const { explanation, googleOverview } = formatTheaSearchOverview(parsed.retroalimentacion, query);
 
   return {
     id: `q-socratic-recall-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -3227,7 +3260,8 @@ Genera la pregunta socrática reformulada en formato JSON:`;
     question: fullQuestion || 'Pregunta de refuerzo socrático.',
     options: optionsArrayFinal,
     correctIndex,
-    explanation: explanationParts.join('\n\n') || 'Explicación fundamentada en la consolidación socrática del concepto.',
+    explanation,
+    googleOverview,
     sourceChunkId: originalQuestion.sourceChunkId,
     sourceChunkText: originalQuestion.sourceChunkText,
     sourcePageOrSlide: originalQuestion.sourcePageOrSlide,
@@ -3336,20 +3370,23 @@ ${translationDirective}
 ${levelInstructions[level]}
 
 DIRECTRICES GENERALES DE GENERACIÓN:
-1. Fidelidad estricta al documento: Toda afirmación y justificación debe emanar del texto provisto.
-2. ROTACIÓN DE ESTILOS: Alterna estilos interactivos:
+1. Fidelidad temática al material: Las preguntas y opciones deben evaluar los conceptos clave del texto provisto.
+2. REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
+   - NO cites fragmentos, diapositivas, números de diapositiva ni uses frases como 'Referencia en el texto'.
+   - La justificación DEBE formularse como una búsqueda enciclopédica externa en Google/Wikipedia ("Google Overview") con exactamente 3 viñetas completas, gramaticalmente perfectas y con rigor científico universal.
+3. ROTACIÓN DE ESTILOS: Alterna estilos interactivos:
    - "multiple-choice": 4 opciones con distractores plausibles del texto. Incluye preguntas donde se deba señalar la afirmación falsa o el concepto equivocado ("¿Cuál es falsa?", "Señala el concepto equivocado", "Todas excepto...").
    - "matching": Emparejar 3 o 4 conceptos específicos con sus definiciones/roles.
    - "drag-drop": Oración con huecos {0}, {1} y banco de palabras con distractores.
    - "multi-select": 4 o 5 opciones con 2 o 3 respuestas a marcar (tanto para seleccionar las correctas como para seleccionar las afirmaciones falsas).
    - "image-labeling": Etiquetar zonas de un diagrama o esquema.
    - "true-false": Afirmación conceptual directa.
-3. EXTENSIÓN BALANCEADA: El 50% de las preguntas DEBEN tener enunciados CORTOS Y DIRECTOS (1 a 2 líneas concisas) para memorizar conceptos específicos; el otro 50% casos prácticos o de análisis.
-4. LÍMITES ESTRICTOS DE EXTENSIÓN (MÁXIMO 50 O 80 PALABRAS):
+4. EXTENSIÓN BALANCEADA: El 50% de las preguntas DEBEN tener enunciados CORTOS Y DIRECTOS (1 a 2 líneas concisas) para memorizar conceptos específicos; el otro 50% casos prácticos o de análisis.
+5. LÍMITES ESTRICTOS DE EXTENSIÓN (MÁXIMO 50 O 80 PALABRAS):
    - Todo enunciado estándar DEBE TENER UN MÁXIMO DE 50 PALABRAS. Evita redundancias o textos inflados.
    - Si describe un caso práctico, viñeta clínica o supuesto de hecho, el límite máximo se amplía hasta 80 PALABRAS MÁXIMO.
    - Cualquier enunciado que supere estos límites debe compactarse o recortarse.
-5. Tema Enfocado: ${topicQuery.trim() ? `TODAS las preguntas deben abordar exclusivamente: "${topicQuery.trim()}".` : 'Aborda los núcleos temáticos más desafiantes del documento.'}
+6. Tema Enfocado: ${topicQuery.trim() ? `TODAS las preguntas deben abordar exclusivamente: "${topicQuery.trim()}".` : 'Aborda los núcleos temáticos más desafiantes del documento.'}
 
 FORMATO DE SALIDA (JSON ÚNICAMENTE):
 {
@@ -3381,9 +3418,15 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
       ],
       "banco_etiquetas": ["Elemento A", "Elemento B"],
       "retroalimentacion": {
-        "referencia_al_texto": "Cita textual del fragmento que fundamenta la respuesta.",
-        "explicacion_logica": "Por qué esta opción es la correcta.",
-        "por_que_fallan_las_otras": "Diferenciación fina y sutil de por qué fallan los distractores."
+        "busqueda_google": {
+          "consulta": "¿Cómo funciona [concepto evaluado]?",
+          "tres_vinetas": [
+            "Primera viñeta con el fundamento factual directo de la respuesta correcta.",
+            "Segunda viñeta con el mecanismo de acción, vía analítica o justificación científica rigurosa.",
+            "Tercera viñeta con la aclaración conceptual que diferencia la opción correcta de las opciones erróneas."
+          ],
+          "termino_imagen": "Palabras clave concisas para buscar diagrama explicativo en la web"
+        }
       }
     }
   ]
@@ -3540,17 +3583,12 @@ Genera las ${count} preguntas en formato JSON estricto:`;
     const isCase = p.longitud_enunciado === 'medio_largo' || /\b(caso|supuesto|paciente|clínic|escenario)\b/i.test(fullQuestion);
     fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-    const retro = p.retroalimentacion || {};
-    const explanationParts: string[] = [];
-    if (retro.explicacion_logica) {
-      explanationParts.push(String(retro.explicacion_logica).trim());
-    }
-    if (retro.referencia_al_texto) {
-      explanationParts.push(`**Referencia en el texto:** "${String(retro.referencia_al_texto).trim()}"`);
-    }
-    if (retro.por_que_fallan_las_otras) {
-      explanationParts.push(`**Discriminación de distractores:** ${String(retro.por_que_fallan_las_otras).trim()}`);
-    }
+    const query = String(
+      p.retroalimentacion?.busqueda_google?.consulta ||
+      (p.concepto_evaluado ? `¿Cómo funciona ${p.concepto_evaluado}?` : p.pregunta || 'Fundamento conceptual')
+    ).trim();
+
+    const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query);
 
     let sourceChunkId = p.chunk_id_origen || undefined;
     let sourceChunkText: string | undefined = undefined;
@@ -3611,7 +3649,8 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       imageHotspots,
       imageWordBank,
       diagramTitle,
-      explanation: explanationParts.join('\n\n') || 'Explicación fundamentada en el texto.',
+      explanation,
+      googleOverview,
       sourceChunkId,
       sourceChunkText,
       sourcePageOrSlide,

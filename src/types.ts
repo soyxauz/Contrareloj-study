@@ -105,6 +105,8 @@ export interface GoogleOverview {
   imageSearchTerm?: string;
   imageUrl?: string;
   imageCaption?: string;
+  searchUrl?: string;
+  wikipediaUrl?: string;
 }
 
 export interface ShortAnswerEvaluation {
