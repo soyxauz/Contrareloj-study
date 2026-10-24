@@ -1,4 +1,4 @@
-import type { User, StudyKit, SmartStudySessionState, PodcastSettings } from '../types';
+import type { User, StudyKit, SmartStudySessionState, PodcastSettings, FlashcardProgressState } from '../types';
 import type { AISettings } from './aiService';
 import { DEFAULT_STUDY_KITS } from '../data/defaultKits';
 import {
@@ -774,6 +774,156 @@ export const authService = {
       }
     }
     return result;
+  },
+
+  /**
+   * Obtiene el progreso de flashcards guardado para el usuario y kit específicos (persistencia inmediata y total).
+   * Cuenta con fallback a sesión de invitado si no existe sesión para el usuario.
+   */
+  getFlashcardProgress(userId: string | null, kitId: string): FlashcardProgressState | null {
+    if (!kitId) return null;
+    try {
+      const userKey = `thea_fc_mem_${userId || 'guest'}_${kitId}`;
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(userKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && parsed.masteryMap) {
+          return parsed as FlashcardProgressState;
+        }
+      }
+      // Fallback a invitado si el usuario aún no tiene progreso registrado
+      if (userId) {
+        const guestKey = `thea_fc_mem_guest_${kitId}`;
+        const guestRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(guestKey) : null;
+        if (guestRaw) {
+          try {
+            const guestParsed = JSON.parse(guestRaw);
+            if (guestParsed && typeof guestParsed === 'object' && guestParsed.masteryMap) {
+              return guestParsed as FlashcardProgressState;
+            }
+          } catch {}
+        }
+      }
+      return null;
+    } catch (e) {
+      console.warn('[authService] Error al leer memoria de Flashcards:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Recupera de forma asíncrona el progreso de flashcards desde IndexedDB si LocalStorage fue purgado.
+   */
+  async restoreFlashcardProgressAsync(userId: string | null, kitId: string): Promise<FlashcardProgressState | null> {
+    if (!kitId) return null;
+    try {
+      const userKey = `thea_fc_mem_${userId || 'guest'}_${kitId}`;
+      const res = await getSessionItem<FlashcardProgressState>(userKey);
+      if (res && res.masteryMap) {
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem(userKey, JSON.stringify(res));
+          } catch {}
+        }
+        return res;
+      }
+      if (userId) {
+        const guestKey = `thea_fc_mem_guest_${kitId}`;
+        const guestRes = await getSessionItem<FlashcardProgressState>(guestKey);
+        if (guestRes && guestRes.masteryMap) {
+          return guestRes;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.warn('[authService] Error al restaurar memoria de Flashcards desde IndexedDB:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Guarda de forma atómica el progreso de flashcards en LocalStorage e IndexedDB en tiempo real.
+   */
+  saveFlashcardProgress(userId: string | null, kitId: string, state: FlashcardProgressState): void {
+    if (!kitId || !state) return;
+    try {
+      const userKey = `thea_fc_mem_${userId || 'guest'}_${kitId}`;
+      const cleanState: FlashcardProgressState = {
+        version: 1,
+        updatedAt: state.updatedAt || Date.now(),
+        kitId,
+        cards: state.cards,
+        archivedCards: state.archivedCards,
+        masteryMap: state.masteryMap || {},
+        currentIdx: state.currentIdx || 0,
+      };
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(userKey, JSON.stringify(cleanState));
+        } catch (err) {
+          notifyQuotaExceeded(err);
+        }
+      }
+      saveSessionItem(userKey, cleanState).catch(() => {});
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thea_flashcard_saved', {
+          detail: { userId, kitId, state: cleanState }
+        }));
+      }
+    } catch (e) {
+      console.warn('[authService] Error al guardar memoria de Flashcards:', e);
+    }
+  },
+
+  /**
+   * Obtiene todos los progresos de flashcards guardados para un usuario.
+   */
+  getAllFlashcardProgress(userId: string | null): Record<string, FlashcardProgressState> {
+    const result: Record<string, FlashcardProgressState> = {};
+    if (typeof localStorage === 'undefined') return result;
+    const prefix = `thea_fc_mem_${userId || 'guest'}_`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(prefix)) continue;
+      const kitId = key.substring(prefix.length);
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.masteryMap) {
+            result[kitId] = parsed;
+          }
+        }
+      } catch {}
+    }
+    return result;
+  },
+
+  /**
+   * Guarda o actualiza un lote completo de progresos de flashcards (ej. descargados de Google Drive).
+   */
+  saveAllFlashcardProgress(userId: string | null, progressMap: Record<string, FlashcardProgressState>): void {
+    if (!progressMap || typeof progressMap !== 'object') return;
+    for (const [kitId, state] of Object.entries(progressMap)) {
+      if (kitId && state && state.masteryMap) {
+        this.saveFlashcardProgress(userId, kitId, state);
+      }
+    }
+  },
+
+  /**
+   * Elimina el progreso de flashcards de un kit.
+   */
+  removeFlashcardProgress(userId: string | null, kitId: string): void {
+    if (!kitId) return;
+    const userKey = `thea_fc_mem_${userId || 'guest'}_${kitId}`;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(userKey);
+      } catch {}
+    }
+    removeSessionItem(userKey).catch(() => {});
   },
 
   /**

@@ -264,3 +264,13 @@ export interface SmartStudySessionState {
   seenQuestionIds?: string[];
 }
 
+export interface FlashcardProgressState {
+  version: 1;
+  updatedAt: number;
+  kitId: string;
+  cards?: Flashcard[];
+  archivedCards?: Flashcard[];
+  masteryMap: Record<string, 'to-learn' | 'known' | 'mastered'>;
+  currentIdx?: number;
+}
+

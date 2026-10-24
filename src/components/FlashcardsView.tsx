@@ -1,4 +1,5 @@
 import { googleDriveService } from '../services/googleDriveService';
+import { authService } from '../services/authService';
 import React, { useState, useEffect } from 'react';
 import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
 import {
@@ -418,22 +419,95 @@ const buildGuessWhoCases = (
 
 interface FlashcardsViewProps {
   kit: StudyKit;
+  userId?: string | null;
   onUpdateKit?: (updatedKit: StudyKit) => void;
 }
 
-export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit }) => {
-  const [cards, setCards] = useState<Flashcard[]>(kit.flashcards || []);
-  const [archivedCards, setArchivedCards] = useState<Flashcard[]>(kit.archivedFlashcards || []);
+export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = null, onUpdateKit }) => {
+  // Cargar progreso persistido de inmediato (síncrono desde LocalStorage, 0ms de latencia)
+  const savedProgress = authService.getFlashcardProgress(userId, kit.id);
+
+  const [cards, setCards] = useState<Flashcard[]>(() => {
+    const rawCards = (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0)
+      ? kit.flashcards
+      : (savedProgress?.cards && savedProgress.cards.length > 0 ? savedProgress.cards : []);
+
+    const map = savedProgress?.masteryMap;
+    if (!map) return rawCards;
+
+    return rawCards.map(c => {
+      const key = c.id || c.term;
+      const m = map[key];
+      return m ? { ...c, mastery: m } : c;
+    });
+  });
+
+  const [archivedCards, setArchivedCards] = useState<Flashcard[]>(() => {
+    if (kit.archivedFlashcards && Array.isArray(kit.archivedFlashcards) && kit.archivedFlashcards.length > 0) {
+      return kit.archivedFlashcards;
+    }
+    if (savedProgress?.archivedCards && savedProgress.archivedCards.length > 0) {
+      return savedProgress.archivedCards;
+    }
+    return [];
+  });
+
+  const [currentIdx, setCurrentIdx] = useState<number>(() => {
+    const rawCards = (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0)
+      ? kit.flashcards
+      : (savedProgress?.cards && savedProgress.cards.length > 0 ? savedProgress.cards : []);
+    const idx = savedProgress?.currentIdx || 0;
+    return (rawCards.length > 0 && idx < rawCards.length) ? idx : 0;
+  });
+
+  // Restaurar asíncronamente desde IndexedDB si LocalStorage fue purgado o tiene versión anterior
+  useEffect(() => {
+    authService.restoreFlashcardProgressAsync(userId, kit.id).then(idbProgress => {
+      if (!idbProgress || !idbProgress.masteryMap) return;
+
+      setCards(prevCards => {
+        const sourceCards = (prevCards.length > 0) ? prevCards : (idbProgress.cards || kit.flashcards || []);
+        const map = idbProgress.masteryMap;
+        return sourceCards.map(c => {
+          const key = c.id || c.term;
+          const m = map[key];
+          return m ? { ...c, mastery: m } : c;
+        });
+      });
+
+      if (idbProgress.archivedCards && idbProgress.archivedCards.length > 0) {
+        setArchivedCards(idbProgress.archivedCards);
+      }
+    }).catch(() => {});
+  }, [kit.id, userId]);
 
   // Sincronizar estado cuando el kit se actualiza o restaura desde IndexedDB / Drive
   useEffect(() => {
-    if (kit.flashcards && Array.isArray(kit.flashcards)) {
-      setCards(kit.flashcards);
+    const prog = authService.getFlashcardProgress(userId, kit.id);
+    const map = prog?.masteryMap || {};
+
+    if (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0) {
+      const merged = kit.flashcards.map(c => {
+        const key = c.id || c.term;
+        const m = map[key] || c.mastery;
+        return m ? { ...c, mastery: m } : c;
+      });
+      setCards(merged);
+    } else if (prog?.cards && prog.cards.length > 0) {
+      const merged = prog.cards.map(c => {
+        const key = c.id || c.term;
+        const m = map[key] || c.mastery;
+        return m ? { ...c, mastery: m } : c;
+      });
+      setCards(merged);
     }
-    if (kit.archivedFlashcards && Array.isArray(kit.archivedFlashcards)) {
+
+    if (kit.archivedFlashcards && Array.isArray(kit.archivedFlashcards) && kit.archivedFlashcards.length > 0) {
       setArchivedCards(kit.archivedFlashcards);
+    } else if (prog?.archivedCards && prog.archivedCards.length > 0) {
+      setArchivedCards(prog.archivedCards);
     }
-  }, [kit.id, kit.updatedAt]);
+  }, [kit.id, kit.updatedAt, userId]);
 
   // Al salir de la pantalla de flashcards, forzar guardado inmediato en Drive de cambios agrupados
   useEffect(() => {
@@ -441,7 +515,6 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
       googleDriveService.flushAutoSync();
     };
   }, []);
-  const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [gameMode, setGameMode] = useState<'study' | 'guess-who'>('study');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -488,6 +561,20 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
       );
       if (generated.length > 0) {
         setCards(generated);
+        const map: Record<string, 'to-learn' | 'known' | 'mastered'> = {};
+        generated.forEach(c => {
+          if (c.id) map[c.id] = c.mastery || 'to-learn';
+          if (c.term) map[c.term] = c.mastery || 'to-learn';
+        });
+        authService.saveFlashcardProgress(userId, kit.id, {
+          version: 1,
+          updatedAt: Date.now(),
+          kitId: kit.id,
+          cards: generated,
+          archivedCards: [],
+          masteryMap: map,
+          currentIdx: 0,
+        });
         if (onUpdateKit) {
           onUpdateKit({ ...kit, flashcards: generated });
         }
@@ -517,6 +604,21 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
       if (additional.length > 0) {
         const nextCards = [...cards, ...additional];
         setCards(nextCards);
+        const currentProgress = authService.getFlashcardProgress(userId, kit.id);
+        const currentMap = { ...(currentProgress?.masteryMap || {}) };
+        additional.forEach(c => {
+          if (c.id) currentMap[c.id] = c.mastery || 'to-learn';
+          if (c.term) currentMap[c.term] = c.mastery || 'to-learn';
+        });
+        authService.saveFlashcardProgress(userId, kit.id, {
+          version: 1,
+          updatedAt: Date.now(),
+          kitId: kit.id,
+          cards: nextCards,
+          archivedCards,
+          masteryMap: currentMap,
+          currentIdx,
+        });
         if (onUpdateKit) {
           onUpdateKit({ ...kit, flashcards: nextCards, archivedFlashcards: archivedCards });
         }
@@ -560,6 +662,23 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
       setCurrentIdx(0);
       setIsFlipped(false);
 
+      const currentProgress = authService.getFlashcardProgress(userId, kit.id);
+      const currentMap = { ...(currentProgress?.masteryMap || {}) };
+      freshBatch.forEach(c => {
+        if (c.id) currentMap[c.id] = c.mastery || 'to-learn';
+        if (c.term) currentMap[c.term] = c.mastery || 'to-learn';
+      });
+
+      authService.saveFlashcardProgress(userId, kit.id, {
+        version: 1,
+        updatedAt: Date.now(),
+        kitId: kit.id,
+        cards: nextCards,
+        archivedCards: newlyArchived,
+        masteryMap: currentMap,
+        currentIdx: 0,
+      });
+
       if (onUpdateKit) {
         onUpdateKit({
           ...kit,
@@ -599,6 +718,24 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
         // Regla: Añadir SIEMPRE a la baraja existente sin borrar las anteriores
         const nextCards = [...cards, ...freshBatch];
         setCards(nextCards);
+
+        const currentProgress = authService.getFlashcardProgress(userId, kit.id);
+        const currentMap = { ...(currentProgress?.masteryMap || {}) };
+        freshBatch.forEach(c => {
+          if (c.id) currentMap[c.id] = c.mastery || 'to-learn';
+          if (c.term) currentMap[c.term] = c.mastery || 'to-learn';
+        });
+
+        authService.saveFlashcardProgress(userId, kit.id, {
+          version: 1,
+          updatedAt: Date.now(),
+          kitId: kit.id,
+          cards: nextCards,
+          archivedCards,
+          masteryMap: currentMap,
+          currentIdx,
+        });
+
         if (onUpdateKit) {
           onUpdateKit({
             ...kit,
@@ -627,10 +764,28 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
     if (!cards || cards.length === 0) return;
     const targetIdx = currentIdx % cards.length;
+    const targetCard = cards[targetIdx];
     const updated = cards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
     setCards(updated);
     setIsFlipped(false);
-    setCurrentIdx(prev => (prev + 1) % cards.length);
+    const nextIdx = (targetIdx + 1) % cards.length;
+    setCurrentIdx(nextIdx);
+
+    // Actualizar mapa y persistir inmediatamente en almacenamiento dedicado
+    const currentProgress = authService.getFlashcardProgress(userId, kit.id);
+    const currentMap = { ...(currentProgress?.masteryMap || {}) };
+    if (targetCard.id) currentMap[targetCard.id] = mastery;
+    if (targetCard.term) currentMap[targetCard.term] = mastery;
+
+    authService.saveFlashcardProgress(userId, kit.id, {
+      version: 1,
+      updatedAt: Date.now(),
+      kitId: kit.id,
+      cards: updated,
+      archivedCards,
+      masteryMap: currentMap,
+      currentIdx: nextIdx,
+    });
 
     if (onUpdateKit) {
       onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
@@ -1356,7 +1511,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
               <span className="font-bold text-white">Tarjeta {currentIdx + 1} de {cards.length}</span>
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium">
-                  Por aprender: {cards.filter(c => c.mastery === 'to-learn').length}
+                  Por aprender: {cards.filter(c => c.mastery === 'to-learn' || !c.mastery).length}
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-amber-950 text-amber-300 font-medium">
                   Conocidas: {cards.filter(c => c.mastery === 'known').length}
@@ -1425,13 +1580,25 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
                       TÉRMINO CLAVE
                     </span>
                   )}
-                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
-                    isQuestionCard
-                      ? 'bg-cyan-900/40 border-cyan-500/30 text-cyan-300'
-                      : 'bg-violet-900/40 border-violet-500/30 text-violet-300'
-                  }`}>
-                    Frente
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {currentCard?.mastery === 'mastered' && (
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/70 text-emerald-300 font-bold text-[10px] shadow-sm">
+                        <Check className="w-3 h-3 text-emerald-400" /> ¡Dominada!
+                      </span>
+                    )}
+                    {currentCard?.mastery === 'known' && (
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/70 text-amber-300 font-bold text-[10px] shadow-sm">
+                        <Star className="w-3 h-3 text-amber-400" /> La conozco
+                      </span>
+                    )}
+                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
+                      isQuestionCard
+                        ? 'bg-cyan-900/40 border-cyan-500/30 text-cyan-300'
+                        : 'bg-violet-900/40 border-violet-500/30 text-violet-300'
+                    }`}>
+                      Frente
+                    </span>
+                  </div>
                 </div>
 
                 <div className="max-w-2xl w-full flex items-center justify-center my-auto py-4">
@@ -1470,13 +1637,25 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
                       DEFINICIÓN & CONCEPTO
                     </span>
                   )}
-                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
-                    isQuestionCard
-                      ? 'bg-sky-900/40 border-sky-500/30 text-sky-300'
-                      : 'bg-indigo-900/40 border-indigo-500/30 text-indigo-300'
-                  }`}>
-                    Reverso
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {currentCard?.mastery === 'mastered' && (
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/70 text-emerald-300 font-bold text-[10px] shadow-sm">
+                        <Check className="w-3 h-3 text-emerald-400" /> ¡Dominada!
+                      </span>
+                    )}
+                    {currentCard?.mastery === 'known' && (
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/70 text-amber-300 font-bold text-[10px] shadow-sm">
+                        <Star className="w-3 h-3 text-amber-400" /> La conozco
+                      </span>
+                    )}
+                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
+                      isQuestionCard
+                        ? 'bg-sky-900/40 border-sky-500/30 text-sky-300'
+                        : 'bg-indigo-900/40 border-indigo-500/30 text-indigo-300'
+                    }`}>
+                      Reverso
+                    </span>
+                  </div>
                 </div>
 
                 <div className="max-w-2xl w-full flex items-center justify-center my-auto py-4">

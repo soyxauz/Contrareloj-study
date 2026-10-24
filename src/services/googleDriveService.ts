@@ -1457,19 +1457,26 @@ export const googleDriveService = {
         }
       }
 
-      // 5. Procesar e integrar progreso de Smart Study (nivel, respuestas, historial)
+      // 5. Procesar e integrar progreso de Smart Study y Flashcards (nivel, respuestas, historial, dominadas)
       if (cloudProgress?.sessions && typeof cloudProgress.sessions === 'object') {
         authService.saveAllSmartStudySessions(userId, cloudProgress.sessions, cloudProgress.revealedQuestions);
+      }
+      if (cloudProgress?.flashcards && typeof cloudProgress.flashcards === 'object') {
+        authService.saveAllFlashcardProgress(userId, cloudProgress.flashcards);
+      }
 
+      if (cloudProgress) {
         // Subir inmediatamente la versión validada y saneada a Google Drive para limpiar la nube
         const cleanSessions = authService.getAllSmartStudySessions(userId);
         const cleanRevealed = authService.getAllRevealedQuestionIds(userId);
+        const cleanFlashcards = authService.getAllFlashcardProgress(userId);
         const cleanPayload = {
           version: 1,
           updatedAt: Date.now(),
           userId,
           sessions: cleanSessions,
           revealedQuestions: cleanRevealed,
+          flashcards: cleanFlashcards,
         };
         this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, cleanPayload).catch(err => {
           console.warn('[GoogleDriveService] Error actualizando progreso saneado en Drive:', err);
@@ -1663,12 +1670,14 @@ export const googleDriveService = {
       const lightweightKits = stripHeavyAssetsForLocalStorage(driveMergedKits);
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
+      const userFlashcards = authService.getAllFlashcardProgress(userId);
       const userProgressPayload = {
         version: 1,
         updatedAt: Date.now(),
         userId,
         sessions: userSessions,
         revealedQuestions: userRevealed,
+        flashcards: userFlashcards,
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
       const userMateriasFileName = `thea_materias_${userId}.json`;
@@ -1797,12 +1806,14 @@ export const googleDriveService = {
 
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
+      const userFlashcards = authService.getAllFlashcardProgress(userId);
       const userProgressPayload = {
         version: 1,
         updatedAt: Date.now(),
         userId,
         sessions: userSessions,
         revealedQuestions: userRevealed,
+        flashcards: userFlashcards,
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
 
@@ -2007,12 +2018,14 @@ export const googleDriveService = {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
+      const userFlashcards = authService.getAllFlashcardProgress(userId);
       const userProgressPayload = {
         version: 1,
         updatedAt: Date.now(),
         userId,
         sessions: userSessions,
         revealedQuestions: userRevealed,
+        flashcards: userFlashcards,
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
       await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);

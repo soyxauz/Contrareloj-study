@@ -488,27 +488,29 @@ export const App: React.FC = () => {
     googleDriveService.scheduleAutoSync(currentUser.id, kits, 7000);
   }, [kits, currentUser]);
 
-  // Respaldo en segundo plano del progreso de Smart Study hacia Google Drive en tiempo real
+  // Respaldo en segundo plano del progreso de Smart Study y Flashcards hacia Google Drive en tiempo real
   useEffect(() => {
     if (!currentUser) return;
     let debounceTimer: any = null;
 
-    const handleSessionSaved = () => {
+    const handleProgressSaved = () => {
       if (isLoggingOutRef.current) return;
       if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
 
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         googleDriveService.pushProgressToDrive(currentUser.id).catch((err) => {
-          console.warn('[App] Error al sincronizar progreso de Smart Study en Google Drive:', err);
+          console.warn('[App] Error al sincronizar progreso en Google Drive:', err);
         });
       }, 2500);
     };
 
-    window.addEventListener('thea_session_saved', handleSessionSaved);
+    window.addEventListener('thea_session_saved', handleProgressSaved);
+    window.addEventListener('thea_flashcard_saved', handleProgressSaved);
     return () => {
       clearTimeout(debounceTimer);
-      window.removeEventListener('thea_session_saved', handleSessionSaved);
+      window.removeEventListener('thea_session_saved', handleProgressSaved);
+      window.removeEventListener('thea_flashcard_saved', handleProgressSaved);
     };
   }, [currentUser]);
 
@@ -779,6 +781,7 @@ export const App: React.FC = () => {
 
   const handleDeleteKit = (kitId: string) => {
     recordDeletedKitId(kitId);
+    authService.removeFlashcardProgress(currentUser ? currentUser.id : null, kitId);
     const updated = kits.filter(k => k.id !== kitId);
     setKits(updated);
     try {
@@ -954,7 +957,12 @@ export const App: React.FC = () => {
             )}
             {currentMode === 'tests' && <PracticeTestView key={currentKit.id} kit={currentKit} />}
             {currentMode === 'flashcards' && (
-              <FlashcardsView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />
+              <FlashcardsView
+                key={currentKit.id}
+                kit={currentKit}
+                userId={currentUser?.id || null}
+                onUpdateKit={handleUpdateKit}
+              />
             )}
             {currentMode === 'analytics' && (
               <AnalyticsView

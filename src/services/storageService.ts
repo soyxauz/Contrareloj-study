@@ -667,6 +667,29 @@ export async function getKitsFromIndexedDB(key: string): Promise<StudyKit[] | nu
 }
 
 /**
+ * Consulta la memoria persistente de flashcards para garantizar que las tarjetas
+ * marcadas como dominadas o conocidas nunca retrocedan durante una fusion.
+ */
+function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' | 'known' | 'mastered') | null {
+  if (typeof localStorage === 'undefined' || !kitId || !cardKey) return null;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.includes('_fc_mem_') && k.endsWith(`_${kitId}`)) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.masteryMap && parsed.masteryMap[cardKey]) {
+            return parsed.masteryMap[cardKey];
+          }
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/**
  * Fusión acumulativa estricta por ID y marca temporal updatedAt (el más reciente gana).
  * Respeta la lista negra de kits eliminados y PRESERVA SIEMPRE los dataUrls de activos para que nunca se deshidraten.
  */
@@ -719,9 +742,11 @@ export function mergeKitsByUpdatedAt(
     const mergedFlashcards = rawFlashcards.map(f => {
       const fromExist = existingFlashcardsMap.get(f.id || f.term);
       const fromIn = incomingFlashcardsMap.get(f.id || f.term);
-      const mastery = (incomingTime >= existingTime)
+      const cardKey = f.id || f.term;
+      const dedicatedMastery = getSavedFlashcardMastery(kit.id, cardKey);
+      const mastery = dedicatedMastery || (incomingTime >= existingTime
         ? (fromIn?.mastery || f.mastery || fromExist?.mastery || 'to-learn')
-        : (fromExist?.mastery || f.mastery || fromIn?.mastery || 'to-learn');
+        : (fromExist?.mastery || f.mastery || fromIn?.mastery || 'to-learn'));
 
       let sourceAsset = f.sourceAsset;
       if (sourceAsset && !sourceAsset.dataUrl && fromExist?.sourceAsset?.dataUrl) {
