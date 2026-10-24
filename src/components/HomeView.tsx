@@ -444,9 +444,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
       setStatsVersion(v => v + 1);
     };
     window.addEventListener('thea_session_saved', handleProgressUpdate);
+    window.addEventListener('thea_flashcard_saved', handleProgressUpdate);
     window.addEventListener('thea_progress_synced', handleProgressUpdate);
     return () => {
       window.removeEventListener('thea_session_saved', handleProgressUpdate);
+      window.removeEventListener('thea_flashcard_saved', handleProgressUpdate);
       window.removeEventListener('thea_progress_synced', handleProgressUpdate);
     };
   }, []);

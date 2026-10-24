@@ -427,27 +427,38 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   // Cargar progreso persistido de inmediato (síncrono desde LocalStorage, 0ms de latencia)
   const savedProgress = authService.getFlashcardProgress(userId, kit.id);
 
+  const getCardMastery = (card: Flashcard, map?: Record<string, 'to-learn' | 'known' | 'mastered'> | null): 'to-learn' | 'known' | 'mastered' => {
+    if (!map) return card.mastery || 'to-learn';
+    const cleanTerm = card.term ? card.term.trim() : '';
+    const cleanLower = cleanTerm.toLowerCase();
+    return (
+      (card.id && map[card.id]) ||
+      (card.term && map[card.term]) ||
+      (cleanTerm && map[cleanTerm]) ||
+      (cleanLower && map[cleanLower]) ||
+      card.mastery ||
+      'to-learn'
+    );
+  };
+
   const [cards, setCards] = useState<Flashcard[]>(() => {
     const rawCards = (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0)
       ? kit.flashcards
       : (savedProgress?.cards && savedProgress.cards.length > 0 ? savedProgress.cards : []);
 
     const map = savedProgress?.masteryMap;
-    if (!map) return rawCards;
-
-    return rawCards.map(c => {
-      const key = c.id || c.term;
-      const m = map[key];
-      return m ? { ...c, mastery: m } : c;
-    });
+    return rawCards.map(c => ({
+      ...c,
+      mastery: getCardMastery(c, map),
+    }));
   });
 
   const [archivedCards, setArchivedCards] = useState<Flashcard[]>(() => {
-    if (kit.archivedFlashcards && Array.isArray(kit.archivedFlashcards) && kit.archivedFlashcards.length > 0) {
-      return kit.archivedFlashcards;
-    }
     if (savedProgress?.archivedCards && savedProgress.archivedCards.length > 0) {
       return savedProgress.archivedCards;
+    }
+    if (kit.archivedFlashcards && Array.isArray(kit.archivedFlashcards) && kit.archivedFlashcards.length > 0) {
+      return kit.archivedFlashcards;
     }
     return [];
   });
@@ -468,38 +479,32 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       setCards(prevCards => {
         const sourceCards = (prevCards.length > 0) ? prevCards : (idbProgress.cards || kit.flashcards || []);
         const map = idbProgress.masteryMap;
-        return sourceCards.map(c => {
-          const key = c.id || c.term;
-          const m = map[key];
-          return m ? { ...c, mastery: m } : c;
-        });
+        return sourceCards.map(c => ({
+          ...c,
+          mastery: getCardMastery(c, map),
+        }));
       });
 
       if (idbProgress.archivedCards && idbProgress.archivedCards.length > 0) {
-        setArchivedCards(idbProgress.archivedCards);
+        setArchivedCards(prev => (prev.length > 0 ? prev : idbProgress.archivedCards!));
       }
     }).catch(() => {});
   }, [kit.id, userId]);
 
-  // Sincronizar estado cuando el kit se actualiza o restaura desde IndexedDB / Drive
+  // Sincronizar estado cuando se abre o cambia de kit o de usuario
   useEffect(() => {
     const prog = authService.getFlashcardProgress(userId, kit.id);
     const map = prog?.masteryMap || {};
 
-    if (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0) {
-      const merged = kit.flashcards.map(c => {
-        const key = c.id || c.term;
-        const m = map[key] || c.mastery;
-        return m ? { ...c, mastery: m } : c;
-      });
-      setCards(merged);
-    } else if (prog?.cards && prog.cards.length > 0) {
-      const merged = prog.cards.map(c => {
-        const key = c.id || c.term;
-        const m = map[key] || c.mastery;
-        return m ? { ...c, mastery: m } : c;
-      });
-      setCards(merged);
+    const rawCards = (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0)
+      ? kit.flashcards
+      : (prog?.cards && prog.cards.length > 0 ? prog.cards : []);
+
+    if (rawCards.length > 0) {
+      setCards(rawCards.map(c => ({
+        ...c,
+        mastery: getCardMastery(c, map),
+      })));
     }
 
     if (kit.archivedFlashcards && Array.isArray(kit.archivedFlashcards) && kit.archivedFlashcards.length > 0) {
@@ -507,7 +512,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     } else if (prog?.archivedCards && prog.archivedCards.length > 0) {
       setArchivedCards(prog.archivedCards);
     }
-  }, [kit.id, kit.updatedAt, userId]);
+  }, [kit.id, userId]);
 
   // Al salir de la pantalla de flashcards, forzar guardado inmediato en Drive de cambios agrupados
   useEffect(() => {
@@ -762,34 +767,42 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     Boolean(currentCard?.term && /^\s*¿|\?\s*$/.test(currentCard.term));
 
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
-    if (!cards || cards.length === 0) return;
-    const targetIdx = currentIdx % cards.length;
-    const targetCard = cards[targetIdx];
-    const updated = cards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
-    setCards(updated);
-    setIsFlipped(false);
-    const nextIdx = (targetIdx + 1) % cards.length;
-    setCurrentIdx(nextIdx);
+    setCards(prevCards => {
+      if (!prevCards || prevCards.length === 0) return prevCards;
+      const targetIdx = currentIdx % prevCards.length;
+      const targetCard = prevCards[targetIdx];
+      const updated = prevCards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
+      const nextIdx = (targetIdx + 1) % prevCards.length;
 
-    // Actualizar mapa y persistir inmediatamente en almacenamiento dedicado
-    const currentProgress = authService.getFlashcardProgress(userId, kit.id);
-    const currentMap = { ...(currentProgress?.masteryMap || {}) };
-    if (targetCard.id) currentMap[targetCard.id] = mastery;
-    if (targetCard.term) currentMap[targetCard.term] = mastery;
+      setIsFlipped(false);
+      setCurrentIdx(nextIdx);
 
-    authService.saveFlashcardProgress(userId, kit.id, {
-      version: 1,
-      updatedAt: Date.now(),
-      kitId: kit.id,
-      cards: updated,
-      archivedCards,
-      masteryMap: currentMap,
-      currentIdx: nextIdx,
+      // Actualizar mapa y persistir inmediatamente en almacenamiento dedicado
+      const currentProgress = authService.getFlashcardProgress(userId, kit.id);
+      const currentMap = { ...(currentProgress?.masteryMap || {}) };
+      if (targetCard.id) currentMap[targetCard.id] = mastery;
+      if (targetCard.term) {
+        currentMap[targetCard.term] = mastery;
+        currentMap[targetCard.term.trim()] = mastery;
+        currentMap[targetCard.term.trim().toLowerCase()] = mastery;
+      }
+
+      authService.saveFlashcardProgress(userId, kit.id, {
+        version: 1,
+        updatedAt: Date.now(),
+        kitId: kit.id,
+        cards: updated,
+        archivedCards,
+        masteryMap: currentMap,
+        currentIdx: nextIdx,
+      });
+
+      if (onUpdateKit) {
+        onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
+      }
+
+      return updated;
     });
-
-    if (onUpdateKit) {
-      onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
-    }
   };
 
   const handlePrevCard = () => {

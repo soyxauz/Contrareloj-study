@@ -673,14 +673,19 @@ export async function getKitsFromIndexedDB(key: string): Promise<StudyKit[] | nu
 function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' | 'known' | 'mastered') | null {
   if (typeof localStorage === 'undefined' || !kitId || !cardKey) return null;
   try {
+    const cleanKey = cardKey.trim();
+    const lowerKey = cleanKey.toLowerCase();
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.includes('_fc_mem_') && k.endsWith(`_${kitId}`)) {
         const raw = localStorage.getItem(k);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed?.masteryMap && parsed.masteryMap[cardKey]) {
-            return parsed.masteryMap[cardKey];
+          const map = parsed?.masteryMap;
+          if (map) {
+            if (map[cardKey]) return map[cardKey];
+            if (map[cleanKey]) return map[cleanKey];
+            if (map[lowerKey]) return map[lowerKey];
           }
         }
       }

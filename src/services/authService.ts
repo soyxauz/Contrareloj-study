@@ -812,7 +812,8 @@ export const authService = {
   },
 
   /**
-   * Recupera de forma asíncrona el progreso de flashcards desde IndexedDB si LocalStorage fue purgado.
+   * Recupera de forma asincrona el progreso de flashcards desde IndexedDB si LocalStorage fue purgado.
+   * Nunca sobreescribe si LocalStorage ya posee un estado mas reciente en memoria o almacenamiento.
    */
   async restoreFlashcardProgressAsync(userId: string | null, kitId: string): Promise<FlashcardProgressState | null> {
     if (!kitId) return null;
@@ -822,6 +823,20 @@ export const authService = {
       if (res && res.masteryMap) {
         if (typeof localStorage !== 'undefined') {
           try {
+            const localRaw = localStorage.getItem(userKey);
+            if (localRaw) {
+              const localParsed = JSON.parse(localRaw);
+              if (localParsed && (localParsed.updatedAt || 0) >= (res.updatedAt || 0)) {
+                // Preservar estado local mas nuevo y fusionar mapas
+                const mergedMap = { ...(res.masteryMap || {}), ...(localParsed.masteryMap || {}) };
+                const mergedState: FlashcardProgressState = {
+                  ...localParsed,
+                  masteryMap: mergedMap,
+                };
+                localStorage.setItem(userKey, JSON.stringify(mergedState));
+                return mergedState;
+              }
+            }
             localStorage.setItem(userKey, JSON.stringify(res));
           } catch {}
         }
@@ -842,21 +857,40 @@ export const authService = {
   },
 
   /**
-   * Guarda de forma atómica el progreso de flashcards en LocalStorage e IndexedDB en tiempo real.
+   * Guarda de forma atomica el progreso de flashcards en LocalStorage e IndexedDB en tiempo real.
+   * Normaliza claves de tarjetas (id, term y term en minusculas) para que ninguna modificacion se pierda.
    */
   saveFlashcardProgress(userId: string | null, kitId: string, state: FlashcardProgressState): void {
     if (!kitId || !state) return;
     try {
       const userKey = `thea_fc_mem_${userId || 'guest'}_${kitId}`;
+      const rawMap = state.masteryMap || {};
+      const normalizedMap: Record<string, 'to-learn' | 'known' | 'mastered'> = { ...rawMap };
+
+      if (state.cards && Array.isArray(state.cards)) {
+        state.cards.forEach(c => {
+          const m = c.mastery;
+          if (m) {
+            if (c.id) normalizedMap[c.id] = m;
+            if (c.term) {
+              normalizedMap[c.term] = m;
+              normalizedMap[c.term.trim()] = m;
+              normalizedMap[c.term.trim().toLowerCase()] = m;
+            }
+          }
+        });
+      }
+
       const cleanState: FlashcardProgressState = {
         version: 1,
         updatedAt: state.updatedAt || Date.now(),
         kitId,
         cards: state.cards,
         archivedCards: state.archivedCards,
-        masteryMap: state.masteryMap || {},
-        currentIdx: state.currentIdx || 0,
+        masteryMap: normalizedMap,
+        currentIdx: typeof state.currentIdx === 'number' ? state.currentIdx : 0,
       };
+
       if (typeof localStorage !== 'undefined') {
         try {
           localStorage.setItem(userKey, JSON.stringify(cleanState));

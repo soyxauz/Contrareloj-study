@@ -158,10 +158,29 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     : (typeof session?.levelCorrectCount === 'number' ? session.levelCorrectCount : 0);
   const smartStudyProgressPercent = Math.min(100, Math.round((levelCorrectCount / levelTarget) * 100));
 
-  const flashcardsTotal = kit.flashcards ? kit.flashcards.length : 0;
-  const flashcardsMastered = kit.flashcards ? kit.flashcards.filter(f => f.mastery === 'mastered').length : 0;
-  const flashcardsKnown = kit.flashcards ? kit.flashcards.filter(f => f.mastery === 'known').length : 0;
-  const flashcardsToLearn = kit.flashcards ? kit.flashcards.filter(f => f.mastery === 'to-learn').length : 0;
+  const flashcardProgress = authService.getFlashcardProgress(userId, kit.id);
+  const flashcardMap = flashcardProgress?.masteryMap || {};
+  const activeFlashcards = (kit.flashcards && kit.flashcards.length > 0)
+    ? kit.flashcards
+    : (flashcardProgress?.cards || []);
+
+  const flashcardsTotal = activeFlashcards.length;
+  let flashcardsMastered = 0;
+  let flashcardsKnown = 0;
+  let flashcardsToLearn = 0;
+
+  activeFlashcards.forEach(f => {
+    const termClean = f.term ? f.term.trim() : '';
+    const m = (f.id && flashcardMap[f.id]) ||
+              (f.term && flashcardMap[f.term]) ||
+              (termClean && flashcardMap[termClean]) ||
+              (termClean && flashcardMap[termClean.toLowerCase()]) ||
+              f.mastery ||
+              'to-learn';
+    if (m === 'mastered') flashcardsMastered++;
+    else if (m === 'known') flashcardsKnown++;
+    else flashcardsToLearn++;
+  });
 
   const chunksCount = kit.chunks ? kit.chunks.length : 0;
   const assetsCount = kit.assets ? kit.assets.length : 0;
