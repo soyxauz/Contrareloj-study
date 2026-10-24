@@ -1,4 +1,4 @@
-import type { DocumentAsset, StudyKit } from '../types';
+import type { DocumentAsset, StudyKit, Flashcard } from '../types';
 
 /**
  * Servicio de persistencia de activos pesados en IndexedDB.
@@ -713,15 +713,36 @@ export function mergeKitsByUpdatedAt(
       ? ((existing.flashcards && existing.flashcards.length > kit.flashcards.length && existingTime > incomingTime) ? existing.flashcards : kit.flashcards)
       : (existing.flashcards || []);
 
+    const existingFlashcardsMap = new Map((existing.flashcards || []).map(f => [f.id || f.term, f]));
+    const incomingFlashcardsMap = new Map((kit.flashcards || []).map(f => [f.id || f.term, f]));
+
     const mergedFlashcards = rawFlashcards.map(f => {
-      if (f.sourceAsset && !f.sourceAsset.dataUrl) {
-        const fromExist = existing.flashcards?.find(ef => ef.id === f.id || ef.term === f.term)?.sourceAsset;
-        if (fromExist?.dataUrl) {
-          return { ...f, sourceAsset: { ...f.sourceAsset, dataUrl: fromExist.dataUrl } };
-        }
+      const fromExist = existingFlashcardsMap.get(f.id || f.term);
+      const fromIn = incomingFlashcardsMap.get(f.id || f.term);
+      const mastery = (incomingTime >= existingTime)
+        ? (fromIn?.mastery || f.mastery || fromExist?.mastery || 'to-learn')
+        : (fromExist?.mastery || f.mastery || fromIn?.mastery || 'to-learn');
+
+      let sourceAsset = f.sourceAsset;
+      if (sourceAsset && !sourceAsset.dataUrl && fromExist?.sourceAsset?.dataUrl) {
+        sourceAsset = { ...sourceAsset, dataUrl: fromExist.sourceAsset.dataUrl };
+      } else if (!sourceAsset && fromExist?.sourceAsset) {
+        sourceAsset = fromExist.sourceAsset;
       }
-      return f;
+      return {
+        ...fromExist,
+        ...f,
+        mastery,
+        sourceAsset,
+      };
     });
+
+    const existingArchived = existing.archivedFlashcards || [];
+    const incomingArchived = kit.archivedFlashcards || [];
+    const archivedMap = new Map<string, Flashcard>();
+    existingArchived.forEach(c => archivedMap.set(c.id || c.term, c));
+    incomingArchived.forEach(c => archivedMap.set(c.id || c.term, c));
+    const mergedArchived = Array.from(archivedMap.values());
 
     // En activos, preservar estrictamente cualquier dataUrl ya cargado o existente para no deshidratar
     const candidateAssets = (kit.assets && kit.assets.length > 0)
@@ -758,6 +779,7 @@ export function mergeKitsByUpdatedAt(
         updatedAt: incomingTime,
         questions: mergedQuestions,
         flashcards: mergedFlashcards,
+        archivedFlashcards: mergedArchived,
         assets: mergedAssets,
         studyGuideMarkdown: mergedGuide,
         podcast: mergedPodcast,
@@ -769,6 +791,7 @@ export function mergeKitsByUpdatedAt(
         updatedAt: existingTime,
         questions: mergedQuestions,
         flashcards: mergedFlashcards,
+        archivedFlashcards: mergedArchived,
         assets: mergedAssets,
         studyGuideMarkdown: mergedGuide,
         podcast: mergedPodcast,

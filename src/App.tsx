@@ -162,8 +162,18 @@ export const App: React.FC = () => {
           const targetId = prev ? prev.id : savedCurrentId;
           const fullKit = cleanKits.find(k => k.id === targetId);
 
-          if (fullKit && (fullKit.questions?.length || 0) > (prev?.questions?.length || 0)) {
-            return fullKit;
+          if (fullKit) {
+            if (!prev) return fullKit;
+            const fullTime = fullKit.updatedAt || 0;
+            const prevTime = prev.updatedAt || 0;
+            if (
+              fullTime >= prevTime ||
+              (fullKit.questions?.length || 0) > (prev.questions?.length || 0) ||
+              (fullKit.flashcards?.length || 0) > (prev.flashcards?.length || 0) ||
+              (fullKit.archivedFlashcards?.length || 0) > (prev.archivedFlashcards?.length || 0)
+            ) {
+              return fullKit;
+            }
           }
 
           if (!prev) {
@@ -219,6 +229,9 @@ export const App: React.FC = () => {
         const userId = activeUser ? activeUser.id : null;
         if (kits && kits.length > 0) {
           authService.flushKitsSync(userId, kits);
+          if (userId) {
+            googleDriveService.flushAutoSync(userId, kits);
+          }
         }
       } catch (e) {
         console.warn('[App] Error en safety flush:', e);
@@ -296,6 +309,10 @@ export const App: React.FC = () => {
   };
 
   const handleSelectMode = (mode: StudyMode, pushToHistory = true) => {
+    // Forzar guardado en Drive al cambiar de modo si había cambios pendientes
+    if (currentUser?.id) {
+      googleDriveService.flushAutoSync(currentUser.id, kits);
+    }
     // Revocar activamente audios en memoria al cambiar de vista o de sección de estudio
     if (mode !== currentMode) {
       revokeAllAzureAudioUrls();
@@ -442,7 +459,10 @@ export const App: React.FC = () => {
             setCurrentKit(prev => {
               if (!prev) return clean[0];
               const match = clean.find(k => k.id === prev.id);
-              return match || prev;
+              if (match) {
+                return mergeKitsByUpdatedAt([prev], [match])[0] || prev;
+              }
+              return prev;
             });
           }
         }
@@ -465,13 +485,7 @@ export const App: React.FC = () => {
     if (!isHydratedRef.current) return;
     if (Date.now() < startupGracePeriodRef.current) return;
 
-    const timer = setTimeout(() => {
-      googleDriveService.pushToDrive(currentUser.id, kits).catch((err) => {
-        console.warn('[App] Error en sincronización en segundo plano con Google Drive:', err);
-      });
-    }, 1200);
-
-    return () => clearTimeout(timer);
+    googleDriveService.scheduleAutoSync(currentUser.id, kits, 7000);
   }, [kits, currentUser]);
 
   // Respaldo en segundo plano del progreso de Smart Study hacia Google Drive en tiempo real
@@ -750,8 +764,12 @@ export const App: React.FC = () => {
     setKits(prev => {
       const next = prev.map(k => (k.id === kitWithTime.id ? kitWithTime : k));
       try {
-        authService.saveUserKits(currentUser ? currentUser.id : null, next);
-        authService.saveUserKitsAsync(currentUser ? currentUser.id : null, next).catch(() => {});
+        const userId = currentUser ? currentUser.id : null;
+        authService.saveUserKits(userId, next);
+        authService.saveUserKitsAsync(userId, next).catch(() => {});
+        if (userId) {
+          googleDriveService.scheduleAutoSync(userId, next, 7000);
+        }
       } catch (e) {
         console.error('Error al guardar Study Kits tras actualizar:', e);
       }

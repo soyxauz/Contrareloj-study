@@ -2079,18 +2079,39 @@ export const googleDriveService = {
   /**
    * Programa la sincronización automática hacia Google Drive con debounce configurable.
    */
-  scheduleAutoSync(userId: string, kits: StudyKit[], delayMs: number = 1500): void {
+  scheduleAutoSync(userId: string, kits: StudyKit[], delayMs: number = 7000): void {
     if (!userId || userId === 'guest') return;
+    globalDrivePendingKits = kits;
+    globalDrivePendingUserId = userId;
     if (globalDriveDebounceTimer) clearTimeout(globalDriveDebounceTimer);
     globalDriveDebounceTimer = setTimeout(() => {
-      this.pushToDrive(userId, kits).catch(err => {
-        console.warn('[GoogleDriveService] Error en scheduleAutoSync:', err);
-      });
+      this.flushAutoSync(userId, kits);
     }, delayMs);
+  },
+
+  flushAutoSync(userId?: string, kits?: StudyKit[]): void {
+    if (globalDriveDebounceTimer) {
+      clearTimeout(globalDriveDebounceTimer);
+      globalDriveDebounceTimer = null;
+    }
+    const targetUserId = userId || globalDrivePendingUserId || authService.getCurrentUser()?.id;
+    if (!targetUserId || targetUserId === 'guest') return;
+
+    const targetKits = kits || globalDrivePendingKits || authService.getUserKits(targetUserId);
+    globalDrivePendingKits = null;
+    globalDrivePendingUserId = null;
+
+    if (targetKits && targetKits.length > 0) {
+      this.pushToDrive(targetUserId, targetKits).catch(err => {
+        console.warn('[GoogleDriveService] Error en flushAutoSync:', err);
+      });
+    }
   },
 };
 
 let globalDriveDebounceTimer: any = null;
+let globalDrivePendingKits: StudyKit[] | null = null;
+let globalDrivePendingUserId: string | null = null;
 
 // Registrar el descargador prioritario de activos en storageService para hidratar imágenes automáticamente
 registerDriveAssetDownloader((assetIds) => googleDriveService.prioritizeAssetsDownload(assetIds));

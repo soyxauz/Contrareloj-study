@@ -1,3 +1,4 @@
+import { googleDriveService } from '../services/googleDriveService';
 import React, { useState, useEffect } from 'react';
 import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
 import {
@@ -423,6 +424,23 @@ interface FlashcardsViewProps {
 export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit }) => {
   const [cards, setCards] = useState<Flashcard[]>(kit.flashcards || []);
   const [archivedCards, setArchivedCards] = useState<Flashcard[]>(kit.archivedFlashcards || []);
+
+  // Sincronizar estado cuando el kit se actualiza o restaura desde IndexedDB / Drive
+  useEffect(() => {
+    if (kit.flashcards && Array.isArray(kit.flashcards)) {
+      setCards(kit.flashcards);
+    }
+    if (kit.archivedFlashcards && Array.isArray(kit.archivedFlashcards)) {
+      setArchivedCards(kit.archivedFlashcards);
+    }
+  }, [kit.id, kit.updatedAt]);
+
+  // Al salir de la pantalla de flashcards, forzar guardado inmediato en Drive de cambios agrupados
+  useEffect(() => {
+    return () => {
+      googleDriveService.flushAutoSync();
+    };
+  }, []);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [gameMode, setGameMode] = useState<'study' | 'guess-who'>('study');
@@ -607,15 +625,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, onUpdateKit
     Boolean(currentCard?.term && /^\s*¿|\?\s*$/.test(currentCard.term));
 
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
-    setCards(prev => {
-      const updated = prev.map((c, i) => (i === currentIdx ? { ...c, mastery } : c));
-      if (onUpdateKit) {
-        onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
-      }
-      return updated;
-    });
+    if (!cards || cards.length === 0) return;
+    const targetIdx = currentIdx % cards.length;
+    const updated = cards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
+    setCards(updated);
     setIsFlipped(false);
     setCurrentIdx(prev => (prev + 1) % cards.length);
+
+    if (onUpdateKit) {
+      onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
+    }
   };
 
   const handlePrevCard = () => {
