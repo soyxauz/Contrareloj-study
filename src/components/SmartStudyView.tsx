@@ -35,14 +35,12 @@ import {
   FileCheck2,
   Home,
   ChevronDown,
-  ChevronUp,
   ZoomIn,
   CheckCheck,
   Send,
-  Search,
-  ExternalLink,
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
+import { TheaExplanationView } from './TheaExplanationView';
 import confetti from 'canvas-confetti';
 import {
   generateAIPedagogicalQuestions,
@@ -113,193 +111,8 @@ interface SmartStudyViewProps {
   onNavigate?: (mode: StudyMode) => void;
 }
 
-interface GoogleSearchOverviewCardProps {
-  question: Question;
-  kitAssets?: DocumentAsset[];
-  onZoomImage?: (asset: DocumentAsset) => void;
-}
-
-export const GoogleSearchOverviewCard: React.FC<GoogleSearchOverviewCardProps> = ({
-  question,
-  kitAssets = [],
-  onZoomImage,
-}) => {
-  // 1. Resolver la consulta de búsqueda de Google
-  let query = question.googleOverview?.query;
-  if (!query) {
-    const match = question.explanation.match(/### Búsqueda en Google:\s*["“']?([^"”'\n]+)["”']?/i);
-    if (match) {
-      query = match[1].trim();
-    } else {
-      const bestAnswer =
-        question.options && question.correctIndex !== undefined
-          ? question.options[question.correctIndex]
-          : question.idealAnswer || '';
-      query = question.topic
-        ? `${question.topic}: ${bestAnswer ? bestAnswer.slice(0, 50) : question.question.slice(0, 50)}`
-        : question.question.slice(0, 65);
-    }
-  }
-
-  // 2. Resolver exactamente 3 viñetas destacadas
-  let bullets: string[] = [];
-  if (question.googleOverview?.bullets && question.googleOverview.bullets.length >= 2) {
-    bullets = question.googleOverview.bullets.slice(0, 3);
-  } else {
-    const rawBullets = question.explanation.match(/(?:> •|•|\*|-|\d+\.)\s*([^\n]+)/g);
-    if (rawBullets && rawBullets.length >= 2) {
-      bullets = rawBullets.slice(0, 3).map(b => b.replace(/^(?:> •|•|\*|-|\d+\.)\s*/, '').trim());
-    }
-  }
-
-  if (bullets.length < 3) {
-    const parts = question.explanation
-      .split('\n\n')
-      .map(p => p.replace(/[#*`>]/g, '').trim())
-      .filter(p => p.length > 20 && !p.toLowerCase().includes('búsqueda en google'));
-
-    const correctText =
-      question.options && question.correctIndex !== undefined
-        ? question.options[question.correctIndex]
-        : question.idealAnswer || 'Fundamento exacto del concepto evaluado.';
-
-    bullets = [
-      `Respuesta directa y veredicto: ${correctText}`,
-      parts[0] ? (parts[0].length > 140 ? parts[0].slice(0, 140) + '...' : parts[0]) : 'Principio causal y fisiológico verificado en el material de estudio.',
-      parts[1] ? (parts[1].length > 140 ? parts[1].slice(0, 140) + '...' : parts[1]) : 'Conclusión distintiva contrastada frente a las alternativas evaluadas.',
-    ];
-  }
-
-  while (bullets.length < 3) {
-    bullets.push('Evidencia corroborada por la bibliografía oficial del documento.');
-  }
-
-  // 3. Resolver mínimo 1 imagen relevante
-  let displayAsset: DocumentAsset | undefined = question.sourceAsset?.dataUrl ? question.sourceAsset : undefined;
-
-  if (!displayAsset && question.sourcePageOrSlide && kitAssets.length > 0) {
-    displayAsset = kitAssets.find(a => a.pageOrSlide === question.sourcePageOrSlide && a.dataUrl);
-  }
-
-  if (!displayAsset && kitAssets.length > 0) {
-    const keywords = (question.topic + ' ' + query).toLowerCase().split(/\s+/).filter(w => w.length > 3);
-    displayAsset = kitAssets.find(a => {
-      if (!a.dataUrl) return false;
-      const text = ((a.caption || '') + ' ' + (a.contextNearby || '')).toLowerCase();
-      return keywords.some(k => text.includes(k));
-    });
-  }
-
-  if (!displayAsset && kitAssets.length > 0) {
-    displayAsset = kitAssets.find(a => a.dataUrl);
-  }
-
-  const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-  const googleImagesUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
-
-  return (
-    <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-br from-[#0c1229] via-[#151138] to-[#0d0f22] p-4 sm:p-5 shadow-xl space-y-4 animate-fadeIn">
-      {/* Cabecera estilo Google Search / AI Overview */}
-      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-blue-500/20 pb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-white/10 border border-blue-400/40 flex items-center justify-center font-black text-sm text-white shadow-inner">
-            <span className="text-blue-400 font-bold">G</span>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Búsqueda en Google • AI Overview</span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-100 font-semibold italic mt-0.5">
-              &quot;{query}&quot;
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <a
-            href={googleSearchUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] px-2.5 py-1.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            title="Abrir búsqueda en Google en una nueva pestaña"
-          >
-            <Search className="w-3 h-3 text-blue-400" />
-            <span>Google</span>
-            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-          </a>
-          <a
-            href={googleImagesUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] px-2.5 py-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 border border-violet-500/30 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            title="Abrir imágenes en Google en una nueva pestaña"
-          >
-            <ImageIcon className="w-3 h-3 text-violet-400" />
-            <span>Imágenes</span>
-            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-          </a>
-        </div>
-      </div>
-
-      {/* Grid de 3 Viñetas + Mínimo 1 Imagen del Buscador / Material */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
-        {/* 3 Viñetas destacadas */}
-        <div className="md:col-span-2 flex flex-col justify-between gap-2.5">
-          {bullets.slice(0, 3).map((bullet, idx) => (
-            <div
-              key={idx}
-              className="flex items-start gap-2.5 p-3 rounded-xl bg-blue-950/20 border border-blue-500/20 text-xs sm:text-sm text-slate-200 leading-relaxed"
-            >
-              <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-blue-500/40">
-                {idx + 1}
-              </div>
-              <span className="flex-1 font-normal text-slate-200">{bullet}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* 1 Imagen asociada del buscador / material */}
-        <div className="flex flex-col justify-center">
-          {displayAsset && displayAsset.dataUrl ? (
-            <div
-              onClick={() => onZoomImage && onZoomImage(displayAsset!)}
-              className="group relative aspect-video md:aspect-auto md:h-full min-h-[130px] rounded-xl bg-black/60 border border-blue-500/30 overflow-hidden flex items-center justify-center p-2 cursor-pointer hover:border-blue-400 transition-all shadow-md"
-              title="Clic para ampliar imagen"
-            >
-              <img
-                src={displayAsset.dataUrl}
-                alt={displayAsset.caption || query}
-                className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <div className="w-8 h-8 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-lg">
-                  <ZoomIn className="w-4 h-4" />
-                </div>
-              </div>
-              <span className="absolute bottom-1.5 left-1.5 right-1.5 text-[9px] px-2 py-0.5 rounded bg-black/80 backdrop-blur-xs text-blue-200 truncate text-center border border-white/10">
-                {displayAsset.caption || (displayAsset.pageOrSlide ? `Diapositiva ${displayAsset.pageOrSlide}` : 'Figura de referencia')}
-              </span>
-            </div>
-          ) : (
-            <a
-              href={googleImagesUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="aspect-video md:aspect-auto md:h-full min-h-[130px] rounded-xl bg-blue-950/20 border border-dashed border-blue-500/30 p-3 flex flex-col items-center justify-center text-center gap-1.5 hover:bg-blue-950/40 transition-colors group cursor-pointer"
-            >
-              <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                <ImageIcon className="w-4.5 h-4.5" />
-              </div>
-              <span className="text-[11px] font-semibold text-blue-300">Explorar imágenes en Google</span>
-              <span className="text-[9px] text-slate-400 line-clamp-1 italic">&quot;{query}&quot;</span>
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+// Réplica exacta de Thea para la justificación (3 viñetas + ilustración médica con enlace a fuente)
+export const GoogleSearchOverviewCard = TheaExplanationView;
 
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
   // ── Session Restoration (Memoria Total en Tiempo Real) ────────────────────
@@ -492,8 +305,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const isAdvancingRef = useRef<boolean>(false);
   const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
 
-  // ── Justificaciones desplegables bajo demanda (Smart Study e Historial) ───
-  const [showJustification, setShowJustification] = useState<boolean>(false);
+  // ── Justificaciones desplegables bajo demanda (Historial) ───
   const [expandedHistoryQuestions, setExpandedHistoryQuestions] = useState<Set<string>>(new Set());
 
   const toggleHistoryJustification = (questionId: string) => {
@@ -1207,11 +1019,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   const currentQ: Question = currentQuestion;
 
-  // Resetear la justificación al cambiar de pregunta
-  useEffect(() => {
-    setShowJustification(false);
-  }, [currentQ?.id]);
-
   // Regla estricta para adjuntar imágenes a las preguntas individuales
   const isImageStrictlyNecessary = (q: Question): boolean => {
     if (!q || !q.sourceAsset || !q.sourceAsset.dataUrl) return false;
@@ -1423,7 +1230,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     setIsAnswered(false);
     setIsCurrentCorrect(null);
-    setShowJustification(false);
   }, [currentQ?.id, effectiveBlanksCorrect.length]);
 
   // Referencia actualizada al último estado de sesión para persistencia garantizada al desmontar la vista
@@ -2129,7 +1935,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setMatchingPairsMap({});
     setMatchingChecked(false);
     setDragDropChecked(false);
-    setShowJustification(false);
     const nextBlanksCount = (nextQ?.blanksCorrect && nextQ.blanksCorrect.length > 0)
       ? nextQ.blanksCorrect.length
       : (nextQ?.templateSentence?.match(/\{\d+\}/g)?.length || nextQ?.question?.match(/\{\d+\}/g)?.length || 0);
@@ -2742,7 +2547,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                         if (!matchedQ) return null;
                         return (
                           <div className="my-2">
-                            <GoogleSearchOverviewCard
+                            <TheaExplanationView
                               question={matchedQ}
                               kitAssets={kit.assets || []}
                               onZoomImage={(asset) => setZoomAsset(asset)}
@@ -2944,14 +2749,14 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
                 if (isAnswered) {
                   if (isCorrect) {
-                    cardClasses = 'border-2 border-emerald-400 bg-[#10252b]/95 text-white shadow-[0_0_24px_rgba(52,211,153,0.4)] ring-1 ring-emerald-400/50 animate-cardCorrect';
-                    badgeClasses = 'bg-[#4ade80] text-[#0f291e] scale-105';
+                    cardClasses = 'border-2 border-emerald-500 bg-[#10252b]/95 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] ring-1 ring-emerald-500/40 animate-cardCorrect';
+                    badgeClasses = 'bg-[#22c55e] text-white scale-105';
                   } else if (isSelected) {
-                    cardClasses = 'border-2 border-rose-500 bg-rose-950/60 text-rose-100 shadow-[0_0_22px_rgba(244,63,94,0.35)] ring-1 ring-rose-500/50 animate-cardError';
-                    badgeClasses = 'bg-[#f87171] text-white scale-105';
+                    cardClasses = 'border-2 border-rose-500 bg-rose-950/60 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] ring-1 ring-rose-500/40 animate-cardError';
+                    badgeClasses = 'bg-[#ef4444] text-white scale-105';
                   } else {
-                    cardClasses = 'border-[#221742]/50 bg-[#120a2a]/50 text-slate-500 opacity-40';
-                    badgeClasses = 'bg-[#22173f] text-slate-600';
+                    cardClasses = 'border border-[#2b2053] bg-[#181138]/90 text-slate-200';
+                    badgeClasses = 'bg-[#2f1f58] text-[#cbb8e8]';
                   }
                 }
 
@@ -3612,115 +3417,68 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
         )}
 
-        {/* ── ESTADO INMEDIATO DE LA RESPUESTA (CORRECTA / INCORRECTA) ─── */}
-        {isAnswered && (
-          <div className={`p-4 sm:p-5 rounded-2xl mb-6 flex items-center justify-between gap-3 border shadow-lg animate-feedbackPop ${
+        {/* ── ESTADO INMEDIATO DE LA RESPUESTA PARA PREGUNTAS ABIERTAS (SHORT-ANSWER) ─── */}
+        {isAnswered && (qType === 'short-answer' || qType === 'matching') && (
+          <div className={`p-4 rounded-2xl mb-6 flex items-center justify-between gap-3 border shadow-lg animate-feedbackPop ${
             isCurrentCorrect
-              ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200 ring-1 ring-emerald-500/40 shadow-emerald-950/40'
-              : 'bg-rose-950/70 border-rose-500/60 text-rose-200 ring-1 ring-rose-500/40 shadow-rose-950/40'
+              ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200 ring-1 ring-emerald-500/40'
+              : 'bg-rose-950/70 border-rose-500/60 text-rose-200 ring-1 ring-rose-500/40'
           }`}>
-            <div className="flex items-center gap-3.5">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold shadow-md animate-iconPop ${
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold ${
                 isCurrentCorrect ? 'bg-emerald-500 text-slate-950' : 'bg-rose-500 text-white'
               }`}>
-                {isCurrentCorrect ? <Check className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" /> : <X className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />}
+                {isCurrentCorrect ? <Check className="w-5 h-5 stroke-[3]" /> : <X className="w-5 h-5 stroke-[3]" />}
               </div>
               <div>
-                <p className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2 flex-wrap">
-                  <span>
-                    {isManuallyOverridden
-                      ? '¡Respuesta Reclasificada! (¡Tenía razón!)'
-                      : isCurrentCorrect
-                      ? '¡Respuesta Correcta!'
-                      : 'Respuesta Incorrecta'}
-                  </span>
-                  {isCurrentCorrect && isCurrentQRevealed && (
-                    <span className="text-[11px] font-bold text-amber-300 bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-500/40">
-                      (No suma avance: revelada en banco)
-                    </span>
-                  )}
+                <p className="font-extrabold text-sm sm:text-base text-white">
+                  {isManuallyOverridden
+                    ? '¡Respuesta Reclasificada! (¡Tenía razón!)'
+                    : isCurrentCorrect
+                    ? '¡Respuesta Correcta!'
+                    : 'Respuesta Incorrecta'}
                 </p>
-                <p className="text-xs sm:text-sm opacity-95 mt-0.5">
+                <p className="text-xs sm:text-sm opacity-90 mt-0.5">
                   {isCurrentCorrect
-                    ? (isCurrentQRevealed
-                        ? 'Has respondido correctamente. Esta pregunta fue revelada previamente en el Banco de Preguntas, por lo que no suma porcentaje al avance.'
-                        : qType === 'matching'
-                        ? `Has emparejado todos los conceptos con exactitud: ${correctMatchingFormula}.`
-                        : qType === 'short-answer'
-                        ? 'Tu respuesta coincide conceptualmente con la solución esperada.'
-                        : 'Has identificado con exactitud el concepto del texto.')
-                    : (qType === 'matching'
-                        ? `Los emparejamientos correctos eran: ${correctMatchingFormula}`
-                        : qType === 'short-answer'
-                        ? `La respuesta esperada era: ${currentQ.idealAnswer || currentQ.explanation}`
-                        : `La respuesta correcta es: ${
-                            qType === 'true-false'
-                              ? (safeCorrectIndex === 0 ? 'Verdadero' : 'Falso')
-                              : qType === 'multi-select'
-                              ? safeCorrectIndices.map(i => safeOptions[i] || `Opción ${i + 1}`).join(' • ')
-                              : qType === 'drag-drop'
-                              ? (effectiveBlanksCorrect.length > 0 ? effectiveBlanksCorrect.map((b, i) => `[${i + 1}] ${b}`).join(', ') : '')
-                              : (safeOptions[safeCorrectIndex] || 'la opción correcta')
-                          }`)}
+                    ? 'Tu respuesta coincide conceptualmente con la solución esperada.'
+                    : `La respuesta esperada era: ${currentQ.idealAnswer || currentQ.explanation}`}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {!isCurrentCorrect && (
-                <button
-                  type="button"
-                  onClick={handleIWasRight}
-                  className="px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300"
-                  title="Si consideras que tu respuesta era válida o la IA fue demasiado estricta, haz clic para marcarla como correcta"
-                >
-                  <CheckCheck className="w-3.5 h-3.5 text-amber-300" />
-                  <span>¡Tenía razón!</span>
-                </button>
-              )}
+            {!isCurrentCorrect && (
               <button
                 type="button"
-                onClick={() => {
-                  setShowJustification(prev => !prev);
-                  if (!showJustification) {
-                    setTimeout(() => {
-                      explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }, 50);
-                  }
-                }}
-                className={`px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 ${
-                  showJustification
-                    ? 'bg-violet-600 hover:bg-violet-500 text-white ring-2 ring-violet-400/50 shadow-violet-900/40'
-                    : 'bg-black/50 hover:bg-black/70 border border-white/20 text-white hover:border-violet-400'
-                }`}
+                onClick={handleIWasRight}
+                className="px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300"
+                title="Si consideras que tu respuesta era válida o la IA fue demasiado estricta, haz clic para marcarla como correcta"
               >
-                <FileText className="w-3.5 h-3.5 text-amber-300" />
-                <span>{showJustification ? 'Ocultar Justificación' : 'Justificación'}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showJustification ? 'rotate-180' : ''}`} />
+                <CheckCheck className="w-3.5 h-3.5 text-amber-300" />
+                <span>¡Tenía razón!</span>
               </button>
-            </div>
+            )}
           </div>
         )}
 
-        {/* ── ACTION ROW: HISTORIAL DE PREGUNTAS + THUMBS UP / DOWN ────── */}
-        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
+        {/* ── ACTION ROW: HISTORIAL DE PREGUNTAS + THUMBS UP / DOWN (ESTILO THEA) ────── */}
+        <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className="px-4 sm:px-5 py-2.5 rounded-full bg-[#d5c7ee] hover:bg-[#e4d8fb] text-[#1b113b] font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-2 active:scale-95 min-h-[44px]"
+            className="px-4 sm:px-5 py-2 rounded-full bg-[#d5c7ee] hover:bg-[#e4d8fb] text-[#1b113b] font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-2 active:scale-95 min-h-[40px]"
           >
             <span>Historial de preguntas</span>
           </button>
 
-          <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setFeedbackGiven(feedbackGiven === 'up' ? null : 'up')}
               title="Pregunta clara y de alta calidad"
-              className={`w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-110 active:scale-90 ${
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-105 active:scale-95 ${
                 feedbackGiven === 'up'
-                  ? 'bg-[#22c55e] text-white ring-2 ring-emerald-300 scale-105'
-                  : 'bg-[#4ade80] hover:bg-[#22c55e] text-[#0f291e]'
+                  ? 'bg-[#22c55e] text-white ring-2 ring-emerald-300'
+                  : 'bg-[#22c55e] hover:bg-[#16a34a] text-white'
               }`}
             >
               <ThumbsUp className="w-4 h-4 fill-current" />
@@ -3729,10 +3487,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               type="button"
               onClick={() => setFeedbackGiven(feedbackGiven === 'down' ? null : 'down')}
               title="Reportar pregunta o redacción confusa"
-              className={`w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-110 active:scale-90 ${
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-105 active:scale-95 ${
                 feedbackGiven === 'down'
-                  ? 'bg-[#ef4444] text-white ring-2 ring-rose-300 scale-105'
-                  : 'bg-[#f87171] hover:bg-[#ef4444] text-[#3b0d0d]'
+                  ? 'bg-[#ef4444] text-white ring-2 ring-rose-300'
+                  : 'bg-[#ef4444] hover:bg-[#dc2626] text-white'
               }`}
             >
               <ThumbsDown className="w-4 h-4 fill-current" />
@@ -3740,18 +3498,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
         </div>
 
-        {/* ── CENTERED "SIGUIENTE PREGUNTA" / "SALTAR PREGUNTA" / "AVANZAR AL NIVEL" BUTTON ── */}
+        {/* ── CENTERED "SIGUIENTE PREGUNTA" / "SALTAR PREGUNTA" BUTTON (ESTILO THEA) ── */}
         <div className="flex justify-center mb-6 sm:mb-8">
           <button
             type="button"
             onClick={handleNext}
             disabled={isAdvancing}
-            className={`w-full sm:w-auto justify-center px-8 py-3.5 rounded-full font-bold text-sm sm:text-base shadow-lg transition-all transform hover:scale-[1.03] active:scale-95 flex items-center gap-2 cursor-pointer min-h-[48px] ${
+            className={`w-full sm:w-auto justify-center px-8 py-2.5 rounded-full font-bold text-sm sm:text-base shadow-md transition-all transform hover:scale-[1.02] active:scale-95 flex items-center gap-2 cursor-pointer min-h-[44px] ${
               isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
             } ${
               currentLevelCorrect >= levelTarget
                 ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-violet-300 hover:from-amber-300 hover:to-violet-200 text-slate-950 font-extrabold shadow-amber-500/25 ring-2 ring-amber-400/50'
-                : 'bg-[#c8b6e2] hover:bg-[#d9caf2] text-[#1a1038]'
+                : 'bg-[#bba7ea] hover:bg-[#cbbaef] text-[#1b113b]'
             }`}
           >
             <span>
@@ -3765,102 +3523,47 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </button>
         </div>
 
-        {/* ── BOTÓN JUSTIFICACIÓN (VISIBLE TRAS RESPONDER SI AÚN NO ESTÁ ABIERTA) ── */}
-        {isAnswered && !showJustification && (
-          <div className="flex justify-center -mt-2 sm:-mt-4 mb-6 sm:mb-8 animate-fadeIn">
-            <button
-              type="button"
-              onClick={() => {
-                setShowJustification(true);
-                setTimeout(() => {
-                  explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 50);
-              }}
-              className="w-full sm:w-auto justify-center px-6 py-3 rounded-full bg-[#20183f] hover:bg-[#2b2054] border border-violet-500/40 hover:border-violet-400 text-violet-200 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer min-h-[44px]"
-            >
-              <FileText className="w-4 h-4 text-amber-400" />
-              <span>Justificación</span>
-              <ChevronDown className="w-4 h-4 text-violet-400" />
-            </button>
-          </div>
-        )}
-
-        {/* ── EXPLICACIÓN DETALLADA (SOLO SI SE PRESIONA EL BOTÓN JUSTIFICACIÓN) ─ */}
-        {isAnswered && showJustification && (
+        {/* ── JUSTIFICACIÓN EXACTA DE THEA (VISIBLE AUTOMÁTICAMENTE AL RESPONDER) ─ */}
+        {isAnswered && (
           <div
             ref={explanationRef}
-            className="mt-8 pt-6 border-t border-[#261c47] animate-fadeIn space-y-4"
+            className="mt-6 pt-5 border-t border-[#261c47]/70 animate-fadeIn"
           >
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  isCurrentCorrect ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                }`}>
-                  {isCurrentCorrect ? <Check className="w-4 h-4 stroke-[3]" /> : <X className="w-4 h-4 stroke-[3]" />}
-                </div>
-                <h3 className="font-bold text-base text-white">
-                  {isCurrentCorrect ? '¡Respuesta Correcta! Fundamento Conceptual:' : 'Respuesta Incorrecta: Análisis del Concepto y Descarte:'}
-                </h3>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowJustification(false)}
-                  className="px-3 py-1.5 rounded-xl bg-thea-surfaceLight border border-thea-border/80 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-500 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  title="Ocultar Justificación"
-                >
-                  <ChevronUp className="w-3.5 h-3.5" />
-                  <span>Ocultar</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setModalChunk({
-                      id: currentQ.sourceChunkId,
-                      text: currentQ.sourceChunkText || kit.chunks?.find(c => c.id === currentQ.sourceChunkId)?.text || currentQ.explanation,
-                      pageOrSlide: currentQ.sourcePageOrSlide,
-                      asset: currentQ.sourceAsset,
-                    });
-                    setShowSourceModal(true);
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-violet-950/80 border border-violet-500/40 text-violet-300 hover:text-white hover:bg-violet-600/40 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  <FileSearch className="w-3.5 h-3.5 text-violet-400" />
-                  <span>Fragmento RAG Original</span>
-                </button>
-                <button
-                  onClick={() => handleReadAloud(currentQ.explanation)}
-                  className={`p-2 rounded-xl border border-thea-border text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
-                    isSpeaking ? 'bg-violet-600 text-white' : 'bg-thea-surfaceLight text-slate-400 hover:text-white'
-                  }`}
-                  title="Escuchar explicación"
-                >
-                  <Volume2 className="w-4 h-4" />
-                </button>
-              </div>
+            {/* Barra de utilidades secundaria sutil (escuchar audio / ver fuente RAG) */}
+            <div className="flex items-center justify-end gap-2 mb-3">
+              <button
+                onClick={() => {
+                  setModalChunk({
+                    id: currentQ.sourceChunkId,
+                    text: currentQ.sourceChunkText || kit.chunks?.find(c => c.id === currentQ.sourceChunkId)?.text || currentQ.explanation,
+                    pageOrSlide: currentQ.sourcePageOrSlide,
+                    asset: currentQ.sourceAsset,
+                  });
+                  setShowSourceModal(true);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Ver fragmento original del documento"
+              >
+                <FileSearch className="w-3.5 h-3.5 text-violet-400" />
+                <span>Fragmento RAG</span>
+              </button>
+              <button
+                onClick={() => handleReadAloud(currentQ.explanation)}
+                className={`p-1.5 rounded-lg border border-white/10 text-xs flex items-center transition-colors cursor-pointer ${
+                  isSpeaking ? 'bg-violet-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                }`}
+                title="Escuchar explicación con voz neural"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Tarjeta de Búsqueda de Google / AI Overview con 3 viñetas e imagen */}
-            <GoogleSearchOverviewCard
+            {/* Componente réplica exacta Thea: 3 viñetas limpias + imagen con Crédito: Enlace a la fuente */}
+            <TheaExplanationView
               question={currentQ}
               kitAssets={kit.assets || []}
               onZoomImage={(asset) => setZoomAsset(asset)}
             />
-
-            <div className="p-5 sm:p-6 rounded-2xl bg-[#181138]/90 border border-[#2e2258] text-slate-200 text-sm sm:text-base leading-relaxed shadow-lg space-y-2">
-              <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5 mb-2">
-                <Lightbulb className="w-4 h-4" />
-                <span>Desglose Pedagógico y Fundamentación Académica:</span>
-              </div>
-              <FormattedText text={currentQ.explanation.replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '').trim() || currentQ.explanation} />
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-400 px-1">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>
-                Contexto cerrado RAG: sustentado en {currentQ.sourcePageOrSlide ? `Pág./Diapositiva ${currentQ.sourcePageOrSlide}` : 'el documento fuente original'}
-              </span>
-            </div>
           </div>
         )}
             </>
