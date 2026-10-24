@@ -10,6 +10,8 @@
  * ~20 peticiones/min y ~2.000/día, archivo máx. 25 MB.
  */
 
+import { DEFAULT_GROQ_KEY } from './aiService';
+
 const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const STT_MODEL = 'whisper-large-v3-turbo';
 
@@ -131,7 +133,18 @@ async function transcribe(blob: Blob, opts: WhisperMicOptions): Promise<string> 
     } catch {
       /* sin detalle */
     }
-    if (res.status === 401) throw new Error('La API key de Groq no es válida (debe empezar por gsk_).');
+    if (res.status === 401) {
+      if (DEFAULT_GROQ_KEY && opts.apiKey !== DEFAULT_GROQ_KEY) {
+        console.warn('[WhisperMic] Clave 401 rechazada, auto-recuperando con DEFAULT_GROQ_KEY...');
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
+          }
+        } catch {}
+        return transcribe(blob, { ...opts, apiKey: DEFAULT_GROQ_KEY });
+      }
+      throw new Error('La API key de Groq no es válida (debe empezar por gsk_).');
+    }
     if (res.status === 429) throw new Error('Límite de Groq alcanzado (demasiadas peticiones). Espera un minuto e inténtalo de nuevo.');
     throw new Error(`Error de transcripción (HTTP ${res.status}). ${detail}`.trim());
   }

@@ -64,6 +64,10 @@ export const AI_PRESETS: AIPreset[] = [
 /** Modelo de respaldo para Groq cuando el principal da límite de tasa (429) o error de servidor (5xx) */
 const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 
+/** Detecta claves conocidas expiradas o revocadas de Groq */
+export const isRevokedGroqKey = (k?: string | null): boolean =>
+  !k || k === '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';
+
 export const DEFAULT_GROQ_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GROQ_API_KEY)
   ? String((import.meta as any).env.VITE_GROQ_API_KEY).trim()
   : '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';
@@ -262,16 +266,21 @@ export function getAISettings(): AISettings {
     (parsed.model && !parsed.model.includes('gpt-oss') && !parsed.model.includes('llama-3.3') ? parsed.model : 'gemma4:31b');
 
   // 2. Resolver configuracion oral (GROQ / GROK - Motor Oral exclusivo para Leccion y Conversacion Oral)
-  const groqStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_api_key') : null;
+  let groqStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_api_key') : null;
+  if (groqStorageKey && isRevokedGroqKey(groqStorageKey)) {
+    localStorage.removeItem('thea_groq_api_key');
+    groqStorageKey = null;
+  }
   const grokStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_grok_api_key') : null;
+  const parsedGroqKey = parsed.groqApiKey && !isRevokedGroqKey(parsed.groqApiKey) ? parsed.groqApiKey : '';
 
   const effectiveOralKey =
     groqStorageKey ||
-    grokStorageKey ||
-    parsed.groqApiKey ||
-    parsed.grokApiKey ||
-    (parsed.apiKey && (parsed.apiKey.startsWith('gsk_') || parsed.apiKey.startsWith('grok_') || parsed.apiKey.startsWith('xai-')) ? parsed.apiKey : '') ||
+    (parsed.apiKey && parsed.apiKey.startsWith('gsk_') && !isRevokedGroqKey(parsed.apiKey) ? parsed.apiKey : '') ||
+    parsedGroqKey ||
     DEFAULT_GROQ_KEY ||
+    grokStorageKey ||
+    parsed.grokApiKey ||
     DEFAULT_GROK_KEY;
 
   const isGrok = Boolean(effectiveOralKey && (effectiveOralKey.startsWith('grok_') || effectiveOralKey.startsWith('xai-')));
@@ -475,10 +484,10 @@ export function saveGrokSettings(settings: Partial<GrokSettings>): void {
 
 export function getGrokApiKey(): string {
   const settingsKey = getGrokSettings().apiKey;
-  if (settingsKey && settingsKey.trim()) return settingsKey.trim();
+  if (settingsKey && settingsKey.trim() && !isRevokedGroqKey(settingsKey)) return settingsKey.trim();
   if (typeof localStorage !== 'undefined') {
-    const direct = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key');
-    if (direct && direct.trim().length > 0) return direct.trim();
+    const direct = localStorage.getItem('thea_grok_api_key');
+    if (direct && direct.trim().length > 0 && !isRevokedGroqKey(direct)) return direct.trim();
   }
   return DEFAULT_GROK_KEY;
 }
@@ -545,19 +554,37 @@ export function saveOllamaApiKey(key: string): void {
 
 export function getGroqApiKey(): string {
   if (typeof localStorage !== 'undefined') {
-    const direct = localStorage.getItem('thea_groq_api_key') || localStorage.getItem('thea_grok_api_key');
-    if (direct && direct.trim().length > 0) return direct.trim();
+    const directGroq = localStorage.getItem('thea_groq_api_key');
+    if (directGroq && isRevokedGroqKey(directGroq)) {
+      localStorage.removeItem('thea_groq_api_key');
+    } else if (directGroq && directGroq.trim().length > 0) {
+      return directGroq.trim();
+    }
   }
+
   const current = getAISettings();
-  if (current.groqApiKey && current.groqApiKey.trim().length > 0) {
+  if (current.groqApiKey && !isRevokedGroqKey(current.groqApiKey)) {
     return current.groqApiKey.trim();
   }
+
+  // DEFAULT_GROQ_KEY verificado tiene prioridad absoluta
+  if (DEFAULT_GROQ_KEY && !isRevokedGroqKey(DEFAULT_GROQ_KEY)) {
+    return DEFAULT_GROQ_KEY;
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    const directGrok = localStorage.getItem('thea_grok_api_key');
+    if (directGrok && directGrok.trim().length > 0) return directGrok.trim();
+  }
+
   if (current.grokApiKey && current.grokApiKey.trim().length > 0) {
     return current.grokApiKey.trim();
   }
-  if (current.apiKey && (current.apiKey.startsWith('gsk_') || current.apiKey.startsWith('grok_') || current.apiKey.startsWith('xai-') || current.baseUrl?.includes('api.groq.com') || current.baseUrl?.includes('api.x.ai'))) {
+
+  if (current.apiKey && !isRevokedGroqKey(current.apiKey) && (current.apiKey.startsWith('gsk_') || current.apiKey.startsWith('grok_') || current.apiKey.startsWith('xai-') || current.baseUrl?.includes('api.groq.com') || current.baseUrl?.includes('api.x.ai'))) {
     return current.apiKey.trim();
   }
+
   return DEFAULT_GROQ_KEY || DEFAULT_GROK_KEY;
 }
 
@@ -918,6 +945,26 @@ export async function queryAICompletion(
     }
 
     clearTimeout(timer);
+
+    if (!response.ok) {
+      if (response.status === 401 && cleanBase.includes('api.groq.com') && targetKey !== DEFAULT_GROQ_KEY && DEFAULT_GROQ_KEY) {
+        console.warn('[aiService] Groq 401 detectado, auto-recuperando con DEFAULT_GROQ_KEY...');
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
+        }
+        const retryHeaders = { ...headers, Authorization: `Bearer ${DEFAULT_GROQ_KEY}` };
+        response = await fetchWithProxyFallback(
+          url,
+          {
+            method: 'POST',
+            headers: retryHeaders,
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          },
+          body
+        );
+      }
+    }
 
     if (!response.ok) {
       let detail = '';
