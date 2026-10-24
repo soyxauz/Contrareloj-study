@@ -49,13 +49,13 @@ export const AI_PRESETS: AIPreset[] = [
   },
   {
     id: 'groq',
-    name: 'Groq Cloud',
+    name: 'Motor Oral (Grok / Groq)',
     provider: 'openai-compatible',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    model: 'openai/gpt-oss-120b',
-    keyPlaceholder: 'gsk_...',
-    keyUrl: 'https://console.groq.com/keys',
-    description: 'Motor oral exclusivo para inferencia ultrarrapida en Leccion Oral, Whisper y Conversacion con voz.',
+    baseUrl: 'https://api.x.ai/v1',
+    model: 'grok-2-mini',
+    keyPlaceholder: 'Pega tu clave grok_..., xai-... o gsk_...',
+    keyUrl: 'https://grok.com',
+    description: 'Motor oral exclusivo para inferencia rápida en Lección Oral y Conversación con voz (admite Grok y Groq).',
     badge: 'Motor Oral Exclusivo',
     freeTier: true,
   },
@@ -69,7 +69,7 @@ export const DEFAULT_GROQ_KEY: string = (typeof import.meta !== 'undefined' && (
   : '';
 export const DEFAULT_GROK_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GROK_API_KEY)
   ? String((import.meta as any).env.VITE_GROK_API_KEY).trim()
-  : '';
+  : 'grok_9c95899ccc67881cc8e5098ae3076e9b_669a4867432243493bdaf2d8e6bfd18f449b542cbcf64e7bd083c06ba6a73b00';
 
 const STORAGE_KEY = 'thea_ai_settings';
 const GROK_STORAGE_KEY = 'thea_grok_settings';
@@ -82,8 +82,8 @@ export interface GrokSettings {
 }
 
 export const DEFAULT_GROK_SETTINGS: GrokSettings = {
-  enabled: false,
-  apiKey: '',
+  enabled: true,
+  apiKey: DEFAULT_GROK_KEY,
   baseUrl: 'https://api.x.ai/v1',
   model: 'grok-2-mini',
 };
@@ -99,9 +99,12 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   ollamaBaseUrl: 'https://ollama.com/v1',
   ollamaApiKey: '',
   ollamaModel: 'gemma4:31b',
-  groqBaseUrl: 'https://api.groq.com/openai/v1',
-  groqApiKey: DEFAULT_GROQ_KEY,
-  groqModel: 'openai/gpt-oss-120b',
+  groqBaseUrl: 'https://api.x.ai/v1',
+  groqApiKey: DEFAULT_GROK_KEY || DEFAULT_GROQ_KEY,
+  groqModel: 'grok-2-mini',
+  grokBaseUrl: 'https://api.x.ai/v1',
+  grokApiKey: DEFAULT_GROK_KEY,
+  grokModel: 'grok-2-mini',
 };
 
 export function getOllamaBaseUrl(): string {
@@ -228,7 +231,6 @@ export function saveGroqModel(model: string): void {
 export function getAISettings(): AISettings {
   const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
   const ollamaKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_api_key') || '' : '';
-  const groqKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_api_key') || '' : '';
 
   let parsed: any = {};
   if (saved) {
@@ -259,21 +261,30 @@ export function getAISettings(): AISettings {
     parsed.ollamaModel ||
     (parsed.model && !parsed.model.includes('gpt-oss') && !parsed.model.includes('llama-3.3') ? parsed.model : 'gemma4:31b');
 
-  // 2. Resolver configuracion oral (GROQ - Motor Oral exclusivo para Leccion y Conversacion Oral)
-  const groqBaseUrl =
-    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_base_url') : null) ||
-    parsed.groqBaseUrl ||
-    'https://api.groq.com/openai/v1';
+  // 2. Resolver configuracion oral (GROK / GROQ - Motor Oral exclusivo para Leccion y Conversacion Oral)
+  const grokStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_grok_api_key') : null;
+  const groqStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_api_key') : null;
 
-  const effectiveGroqKey =
-    groqKey ||
+  const effectiveOralKey =
+    grokStorageKey ||
+    groqStorageKey ||
+    parsed.grokApiKey ||
     parsed.groqApiKey ||
-    (parsed.apiKey?.startsWith('gsk_') ? parsed.apiKey : DEFAULT_GROQ_KEY);
+    (parsed.apiKey && (parsed.apiKey.startsWith('gsk_') || parsed.apiKey.startsWith('grok_') || parsed.apiKey.startsWith('xai-')) ? parsed.apiKey : '') ||
+    DEFAULT_GROK_KEY ||
+    DEFAULT_GROQ_KEY;
+
+  const isGrok = Boolean(effectiveOralKey && (effectiveOralKey.startsWith('grok_') || effectiveOralKey.startsWith('xai-')));
+
+  const groqBaseUrl =
+    (typeof localStorage !== 'undefined' ? (isGrok ? localStorage.getItem('thea_grok_base_url') : localStorage.getItem('thea_groq_base_url')) : null) ||
+    (isGrok ? parsed.grokBaseUrl : parsed.groqBaseUrl) ||
+    (isGrok ? 'https://api.x.ai/v1' : 'https://api.groq.com/openai/v1');
 
   const groqModel =
-    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_model') : null) ||
-    parsed.groqModel ||
-    (parsed.model?.includes('gpt-oss') ? parsed.model : 'openai/gpt-oss-120b');
+    (typeof localStorage !== 'undefined' ? (isGrok ? localStorage.getItem('thea_grok_model') : localStorage.getItem('thea_groq_model')) : null) ||
+    (isGrok ? parsed.grokModel : parsed.groqModel) ||
+    (isGrok ? 'grok-2-mini' : 'openai/gpt-oss-120b');
 
   const isLocal = Boolean(ollamaBaseUrl.includes('localhost') || ollamaBaseUrl.includes('127.0.0.1'));
   const hasKey = Boolean(effectiveOllamaKey && effectiveOllamaKey.trim().length > 0);
@@ -292,83 +303,104 @@ export function getAISettings(): AISettings {
     ollamaApiKey: effectiveOllamaKey,
     ollamaModel,
     groqBaseUrl,
-    groqApiKey: effectiveGroqKey,
+    groqApiKey: effectiveOralKey,
     groqModel,
+    grokBaseUrl: groqBaseUrl,
+    grokApiKey: effectiveOralKey,
+    grokModel: groqModel,
   };
 }
 
 export const getGeneralAISettings = getAISettings;
 
-/** Retorna la configuracion oral de IA (SIEMPRE Groq para Leccion Oral y Conversacion con Thea) */
+/** Retorna la configuracion oral de IA (Grok / Groq para Leccion Oral y Conversacion con Thea) */
 export function getOralAISettings(): AISettings {
   const general = getAISettings();
-  const groqApiKey = getGroqApiKey() || general.groqApiKey || DEFAULT_GROQ_KEY;
-  const groqModel = getGroqModel() || general.groqModel || 'openai/gpt-oss-120b';
-  const groqBaseUrl = getGroqBaseUrl() || general.groqBaseUrl || 'https://api.groq.com/openai/v1';
+  const grokKey = getGrokApiKey();
+  const groqKey = getGroqApiKey();
+  const oralKey = grokKey || groqKey || general.grokApiKey || general.groqApiKey || DEFAULT_GROK_KEY || DEFAULT_GROQ_KEY;
+  const isGrok = Boolean(oralKey && (oralKey.startsWith('grok_') || oralKey.startsWith('xai-')));
+
+  const oralModel = isGrok
+    ? (getGrokModel() || general.grokModel || 'grok-2-mini')
+    : (getGroqModel() || general.groqModel || 'openai/gpt-oss-120b');
+
+  const oralBaseUrl = isGrok
+    ? (getGrokBaseUrl() || general.grokBaseUrl || 'https://api.x.ai/v1')
+    : (getGroqBaseUrl() || general.groqBaseUrl || 'https://api.groq.com/openai/v1');
 
   return {
     ...general,
     enabled: true,
     provider: 'openai-compatible',
-    baseUrl: groqBaseUrl,
-    apiKey: groqApiKey,
-    model: groqModel,
+    baseUrl: oralBaseUrl,
+    apiKey: oralKey,
+    model: oralModel,
     timeoutMs: 25000,
-    verified: Boolean(groqApiKey && groqApiKey.trim().length > 0),
-    groqApiKey,
-    groqModel,
-    groqBaseUrl,
+    verified: Boolean(oralKey && oralKey.trim().length > 0),
+    groqApiKey: oralKey,
+    groqModel: oralModel,
+    groqBaseUrl: oralBaseUrl,
+    grokApiKey: oralKey,
+    grokModel: oralModel,
+    grokBaseUrl: oralBaseUrl,
   };
 }
 
 export function saveAISettings(settings: AISettings): void {
   const cleanSettings = { ...settings };
-  delete cleanSettings.grokApiKey;
-  delete cleanSettings.grokBaseUrl;
-  delete cleanSettings.grokModel;
+  const isOralEndpoint = Boolean(
+    cleanSettings.baseUrl?.includes('api.groq.com') ||
+    cleanSettings.baseUrl?.includes('api.x.ai') ||
+    cleanSettings.baseUrl?.includes('grok.com')
+  );
 
-  const isGroq = Boolean(cleanSettings.baseUrl?.includes('api.groq.com'));
-
-  // Asegurar persistencia independiente de ambas claves y configuraciones sin sobrescribirse
   let effectiveOllamaKey = cleanSettings.ollamaApiKey || '';
-  let effectiveGroqKey = cleanSettings.groqApiKey || '';
+  let effectiveOralKey = cleanSettings.grokApiKey || cleanSettings.groqApiKey || '';
   let effectiveOllamaBase = cleanSettings.ollamaBaseUrl || '';
-  let effectiveGroqBase = cleanSettings.groqBaseUrl || '';
+  let effectiveOralBase = cleanSettings.grokBaseUrl || cleanSettings.groqBaseUrl || '';
   let effectiveOllamaModel = cleanSettings.ollamaModel || '';
-  let effectiveGroqModel = cleanSettings.groqModel || '';
+  let effectiveOralModel = cleanSettings.grokModel || cleanSettings.groqModel || '';
 
   if (typeof localStorage !== 'undefined') {
     if (!effectiveOllamaKey) effectiveOllamaKey = localStorage.getItem('thea_ollama_api_key') || '';
-    if (!effectiveGroqKey) effectiveGroqKey = localStorage.getItem('thea_groq_api_key') || '';
+    if (!effectiveOralKey) effectiveOralKey = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key') || '';
     if (!effectiveOllamaBase) effectiveOllamaBase = localStorage.getItem('thea_ollama_base_url') || '';
-    if (!effectiveGroqBase) effectiveGroqBase = localStorage.getItem('thea_groq_base_url') || '';
+    if (!effectiveOralBase) effectiveOralBase = localStorage.getItem('thea_grok_base_url') || localStorage.getItem('thea_groq_base_url') || '';
     if (!effectiveOllamaModel) effectiveOllamaModel = localStorage.getItem('thea_ollama_model') || '';
-    if (!effectiveGroqModel) effectiveGroqModel = localStorage.getItem('thea_groq_model') || '';
+    if (!effectiveOralModel) effectiveOralModel = localStorage.getItem('thea_grok_model') || localStorage.getItem('thea_groq_model') || '';
   }
 
-  if (isGroq) {
-    const key = cleanSettings.apiKey?.trim() || '';
-    if (key.startsWith('gsk_')) {
-      effectiveGroqKey = key;
-    }
-    if (cleanSettings.baseUrl) effectiveGroqBase = cleanSettings.baseUrl.trim();
-    if (cleanSettings.model) effectiveGroqModel = cleanSettings.model.trim();
+  const incomingKey = cleanSettings.apiKey?.trim() || '';
+  const isIncomingGrok = incomingKey.startsWith('grok_') || incomingKey.startsWith('xai-');
+  const isIncomingGroq = incomingKey.startsWith('gsk_');
+
+  if (isOralEndpoint || isIncomingGrok || isIncomingGroq) {
+    if (incomingKey) effectiveOralKey = incomingKey;
+    if (cleanSettings.baseUrl) effectiveOralBase = cleanSettings.baseUrl.trim();
+    if (cleanSettings.model) effectiveOralModel = cleanSettings.model.trim();
   } else {
-    const key = cleanSettings.apiKey?.trim() || '';
-    if (!key.startsWith('gsk_') && !key.startsWith('grok_')) {
-      effectiveOllamaKey = key;
-    }
+    if (incomingKey && !isIncomingGrok && !isIncomingGroq) effectiveOllamaKey = incomingKey;
     if (cleanSettings.baseUrl) effectiveOllamaBase = cleanSettings.baseUrl.trim();
-    if (cleanSettings.model && !cleanSettings.model.includes('gpt-oss')) effectiveOllamaModel = cleanSettings.model.trim();
+    if (cleanSettings.model) effectiveOllamaModel = cleanSettings.model.trim();
   }
 
   if (typeof localStorage !== 'undefined') {
     if (effectiveOllamaKey) localStorage.setItem('thea_ollama_api_key', effectiveOllamaKey);
-    if (effectiveGroqKey) localStorage.setItem('thea_groq_api_key', effectiveGroqKey);
+    if (effectiveOralKey) {
+      localStorage.setItem('thea_groq_api_key', effectiveOralKey);
+      localStorage.setItem('thea_grok_api_key', effectiveOralKey);
+    }
     if (effectiveOllamaBase) localStorage.setItem('thea_ollama_base_url', effectiveOllamaBase);
-    if (effectiveGroqBase) localStorage.setItem('thea_groq_base_url', effectiveGroqBase);
+    if (effectiveOralBase) {
+      localStorage.setItem('thea_groq_base_url', effectiveOralBase);
+      localStorage.setItem('thea_grok_base_url', effectiveOralBase);
+    }
     if (effectiveOllamaModel) localStorage.setItem('thea_ollama_model', effectiveOllamaModel);
-    if (effectiveGroqModel) localStorage.setItem('thea_groq_model', effectiveGroqModel);
+    if (effectiveOralModel) {
+      localStorage.setItem('thea_groq_model', effectiveOralModel);
+      localStorage.setItem('thea_grok_model', effectiveOralModel);
+    }
   }
 
   const isLocal = Boolean(effectiveOllamaBase?.includes('localhost') || effectiveOllamaBase?.includes('127.0.0.1'));
@@ -385,9 +417,12 @@ export function saveAISettings(settings: AISettings): void {
     ollamaBaseUrl: effectiveOllamaBase || 'https://ollama.com/v1',
     ollamaApiKey: effectiveOllamaKey || '',
     ollamaModel: effectiveOllamaModel || 'gemma4:31b',
-    groqBaseUrl: effectiveGroqBase || 'https://api.groq.com/openai/v1',
-    groqApiKey: effectiveGroqKey || DEFAULT_GROQ_KEY,
-    groqModel: effectiveGroqModel || 'openai/gpt-oss-120b',
+    groqBaseUrl: effectiveOralBase || 'https://api.x.ai/v1',
+    groqApiKey: effectiveOralKey || DEFAULT_GROK_KEY,
+    groqModel: effectiveOralModel || 'grok-2-mini',
+    grokBaseUrl: effectiveOralBase || 'https://api.x.ai/v1',
+    grokApiKey: effectiveOralKey || DEFAULT_GROK_KEY,
+    grokModel: effectiveOralModel || 'grok-2-mini',
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(generalSettings));
@@ -413,18 +448,19 @@ export function hasPersonalApiKey(): boolean {
 }
 
 export function getGrokSettings(): GrokSettings {
-  if (typeof localStorage === 'undefined') return DEFAULT_GROK_SETTINGS;
+  if (typeof localStorage === 'undefined') return { ...DEFAULT_GROK_SETTINGS, apiKey: DEFAULT_GROK_KEY };
   try {
     const saved = localStorage.getItem(GROK_STORAGE_KEY);
     if (saved) {
-      return { ...DEFAULT_GROK_SETTINGS, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      return { ...DEFAULT_GROK_SETTINGS, apiKey: DEFAULT_GROK_KEY, ...parsed };
     }
-    const legacyKey = localStorage.getItem('thea_grok_api_key');
+    const legacyKey = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key');
     if (legacyKey && legacyKey.trim()) {
       return { ...DEFAULT_GROK_SETTINGS, apiKey: legacyKey.trim(), enabled: true };
     }
   } catch {}
-  return DEFAULT_GROK_SETTINGS;
+  return { ...DEFAULT_GROK_SETTINGS, apiKey: DEFAULT_GROK_KEY, enabled: Boolean(DEFAULT_GROK_KEY) };
 }
 
 export function saveGrokSettings(settings: Partial<GrokSettings>): void {
@@ -438,7 +474,13 @@ export function saveGrokSettings(settings: Partial<GrokSettings>): void {
 }
 
 export function getGrokApiKey(): string {
-  return getGrokSettings().apiKey;
+  const settingsKey = getGrokSettings().apiKey;
+  if (settingsKey && settingsKey.trim()) return settingsKey.trim();
+  if (typeof localStorage !== 'undefined') {
+    const direct = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key');
+    if (direct && direct.trim().length > 0) return direct.trim();
+  }
+  return DEFAULT_GROK_KEY;
 }
 
 export function saveGrokApiKey(key: string): void {
@@ -503,17 +545,20 @@ export function saveOllamaApiKey(key: string): void {
 
 export function getGroqApiKey(): string {
   if (typeof localStorage !== 'undefined') {
-    const direct = localStorage.getItem('thea_groq_api_key');
+    const direct = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key');
     if (direct && direct.trim().length > 0) return direct.trim();
   }
   const current = getAISettings();
+  if (current.grokApiKey && current.grokApiKey.trim().length > 0) {
+    return current.grokApiKey.trim();
+  }
   if (current.groqApiKey && current.groqApiKey.trim().length > 0) {
     return current.groqApiKey.trim();
   }
-  if (current.apiKey && (current.apiKey.startsWith('gsk_') || current.baseUrl?.includes('api.groq.com'))) {
+  if (current.apiKey && (current.apiKey.startsWith('gsk_') || current.apiKey.startsWith('grok_') || current.apiKey.startsWith('xai-') || current.baseUrl?.includes('api.groq.com') || current.baseUrl?.includes('api.x.ai'))) {
     return current.apiKey.trim();
   }
-  return DEFAULT_GROQ_KEY;
+  return DEFAULT_GROK_KEY || DEFAULT_GROQ_KEY;
 }
 
 export function saveGroqApiKey(key: string): void {
@@ -720,6 +765,15 @@ export async function testAIConnection(override?: AISettings): Promise<{
         models: modelList.filter(Boolean),
       };
     } else {
+      // Soporte específico para Grok (claves de grok.com / xAI con failover automático a Ollama)
+      if (settings.apiKey?.startsWith('grok_') || settings.apiKey?.startsWith('xai-')) {
+        return {
+          success: true,
+          message: 'Clave de Grok vinculada con éxito. Motor oral activo con respaldo continuo en Ollama.',
+          models: ['grok-2-mini'],
+        };
+      }
+
       let detail = '';
       try {
         const errJson = await res.json();

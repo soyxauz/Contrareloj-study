@@ -28,28 +28,41 @@ export function validateBaseUrl(url: string): ValidationResult {
 }
 
 /**
- * Valida el formato de una API Key de Groq
+ * Valida el formato de una API Key para el Motor Oral (admite Grok de grok.com/xAI y Groq de groq.com)
  */
-export function validateGroqApiKey(key: string, isOptional = false): ValidationResult {
+export function validateOralApiKey(key: string, isOptional = false): ValidationResult {
   const trimmed = key.trim();
   if (!trimmed) {
     if (isOptional) return { isValid: true };
-    return { isValid: false, error: 'La API Key de Groq no puede estar vacía.' };
+    return { isValid: false, error: 'La API Key del motor oral no puede estar vacía.' };
   }
 
-  if (!trimmed.startsWith('gsk_')) {
-    return { isValid: false, error: 'Las claves de Groq deben comenzar con el prefijo "gsk_".' };
+  const isGrok = trimmed.startsWith('grok_') || trimmed.startsWith('xai-');
+  const isGroq = trimmed.startsWith('gsk_');
+
+  if (!isGrok && !isGroq) {
+    return {
+      isValid: false,
+      error: 'La clave debe ser de Grok (prefijo "grok_" o "xai-") o de Groq (prefijo "gsk_").',
+    };
   }
 
-  if (trimmed.length < 30) {
-    return { isValid: false, error: 'La clave de Groq es demasiado corta (mínimo 30 caracteres).' };
+  if (trimmed.length < 25) {
+    return { isValid: false, error: 'La clave ingresada es demasiado corta (mínimo 25 caracteres).' };
   }
 
-  if (!/^gsk_[A-Za-z0-9_-]+$/.test(trimmed)) {
+  if (!/^(grok_|xai-|gsk_)[A-Za-z0-9_-]+$/.test(trimmed)) {
     return { isValid: false, error: 'La clave contiene caracteres no válidos.' };
   }
 
   return { isValid: true };
+}
+
+/**
+ * Valida el formato de una API Key de Groq o Grok (compatible con ambos)
+ */
+export function validateGroqApiKey(key: string, isOptional = false): ValidationResult {
+  return validateOralApiKey(key, isOptional);
 }
 
 /**

@@ -971,36 +971,22 @@ export const authService = {
       const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (
-          parsed.baseUrl?.includes('api.x.ai') ||
-          parsed.baseUrl?.includes('grok.com') ||
-          parsed.apiKey?.startsWith('grok_') ||
-          parsed.apiKey?.startsWith('xai-')
-        ) {
-          localStorage.removeItem(key);
-        } else {
-          const hasKey = Boolean(
-            (parsed.apiKey && parsed.apiKey.trim().length > 0) ||
-            (parsed.geminiApiKey && parsed.geminiApiKey.trim().length > 0)
-          );
-          if (hasKey) return parsed;
-        }
+        const hasKey = Boolean(
+          (parsed.apiKey && parsed.apiKey.trim().length > 0) ||
+          (parsed.geminiApiKey && parsed.geminiApiKey.trim().length > 0) ||
+          (parsed.grokApiKey && parsed.grokApiKey.trim().length > 0) ||
+          (parsed.groqApiKey && parsed.groqApiKey.trim().length > 0)
+        );
+        if (hasKey) return parsed;
       }
       // Buscar también dentro del registro de usuario
       const users = getStoredUsers();
       const user = users.find(u => u.id === userId);
-      if (
-        user?.aiSettings &&
-        (user.aiSettings.baseUrl?.includes('api.x.ai') ||
-         user.aiSettings.baseUrl?.includes('grok.com') ||
-         user.aiSettings.apiKey?.startsWith('grok_') ||
-         user.aiSettings.apiKey?.startsWith('xai-'))
-      ) {
-        delete user.aiSettings;
-      }
       const userHasKey = Boolean(
         (user?.aiSettings?.apiKey && user.aiSettings.apiKey.trim().length > 0) ||
-        (user?.aiSettings?.geminiApiKey && user.aiSettings.geminiApiKey.trim().length > 0)
+        (user?.aiSettings?.geminiApiKey && user.aiSettings.geminiApiKey.trim().length > 0) ||
+        (user?.aiSettings?.grokApiKey && user.aiSettings.grokApiKey.trim().length > 0) ||
+        (user?.aiSettings?.groqApiKey && user.aiSettings.groqApiKey.trim().length > 0)
       );
       if (user?.aiSettings && userHasKey) {
         return user.aiSettings;

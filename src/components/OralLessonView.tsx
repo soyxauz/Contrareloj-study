@@ -115,7 +115,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(getPreferredSpeechLang);
 
-  const useWhisper = Boolean(getGroqApiKey()) && isWhisperMicSupported();
+  const groqKey = getGroqApiKey();
+  const useWhisper = Boolean(groqKey && groqKey.startsWith('gsk_')) && isWhisperMicSupported();
   const useWhisperRef = useRef(useWhisper);
   useWhisperRef.current = useWhisper;
   const whisperRef = useRef<WhisperRecording | null>(null);

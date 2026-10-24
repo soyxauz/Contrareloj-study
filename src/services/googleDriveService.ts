@@ -12,7 +12,7 @@ import {
   getDeletedKitIds,
   registerDriveAssetDownloader
 } from './storageService';
-import { getAISettings, saveAISettings, resetAISettingsToDefault, DEFAULT_AI_SETTINGS, type AISettings } from './aiService';
+import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
 import {
   getStoredCustomMaterias,
@@ -1081,18 +1081,11 @@ export const googleDriveService = {
         for (const u of localUsers) mergedMap.set(u.id, u);
         for (const u of remoteUsers) {
           const localU = mergedMap.get(u.id);
-          if (
-            u.aiSettings &&
-            (u.aiSettings.baseUrl?.includes('api.x.ai') ||
-             u.aiSettings.baseUrl?.includes('grok.com') ||
-             u.aiSettings.apiKey?.startsWith('grok_') ||
-             u.aiSettings.apiKey?.startsWith('xai-'))
-          ) {
-            u.aiSettings = { ...DEFAULT_AI_SETTINGS };
-          }
           const uHasAiKey = Boolean(
             (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) ||
-            (u.aiSettings?.geminiApiKey && u.aiSettings.geminiApiKey.trim().length > 0)
+            (u.aiSettings?.geminiApiKey && u.aiSettings.geminiApiKey.trim().length > 0) ||
+            (u.aiSettings?.grokApiKey && u.aiSettings.grokApiKey.trim().length > 0) ||
+            (u.aiSettings?.groqApiKey && u.aiSettings.groqApiKey.trim().length > 0)
           );
           if (uHasAiKey && u.aiSettings) {
             u.aiSettings.verified = true;
@@ -1164,21 +1157,17 @@ export const googleDriveService = {
       const localAISettings = getAISettings();
       let effectiveRemoteAI = remoteAISettings;
       if (effectiveRemoteAI && typeof effectiveRemoteAI === 'object') {
-        if (
-          effectiveRemoteAI.baseUrl?.includes('api.x.ai') ||
-          effectiveRemoteAI.baseUrl?.includes('grok.com') ||
-          effectiveRemoteAI.apiKey?.startsWith('grok_') ||
-          effectiveRemoteAI.apiKey?.startsWith('xai-')
-        ) {
-          effectiveRemoteAI = { ...DEFAULT_AI_SETTINGS };
-        }
         const remoteHasKey = Boolean(
           (effectiveRemoteAI.apiKey && effectiveRemoteAI.apiKey.trim().length > 0) ||
-          (effectiveRemoteAI.geminiApiKey && effectiveRemoteAI.geminiApiKey.trim().length > 0)
+          (effectiveRemoteAI.geminiApiKey && effectiveRemoteAI.geminiApiKey.trim().length > 0) ||
+          (effectiveRemoteAI.grokApiKey && effectiveRemoteAI.grokApiKey.trim().length > 0) ||
+          (effectiveRemoteAI.groqApiKey && effectiveRemoteAI.groqApiKey.trim().length > 0)
         );
         const localHasKey = Boolean(
           (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
-          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0)
+          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0) ||
+          (localAISettings.grokApiKey && localAISettings.grokApiKey.trim().length > 0) ||
+          (localAISettings.groqApiKey && localAISettings.groqApiKey.trim().length > 0)
         );
 
         if (remoteHasKey) {
