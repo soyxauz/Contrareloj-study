@@ -134,9 +134,10 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [transcribing, setTranscribing] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
 
-  // Estados y refs para interrupción fluida (barge-in)
+  // Estados y refs para interrupción fluida
   const [isInterrupted, setIsInterrupted] = useState(false);
   const isPausedForInterruptionRef = useRef(false);
+  const isInterruptionContextRef = useRef(false);
   const bargeInRef = useRef<WhisperRecording | null>(null);
   const handleInterruptionRef = useRef<(text: string) => Promise<void>>(async () => {});
   const lastTheaStatementRef = useRef<string>(messages[0]?.text || kit.title);
@@ -243,9 +244,16 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         e.stopPropagation();
         if (e.repeat) return;
 
-        // Comportamiento 100% idéntico al clic en el botón central:
+        // 1. Si Thea está hablando: la tecla Espacio la pausa e inicia el micrófono de inmediato para hablar
         if (speakingRef.current) {
+          isInterruptionContextRef.current = true;
           stopSpeaking();
+          startListeningRef.current();
+          return;
+        }
+
+        // 2. Si el micrófono está escuchando: no hacer nada (se auto-transcribe por silencio al terminar de hablar)
+        if (listeningRef.current) {
           return;
         }
 
@@ -253,16 +261,11 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           return;
         }
 
-        if (listeningRef.current) {
-          // Si está hablando/grabando, pulsar Espacio detiene e interpreta/envía de inmediato
-          stopListeningRef.current(true);
+        // 3. Si está inactivo: pulsar Espacio inicia la lección o la escucha
+        if (messagesRef.current.length <= 1) {
+          startOralLessonRef.current();
         } else {
-          // Si está inactivo, pulsa Espacio para empezar a hablar
-          if (messagesRef.current.length <= 1) {
-            startOralLessonRef.current();
-          } else {
-            startListeningRef.current();
-          }
+          startListeningRef.current();
         }
       }
     };
@@ -293,7 +296,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     };
   }, []);
 
-  // ───────────────────────── ESCUCHA DE INTERRUPCIÓN (BARGE-IN INTELIGENTE) ─────────────────────────
+  // ───────────────────────── ESCUCHA DE INTERRUPCIÓN ─────────────────────────
   const stopBargeInListener = () => {
     isPausedForInterruptionRef.current = false;
     setIsInterrupted(false);
@@ -301,101 +304,6 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       const rec = bargeInRef.current;
       bargeInRef.current = null;
       rec.cancel();
-    }
-  };
-
-  const startBargeInListener = async () => {
-    if (!useWhisperRef.current) return;
-    stopBargeInListener();
-
-    try {
-      const rec = await startWhisperRecording({
-        apiKey: getGroqApiKey(),
-        language: 'es',
-        prompt: kit.title,
-        autoStopOnSilence: true,
-        silenceMs: 650,
-        noSpeechTimeoutMs: 120000,
-        isInterruptionMode: true, // Modo interrupción ágil y natural con filtro de clics
-        minSpeechRms: 0.075,      // Detecta habla humana normal (~350ms) con tolerancia a pausas de sílabas
-        onVolume: (vol) => {
-          if (isPausedForInterruptionRef.current) {
-            setMicLevel(vol);
-          }
-        },
-        onSpeechDetected: () => {
-          if (speakingRef.current) {
-            if (audioRef.current && !audioRef.current.paused) {
-              try {
-                audioRef.current.pause();
-              } catch {}
-              isPausedForInterruptionRef.current = true;
-              setIsInterrupted(true);
-            } else if (typeof speechSynthesis !== 'undefined' && speechSynthesis.speaking) {
-              try {
-                speechSynthesis.pause();
-              } catch {}
-              isPausedForInterruptionRef.current = true;
-              setIsInterrupted(true);
-            }
-          }
-        },
-        onTranscribing: () => {
-          if (isPausedForInterruptionRef.current) {
-            setTranscribing(true);
-          }
-        },
-      });
-
-      bargeInRef.current = rec;
-
-      rec.result
-        .then((text) => {
-          if (bargeInRef.current !== rec) return;
-          bargeInRef.current = null;
-          setTranscribing(false);
-
-          if (isMeaningfulSpeech(text)) {
-            // Confirmado: el estudiante dijo palabras reales con sentido
-            isPausedForInterruptionRef.current = false;
-            setIsInterrupted(false);
-            stopSpeaking();
-            handleInterruptionRef.current(text);
-          } else {
-            // Fue solo un sonido o carraspeo: reanudar habla de Thea donde iba
-            setIsInterrupted(false);
-            if (isPausedForInterruptionRef.current) {
-              isPausedForInterruptionRef.current = false;
-              if (audioRef.current && audioRef.current.paused) {
-                audioRef.current.play().catch(() => {});
-              }
-              if (typeof speechSynthesis !== 'undefined' && speechSynthesis.paused) {
-                speechSynthesis.resume();
-              }
-            }
-            // Si Thea continúa hablando, reactivar escucha de interrupción
-            if (speakingRef.current) {
-              startBargeInListener();
-            }
-          }
-        })
-        .catch(() => {
-          if (bargeInRef.current !== rec) return;
-          bargeInRef.current = null;
-          setTranscribing(false);
-          setIsInterrupted(false);
-          if (isPausedForInterruptionRef.current) {
-            isPausedForInterruptionRef.current = false;
-            if (audioRef.current && audioRef.current.paused) {
-              audioRef.current.play().catch(() => {});
-            }
-            if (typeof speechSynthesis !== 'undefined' && speechSynthesis.paused) {
-              speechSynthesis.resume();
-            }
-          }
-        });
-    } catch (err) {
-      console.warn('[BargeIn] No se pudo iniciar escucha de interrupción:', err);
     }
   };
 
@@ -459,10 +367,6 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     const chunks = splitForSpeech(text).slice(0, 6);
     if (chunks.length === 0) return false;
     setSpeaking(true);
-
-    if (useWhisperRef.current) {
-      startBargeInListener();
-    }
 
     // Pre-sintetizar de inmediato todas las frases posteriores en paralelo mientras se arranca la primera
     if (chunks.length > 1) {
@@ -533,12 +437,21 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           setListening(false);
           setTranscribing(false);
           if (text && isMeaningfulSpeech(text)) {
-            handleSendRef.current(text);
+            if (isInterruptionContextRef.current) {
+              isInterruptionContextRef.current = false;
+              handleInterruptionRef.current(text);
+            } else {
+              handleSendRef.current(text);
+            }
           } else if (text) {
+            isInterruptionContextRef.current = false;
             console.log('[OralLesson] Ruido ambiental o sonido no verbal descartado:', text);
+          } else {
+            isInterruptionContextRef.current = false;
           }
         })
         .catch((err: Error) => {
+          isInterruptionContextRef.current = false;
           if (whisperRef.current !== rec) return;
           whisperRef.current = null;
           isListeningDesiredRef.current = false;
@@ -605,7 +518,14 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     setInput('');
 
     if (shouldSend && textToSend) {
-      handleSendRef.current(textToSend);
+      if (isInterruptionContextRef.current) {
+        isInterruptionContextRef.current = false;
+        handleInterruptionRef.current(textToSend);
+      } else {
+        handleSendRef.current(textToSend);
+      }
+    } else {
+      isInterruptionContextRef.current = false;
     }
   };
   stopListeningRef.current = stopListening;
@@ -1167,7 +1087,9 @@ Reglas obligatorias estrictas:
             type="button"
             onClick={() => {
               if (speaking || isInterrupted) {
+                isInterruptionContextRef.current = true;
                 stopSpeaking();
+                startListening();
               } else if (!isTyping && !transcribing) {
                 toggleMic();
               }
@@ -1193,9 +1115,9 @@ Reglas obligatorias estrictas:
                 : isInterrupted
                 ? 'Escuchando tu interrupción... di tu comentario'
                 : listening
-                ? 'Pulsar o presionar Espacio para detener y enviar'
+                ? 'Escuchando tu respuesta... se transcribirá automáticamente al terminar de hablar'
                 : speaking
-                ? 'Pulsar o presionar Espacio para callar a Thea'
+                ? 'Pulsar o presionar Espacio para pausar a Thea y hablar'
                 : isInitialState
                 ? mode === 'exam'
                   ? 'Pulsar o presionar Espacio para empezar la lección oral'
