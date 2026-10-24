@@ -799,7 +799,7 @@ export const googleDriveService = {
   /**
    * Sube una imagen individual a la subcarpeta 'assets/' de Drive de forma directa sin búsquedas redundantes.
    */
-  async uploadAssetDirectly(token: string, assetsFolderId: string, asset: DocumentAsset): Promise<string | null> {
+  async uploadAssetDirectly(token: string, assetsFolderId: string, asset: DocumentAsset, retries = 2): Promise<string | null> {
     if (!asset.id || !asset.dataUrl) return null;
 
     if (inFlightAssetUploads.has(asset.id)) {
@@ -826,25 +826,36 @@ export const googleDriveService = {
         type: `multipart/related; boundary=${boundary}`,
       });
 
-      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: fullBlob,
-      });
+      let attempt = 0;
+      while (attempt <= retries) {
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: fullBlob,
+        });
 
-      if (!res.ok) {
         if (res.status === 401) {
           this.clearAccessToken();
           throw new Error('TOKEN_EXPIRED_401');
         }
-        console.warn(`[GoogleDriveService] No se pudo subir activo directo ${asset.id} (${res.status})`);
-        return null;
-      }
 
-      const fileData = await res.json();
-      return fileData.id;
+        if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+          await new Promise(r => setTimeout(r, 600 * Math.pow(2, attempt)));
+          attempt++;
+          continue;
+        }
+
+        if (!res.ok) {
+          console.warn(`[GoogleDriveService] No se pudo subir activo directo ${asset.id} (${res.status})`);
+          return null;
+        }
+
+        const fileData = await res.json();
+        return fileData.id;
+      }
+      return null;
     } catch (err) {
       console.warn(`[GoogleDriveService] Error en subida directa de activo ${asset.id}:`, err);
       return null;
@@ -872,44 +883,80 @@ export const googleDriveService = {
   },
 
   /**
-   * Descarga un archivo de imagen desde Drive y lo convierte a DataURL.
+   * Descarga un archivo de imagen desde Drive y lo convierte a DataURL con reintentos exponenciales.
    */
-  async downloadAssetDataUrl(token: string, fileId: string): Promise<string> {
+  async downloadAssetDataUrl(token: string, fileId: string, retries = 2): Promise<string> {
     const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    let attempt = 0;
+    while (attempt <= retries) {
+      try {
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-    if (!res.ok) {
+        if (res.status === 401) {
+          this.clearAccessToken();
+          throw new Error('TOKEN_EXPIRED_401');
+        }
+
+        if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+          await new Promise(r => setTimeout(r, 400 * Math.pow(2, attempt)));
+          attempt++;
+          continue;
+        }
+
+        if (!res.ok) {
+          throw new Error(`Error al descargar activo ${fileId} (${res.status})`);
+        }
+
+        const blob = await res.blob();
+        return await blobToDataUrl(blob);
+      } catch (err: any) {
+        if (err?.message === 'TOKEN_EXPIRED_401' || attempt >= retries) {
+          throw err;
+        }
+        await new Promise(r => setTimeout(r, 400 * Math.pow(2, attempt)));
+        attempt++;
+      }
+    }
+    throw new Error(`Error al descargar activo ${fileId}`);
+  },
+
+  /**
+   * Lista todos los archivos dentro de una carpeta en Google Drive con soporte de paginación completa.
+   */
+  async listFilesInFolder(token: string, folderId: string): Promise<Array<{ id: string; name: string }>> {
+    const allFiles: Array<{ id: string; name: string }> = [];
+    let pageToken: string | undefined = undefined;
+    let pageCount = 0;
+
+    do {
+      const q = `'${folderId}' in parents and trashed = false`;
+      let url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name)&pageSize=1000`;
+      if (pageToken) {
+        url += `&pageToken=${encodeURIComponent(pageToken)}`;
+      }
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
       if (res.status === 401) {
         this.clearAccessToken();
         throw new Error('TOKEN_EXPIRED_401');
       }
-      throw new Error(`Error al descargar activo ${fileId}`);
-    }
 
-    const blob = await res.blob();
-    return await blobToDataUrl(blob);
-  },
+      if (!res.ok) break;
 
-  /**
-   * Lista todos los archivos dentro de una carpeta en Google Drive.
-   */
-  async listFilesInFolder(token: string, folderId: string): Promise<Array<{ id: string; name: string }>> {
-    const q = `'${folderId}' in parents and trashed = false`;
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1000`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      const data = await res.json();
+      if (Array.isArray(data.files)) {
+        allFiles.push(...data.files);
+      }
+      pageToken = data.nextPageToken;
+      pageCount++;
+    } while (pageToken && pageCount < 50);
 
-    if (res.status === 401) {
-      this.clearAccessToken();
-      throw new Error('TOKEN_EXPIRED_401');
-    }
-
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.files || [];
+    return allFiles;
   },
 
   /**
@@ -967,8 +1014,12 @@ export const googleDriveService = {
 
   /**
    * Descarga de forma prioritaria los activos de un kit específico desde Google Drive si faltan localmente.
+   * Utiliza lotes inteligentes de 6 en paralelo con reintentos exponenciales para no saturar la red.
    */
-  async prioritizeAssetsDownload(assetIds: string[]): Promise<Map<string, DocumentAsset>> {
+  async prioritizeAssetsDownload(
+    assetIds: string[],
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<Map<string, DocumentAsset>> {
     const result = new Map<string, DocumentAsset>();
     if (!assetIds || assetIds.length === 0) return result;
 
@@ -991,31 +1042,44 @@ export const googleDriveService = {
 
       if (filesToDownload.length === 0) return result;
 
-      const downloaded = await Promise.all(
-        filesToDownload.map(async (file): Promise<DocumentAsset | null> => {
-          const rawId = file.name.replace(/\.[^/.]+$/, '');
-          try {
-            const dataUrl = await this.downloadAssetDataUrl(token, file.id);
-            return {
-              id: rawId,
-              type: 'image',
-              dataUrl,
-            };
-          } catch (e) {
-            console.warn(`[GoogleDriveService] Error descargando activo prioritario ${file.name}:`, e);
-            return null;
-          }
-        })
-      );
+      const BATCH_SIZE = 6;
+      let completedCount = 0;
 
-      const valid = downloaded.filter((a): a is DocumentAsset => a !== null);
-      if (valid.length > 0) {
-        await saveAssetsToIndexedDB(valid);
-        for (const a of valid) {
-          result.set(a.id, a);
+      for (let i = 0; i < filesToDownload.length; i += BATCH_SIZE) {
+        const batch = filesToDownload.slice(i, i + BATCH_SIZE);
+        const downloaded = await Promise.all(
+          batch.map(async (file): Promise<DocumentAsset | null> => {
+            const rawId = file.name.replace(/\.[^/.]+$/, '');
+            try {
+              const dataUrl = await this.downloadAssetDataUrl(token, file.id);
+              return {
+                id: rawId,
+                type: 'image',
+                dataUrl,
+              };
+            } catch (e) {
+              console.warn(`[GoogleDriveService] Error descargando activo prioritario ${file.name}:`, e);
+              return null;
+            }
+          })
+        );
+
+        const valid = downloaded.filter((a): a is DocumentAsset => a !== null);
+        if (valid.length > 0) {
+          await saveAssetsToIndexedDB(valid);
+          for (const a of valid) {
+            result.set(a.id, a);
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('thea_assets_synced'));
+          }
         }
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('thea_assets_synced'));
+
+        completedCount += batch.length;
+        onProgress?.(completedCount, filesToDownload.length);
+
+        if (i + BATCH_SIZE < filesToDownload.length) {
+          await new Promise(r => setTimeout(r, 60));
         }
       }
     } catch (err) {
@@ -1379,10 +1443,13 @@ export const googleDriveService = {
       const BATCH_SIZE = 6;
       for (let i = 0; i < assetsToUpload.length; i += BATCH_SIZE) {
         const batch = assetsToUpload.slice(i, i + BATCH_SIZE);
-        await Promise.all(
+        const results = await Promise.all(
           batch.map(asset => this.uploadAssetDirectly(token, assetsFolderId, asset))
         );
-        uploadedCount += batch.length;
+        uploadedCount += results.filter(Boolean).length;
+        if (i + BATCH_SIZE < assetsToUpload.length) {
+          await new Promise(r => setTimeout(r, 80));
+        }
       }
 
       // 3. Guardar configuración de IA y API propia en Google Drive si tiene clave personal o Gemini
@@ -1537,10 +1604,13 @@ export const googleDriveService = {
       let uploadedCount = 0;
       for (let i = 0; i < pendingAssets.length; i += BATCH_SIZE) {
         const batch = pendingAssets.slice(i, i + BATCH_SIZE);
-        await Promise.all(
+        const results = await Promise.all(
           batch.map(asset => this.uploadAssetDirectly(token, assetsFolderId, asset))
         );
-        uploadedCount += batch.length;
+        uploadedCount += results.filter(Boolean).length;
+        if (i + BATCH_SIZE < pendingAssets.length) {
+          await new Promise(r => setTimeout(r, 80));
+        }
       }
 
       const now = Date.now();

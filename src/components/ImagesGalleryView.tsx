@@ -8,7 +8,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
-import { getAssetsMap } from '../services/storageService';
+import { getAssetsMap, getAssetById } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
 
 interface ImagesGalleryViewProps {
@@ -21,13 +21,59 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
   const [loadingAssetIds, setLoadingAssetIds] = useState<Set<string>>(new Set());
   const [isHydrating, setIsHydrating] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ completed: number; total: number } | null>(null);
 
   // Mantener activos sincronizados cuando cambia el kit
   useEffect(() => {
     setAssets(kit.assets || []);
   }, [kit.id, kit.assets]);
 
-  // Carga e hidratación proactiva e inmediata de activos faltantes
+  // Carga individual e inmediata para una imagen específica al pulsar sobre ella
+  const loadSingleAsset = async (assetId: string) => {
+    if (!assetId || loadingAssetIds.has(assetId)) return;
+
+    setLoadingAssetIds(prev => new Set(prev).add(assetId));
+
+    try {
+      // 1. Consultar IndexedDB local
+      const local = await getAssetById(assetId);
+      if (local?.dataUrl) {
+        const updated = (kit.assets || assets).map(a => (a.id === assetId ? { ...a, dataUrl: local.dataUrl } : a));
+        setAssets(updated);
+        if (onUpdateKit) {
+          onUpdateKit({
+            ...kit,
+            assets: updated,
+          });
+        }
+        return;
+      }
+
+      // 2. Descargar prioritariamente desde Google Drive con reintentos
+      const driveMap = await googleDriveService.prioritizeAssetsDownload([assetId]);
+      if (driveMap.has(assetId)) {
+        const downloaded = driveMap.get(assetId)!;
+        const updated = (kit.assets || assets).map(a => (a.id === assetId ? { ...a, dataUrl: downloaded.dataUrl } : a));
+        setAssets(updated);
+        if (onUpdateKit) {
+          onUpdateKit({
+            ...kit,
+            assets: updated,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[ImagesGalleryView] Error al cargar activo individual ${assetId}:`, err);
+    } finally {
+      setLoadingAssetIds(prev => {
+        const next = new Set(prev);
+        next.delete(assetId);
+        return next;
+      });
+    }
+  };
+
+  // Carga e hidratación proactiva e inmediata de activos faltantes en lotes inteligentes
   const loadMissingAssets = async () => {
     const currentList = kit.assets || [];
     const missing = currentList.filter(a => !a.dataUrl && a.id);
@@ -54,9 +100,13 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       const stillMissingIds = stillMissing.map(a => a.id);
       setLoadingAssetIds(new Set(stillMissingIds));
 
-      // 2. Si todavía faltan imágenes, descargarlas de forma prioritaria desde Google Drive
+      // 2. Si todavía faltan imágenes, descargarlas en lotes paralelos de 6 desde Google Drive
       if (stillMissingIds.length > 0) {
-        const driveMap = await googleDriveService.prioritizeAssetsDownload(stillMissingIds);
+        setSyncProgress({ completed: 0, total: stillMissingIds.length });
+        const driveMap = await googleDriveService.prioritizeAssetsDownload(
+          stillMissingIds,
+          (done, total) => setSyncProgress({ completed: done, total })
+        );
         if (driveMap.size > 0) {
           updatedAssets = updatedAssets.map(a => {
             if (!a.dataUrl && driveMap.has(a.id)) {
@@ -81,6 +131,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
     } finally {
       setLoadingAssetIds(new Set());
       setIsHydrating(false);
+      setSyncProgress(null);
     }
   };
 
@@ -151,7 +202,11 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
             {isHydrating && (
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1.5 animate-pulse">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Cargando imágenes de Google Drive...</span>
+                <span>
+                  {syncProgress
+                    ? `Restaurando imágenes (${syncProgress.completed}/${syncProgress.total})...`
+                    : 'Cargando imágenes de Google Drive...'}
+                </span>
               </span>
             )}
 
@@ -194,7 +249,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
           {assets.map((asset, index) => {
             const isImage = asset.type === 'image';
             const pageInfo = asset.pageOrSlide ? `Pág. / Diapositiva ${asset.pageOrSlide}` : `Elemento #${index + 1}`;
-            const isAssetLoading = loadingAssetIds.has(asset.id) || (isHydrating && !asset.dataUrl);
+            const isAssetLoading = loadingAssetIds.has(asset.id);
 
             return (
               <div
@@ -203,7 +258,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                   if (asset.dataUrl) {
                     setSelectedAsset(asset);
                   } else {
-                    loadMissingAssets();
+                    loadSingleAsset(asset.id);
                   }
                 }}
                 className="group bg-thea-surface border border-thea-border rounded-2xl overflow-hidden hover:border-violet-500/50 hover:shadow-xl hover:shadow-violet-950/20 transition-all cursor-pointer flex flex-col"
@@ -230,7 +285,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          loadMissingAssets();
+                          loadSingleAsset(asset.id);
                         }}
                         className="text-[9px] px-2 py-0.5 rounded bg-violet-600/30 text-violet-300 hover:bg-violet-600 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
                       >

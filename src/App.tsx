@@ -121,11 +121,7 @@ export const App: React.FC = () => {
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
   const [kits, setKits] = useState<StudyKit[]>(() => {
     const initialKits = authService.getUserKits(currentUser ? currentUser.id : null);
-    const cleanKits = initialKits.filter(k => !isCorruptedKit(k));
-    if (cleanKits.length > 0) {
-      isHydratedRef.current = true;
-    }
-    return cleanKits;
+    return initialKits.filter(k => !isCorruptedKit(k));
   });
 
   // Selección inicial del kit activo

@@ -139,6 +139,7 @@ export async function removeSessionItem(key: string): Promise<void> {
 
 /**
  * Guarda un lote de activos en IndexedDB y los sincroniza en la memoria rápida.
+ * Divide los guardados en transacciones seguras por lotes de 30 para evitar saturación de memoria.
  */
 export async function saveAssetsToIndexedDB(assets: DocumentAsset[]): Promise<void> {
   if (!assets || assets.length === 0) return;
@@ -154,28 +155,33 @@ export async function saveAssetsToIndexedDB(assets: DocumentAsset[]): Promise<vo
   const db = await getDatabase();
   if (!db) return;
 
-  return new Promise((resolve) => {
-    try {
-      const tx = db.transaction(ASSET_STORE, 'readwrite');
-      const store = tx.objectStore(ASSET_STORE);
+  const validAssets = assets.filter(a => a.id && a.dataUrl);
+  if (validAssets.length === 0) return;
 
-      for (let i = 0; i < assets.length; i++) {
-        const a = assets[i];
-        if (a.id && a.dataUrl) {
-          store.put(a);
+  const CHUNK_SIZE = 30;
+  for (let c = 0; c < validAssets.length; c += CHUNK_SIZE) {
+    const chunk = validAssets.slice(c, c + CHUNK_SIZE);
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(ASSET_STORE, 'readwrite');
+        const store = tx.objectStore(ASSET_STORE);
+
+        for (let i = 0; i < chunk.length; i++) {
+          store.put(chunk[i]);
         }
-      }
 
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => {
-        console.warn('[StorageService] Error en transacción de guardado de activos');
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => {
+          console.warn('[StorageService] Error en transacción de guardado de activos:', e);
+          resolve();
+        };
+        tx.onabort = () => resolve();
+      } catch (e) {
+        console.warn('[StorageService] Excepción al guardar activos:', e);
         resolve();
-      };
-    } catch (e) {
-      console.warn('[StorageService] Excepción al guardar activos:', e);
-      resolve();
-    }
-  });
+      }
+    });
+  }
 }
 
 /**
@@ -562,6 +568,7 @@ export function recordDeletedKitIds(ids: string[]): void {
 
 /**
  * Guarda kits completos en IndexedDB esperando a que la transacción culmine (cero demoras / sin pérdidas).
+ * Protege estrictamente los dataUrls de los activos preservando lo ya almacenado en IndexedDB si la entrada viene aligerada.
  */
 export async function saveKitsToIndexedDB(key: string, kits: StudyKit[]): Promise<void> {
   const db = await getDatabase();
@@ -569,11 +576,19 @@ export async function saveKitsToIndexedDB(key: string, kits: StudyKit[]): Promis
 
   const clean = Array.isArray(kits) ? kits.filter(k => !isCorruptedKit(k)) : [];
 
+  let payload = clean;
+  try {
+    const existingKits = await getKitsFromIndexedDB(key).catch(() => null);
+    if (existingKits && existingKits.length > 0) {
+      payload = mergeKitsByUpdatedAt(existingKits, clean);
+    }
+  } catch {}
+
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(SESSION_STORE, 'readwrite');
       const store = tx.objectStore(SESSION_STORE);
-      store.put({ key, value: clean, updatedAt: Date.now() });
+      store.put({ key, value: payload, updatedAt: Date.now() });
       tx.oncomplete = () => resolve();
       tx.onerror = (e) => {
         console.warn('[StorageService] Error en transacción al guardar kits en IndexedDB:', e);
@@ -601,7 +616,7 @@ export async function getKitsFromIndexedDB(key: string): Promise<StudyKit[] | nu
 
 /**
  * Fusión acumulativa estricta por ID y marca temporal updatedAt (el más reciente gana).
- * Respeta la lista negra de kits eliminados para no reintroducir kits borrados intencionalmente.
+ * Respeta la lista negra de kits eliminados y PRESERVA SIEMPRE los dataUrls de activos para que nunca se deshidraten.
  */
 export function mergeKitsByUpdatedAt(
   listA: StudyKit[],
@@ -628,17 +643,53 @@ export function mergeKitsByUpdatedAt(
     const incomingTime = kit.updatedAt || 0;
 
     // Preservar siempre las listas con contenido frente a esquemas vacíos o parciales
-    const mergedQuestions = (kit.questions && kit.questions.length > 0)
+    const rawQuestions = (kit.questions && kit.questions.length > 0)
       ? ((existing.questions && existing.questions.length > kit.questions.length && existingTime > incomingTime) ? existing.questions : kit.questions)
       : (existing.questions || []);
 
-    const mergedFlashcards = (kit.flashcards && kit.flashcards.length > 0)
+    const mergedQuestions = rawQuestions.map(q => {
+      if (q.sourceAsset && !q.sourceAsset.dataUrl) {
+        const fromExist = existing.questions?.find(eq => eq.id === q.id || eq.question === q.question)?.sourceAsset;
+        if (fromExist?.dataUrl) {
+          return { ...q, sourceAsset: { ...q.sourceAsset, dataUrl: fromExist.dataUrl } };
+        }
+      }
+      return q;
+    });
+
+    const rawFlashcards = (kit.flashcards && kit.flashcards.length > 0)
       ? ((existing.flashcards && existing.flashcards.length > kit.flashcards.length && existingTime > incomingTime) ? existing.flashcards : kit.flashcards)
       : (existing.flashcards || []);
 
-    const mergedAssets = (kit.assets && kit.assets.length > 0)
+    const mergedFlashcards = rawFlashcards.map(f => {
+      if (f.sourceAsset && !f.sourceAsset.dataUrl) {
+        const fromExist = existing.flashcards?.find(ef => ef.id === f.id || ef.term === f.term)?.sourceAsset;
+        if (fromExist?.dataUrl) {
+          return { ...f, sourceAsset: { ...f.sourceAsset, dataUrl: fromExist.dataUrl } };
+        }
+      }
+      return f;
+    });
+
+    // En activos, preservar estrictamente cualquier dataUrl ya cargado o existente para no deshidratar
+    const candidateAssets = (kit.assets && kit.assets.length > 0)
       ? ((existing.assets && existing.assets.length > kit.assets.length && existingTime > incomingTime) ? existing.assets : kit.assets)
       : (existing.assets || []);
+
+    const existingAssetsMap = new Map((existing.assets || []).map(a => [a.id, a]));
+    const incomingAssetsMap = new Map((kit.assets || []).map(a => [a.id, a]));
+
+    const mergedAssets = candidateAssets.map(a => {
+      const fromEx = existingAssetsMap.get(a.id);
+      const fromIn = incomingAssetsMap.get(a.id);
+      const bestDataUrl = a.dataUrl || fromEx?.dataUrl || fromIn?.dataUrl;
+      return {
+        ...fromEx,
+        ...fromIn,
+        ...a,
+        dataUrl: bestDataUrl,
+      };
+    });
 
     const mergedGuide = (kit.studyGuideMarkdown && kit.studyGuideMarkdown.length > 0)
       ? (incomingTime >= existingTime ? kit.studyGuideMarkdown : (existing.studyGuideMarkdown || kit.studyGuideMarkdown))
