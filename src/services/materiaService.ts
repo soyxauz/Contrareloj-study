@@ -329,110 +329,99 @@ export async function restoreCustomMateriasAsync(userId?: string | null): Promis
 }
 
 /**
- * Asigna un color característico único para una materia, evitando repetir colores
- * asignados a otras materias presentes en la lista.
+ * Determina el identificador de color característico de una materia.
+ * Es 100% determinista y estable: el color depende EXCLUSIVAMENTE del nombre
+ * de la materia y de las preferencias guardadas del usuario, NUNCA de la posición
+ * o el orden de los kits en la lista.
  */
-export function getDistinctColorForCategory(categoryName: string, usedColors: string[], userId?: string | null): string {
-  // Ver si ya tiene un color guardado
+export function getColorIdForCategory(categoryName: string | undefined, userId?: string | null): string {
+  if (!categoryName) return 'slate';
+  const trimmed = categoryName.trim();
+  const lower = trimmed.toLowerCase();
+
+  // 1. Color personalizado guardado por el usuario (máxima prioridad)
   const stored = getStoredCustomMaterias(userId);
-  const existing = stored.find(m => m.name.toLowerCase() === categoryName.trim().toLowerCase());
+  const existing = stored.find(m => m.name.toLowerCase() === lower);
   if (existing && OPAQUE_DARK_PALETTES[existing.colorId]) {
     return existing.colorId;
   }
 
-  // Si encaja semánticamente con alguna conocida y no está en conflicto
-  const lower = categoryName.toLowerCase();
-  let candidate = '';
-  if (lower.includes('fisiolog') || lower.includes('médic') || lower.includes('medic') || lower.includes('salud') || lower.includes('farmac')) candidate = 'blue';
-  else if (lower.includes('bio') || lower.includes('ecolog') || lower.includes('botán')) candidate = 'emerald';
-  else if (lower.includes('derecho') || lower.includes('ley') || lower.includes('legal') || lower.includes('juríd')) candidate = 'amber';
-  else if (lower.includes('computer') || lower.includes('software') || lower.includes('sistemas') || lower.includes('algoritmo') || lower.includes('código')) candidate = 'indigo';
-  else if (lower.includes('human') || lower.includes('filosof') || lower.includes('histori') || lower.includes('literat') || lower.includes('arte')) candidate = 'purple';
-  else if (lower.includes('econ') || lower.includes('finanz') || lower.includes('comerc')) candidate = 'rose';
-  else if (lower.includes('químic') || lower.includes('laborat')) candidate = 'teal';
-  else if (lower.includes('matemát') || lower.includes('físic') || lower.includes('álgebra')) candidate = 'cyan';
-  else if (lower.includes('idioma') || lower.includes('comunic')) candidate = 'orange';
+  // 2. Afinidad semántica determinista por materia (inmune a reordenamientos)
+  if (lower.includes('meteorolog') || lower.includes('clima') || lower.includes('atmósfer') || lower.includes('tiempo')) return 'blue';
+  if (lower.includes('gastro') || lower.includes('digestiv') || lower.includes('esófago') || lower.includes('estómag') || lower.includes('hígado') || lower.includes('intest')) return 'emerald';
+  if (lower.includes('otorrino') || lower.includes('oído') || lower.includes('nariz') || lower.includes('laring') || lower.includes('audiolog')) return 'amber';
+  if (lower.includes('bioquím') || lower.includes('metabol') || lower.includes('enzim') || lower.includes('molecular')) return 'purple';
+  if (lower.includes('dermato') || lower.includes('piel') || lower.includes('cutáne') || lower.includes('herpes') || lower.includes('tegument')) return 'indigo';
+  if (lower.includes('ginecol') || lower.includes('obstetr') || lower.includes('embaraz') || lower.includes('endometri') || lower.includes('parto')) return 'rose';
+  if (lower.includes('neumo') || lower.includes('pulmon') || lower.includes('respirat') || lower.includes('asma') || lower.includes('tórax')) return 'teal';
+  if (lower.includes('cardio') || lower.includes('vascular') || lower.includes('corazón') || lower.includes('hematol') || lower.includes('sangre')) return 'rose';
+  if (lower.includes('neuro') || lower.includes('cerebro') || lower.includes('psiquiatr') || lower.includes('psicolog') || lower.includes('mental')) return 'purple';
+  if (lower.includes('pediatr') || lower.includes('infant') || lower.includes('niñ')) return 'cyan';
+  if (lower.includes('traumato') || lower.includes('ortoped') || lower.includes('óseo') || lower.includes('hueso') || lower.includes('múscul')) return 'orange';
+  if (lower.includes('oftalmo') || lower.includes('ojo') || lower.includes('visión') || lower.includes('óptica')) return 'cyan';
+  if (lower.includes('nefro') || lower.includes('urolog') || lower.includes('renal') || lower.includes('riñón')) return 'amber';
+  if (lower.includes('endocrin') || lower.includes('hormon') || lower.includes('tiroides') || lower.includes('diabetes')) return 'orange';
+  if (lower.includes('infectolog') || lower.includes('microbiol') || lower.includes('bacteri') || lower.includes('virolog') || lower.includes('inmunol')) return 'teal';
+  if (lower.includes('fisiolog') || lower.includes('médic') || lower.includes('medic') || lower.includes('salud') || lower.includes('farmac')) return 'blue';
+  if (lower.includes('bio') || lower.includes('ecolog') || lower.includes('botán')) return 'emerald';
+  if (lower.includes('derecho') || lower.includes('ley') || lower.includes('legal') || lower.includes('juríd')) return 'amber';
+  if (lower.includes('computer') || lower.includes('software') || lower.includes('sistemas') || lower.includes('algoritmo') || lower.includes('código')) return 'indigo';
+  if (lower.includes('human') || lower.includes('filosof') || lower.includes('histori') || lower.includes('literat') || lower.includes('arte')) return 'purple';
+  if (lower.includes('econ') || lower.includes('finanz') || lower.includes('comerc')) return 'rose';
+  if (lower.includes('químic') || lower.includes('laborat')) return 'teal';
+  if (lower.includes('matemát') || lower.includes('físic') || lower.includes('álgebra')) return 'cyan';
+  if (lower.includes('idioma') || lower.includes('comunic')) return 'orange';
 
-  if (candidate && !usedColors.includes(candidate)) {
-    return candidate;
-  }
-
-  // Si candidate ya está ocupado o no hubo match, buscar el primer color libre del pool
-  for (const colorKey of PALETTE_ROTATION) {
-    if (!usedColors.includes(colorKey)) {
-      return colorKey;
-    }
-  }
-
-  // Si se agotaron los colores únicos, calcular hash determinista
+  // 3. Hash determinista estricto del nombre si no hubo coincidencia semántica
   let hash = 0;
-  for (let i = 0; i < categoryName.length; i++) {
-    hash = (hash << 5) - hash + categoryName.charCodeAt(i);
+  for (let i = 0; i < lower.length; i++) {
+    hash = ((hash << 5) - hash) + lower.charCodeAt(i);
     hash |= 0;
   }
   return PALETTE_ROTATION[Math.abs(hash) % PALETTE_ROTATION.length];
 }
 
 /**
+ * Asigna un color característico único para una materia de forma determinista.
+ */
+export function getDistinctColorForCategory(categoryName: string, _usedColors: string[] = [], userId?: string | null): string {
+  return getColorIdForCategory(categoryName, userId);
+}
+
+/**
  * Obtiene únicamente las materias que tienen al menos 1 kit asociado.
  * No genera materias vacías con 0 kits.
- * Asigna a cada una un color característico único.
+ * Asigna a cada materia su color fijo característico, completamente inmune al orden de los kits.
  */
 export function getAllAvailableMaterias(kits: StudyKit[], userId?: string | null): { name: string; colorId: string; count: number }[] {
-  const map = new Map<string, { colorId: string; count: number }>();
-  const usedColors: string[] = [];
+  const countMap = new Map<string, number>();
 
-  // Mapear solo los kits reales existentes
+  // Contar kits por cada materia
   for (const kit of kits) {
     const rawCat = kit.category ? kit.category.trim() : 'General';
     if (!rawCat) continue;
-
-    if (map.has(rawCat)) {
-      map.get(rawCat)!.count += 1;
-    } else {
-      const assignedColor = getDistinctColorForCategory(rawCat, usedColors, userId);
-      usedColors.push(assignedColor);
-      map.set(rawCat, { colorId: assignedColor, count: 1 });
-    }
+    countMap.set(rawCat, (countMap.get(rawCat) || 0) + 1);
   }
 
-  // Filtrar estrictamente solo las que tienen kits (count > 0)
-  return Array.from(map.entries())
-    .filter(([_, data]) => data.count > 0)
-    .map(([name, data]) => ({
+  // Ordenar alfabéticamente para estabilidad total en los filtros
+  return Array.from(countMap.entries())
+    .filter(([_, count]) => count > 0)
+    .sort(([a], [b]) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+    .map(([name, count]) => ({
       name,
-      colorId: data.colorId,
-      count: data.count,
+      colorId: getColorIdForCategory(name, userId),
+      count,
     }));
 }
 
 /**
  * Obtiene el tema visual de una categoría/materia.
- * Si se pasa la lista de kits actuales, garantiza que tome el color asignado a esa materia en el pool.
+ * Depende exclusivamente de la materia, sin importar la posición de ningún kit.
  */
-export function getMateriaTheme(categoryName: string | undefined, kits?: StudyKit[], userId?: string | null): MateriaColorDef {
+export function getMateriaTheme(categoryName: string | undefined, _kits?: StudyKit[], userId?: string | null): MateriaColorDef {
   if (!categoryName) return OPAQUE_DARK_PALETTES.slate;
-  const trimmed = categoryName.trim();
-
-  // Si se proporcionó la lista de kits, buscar la asignación unificada
-  if (kits && kits.length > 0) {
-    const activeMaterias = getAllAvailableMaterias(kits, userId);
-    const found = activeMaterias.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
-    if (found && OPAQUE_DARK_PALETTES[found.colorId]) {
-      return OPAQUE_DARK_PALETTES[found.colorId];
-    }
-  }
-
-  // Verificar si está en storage personalizado
-  const stored = getStoredCustomMaterias(userId);
-  const custom = stored.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
-  if (custom && OPAQUE_DARK_PALETTES[custom.colorId]) {
-    return OPAQUE_DARK_PALETTES[custom.colorId];
-  }
-
-  // Fallback determinista
-  const fallbackColor = getDistinctColorForCategory(trimmed, [], userId);
-  return OPAQUE_DARK_PALETTES[fallbackColor] || OPAQUE_DARK_PALETTES.slate;
+  const colorId = getColorIdForCategory(categoryName, userId);
+  return OPAQUE_DARK_PALETTES[colorId] || OPAQUE_DARK_PALETTES.slate;
 }
 
 /**

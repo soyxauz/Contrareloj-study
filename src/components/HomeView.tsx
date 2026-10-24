@@ -481,7 +481,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const materiaThemeMap = React.useMemo(() => {
     const map = new Map<string, ReturnType<typeof getMateriaTheme>>();
     for (const m of availableMateriasList) {
-      map.set(m.name.toLowerCase(), getMateriaTheme(m.name, kits, userId));
+      map.set(m.name.trim().toLowerCase(), getMateriaTheme(m.name, kits, userId));
     }
     return map;
   }, [availableMateriasList, kits, userId]);
@@ -785,7 +785,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {filteredKits.map(kit => {
               const isActive = currentKit?.id === kit.id;
               const kStats = bookStatsMap.get(kit.id) || getBookRealStats(kit, userId);
-              const mTheme = materiaThemeMap.get((kit.category || 'General').toLowerCase()) || getMateriaTheme(kit.category, kits, userId);
+              const catKey = (kit.category || 'General').trim().toLowerCase();
+              const mTheme = materiaThemeMap.get(catKey) || getMateriaTheme(kit.category, kits, userId);
               const isMenuOpen = kitMenuOpenId === kit.id;
               const smartStudyPct = kStats.smartStudyProgressPercent ?? 0;
               const progressPercent = smartStudyPct > 0
