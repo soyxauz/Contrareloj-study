@@ -63,8 +63,10 @@ export function isMeaningfulSpeech(raw: string): boolean {
   // Filtrar tokens de ruido entre corchetes o paréntesis típicos de Whisper
   if (/^(\[[^\]]+\]|\([^)]+\))$/i.test(clean)) return false;
 
-  // Filtrar alucinaciones comunes de subtítulos
-  if (/(subtítulo|suscríbete|gracias por ver|amara\.org|watching)/i.test(clean)) return false;
+  // Filtrar alucinaciones comunes de subtítulos y artefactos
+  if (/(subtítulo|suscríbete|gracias por ver|amara\.org|watching|youtube|captioned|copyright|transcripción|derechos reservados)/i.test(clean)) {
+    return false;
+  }
 
   // Extraer palabras con caracteres alfanuméricos españoles
   const words = clean
@@ -75,18 +77,18 @@ export function isMeaningfulSpeech(raw: string): boolean {
 
   if (words.length === 0) return false;
 
-  // Si es una sola palabra y coincide con sonidos, carraspeos o suspiros comunes
+  // Sonidos no lingüísticos, carraspeos, suspiros, jadeos o ruidos habituales
   const noiseSounds = new Set([
     'ah', 'eh', 'oh', 'uh', 'um', 'umm', 'mm', 'mmm', 'sh', 'shh', 'psst',
-    'ha', 'he', 'je', 'ay', 'uy', 'cough', 'throat'
+    'ha', 'he', 'je', 'ay', 'uy', 'cough', 'throat', 'sigh', 'pant', 'yawn',
+    'gasp', 'clears', 'snort', 'snicker', 'chuckle', 'silence', 'music', 'sound',
+    'noise', 'tos', 'carraspeo', 'suspiro', 'bostezo', 'respiración', 'aplausos',
+    'ruido', 'música', 'silencio', 'chasquido', 'ajá', 'aja', 'ok'
   ]);
 
-  if (words.length === 1 && noiseSounds.has(words[0])) {
-    return false;
-  }
-
-  // Si tiene al menos una palabra de 2 o más letras que no sea un ruido aislado
-  return words.some((w) => w.length >= 2 && !noiseSounds.has(w));
+  // Exigir al menos una palabra real de 2 o más letras que no sea un ruido clasificado
+  const validWords = words.filter((w) => w.length >= 2 && !noiseSounds.has(w));
+  return validWords.length > 0;
 }
 
 function pickMimeType(): string | undefined {
@@ -261,23 +263,31 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
     opts.onVolume?.(Math.min(1, rms * 6));
 
     const now = Date.now();
-    // Calibra el piso de ruido con muestras tranquilas iniciales
-    if (calibrationSamples < 5) {
-      if (rms < 0.03) {
+    // Calibra el piso de ruido con muestras iniciales tranquilas (800ms)
+    if (calibrationSamples < 8) {
+      if (rms < 0.05) {
         noiseFloor = calibrationSamples === 0 ? rms : (noiseFloor * 0.7 + rms * 0.3);
       }
       calibrationSamples++;
       return;
     }
 
-    // En modo interrupción mientras suena el altavoz, exigir voz firme por encima del altavoz (evita auto-pausa por eco)
-    // Una vez que Thea se pausa (heardSpeech === true), relajamos el umbral para que el usuario hable cómodo
-    const isInterruptionGate = Boolean(opts.isInterruptionMode && !heardSpeech);
-    const threshold = isInterruptionGate
-      ? (opts.minSpeechRms ?? 0.085)
-      : Math.max(0.016, Math.min(0.035, noiseFloor * 1.8));
+    // Actualización adaptativa continua del piso de ruido ambiental durante silencios
+    if (rms < 0.04) {
+      noiseFloor = noiseFloor * 0.95 + rms * 0.05;
+    }
 
-    const requiredTicks = isInterruptionGate ? 3 : 2;
+    // En modo interrupción mientras suena el altavoz:
+    // Exigir voz humana firme (>0.15 RMS) y sostenida durante >500ms (6 ticks de 100ms)
+    // para descartar respiraciones, clics de teclado, carraspeos, crujidos y ruidos breves.
+    // Una vez que el audio se pausa (heardSpeech === true), relajamos el umbral para que el usuario hable cómodo.
+    const isInterruptionGate = Boolean(opts.isInterruptionMode && !heardSpeech);
+    const baseInterruptionThreshold = opts.minSpeechRms ?? 0.15;
+    const threshold = isInterruptionGate
+      ? Math.max(baseInterruptionThreshold, noiseFloor * 3.2)
+      : Math.max(0.02, Math.min(0.045, noiseFloor * 1.8));
+
+    const requiredTicks = isInterruptionGate ? 6 : 2;
 
     if (rms > threshold) {
       speechConsecutiveTicks++;

@@ -305,8 +305,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         autoStopOnSilence: true,
         silenceMs: 850,
         noSpeechTimeoutMs: 120000,
-        isInterruptionMode: true, // Umbral calibrado anti-eco: nunca se pausa por altavoces o ruido ambiente
-        minSpeechRms: 0.085,      // Requiere voz humana firme intencional por encima del audio
+        isInterruptionMode: true, // Modo interrupción con filtro estricto anti-ruido
+        minSpeechRms: 0.15,       // Exige voz humana firme intencional (>0.15 RMS) y sostenida (>500ms)
         onVolume: (vol) => {
           if (isPausedForInterruptionRef.current) {
             setMicLevel(vol);
@@ -515,7 +515,11 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           transcribingRef.current = false;
           setListening(false);
           setTranscribing(false);
-          if (text) handleSendRef.current(text);
+          if (text && isMeaningfulSpeech(text)) {
+            handleSendRef.current(text);
+          } else if (text) {
+            console.log('[OralLesson] Ruido ambiental o sonido no verbal descartado:', text);
+          }
         })
         .catch((err: Error) => {
           if (whisperRef.current !== rec) return;
