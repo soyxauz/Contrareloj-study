@@ -72,22 +72,33 @@ const SR: any =
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     : null;
 
-function splitForSpeech(text: string, max = 260): string[] {
+/**
+ * Divide el texto en oraciones optimizadas para streaming de voz ultra-rápido:
+ * La primera oración se aísla como chunk 0 para empezar a hablar en <1 segundo,
+ * mientras el resto de oraciones se precargan en paralelo en segundo plano.
+ */
+function splitForSpeech(text: string): string[] {
   const clean = text.replace(/[*_#`~>|]/g, '').replace(/\s+/g, ' ').trim();
   if (!clean) return [];
-  const sentences = clean.split(/(?<=[.!?])\s+/);
-  const chunks: string[] = [];
+  const rawSentences = clean.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+  if (rawSentences.length <= 1) return [clean];
+
+  const firstSentence = rawSentences[0].trim();
+  const restSentences = rawSentences.slice(1);
+
+  const restChunks: string[] = [];
   let current = '';
-  for (const s of sentences) {
-    if ((current + ' ' + s).trim().length > max && current) {
-      chunks.push(current.trim());
+  for (const s of restSentences) {
+    if ((current + ' ' + s).trim().length > 220 && current) {
+      restChunks.push(current.trim());
       current = s;
     } else {
       current = (current + ' ' + s).trim();
     }
   }
-  if (current) chunks.push(current.trim());
-  return chunks;
+  if (current) restChunks.push(current.trim());
+
+  return [firstSentence, ...restChunks];
 }
 
 export const OralLessonView: React.FC<OralLessonViewProps> = ({
@@ -303,10 +314,10 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         language: 'es',
         prompt: kit.title,
         autoStopOnSilence: true,
-        silenceMs: 850,
+        silenceMs: 650,
         noSpeechTimeoutMs: 120000,
-        isInterruptionMode: true, // Modo interrupción con filtro estricto anti-ruido
-        minSpeechRms: 0.15,       // Exige voz humana firme intencional (>0.15 RMS) y sostenida (>500ms)
+        isInterruptionMode: true, // Modo interrupción ágil y natural con filtro de clics
+        minSpeechRms: 0.075,      // Detecta habla humana normal (~350ms) con tolerancia a pausas de sílabas
         onVolume: (vol) => {
           if (isPausedForInterruptionRef.current) {
             setMicLevel(vol);
@@ -453,13 +464,19 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       startBargeInListener();
     }
 
+    // Pre-sintetizar de inmediato todas las frases posteriores en paralelo mientras se arranca la primera
+    if (chunks.length > 1) {
+      for (let j = 1; j < chunks.length; j++) {
+        prefetchAzureEdgeSpeech(chunks[j], VOICE, TTS_RATE);
+      }
+    }
+
     try {
       for (let i = 0; i < chunks.length; i++) {
         if (token !== speakToken.current) {
           stopBargeInListener();
           return false;
         }
-        if (i + 1 < chunks.length) prefetchAzureEdgeSpeech(chunks[i + 1], VOICE, TTS_RATE);
         let url: string | null = null;
         try {
           url = await synthesizeAzureEdgeSpeech(chunks[i], VOICE, TTS_RATE);
@@ -496,7 +513,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         language: 'es',
         prompt: kit.title,                        // mejora términos técnicos
         autoStopOnSilence: true,                  // ¡Auto-detección activa para responder solo!
-        silenceMs: 950,                           // 0.95s de silencio tras hablar activa respuesta inmediata
+        silenceMs: 600,                           // 0.60s de silencio tras hablar activa respuesta inmediata
         onVolume: setMicLevel,
         onTranscribing: () => {
           listeningRef.current = false;

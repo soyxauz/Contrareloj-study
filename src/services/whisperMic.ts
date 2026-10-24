@@ -278,19 +278,20 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
     }
 
     // En modo interrupción mientras suena el altavoz:
-    // Exigir voz humana firme (>0.15 RMS) y sostenida durante >500ms (6 ticks de 100ms)
-    // para descartar respiraciones, clics de teclado, carraspeos, crujidos y ruidos breves.
+    // Exigir voz humana natural (~0.075 RMS) sostenida durante ~350-400ms (4 ticks)
+    // con decaimiento tolerante a pausas de sílabas para no exigir gritar,
+    // pero descartando clics, carraspeos breves y ruidos de un solo instante.
     // Una vez que el audio se pausa (heardSpeech === true), relajamos el umbral para que el usuario hable cómodo.
     const isInterruptionGate = Boolean(opts.isInterruptionMode && !heardSpeech);
-    const baseInterruptionThreshold = opts.minSpeechRms ?? 0.15;
+    const baseInterruptionThreshold = opts.minSpeechRms ?? 0.075;
     const threshold = isInterruptionGate
-      ? Math.max(baseInterruptionThreshold, noiseFloor * 3.2)
-      : Math.max(0.02, Math.min(0.045, noiseFloor * 1.8));
+      ? Math.max(baseInterruptionThreshold, noiseFloor * 2.2)
+      : Math.max(0.018, Math.min(0.04, noiseFloor * 1.6));
 
-    const requiredTicks = isInterruptionGate ? 6 : 2;
+    const requiredTicks = isInterruptionGate ? 4 : 2;
 
     if (rms > threshold) {
-      speechConsecutiveTicks++;
+      speechConsecutiveTicks = Math.min(requiredTicks, speechConsecutiveTicks + 1);
       if (speechConsecutiveTicks >= requiredTicks && !heardSpeech) {
         heardSpeech = true;
         opts.onSpeechDetected?.();
@@ -299,7 +300,8 @@ export async function startWhisperRecording(opts: WhisperMicOptions): Promise<Wh
       }
       lastVoiceAt = now;
     } else {
-      speechConsecutiveTicks = 0;
+      // Decaimiento tolerante (-1) para no reiniciar a cero ante consonantes sordas o pausas de sílabas
+      speechConsecutiveTicks = Math.max(0, speechConsecutiveTicks - 1);
     }
 
     if (opts.autoStopOnSilence && heardSpeech && now - lastVoiceAt > silenceMs) {
