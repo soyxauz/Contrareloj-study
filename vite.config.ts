@@ -264,6 +264,38 @@ function aiProxyPlugin(): Plugin {
           req.on('end', async () => {
             try {
               const { url, headers, method, data } = JSON.parse(body)
+              const ALLOWED_AI_HOSTS = [
+                'ollama.com',
+                'api.groq.com',
+                'api.x.ai',
+                'grok.com',
+                'generativelanguage.googleapis.com',
+                'api.openai.com',
+                'api.anthropic.com',
+                'openrouter.ai',
+              ]
+              let host = ''
+              try {
+                const parsed = new URL(url)
+                host = parsed.hostname
+                if (parsed.protocol !== 'https:') {
+                  res.statusCode = 400
+                  res.setHeader('Content-Type', 'application/json')
+                  res.end(JSON.stringify({ error: 'Protocolo no permitido (solo HTTPS)' }))
+                  return
+                }
+              } catch {
+                res.statusCode = 400
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ error: 'URL inválida' }))
+                return
+              }
+              if (!ALLOWED_AI_HOSTS.some(h => host === h || host.endsWith('.' + h))) {
+                res.statusCode = 403
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ error: 'Host no permitido por política de seguridad' }))
+                return
+              }
               const cleanHeaders: Record<string, string> = { ...headers }
               delete cleanHeaders['host']
               delete cleanHeaders['origin']

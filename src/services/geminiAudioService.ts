@@ -56,7 +56,7 @@ export const GEMINI_VOICES: GeminiVoiceOption[] = [
 ];
 
 const DB_NAME = 'ContrarelojAudioDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'podcast_audio_cache';
 
 const MAX_ACTIVE_AUDIO_URLS = 4;
@@ -118,6 +118,9 @@ function getAudioDatabase(): Promise<IDBDatabase | null> {
         const db = (e.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('azure_edge_audio_cache')) {
+          db.createObjectStore('azure_edge_audio_cache', { keyPath: 'key' });
         }
       };
       request.onsuccess = () => resolve(request.result);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, Question, ShortAnswerEvaluation } from '../types';
 import { QuestionPrompt } from './QuestionPrompt';
 import {
@@ -43,24 +43,30 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
   const [shortAnswerEvals, setShortAnswerEvals] = useState<Record<number, ShortAnswerEvaluation>>({});
   const [manualOverrides, setManualOverrides] = useState<Record<number, boolean>>({});
 
+  const handleFinishTestRef = useRef<() => void | Promise<void>>(() => {});
+  useEffect(() => {
+    handleFinishTestRef.current = handleFinishTest;
+  });
+
   // Temporizador de cuenta regresiva
   useEffect(() => {
-    let timer: any;
-    if (testState === 'taking' && secondsRemaining > 0) {
-      timer = setInterval(() => {
-        setSecondsRemaining(prev => {
-          if (prev <= 1) {
-            handleFinishTest();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+    if (testState !== 'taking') return;
+    const timer = setInterval(() => {
+      setSecondsRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setTimeout(() => {
+            handleFinishTestRef.current();
+          }, 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     return () => clearInterval(timer);
-  }, [testState, secondsRemaining]);
+  }, [testState]);
 
-  const handleStartTest = async () => {
+    const handleStartTest = async () => {
     setIsGeneratingTest(true);
     try {
       const generated = await generateSpecializedExamQuestions(

@@ -789,16 +789,28 @@ export const App: React.FC = () => {
       updatedAt: Date.now(),
     };
     setCurrentKit(kitWithTime);
+    try {
+      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
+    } catch {}
+
     // Mover el kit actualizado al principio de la lista
-    setKits(prev => {
-      const rest = prev.filter(k => k.id !== kitWithTime.id);
-      return [kitWithTime, ...rest];
-    });
+    const rest = kits.filter(k => k.id !== kitWithTime.id);
+    const updated = [kitWithTime, ...rest];
+    setKits(updated);
+
+    const userId = currentUser ? currentUser.id : null;
+    try {
+      authService.saveUserKits(userId, updated);
+      authService.saveUserKitsAsync(userId, updated).catch((err) => {
+        console.warn('[App] Error en saveUserKitsAsync tras actualizar kit:', err);
+      });
+    } catch (e) {
+      console.error('Error al persistir Study Kits tras actualizar:', e);
+    }
 
     try {
-      const userId = currentUser ? currentUser.id : null;
       if (userId) {
-        googleDriveService.scheduleAutoSync(userId, [kitWithTime], 7000);
+        googleDriveService.scheduleAutoSync(userId, updated, 7000);
       }
     } catch (e) {
       console.error('Error al programar sincronización de Study Kits tras actualizar:', e);

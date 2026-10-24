@@ -864,6 +864,14 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
           osc.stop(ctx.currentTime + i * 0.08 + 0.25);
         });
       }
+      const cleanupMs = type === 'victory' ? 650 : 350;
+      setTimeout(() => {
+        try {
+          if (ctx.state !== 'closed') {
+            ctx.close().catch(() => {});
+          }
+        } catch {}
+      }, cleanupMs);
     } catch {
       // AudioContext no disponible o bloqueado - ignorar silenciosamente
     }

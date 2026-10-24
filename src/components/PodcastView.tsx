@@ -562,6 +562,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       gain2.connect(ctx.destination);
       osc2.start(now + 0.15);
       osc2.stop(now + 0.6);
+      setTimeout(() => {
+        try {
+          if (ctx.state !== 'closed') {
+            ctx.close().catch(() => {});
+          }
+        } catch {}
+      }, 650);
     } catch {
       // AudioContext opcional y no bloqueante
     }
