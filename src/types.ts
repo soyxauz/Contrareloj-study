@@ -94,6 +94,17 @@ export interface Question {
   reformedConcept?: string;
   originalFailedQuestionId?: string;
   socraticAngle?: string;
+
+  // Google Search & AI Overview Feedback
+  googleOverview?: GoogleOverview;
+}
+
+export interface GoogleOverview {
+  query: string;
+  bullets: string[];
+  imageSearchTerm?: string;
+  imageUrl?: string;
+  imageCaption?: string;
 }
 
 export interface ShortAnswerEvaluation {

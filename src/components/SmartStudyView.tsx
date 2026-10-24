@@ -39,6 +39,8 @@ import {
   ZoomIn,
   CheckCheck,
   Send,
+  Search,
+  ExternalLink,
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import confetti from 'canvas-confetti';
@@ -110,6 +112,194 @@ interface SmartStudyViewProps {
   onUpdateKit?: (updatedKit: StudyKit) => void;
   onNavigate?: (mode: StudyMode) => void;
 }
+
+interface GoogleSearchOverviewCardProps {
+  question: Question;
+  kitAssets?: DocumentAsset[];
+  onZoomImage?: (asset: DocumentAsset) => void;
+}
+
+export const GoogleSearchOverviewCard: React.FC<GoogleSearchOverviewCardProps> = ({
+  question,
+  kitAssets = [],
+  onZoomImage,
+}) => {
+  // 1. Resolver la consulta de búsqueda de Google
+  let query = question.googleOverview?.query;
+  if (!query) {
+    const match = question.explanation.match(/### Búsqueda en Google:\s*["“']?([^"”'\n]+)["”']?/i);
+    if (match) {
+      query = match[1].trim();
+    } else {
+      const bestAnswer =
+        question.options && question.correctIndex !== undefined
+          ? question.options[question.correctIndex]
+          : question.idealAnswer || '';
+      query = question.topic
+        ? `${question.topic}: ${bestAnswer ? bestAnswer.slice(0, 50) : question.question.slice(0, 50)}`
+        : question.question.slice(0, 65);
+    }
+  }
+
+  // 2. Resolver exactamente 3 viñetas destacadas
+  let bullets: string[] = [];
+  if (question.googleOverview?.bullets && question.googleOverview.bullets.length >= 2) {
+    bullets = question.googleOverview.bullets.slice(0, 3);
+  } else {
+    const rawBullets = question.explanation.match(/(?:> •|•|\*|-|\d+\.)\s*([^\n]+)/g);
+    if (rawBullets && rawBullets.length >= 2) {
+      bullets = rawBullets.slice(0, 3).map(b => b.replace(/^(?:> •|•|\*|-|\d+\.)\s*/, '').trim());
+    }
+  }
+
+  if (bullets.length < 3) {
+    const parts = question.explanation
+      .split('\n\n')
+      .map(p => p.replace(/[#*`>]/g, '').trim())
+      .filter(p => p.length > 20 && !p.toLowerCase().includes('búsqueda en google'));
+
+    const correctText =
+      question.options && question.correctIndex !== undefined
+        ? question.options[question.correctIndex]
+        : question.idealAnswer || 'Fundamento exacto del concepto evaluado.';
+
+    bullets = [
+      `Respuesta directa y veredicto: ${correctText}`,
+      parts[0] ? (parts[0].length > 140 ? parts[0].slice(0, 140) + '...' : parts[0]) : 'Principio causal y fisiológico verificado en el material de estudio.',
+      parts[1] ? (parts[1].length > 140 ? parts[1].slice(0, 140) + '...' : parts[1]) : 'Conclusión distintiva contrastada frente a las alternativas evaluadas.',
+    ];
+  }
+
+  while (bullets.length < 3) {
+    bullets.push('Evidencia corroborada por la bibliografía oficial del documento.');
+  }
+
+  // 3. Resolver mínimo 1 imagen relevante
+  let displayAsset: DocumentAsset | undefined = question.sourceAsset?.dataUrl ? question.sourceAsset : undefined;
+
+  if (!displayAsset && question.sourcePageOrSlide && kitAssets.length > 0) {
+    displayAsset = kitAssets.find(a => a.pageOrSlide === question.sourcePageOrSlide && a.dataUrl);
+  }
+
+  if (!displayAsset && kitAssets.length > 0) {
+    const keywords = (question.topic + ' ' + query).toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    displayAsset = kitAssets.find(a => {
+      if (!a.dataUrl) return false;
+      const text = ((a.caption || '') + ' ' + (a.contextNearby || '')).toLowerCase();
+      return keywords.some(k => text.includes(k));
+    });
+  }
+
+  if (!displayAsset && kitAssets.length > 0) {
+    displayAsset = kitAssets.find(a => a.dataUrl);
+  }
+
+  const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  const googleImagesUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
+
+  return (
+    <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-br from-[#0c1229] via-[#151138] to-[#0d0f22] p-4 sm:p-5 shadow-xl space-y-4 animate-fadeIn">
+      {/* Cabecera estilo Google Search / AI Overview */}
+      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-blue-500/20 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-white/10 border border-blue-400/40 flex items-center justify-center font-black text-sm text-white shadow-inner">
+            <span className="text-blue-400 font-bold">G</span>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Búsqueda en Google • AI Overview</span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-100 font-semibold italic mt-0.5">
+              &quot;{query}&quot;
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <a
+            href={googleSearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] px-2.5 py-1.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            title="Abrir búsqueda en Google en una nueva pestaña"
+          >
+            <Search className="w-3 h-3 text-blue-400" />
+            <span>Google</span>
+            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+          </a>
+          <a
+            href={googleImagesUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] px-2.5 py-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 border border-violet-500/30 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            title="Abrir imágenes en Google en una nueva pestaña"
+          >
+            <ImageIcon className="w-3 h-3 text-violet-400" />
+            <span>Imágenes</span>
+            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+          </a>
+        </div>
+      </div>
+
+      {/* Grid de 3 Viñetas + Mínimo 1 Imagen del Buscador / Material */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+        {/* 3 Viñetas destacadas */}
+        <div className="md:col-span-2 flex flex-col justify-between gap-2.5">
+          {bullets.slice(0, 3).map((bullet, idx) => (
+            <div
+              key={idx}
+              className="flex items-start gap-2.5 p-3 rounded-xl bg-blue-950/20 border border-blue-500/20 text-xs sm:text-sm text-slate-200 leading-relaxed"
+            >
+              <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-blue-500/40">
+                {idx + 1}
+              </div>
+              <span className="flex-1 font-normal text-slate-200">{bullet}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 1 Imagen asociada del buscador / material */}
+        <div className="flex flex-col justify-center">
+          {displayAsset && displayAsset.dataUrl ? (
+            <div
+              onClick={() => onZoomImage && onZoomImage(displayAsset!)}
+              className="group relative aspect-video md:aspect-auto md:h-full min-h-[130px] rounded-xl bg-black/60 border border-blue-500/30 overflow-hidden flex items-center justify-center p-2 cursor-pointer hover:border-blue-400 transition-all shadow-md"
+              title="Clic para ampliar imagen"
+            >
+              <img
+                src={displayAsset.dataUrl}
+                alt={displayAsset.caption || query}
+                className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-lg">
+                  <ZoomIn className="w-4 h-4" />
+                </div>
+              </div>
+              <span className="absolute bottom-1.5 left-1.5 right-1.5 text-[9px] px-2 py-0.5 rounded bg-black/80 backdrop-blur-xs text-blue-200 truncate text-center border border-white/10">
+                {displayAsset.caption || (displayAsset.pageOrSlide ? `Diapositiva ${displayAsset.pageOrSlide}` : 'Figura de referencia')}
+              </span>
+            </div>
+          ) : (
+            <a
+              href={googleImagesUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="aspect-video md:aspect-auto md:h-full min-h-[130px] rounded-xl bg-blue-950/20 border border-dashed border-blue-500/30 p-3 flex flex-col items-center justify-center text-center gap-1.5 hover:bg-blue-950/40 transition-colors group cursor-pointer"
+            >
+              <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                <ImageIcon className="w-4.5 h-4.5" />
+              </div>
+              <span className="text-[11px] font-semibold text-blue-300">Explorar imágenes en Google</span>
+              <span className="text-[9px] text-slate-400 line-clamp-1 italic">&quot;{query}&quot;</span>
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
   // ── Session Restoration (Memoria Total en Tiempo Real) ────────────────────
@@ -2547,8 +2737,21 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                           </button>
                         </div>
                       </div>
+                      {(() => {
+                        const matchedQ = kit.questions.find(q => q.id === item.questionId);
+                        if (!matchedQ) return null;
+                        return (
+                          <div className="my-2">
+                            <GoogleSearchOverviewCard
+                              question={matchedQ}
+                              kitAssets={kit.assets || []}
+                              onZoomImage={(asset) => setZoomAsset(asset)}
+                            />
+                          </div>
+                        );
+                      })()}
                       <div className="leading-relaxed text-slate-300">
-                        <FormattedText text={item.explanation} />
+                        <FormattedText text={item.explanation.replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '').trim() || item.explanation} />
                       </div>
                     </div>
                   )}
@@ -3637,8 +3840,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </div>
             </div>
 
-            <div className="p-5 sm:p-6 rounded-2xl bg-[#181138]/90 border border-[#2e2258] text-slate-200 text-sm sm:text-base leading-relaxed shadow-lg">
-              <FormattedText text={currentQ.explanation} />
+            {/* Tarjeta de Búsqueda de Google / AI Overview con 3 viñetas e imagen */}
+            <GoogleSearchOverviewCard
+              question={currentQ}
+              kitAssets={kit.assets || []}
+              onZoomImage={(asset) => setZoomAsset(asset)}
+            />
+
+            <div className="p-5 sm:p-6 rounded-2xl bg-[#181138]/90 border border-[#2e2258] text-slate-200 text-sm sm:text-base leading-relaxed shadow-lg space-y-2">
+              <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5 mb-2">
+                <Lightbulb className="w-4 h-4" />
+                <span>Desglose Pedagógico y Fundamentación Académica:</span>
+              </div>
+              <FormattedText text={currentQ.explanation.replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '').trim() || currentQ.explanation} />
             </div>
 
             <div className="flex items-center gap-2 text-xs text-slate-400 px-1">

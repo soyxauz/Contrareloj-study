@@ -82,8 +82,17 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   const handleGenerateStudyGuide = async () => {
     setIsGenerating(true);
     try {
+      const fullText =
+        (kit.sourceText && kit.sourceText.length > 100)
+          ? kit.sourceText
+          : (kit.chunks && kit.chunks.length > 0)
+          ? kit.chunks.map(c => `## ${c.heading || `Diapositiva / Sección ${c.pageOrSlide || c.chunkIndex + 1}`}\n${c.text}`).join('\n\n')
+          : (kit.sourceMaterials && kit.sourceMaterials.length > 0)
+          ? kit.sourceMaterials.map(m => m.name).join(', ')
+          : kit.description;
+
       const generated = await generateAIStudyGuide(
-        kit.sourceText || kit.description,
+        fullText,
         kit.title,
         kit.category
       );

@@ -1273,6 +1273,15 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       ],
       "banco_etiquetas": ["Estructura A", "Estructura B", "Distractor A", "Distractor B"],
       "retroalimentacion": {
+        "busqueda_google": {
+          "consulta": "Búsqueda textual exacta y natural en Google para verificar la respuesta (ej: mecanismo de accion furosemida asa de henle)",
+          "tres_vinetas": [
+            "Afirmación directa nuclear que confirma con precisión la respuesta correcta.",
+            "Principio o mecanismo causal/fisiológico clave que la fundamenta.",
+            "Conclusión distintiva o impacto clínico/práctico frente a las demás alternativas."
+          ],
+          "termino_imagen": "Palabras clave concisas para imagen o diagrama relevante (ej: cotransportador Na K 2Cl asa de henle nefrona)"
+        },
         "referencia_al_texto": "Cita o paráfrasis que sustenta la respuesta.",
         "explicacion_logica": "Por qué es la respuesta correcta.",
         "por_que_fallan_las_otras": "Por qué fallan los distractores."
@@ -1464,15 +1473,45 @@ Genera el JSON completo respetando la estructura exigida:`;
       fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
       const retro = p.retroalimentacion || {};
+      const busqueda = retro.busqueda_google || {};
       const explanationParts: string[] = [];
+
+      // Estructurar Búsqueda de Google con 3 viñetas destacadas
+      const query = String(
+        busqueda.consulta ||
+        (p.concepto_evaluado ? `¿Cómo funciona ${p.concepto_evaluado}?` : 'Fundamento conceptual')
+      ).trim();
+
+      let bullets: string[] = [];
+      if (Array.isArray(busqueda.tres_vinetas) && busqueda.tres_vinetas.length >= 2) {
+        bullets = busqueda.tres_vinetas.slice(0, 3).map((b: any) => String(b).trim());
+      } else {
+        bullets = [
+          retro.explicacion_logica ? String(retro.explicacion_logica).slice(0, 160).trim() : 'Respuesta fundamentada en el marco conceptual.',
+          retro.referencia_al_texto ? `Referencia textual: "${String(retro.referencia_al_texto).slice(0, 160).trim()}"` : 'El principio se sustenta en la evidencia causal directa del material.',
+          retro.por_que_fallan_las_otras ? String(retro.por_que_fallan_las_otras).slice(0, 160).trim() : 'Las demás alternativas alteran el orden de causalidad o la anatomía funcional.'
+        ];
+      }
+      while (bullets.length < 3) {
+        bullets.push('Conclusión corroborada por el marco conceptual del documento de estudio.');
+      }
+
+      const googleOverviewMd = [
+        `### Búsqueda en Google: "${query}"`,
+        `> **Resumen del Buscador (Puntos Clave):**`,
+        ...bullets.map(b => `> • ${b}`),
+      ].join('\n');
+
+      explanationParts.push(googleOverviewMd);
+
       if (retro.explicacion_logica) {
-        explanationParts.push(String(retro.explicacion_logica).trim());
+        explanationParts.push(`**Fundamentación Académica:**\n${String(retro.explicacion_logica).trim()}`);
       }
       if (retro.referencia_al_texto) {
         explanationParts.push(`**Referencia en el texto:** "${String(retro.referencia_al_texto).trim()}"`);
       }
       if (retro.por_que_fallan_las_otras) {
-        explanationParts.push(`**Descarte:** ${String(retro.por_que_fallan_las_otras).trim()}`);
+        explanationParts.push(`**Descarte de opciones:**\n${String(retro.por_que_fallan_las_otras).trim()}`);
       }
 
       // RAG Traceability linkage
@@ -1538,6 +1577,11 @@ Genera el JSON completo respetando la estructura exigida:`;
         imageWordBank,
         diagramTitle,
         explanation: explanationParts.join('\n\n') || 'Explicación fundamentada en el material de estudio.',
+        googleOverview: {
+          query,
+          bullets,
+          imageSearchTerm: String(busqueda.termino_imagen || p.concepto_evaluado || '').trim(),
+        },
         sourceChunkId,
         sourceChunkText,
         sourcePageOrSlide,
@@ -2170,37 +2214,55 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   return [];
 }
 
-/** Generación de Guía de Estudio bajo demanda */
+/** Generación de Guía de Estudio bajo demanda con cobertura exhaustiva de todo el documento */
 export async function generateAIStudyGuide(
   rawText: string,
   title: string,
   category: string
 ): Promise<string> {
   const settings = getAISettings();
-  const langDetection = detectDocumentLanguage(rawText);
+  const cleanInput = (rawText || '').trim();
+  const langDetection = detectDocumentLanguage(cleanInput);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres un redactor académico de élite de Contrareloj Study.
-Genera una Guía de Estudio estructurada en Markdown rigurosa, clara y pedagógica en español.
+  const systemPrompt = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
+Tu misión es generar una GUÍA DE ESTUDIO MAGNA, SUMAMENTE DETALLADA Y EXHAUSTIVA en Markdown que cubra ESTRICTAMENTE TODO EL DOCUMENTO proporcionado, sin omitir ninguna diapositiva, sección, mecanismo, fármaco, clasificación o detalle técnico.
 
 ${translationDirective}
 
-Incluye:
-# ${title}
-> **Resumen Ejecutivo:** Síntesis del material en 3 líneas directas.
+INSTRUCCIONES CRÍTICAS DE EXHAUSTIVIDAD OBLIGATORIA:
+1. COBERTURA TOTAL Y ESTRICTA: Está terminantemente prohibido hacer resúmenes superficiales o saltarse diapositivas/secciones intermedias o finales. Debes recorrer sistemáticamente todo el material desde la primera diapositiva/página hasta la última.
+2. MÁXIMO RIGOR Y DETALLE: No te limites a nombrar conceptos; desglosa los mecanismos fisiológicos, vías moleculares, fórmulas, dosis relativas, indicaciones clínicas, efectos adversos y relaciones de causa-efecto de cada elemento presente.
+3. TABLAS COMPARATIVAS DETALLADAS: Genera tablas completas en formato Markdown (| Columna 1 | Columna 2 | Columna 3 |) sin líneas vacías entre filas para contrastar clasificaciones, diferencias diagnósticas o características distintivas.
+4. ESTRUCTURA DIDÁCTICA EXHAUSTIVA OBLIGATORIA:
+# Guía de Estudio Integral: ${title}
+> **Resumen Ejecutivo:** Visión panorámica y trascendencia académica del tema.
 
-## 1. Núcleos Conceptuales y Principios Clave
-(Con viñetas, definiciones y relaciones lógicas profundas)
+## 1. Fundamentos y Marco Teórico Integral
+(Principios basales, taxonomía y definiciones esenciales)
 
-## 2. Cuadros Comparativos y Diferenciaciones Clave
-(UTILIZA TABLAS EN MARKDOWN con formato | Columna 1 | Columna 2 | Columna 3 | sin líneas vacías entre filas para contrastar patologías, clasificaciones, signos distintivos, fases o conceptos clave)
+## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección / Diapositiva por Diapositiva)
+(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original, desglosando cada fármaco o concepto individualmente)
 
-## 3. Puntos Clave de Examen & Errores Frecuentes
-(Diferenciaciones sutiles y detalles que suelen confundir a los estudiantes)
+## 3. Cuadros Comparativos, Clasificaciones y Vías de Acción
+(Tablas comparativas extensas que contrasten todos los elementos del tema)
 
-## 4. Resumen Rápido / Mnemotecnia de Repaso`;
+## 4. Perlas de Examen, Casos Prácticos y Errores Habituales
+(Diferenciaciones sutiles, preguntas trampa típicas de examen y razonamiento analítico)
 
-  const userPrompt = `Documento ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera la guía de estudio completa en español (markdown):`;
+## 5. Mnemotecnias y Síntesis de Alto Rendimiento
+(Reglas nemotécnicas, cuadros nemónicos y resumen de consolidación rápida)`;
+
+  const maxInputChars = 85000;
+  const processedInput = cleanInput.length > maxInputChars
+    ? cleanInput.slice(0, maxInputChars) + `\n\n[... Resto del documento condensado: total ${cleanInput.length} caracteres]`
+    : cleanInput;
+
+  const userPrompt = `DOCUMENTO ORIGINAL COMPLETO ("${title}" - ${category}):
+
+${processedInput}
+
+Genera la Guía de Estudio exhaustiva en español (Markdown). Cubre estrictamente todo el documento de principio a fin con el máximo nivel de profundidad y detalle:`;
 
   if (settings.enabled) {
     try {
