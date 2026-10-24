@@ -114,6 +114,34 @@ interface SmartStudyViewProps {
 // Réplica exacta de Thea para la justificación (3 viñetas + ilustración médica con enlace a fuente)
 export const GoogleSearchOverviewCard = TheaExplanationView;
 
+/**
+ * Limpia y estructura el texto de retroalimentación eliminando artefactos de prompts y formateando referencias
+ */
+const parseExplanationDetails = (rawText: string) => {
+  if (!rawText) return { main: '', reference: null };
+
+  // 1. Quitar artefactos de descarte no aplicable o búsqueda en google
+  let clean = rawText
+    .replace(/\*\*Descarte:\*\*[\s\S]*?(?=\*\*|$)/gi, '')
+    .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*|$)/gi, '')
+    .trim();
+
+  // 2. Extraer referencia entre comillas si existe
+  const refMatch = clean.match(/\*\*Referencia(?:\s+en\s+el\s+texto)?:\*\*\s*["“']?([^"”'\n]+)["”']?/i);
+  let main = clean;
+  let reference: string | null = null;
+
+  if (refMatch) {
+    reference = refMatch[1].trim();
+    main = clean.slice(0, refMatch.index).trim();
+  }
+
+  // Quitar prefijos redundantes
+  main = main.replace(/^La respuesta esperada era:\s*/i, '').trim();
+
+  return { main, reference };
+};
+
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
   // ── Session Restoration (Memoria Total en Tiempo Real) ────────────────────
   const savedSession = useMemo(() => {
@@ -3417,48 +3445,85 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
         )}
 
-        {/* ── ESTADO INMEDIATO DE LA RESPUESTA PARA PREGUNTAS ABIERTAS (SHORT-ANSWER) ─── */}
-        {isAnswered && (qType === 'short-answer' || qType === 'matching') && (
-          <div className={`p-4 rounded-2xl mb-6 flex items-center justify-between gap-3 border shadow-lg animate-feedbackPop ${
-            isCurrentCorrect
-              ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200 ring-1 ring-emerald-500/40'
-              : 'bg-rose-950/70 border-rose-500/60 text-rose-200 ring-1 ring-rose-500/40'
-          }`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold ${
-                isCurrentCorrect ? 'bg-emerald-500 text-slate-950' : 'bg-rose-500 text-white'
-              }`}>
-                {isCurrentCorrect ? <Check className="w-5 h-5 stroke-[3]" /> : <X className="w-5 h-5 stroke-[3]" />}
-              </div>
-              <div>
-                <p className="font-extrabold text-sm sm:text-base text-white">
-                  {isManuallyOverridden
-                    ? '¡Respuesta Reclasificada! (¡Tenía razón!)'
-                    : isCurrentCorrect
-                    ? '¡Respuesta Correcta!'
-                    : 'Respuesta Incorrecta'}
-                </p>
-                <p className="text-xs sm:text-sm opacity-90 mt-0.5">
-                  {isCurrentCorrect
-                    ? 'Tu respuesta coincide conceptualmente con la solución esperada.'
-                    : `La respuesta esperada era: ${currentQ.idealAnswer || currentQ.explanation}`}
-                </p>
-              </div>
-            </div>
+        {/* ── ESTADO INMEDIATO DE LA RESPUESTA PARA PREGUNTAS ABIERTAS Y EMPAREJAMIENTO ─── */}
+        {isAnswered && (qType === 'short-answer' || qType === 'matching') && (() => {
+          const rawFeedback = currentQ.idealAnswer || currentQ.explanation || '';
+          const parsedFeedback = parseExplanationDetails(rawFeedback);
 
-            {!isCurrentCorrect && (
-              <button
-                type="button"
-                onClick={handleIWasRight}
-                className="px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300"
-                title="Si consideras que tu respuesta era válida o la IA fue demasiado estricta, haz clic para marcarla como correcta"
-              >
-                <CheckCheck className="w-3.5 h-3.5 text-amber-300" />
-                <span>¡Tenía razón!</span>
-              </button>
-            )}
-          </div>
-        )}
+          return (
+            <div className={`p-4 sm:p-5 rounded-2xl mb-6 flex items-start justify-between gap-4 border shadow-lg animate-feedbackPop ${
+              isCurrentCorrect
+                ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200 ring-1 ring-emerald-500/40'
+                : 'bg-rose-950/70 border-rose-500/60 text-rose-200 ring-1 ring-rose-500/40'
+            }`}>
+              <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold mt-0.5 ${
+                  isCurrentCorrect ? 'bg-emerald-500 text-slate-950' : 'bg-rose-500 text-white'
+                }`}>
+                  {isCurrentCorrect ? <Check className="w-5 h-5 stroke-[3]" /> : <X className="w-5 h-5 stroke-[3]" />}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-extrabold text-sm sm:text-base text-white">
+                    {isManuallyOverridden
+                      ? '¡Respuesta Reclasificada! (¡Tenía razón!)'
+                      : isCurrentCorrect
+                      ? '¡Respuesta Correcta!'
+                      : 'Respuesta Incorrecta'}
+                  </p>
+
+                  {isCurrentCorrect ? (
+                    <p className="text-xs sm:text-sm text-emerald-200/90 mt-1">
+                      {qType === 'matching' && correctMatchingFormula
+                        ? `Has emparejado todos los conceptos con exactitud: ${correctMatchingFormula}.`
+                        : 'Tu respuesta coincide conceptualmente con la solución esperada.'}
+                    </p>
+                  ) : (
+                    <div className="text-xs sm:text-sm text-slate-200 mt-1.5 space-y-2">
+                      {qType === 'matching' && correctMatchingFormula && (
+                        <div className="text-xs text-rose-300">
+                          <span className="font-semibold opacity-90">Emparejamientos correctos: </span>
+                          <span className="text-white font-bold">{correctMatchingFormula}</span>
+                        </div>
+                      )}
+
+                      {parsedFeedback.main && (
+                        <div className="leading-relaxed text-slate-200">
+                          <span className="font-bold text-rose-300 mr-1.5">
+                            {qType === 'matching' ? 'Fundamento esperado:' : 'La respuesta esperada era:'}
+                          </span>
+                          <FormattedText text={parsedFeedback.main} inlineOnly={true} />
+                        </div>
+                      )}
+
+                      {parsedFeedback.reference && (
+                        <div className="text-xs text-rose-200/95 bg-black/30 rounded-xl px-3 py-2 border-l-2 border-rose-400 flex items-start gap-2">
+                          <BookOpen className="w-3.5 h-3.5 text-rose-300 shrink-0 mt-0.5" />
+                          <div className="leading-normal">
+                            <span className="font-semibold text-rose-300 mr-1.5">Referencia en el texto:</span>
+                            <span className="italic opacity-90">&quot;{parsedFeedback.reference}&quot;</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {!isCurrentCorrect && (
+                <button
+                  type="button"
+                  onClick={handleIWasRight}
+                  className="px-4 py-2 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 active:scale-95 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 whitespace-nowrap mt-0.5"
+                  title="Si consideras que tu respuesta era válida o la IA fue demasiado estricta, haz clic para marcarla como correcta"
+                >
+                  <CheckCheck className="w-3.5 h-3.5 text-amber-300" />
+                  <span>¡Tenía razón!</span>
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── ACTION ROW: HISTORIAL DE PREGUNTAS + THUMBS UP / DOWN (ESTILO THEA) ────── */}
         <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
