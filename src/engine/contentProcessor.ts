@@ -1379,7 +1379,7 @@ function getPdfImageObject(page: any, pdf: any, imgKey: string, timeoutMs = 1200
 async function extractContentFromPDF(file: File): Promise<{ text: string; assets: DocumentAsset[] }> {
   const arrayBuffer = await file.arrayBuffer();
 
-  // Obtener instancia de pdfjs (global o importada)
+  // Obtener instancia de pdfjs (global o importada dinámicamente sin bloquear el renderizado inicial)
   let pdfjs = (window as any).pdfjsLib;
   if (!pdfjs) {
     try {
@@ -1387,6 +1387,24 @@ async function extractContentFromPDF(file: File): Promise<{ text: string; assets
     } catch {
       // ignore
     }
+  }
+
+  if (!pdfjs && typeof window !== 'undefined' && typeof document !== 'undefined') {
+    try {
+      await new Promise<void>((resolve) => {
+        const script = document.createElement('script');
+        script.src = '/pdf.min.js';
+        script.onload = () => {
+          if ((window as any).pdfjsLib) {
+            (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+            pdfjs = (window as any).pdfjsLib;
+          }
+          resolve();
+        };
+        script.onerror = () => resolve();
+        document.head.appendChild(script);
+      });
+    } catch {}
   }
 
   if (typeof pdfjs !== 'undefined') {

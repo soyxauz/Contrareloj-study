@@ -1,0 +1,18 @@
+# Contrareloj Study
+
+> Contrareloj Study es una plataforma de aprendizaje activo y adaptativo potenciada por inteligencia artificial, diseñada para dominar temas complejos mediante preguntas interactivas, tarjetas de memoria, resúmenes conceptuales, diagramas visuales y podcasts educativos.
+
+## Modos y Funcionalidades Principales
+
+- [Smart Study](https://contrareloj-study-ynjt.vercel.app/): Modo interactivo de estudio adaptativo con preguntas de opción múltiple, justificaciones clínicas/académicas inmediatas y progresión inteligente.
+- [Guía de Estudio Inteligente](https://contrareloj-study-ynjt.vercel.app/): Documentos teóricos generados y estructurados con núcleos conceptuales, mnemotecnias y síntesis en voz alta sin latencia.
+- [Podcasts Educativos](https://contrareloj-study-ynjt.vercel.app/): Conversaciones y lecciones auditivas profundas generadas entre Sofía y Mateo para repaso manos libres.
+- [Galería de Figuras y Esquemas](https://contrareloj-study-ynjt.vercel.app/): Extracción e inspección detallada de diagramas, tablas y figuras embebidas en documentos académicos.
+- [Tarjetas de Memoria / Flashcards](https://contrareloj-study-ynjt.vercel.app/): Repaso espaciado activo para consolidación mnemotécnica a largo plazo.
+- [Evaluaciones Prácticas](https://contrareloj-study-ynjt.vercel.app/): Simuladores de exámenes con temporizador y análisis métrico de rendimiento por materia.
+
+## Capacidades Técnicas y de Inteligencia Artificial
+
+- Motor multimodal compatible con Ollama local y modelos de lenguaje de última generación.
+- Sincronización en la nube bidireccional mediante Google Drive con persistencia local ultrarrápida en IndexedDB.
+- Extracción de documentos en múltiples formatos (PDF, DOCX, PPTX, TXT) directamente en el navegador.
