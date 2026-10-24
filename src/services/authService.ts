@@ -459,14 +459,14 @@ export const authService = {
                 id: item.id,
                 title: item.title,
                 category: item.category || 'General',
-                description: '',
-                icon: 'BookOpen',
-                color: 'from-blue-500 to-indigo-600',
+                description: item.description || '',
+                icon: item.icon || 'BookOpen',
+                color: item.color || 'from-blue-500 to-indigo-600',
                 questions: [],
                 flashcards: [],
                 studyGuideMarkdown: '',
                 podcast: null,
-                updatedAt: item.updatedAt || Date.now(),
+                updatedAt: item.updatedAt || 0,
               }));
               inMemoryKitsCache.set(key, partialKits);
               return partialKits;
@@ -566,6 +566,9 @@ export const authService = {
     const index: StudyKitIndexItem[] = kits.map(k => ({
       id: k.id,
       title: k.title,
+      description: k.description,
+      icon: k.icon,
+      color: k.color,
       updatedAt: k.updatedAt || Date.now(),
       category: k.category,
       questionsCount: Array.isArray(k.questions) ? k.questions.length : 0,
@@ -652,12 +655,20 @@ export const authService = {
     // 2. Escribir índice ligero en LocalStorage
     this.writeIndexToLocalStorage(userId, cleanKits, true);
 
-    // 3. Intentar guardar versión aligerada en LocalStorage
+    // 3. Intentar guardar versión aligerada en LocalStorage protegiendo la cuota
     try {
       const lightweight = stripHeavyAssetsForLocalStorage(cleanKits);
-      localStorage.setItem(key, JSON.stringify(lightweight));
+      const serialized = JSON.stringify(lightweight);
+      if (serialized.length < 2500000) {
+        localStorage.setItem(key, serialized);
+      } else {
+        localStorage.removeItem(key);
+      }
     } catch (err) {
       notifyQuotaExceeded(err);
+      try {
+        localStorage.removeItem(key);
+      } catch {}
     }
 
     // 4. Guardar inmediatamente en IndexedDB (almacén primario completo)

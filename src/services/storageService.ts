@@ -428,6 +428,16 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
     // Eliminar sourceText y chunks del almacenamiento en LocalStorage para garantizar que nunca exceda 5MB
     sourceText: undefined,
     chunks: undefined,
+    podcast: kit.podcast ? {
+      id: kit.podcast.id,
+      title: kit.podcast.title,
+      duration: kit.podcast.duration,
+      hosts: kit.podcast.hosts,
+      dialogue: (kit.podcast.dialogue || []).slice(0, 5),
+      format: kit.podcast.format,
+      durationMode: kit.podcast.durationMode,
+      orientation: kit.podcast.orientation,
+    } : null,
     sourceMaterials: kit.sourceMaterials?.map(m => ({
       id: m.id,
       name: m.name,
@@ -436,14 +446,14 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
       rawText: undefined,
     })),
     assets: kit.assets?.map((a) => {
-      if (a.dataUrl && a.dataUrl.length > 1000) {
+      if (a.dataUrl && a.dataUrl.length > 500) {
         const { dataUrl: _, ...rest } = a;
         return rest;
       }
       return a;
     }),
     questions: kit.questions?.map((q) => {
-      if (q.sourceAsset && q.sourceAsset.dataUrl && q.sourceAsset.dataUrl.length > 1000) {
+      if (q.sourceAsset && q.sourceAsset.dataUrl && q.sourceAsset.dataUrl.length > 500) {
         const { dataUrl: _, ...restAsset } = q.sourceAsset;
         return {
           ...q,
@@ -453,7 +463,7 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
       return q;
     }),
     flashcards: kit.flashcards?.map((f) => {
-      if (f.sourceAsset && f.sourceAsset.dataUrl && f.sourceAsset.dataUrl.length > 1000) {
+      if (f.sourceAsset && f.sourceAsset.dataUrl && f.sourceAsset.dataUrl.length > 500) {
         const { dataUrl: _, ...restAsset } = f.sourceAsset;
         return {
           ...f,
@@ -486,6 +496,9 @@ export function isCorruptedKit(k: unknown): boolean {
 export interface StudyKitIndexItem {
   id: string;
   title: string;
+  description?: string;
+  icon?: string;
+  color?: string;
   updatedAt: number;
   category?: string;
   questionsCount: number;

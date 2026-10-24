@@ -4,7 +4,6 @@ import { BookOpen, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
 import {
   hydrateKitAssets,
-  hydrateKitsAssets,
   isCorruptedKit,
   requestPersistentStorage,
   mergeKitsByUpdatedAt,
@@ -148,20 +147,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     let isCancelled = false;
 
-    authService.restorePersistentSession().then(async (restoredUser) => {
+    // 1. Recuperar kits y materias inmediatamente desde IndexedDB sin esperar la sesión
+    const initialUserId = currentUser ? currentUser.id : authService.getCurrentUser()?.id || null;
+    authService.restoreUserKitsAsync(initialUserId).then((recoveredKits) => {
       if (isCancelled) return;
-      const targetUser = restoredUser || currentUser;
-      if (restoredUser && !currentUser) {
-        setCurrentUser(restoredUser);
-      }
-
-      const targetUserId = targetUser ? targetUser.id : null;
-      const [recoveredKits] = await Promise.all([
-        authService.restoreUserKitsAsync(targetUserId),
-        restoreCustomMateriasAsync(targetUserId),
-      ]);
-      if (isCancelled) return;
-
       const cleanKits = recoveredKits.filter(k => !isCorruptedKit(k));
       if (cleanKits.length > 0) {
         setKits(prev => {
@@ -174,7 +163,6 @@ export const App: React.FC = () => {
           const targetId = prev ? prev.id : savedCurrentId;
           const fullKit = cleanKits.find(k => k.id === targetId);
 
-          // Si el kit activo tiene 0 preguntas y cleanKits contiene la versión completa, actualizarlo
           if (fullKit && (fullKit.questions?.length || 0) > (prev?.questions?.length || 0)) {
             return fullKit;
           }
@@ -190,6 +178,22 @@ export const App: React.FC = () => {
         });
       } else {
         isHydratedRef.current = true;
+      }
+    });
+
+    restoreCustomMateriasAsync(initialUserId).catch(() => {});
+
+    // 2. Restauración de sesión persistente en paralelo si el usuario no estaba cargado
+    authService.restorePersistentSession().then(async (restoredUser) => {
+      if (isCancelled) return;
+      if (restoredUser && (!currentUser || currentUser.id !== restoredUser.id)) {
+        setCurrentUser(restoredUser);
+        const secondKits = await authService.restoreUserKitsAsync(restoredUser.id);
+        if (isCancelled) return;
+        const cleanKits = secondKits.filter(k => !isCorruptedKit(k));
+        if (cleanKits.length > 0) {
+          setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits));
+        }
       }
     });
 
@@ -422,16 +426,12 @@ export const App: React.FC = () => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const clean = pulled.filter(k => !isCorruptedKit(k));
           if (clean.length > 0) {
-            hydrateKitsAssets(clean).then(hydrated => {
-              setKits(prev => mergeKitsByUpdatedAt(prev, hydrated));
-              setCurrentKit(prev => {
-                if (!prev) return hydrated[0];
-                const match = hydrated.find(k => k.id === prev.id);
-                return match || prev;
-              });
-            }).catch(() => {
-              setKits(prev => mergeKitsByUpdatedAt(prev, clean));
-              setCurrentKit(prev => prev || clean[0]);
+            // Aplicar de inmediato los kits y sus preguntas sin esperar a descargar imágenes pesadas
+            setKits(prev => mergeKitsByUpdatedAt(prev, clean));
+            setCurrentKit(prev => {
+              if (!prev) return clean[0];
+              const match = clean.find(k => k.id === prev.id);
+              return match || prev;
             });
           }
         }
@@ -444,12 +444,15 @@ export const App: React.FC = () => {
     }
   }, [currentUser?.id]);
 
+  const startupGracePeriodRef = useRef(Date.now() + 10000); // 10s de gracia inicial para no saturar la red con subidas
+
   // Respaldo en segundo plano hacia Google Drive con debounce de 1200ms
   useEffect(() => {
     if (isLoggingOutRef.current) return;
     if (!currentUser) return;
     if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
     if (!isHydratedRef.current) return;
+    if (Date.now() < startupGracePeriodRef.current) return;
 
     const timer = setTimeout(() => {
       googleDriveService.pushToDrive(currentUser.id, kits).catch((err) => {

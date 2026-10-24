@@ -1123,11 +1123,11 @@ export const googleDriveService = {
           await authService.saveUserKitsAsync(userId, mergedKits);
           authService.markKitsSyncedWithDrive(userId, mergedKits.map(k => k.id));
 
-          // Si la fusion acumulativa genero novedades para la nube o detecto eliminaciones, sincronizar hacia Drive
+          // Si la fusion acumulativa genero novedades para la nube o detecto eliminaciones, sincronizar hacia Drive tras reposo
           if (mergedKits.length !== cleanPulled.length || deletedIds.size > 0) {
             setTimeout(() => {
               this.pushToDrive(userId, mergedKits).catch(() => {});
-            }, 1000);
+            }, 4000);
           }
         } else {
           console.warn('[GoogleDriveService] Kits descargados de la nube vacios o corruptos; se preservan los kits locales para garantizar datos infinitos.');
