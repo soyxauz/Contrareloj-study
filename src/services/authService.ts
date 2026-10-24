@@ -18,6 +18,7 @@ import {
 } from './storageService';
 
 const inMemoryKitsCache = new Map<string, StudyKit[]>();
+const flashcardIdbTimers = new Map<string, any>();
 
 interface StoredUserRecord extends User {
   passwordHash: string;
@@ -926,13 +927,21 @@ export const authService = {
           }
         }
       }
-      saveSessionItem(userKey, cleanState).catch(() => {});
-
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('thea_flashcard_saved', {
-          detail: { userId, kitId, state: cleanState }
-        }));
+      // Persistencia diferida hacia IndexedDB y eventos en vivo con debounce de 350ms
+      // Previene saturacion del bucle de eventos y de memoria (OOM) ante clics sucesivos ultrarrapidos
+      if (flashcardIdbTimers.has(userKey)) {
+        clearTimeout(flashcardIdbTimers.get(userKey));
       }
+      const timer = setTimeout(() => {
+        flashcardIdbTimers.delete(userKey);
+        saveSessionItem(userKey, cleanState).catch(() => {});
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('thea_flashcard_saved', {
+            detail: { userId, kitId, state: cleanState }
+          }));
+        }
+      }, 350);
+      flashcardIdbTimers.set(userKey, timer);
     } catch (e) {
       console.warn('[authService] Error al guardar memoria de Flashcards:', e);
     }

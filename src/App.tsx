@@ -793,17 +793,19 @@ export const App: React.FC = () => {
       localStorage.setItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
     } catch {}
 
-    // Mover el kit actualizado al principio de la lista
-    const rest = kits.filter(k => k.id !== kitWithTime.id);
-    const updated = [kitWithTime, ...rest];
+    // Actualizar kit en la colección sin reordenar innecesariamente si ya es el kit activo
+    let updated: StudyKit[];
+    if (kits.length > 0 && kits[0].id === kitWithTime.id) {
+      updated = [kitWithTime, ...kits.slice(1)];
+    } else {
+      const rest = kits.filter(k => k.id !== kitWithTime.id);
+      updated = [kitWithTime, ...rest];
+    }
     setKits(updated);
 
     const userId = currentUser ? currentUser.id : null;
     try {
       authService.saveUserKits(userId, updated);
-      authService.saveUserKitsAsync(userId, updated).catch((err) => {
-        console.warn('[App] Error en saveUserKitsAsync tras actualizar kit:', err);
-      });
     } catch (e) {
       console.error('Error al persistir Study Kits tras actualizar:', e);
     }

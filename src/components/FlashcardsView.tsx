@@ -1,6 +1,6 @@
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
 import {
   Layers,
@@ -471,10 +471,43 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     return (rawCards.length > 0 && idx < rawCards.length) ? idx : 0;
   });
 
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+
+  const archivedCardsRef = useRef(archivedCards);
+  archivedCardsRef.current = archivedCards;
+
+  const currentIdxRef = useRef(currentIdx);
+  currentIdxRef.current = currentIdx;
+
+  const masteryMapRef = useRef<Record<string, 'to-learn' | 'known' | 'mastered'>>(
+    savedProgress?.masteryMap ? { ...savedProgress.masteryMap } : {}
+  );
+
+  const debounceKitTimerRef = useRef<any>(null);
+  const pendingKitUpdateRef = useRef<{ cards: Flashcard[]; archived: Flashcard[] } | null>(null);
+
+  const flushKitUpdate = useCallback(() => {
+    if (debounceKitTimerRef.current) {
+      clearTimeout(debounceKitTimerRef.current);
+      debounceKitTimerRef.current = null;
+    }
+    if (pendingKitUpdateRef.current && onUpdateKit) {
+      const { cards: nextCards, archived } = pendingKitUpdateRef.current;
+      pendingKitUpdateRef.current = null;
+      onUpdateKit({
+        ...kit,
+        flashcards: nextCards,
+        archivedFlashcards: archived,
+      });
+    }
+  }, [kit, onUpdateKit]);
+
   // Restaurar asíncronamente desde IndexedDB si LocalStorage fue purgado o tiene versión anterior
   useEffect(() => {
     authService.restoreFlashcardProgressAsync(userId, kit.id).then(idbProgress => {
       if (!idbProgress || !idbProgress.masteryMap) return;
+      masteryMapRef.current = { ...masteryMapRef.current, ...idbProgress.masteryMap };
 
       setCards(prevCards => {
         const sourceCards = (prevCards.length > 0) ? prevCards : (idbProgress.cards || kit.flashcards || []);
@@ -494,6 +527,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   // Sincronizar estado cuando se abre o cambia de kit o de usuario
   useEffect(() => {
     const prog = authService.getFlashcardProgress(userId, kit.id);
+    if (prog?.masteryMap) {
+      masteryMapRef.current = { ...masteryMapRef.current, ...prog.masteryMap };
+    }
     const map = prog?.masteryMap || {};
 
     const rawCards = (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0)
@@ -514,12 +550,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   }, [kit.id, userId]);
 
-  // Al salir de la pantalla de flashcards, forzar guardado inmediato en Drive de cambios agrupados
+  // Al salir de la pantalla de flashcards o cambiar de kit, sincronizar inmediatamente cambios pendientes en kit y Drive
   useEffect(() => {
     return () => {
+      flushKitUpdate();
       googleDriveService.flushAutoSync();
     };
-  }, []);
+  }, [flushKitUpdate]);
   const [isFlipped, setIsFlipped] = useState(false);
   const [gameMode, setGameMode] = useState<'study' | 'guess-who'>('study');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -767,22 +804,24 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     Boolean(currentCard?.term && /^\s*¿|\?\s*$/.test(currentCard.term));
 
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
-    if (!cards || cards.length === 0) return;
-    const targetIdx = currentIdx % cards.length;
-    const targetCard = cards[targetIdx];
+    const currentCards = cardsRef.current;
+    if (!currentCards || currentCards.length === 0) return;
+    const targetIdx = currentIdxRef.current % currentCards.length;
+    const targetCard = currentCards[targetIdx];
     if (!targetCard) return;
 
-    const updated = cards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
-    const nextIdx = (targetIdx + 1) % cards.length;
+    const nextIdx = (targetIdx + 1) % currentCards.length;
+    const updated = currentCards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
 
-    // 1. Actualizar estado visual de tarjetas y avanzar a la siguiente
+    // 1. Actualización visual instantánea sin bloqueo de hilo
     setCards(updated);
+    cardsRef.current = updated;
     setIsFlipped(false);
     setCurrentIdx(nextIdx);
+    currentIdxRef.current = nextIdx;
 
-    // 2. Actualizar mapa y persistir inmediatamente en almacenamiento dedicado
-    const currentProgress = authService.getFlashcardProgress(userId, kit.id);
-    const currentMap = { ...(currentProgress?.masteryMap || {}) };
+    // 2. Actualizar mapa en memoria y persistir progreso ligero en LocalStorage inmediatamente
+    const currentMap = masteryMapRef.current;
     if (targetCard.id) currentMap[targetCard.id] = mastery;
     if (targetCard.term) {
       currentMap[targetCard.term] = mastery;
@@ -795,25 +834,41 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       updatedAt: Date.now(),
       kitId: kit.id,
       cards: updated,
-      archivedCards,
+      archivedCards: archivedCardsRef.current,
       masteryMap: currentMap,
       currentIdx: nextIdx,
     });
 
-    // 3. Notificar de forma segura al kit padre fuera del render cycle
-    if (onUpdateKit) {
-      onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
+    // 3. Debounce de 1.5s para sincronizar hacia el kit padre:
+    // Evita re-renderizar todo App.tsx y evita clonar megabytes de kits en cada clic rápido ("dominada, dominada...")
+    pendingKitUpdateRef.current = {
+      cards: updated,
+      archived: archivedCardsRef.current,
+    };
+    if (debounceKitTimerRef.current) {
+      clearTimeout(debounceKitTimerRef.current);
     }
+    debounceKitTimerRef.current = setTimeout(() => {
+      flushKitUpdate();
+    }, 1500);
   };
 
   const handlePrevCard = () => {
     setIsFlipped(false);
-    setCurrentIdx(prev => (prev - 1 + cards.length) % cards.length);
+    setCurrentIdx(prev => {
+      const next = (prev - 1 + cards.length) % cards.length;
+      currentIdxRef.current = next;
+      return next;
+    });
   };
 
   const handleNextCard = () => {
     setIsFlipped(false);
-    setCurrentIdx(prev => (prev + 1) % cards.length);
+    setCurrentIdx(prev => {
+      const next = (prev + 1) % cards.length;
+      currentIdxRef.current = next;
+      return next;
+    });
   };
 
   // Retroalimentación auditiva sintetizada con Web Audio API (cero dependencias externas)
