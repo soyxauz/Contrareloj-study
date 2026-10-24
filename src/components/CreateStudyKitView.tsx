@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import type { StudyKit, DocumentAsset } from '../types';
+import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
   FileText,
   Upload,
@@ -93,6 +93,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
   const [title, setTitle] = useState('');
   const [isTitleManuallyEdited, setIsTitleManuallyEdited] = useState(false);
   const [description, setDescription] = useState('');
+  const [selectedGuideDepth, setSelectedGuideDepth] = useState<StudyGuideDepth>('ultra');
 
   const [materiaVersion, setMateriaVersion] = useState(0);
 
@@ -279,6 +280,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       if (activeTab === 'topic' && topicFocus) {
         processed.kit.category = topicFocus;
       }
+      processed.kit.studyGuideDepth = selectedGuideDepth;
 
       // Persistir inmediatamente los activos en IndexedDB sin esperar a que el usuario cambie de pantalla
       if (processed.kit.assets && processed.kit.assets.length > 0) {
@@ -924,6 +926,68 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         )}
       </div>
 
+
+      {/* Configuración de Extensión de la Guía de Estudio (3 Niveles) */}
+      <div className="bg-thea-surface border border-thea-border rounded-2xl p-6 mb-6 space-y-3.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Nivel de Extensión de la Guía de Estudio</span>
+          </h3>
+          <span className="text-[11px] text-slate-400 font-medium">Sin límite de caracteres</span>
+        </div>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Elige la profundidad inicial con la que se generará la guía teórica para este kit:
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          {[
+            {
+              id: 'essential' as const,
+              name: 'Esencial (1x)',
+              badge: 'Concisa',
+              desc: 'Núcleos y definiciones clave para repaso rápido.'
+            },
+            {
+              id: 'complete' as const,
+              name: 'Completa (2x)',
+              badge: '2x Profundidad',
+              desc: 'Desarrollo sistemático por secciones y tablas.'
+            },
+            {
+              id: 'ultra' as const,
+              name: 'Ultra-Exhaustiva (3x)',
+              badge: 'Recomendada',
+              desc: 'Tratado académico sin límites que cubre todo el documento.'
+            }
+          ].map(opt => {
+            const isSelected = selectedGuideDepth === opt.id;
+            return (
+              <div
+                key={opt.id}
+                onClick={() => setSelectedGuideDepth(opt.id)}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                  isSelected
+                    ? 'bg-violet-600/20 border-violet-500 ring-2 ring-violet-500/40 text-white'
+                    : 'bg-thea-bg/60 border-thea-border hover:border-violet-500/40 text-slate-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1.5">
+                    <span className="text-xs font-bold text-white">{opt.name}</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      opt.id === 'ultra' ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-white/10 text-slate-300'
+                    }`}>
+                      {opt.badge}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-snug">{opt.desc}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Title & Description (collapsible advanced) */}
       <div className="bg-thea-surface border border-thea-border rounded-2xl p-6 mb-6 space-y-4">

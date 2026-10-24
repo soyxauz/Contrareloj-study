@@ -15,7 +15,8 @@ import {
   Layers,
   ZoomIn,
   X,
-  BookOpen
+  BookOpen,
+  RotateCcw
 } from 'lucide-react';
 
 export const DEPTH_OPTIONS: Array<{
@@ -172,8 +173,10 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         setMarkdown(cleaned);
         setSelectedDepth(depthToUse);
         setModalDepthChoice(depthToUse);
+        const updated = { ...currentKitState, studyGuideMarkdown: cleaned, studyGuideDepth: depthToUse };
+        setCurrentKitState(updated);
         if (onUpdateKit) {
-          onUpdateKit({ ...kit, studyGuideMarkdown: cleaned, studyGuideDepth: depthToUse });
+          onUpdateKit(updated);
         }
       }
     } catch (e) {
@@ -401,10 +404,35 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-thea-border">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600 text-white">
-              GUÍA {selectedDepth === 'ultra' ? 'ULTRA-EXHAUSTIVA (3X)' : selectedDepth === 'complete' ? 'COMPLETA (2X)' : 'ESENCIAL (1X)'}
-            </span>
-            <span className="text-xs text-slate-400 font-medium">Sin límite de caracteres • Auto-generada</span>
+            {currentKitState.studyGuideDepth === 'ultra' ? (
+              <>
+                <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600 text-white shadow-xs">
+                  GUÍA ULTRA-EXHAUSTIVA (3X)
+                </span>
+                <span className="text-xs text-slate-400 font-medium">Sin límite de caracteres • Auto-generada</span>
+              </>
+            ) : currentKitState.studyGuideDepth === 'complete' ? (
+              <>
+                <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-indigo-600 text-white shadow-xs">
+                  GUÍA COMPLETA (2X)
+                </span>
+                <span className="text-xs text-slate-400 font-medium">Doble profundidad • Auto-generada</span>
+              </>
+            ) : currentKitState.studyGuideDepth === 'essential' ? (
+              <>
+                <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-emerald-600 text-white shadow-xs">
+                  GUÍA ESENCIAL (1X)
+                </span>
+                <span className="text-xs text-slate-400 font-medium">Síntesis rápida • Auto-generada</span>
+              </>
+            ) : (
+              <>
+                <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-slate-700 text-slate-200 border border-slate-600">
+                  GUÍA ADAPTATIVA
+                </span>
+                <span className="text-xs text-slate-400 font-medium">Auto-generada y editable</span>
+              </>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <FileText className="w-6 h-6 text-violet-400" />
@@ -416,18 +444,18 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         <div className="flex items-center gap-2 flex-wrap">
           {activeTab === 'guide' && (
             <>
-              {/* Selector de Extensión / Regenerar */}
+              {/* Opción de Rehacer la Guía con Diferente Extensión */}
               <button
                 onClick={() => {
-                  setModalDepthChoice(selectedDepth);
+                  setModalDepthChoice(currentKitState.studyGuideDepth || 'ultra');
                   setShowDepthModal(true);
                 }}
                 disabled={isGenerating}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/40 text-violet-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
-                title="Cambiar nivel de extensión (1x, 2x o 3x) o regenerar la guía"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 hover:border-amber-400/60 text-amber-300 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Rehacer la guía de estudio con diferente nivel de extensión (1x, 2x o 3x)"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Extensión ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.name || '3x'})</span>
+                <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                <span>Rehacer con diferente extensión</span>
               </button>
 
               {/* Smart Edit */}
@@ -632,6 +660,30 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
               <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-10 shadow-xl">
                 <FormattedText text={stripExecutiveSummaryPreamble(markdown)} />
+              </div>
+
+              {/* Banner inferior para Rehacer con diferente extensión */}
+              <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-violet-950/40 via-thea-surface to-indigo-950/40 border border-violet-500/30 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5">
+                <div className="space-y-1 text-center sm:text-left">
+                  <h4 className="text-sm sm:text-base font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span>¿Deseas adaptar o cambiar la extensión de esta guía?</span>
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
+                    Puedes rehacer esta guía de estudio en cualquier momento con nivel Esencial (1x), Completa (2x) o Tratado Ultra-Exhaustivo (3x) sin límite de caracteres.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setModalDepthChoice(currentKitState.studyGuideDepth || 'ultra');
+                    setShowDepthModal(true);
+                  }}
+                  disabled={isGenerating}
+                  className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-900/30 transition-all cursor-pointer active:scale-95"
+                >
+                  <RotateCcw className="w-4 h-4 text-slate-950" />
+                  <span>Rehacer con diferente extensión</span>
+                </button>
               </div>
             </div>
           )}
@@ -896,8 +948,8 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-white">Nivel de Extensión de la Guía</h3>
-                  <p className="text-xs text-slate-400">Selecciona el nivel de profundidad para regenerar la guía de estudio:</p>
+                  <h3 className="font-bold text-lg text-white">Rehacer Guía con Diferente Extensión</h3>
+                  <p className="text-xs text-slate-400">Selecciona el nivel de profundidad deseado para regenerar la guía completa:</p>
                 </div>
               </div>
               <button
@@ -952,8 +1004,8 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 onClick={() => handleGenerateStudyGuide(modalDepthChoice)}
                 className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-amber-900/40 cursor-pointer active:scale-95"
               >
-                <Sparkles className="w-4 h-4 text-slate-950" />
-                <span>Regenerar Guía ({DEPTH_OPTIONS.find(o => o.id === modalDepthChoice)?.name})</span>
+                <RotateCcw className="w-4 h-4 text-slate-950" />
+                <span>Rehacer Guía ({DEPTH_OPTIONS.find(o => o.id === modalDepthChoice)?.name})</span>
               </button>
             </div>
           </div>
