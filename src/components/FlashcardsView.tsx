@@ -767,42 +767,43 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     Boolean(currentCard?.term && /^\s*¿|\?\s*$/.test(currentCard.term));
 
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
-    setCards(prevCards => {
-      if (!prevCards || prevCards.length === 0) return prevCards;
-      const targetIdx = currentIdx % prevCards.length;
-      const targetCard = prevCards[targetIdx];
-      const updated = prevCards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
-      const nextIdx = (targetIdx + 1) % prevCards.length;
+    if (!cards || cards.length === 0) return;
+    const targetIdx = currentIdx % cards.length;
+    const targetCard = cards[targetIdx];
+    if (!targetCard) return;
 
-      setIsFlipped(false);
-      setCurrentIdx(nextIdx);
+    const updated = cards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
+    const nextIdx = (targetIdx + 1) % cards.length;
 
-      // Actualizar mapa y persistir inmediatamente en almacenamiento dedicado
-      const currentProgress = authService.getFlashcardProgress(userId, kit.id);
-      const currentMap = { ...(currentProgress?.masteryMap || {}) };
-      if (targetCard.id) currentMap[targetCard.id] = mastery;
-      if (targetCard.term) {
-        currentMap[targetCard.term] = mastery;
-        currentMap[targetCard.term.trim()] = mastery;
-        currentMap[targetCard.term.trim().toLowerCase()] = mastery;
-      }
+    // 1. Actualizar estado visual de tarjetas y avanzar a la siguiente
+    setCards(updated);
+    setIsFlipped(false);
+    setCurrentIdx(nextIdx);
 
-      authService.saveFlashcardProgress(userId, kit.id, {
-        version: 1,
-        updatedAt: Date.now(),
-        kitId: kit.id,
-        cards: updated,
-        archivedCards,
-        masteryMap: currentMap,
-        currentIdx: nextIdx,
-      });
+    // 2. Actualizar mapa y persistir inmediatamente en almacenamiento dedicado
+    const currentProgress = authService.getFlashcardProgress(userId, kit.id);
+    const currentMap = { ...(currentProgress?.masteryMap || {}) };
+    if (targetCard.id) currentMap[targetCard.id] = mastery;
+    if (targetCard.term) {
+      currentMap[targetCard.term] = mastery;
+      currentMap[targetCard.term.trim()] = mastery;
+      currentMap[targetCard.term.trim().toLowerCase()] = mastery;
+    }
 
-      if (onUpdateKit) {
-        onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
-      }
-
-      return updated;
+    authService.saveFlashcardProgress(userId, kit.id, {
+      version: 1,
+      updatedAt: Date.now(),
+      kitId: kit.id,
+      cards: updated,
+      archivedCards,
+      masteryMap: currentMap,
+      currentIdx: nextIdx,
     });
+
+    // 3. Notificar de forma segura al kit padre fuera del render cycle
+    if (onUpdateKit) {
+      onUpdateKit({ ...kit, flashcards: updated, archivedFlashcards: archivedCards });
+    }
   };
 
   const handlePrevCard = () => {

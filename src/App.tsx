@@ -763,20 +763,16 @@ export const App: React.FC = () => {
       updatedAt: Date.now(),
     };
     setCurrentKit(kitWithTime);
-    setKits(prev => {
-      const next = prev.map(k => (k.id === kitWithTime.id ? kitWithTime : k));
-      try {
-        const userId = currentUser ? currentUser.id : null;
-        authService.saveUserKits(userId, next);
-        authService.saveUserKitsAsync(userId, next).catch(() => {});
-        if (userId) {
-          googleDriveService.scheduleAutoSync(userId, next, 7000);
-        }
-      } catch (e) {
-        console.error('Error al guardar Study Kits tras actualizar:', e);
+    setKits(prev => prev.map(k => (k.id === kitWithTime.id ? kitWithTime : k)));
+
+    try {
+      const userId = currentUser ? currentUser.id : null;
+      if (userId) {
+        googleDriveService.scheduleAutoSync(userId, [kitWithTime], 7000);
       }
-      return next;
-    });
+    } catch (e) {
+      console.error('Error al programar sincronización de Study Kits tras actualizar:', e);
+    }
   };
 
   const handleDeleteKit = (kitId: string) => {

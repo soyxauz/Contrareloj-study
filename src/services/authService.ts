@@ -895,7 +895,35 @@ export const authService = {
         try {
           localStorage.setItem(userKey, JSON.stringify(cleanState));
         } catch (err) {
-          notifyQuotaExceeded(err);
+          try {
+            // Si la cuota de LocalStorage está saturada, guardar versión ultra-compacta (sin imágenes)
+            const compactCards = cleanState.cards?.map(c => ({
+              id: c.id,
+              term: c.term,
+              definition: c.definition ? c.definition.slice(0, 200) : '',
+              mastery: c.mastery,
+              type: c.type,
+            }));
+            const compactArchived = cleanState.archivedCards?.map(c => ({
+              id: c.id,
+              term: c.term,
+              definition: c.definition ? c.definition.slice(0, 200) : '',
+              mastery: c.mastery,
+              type: c.type,
+            }));
+            const compactState: FlashcardProgressState = {
+              version: 1,
+              updatedAt: cleanState.updatedAt,
+              kitId,
+              cards: compactCards,
+              archivedCards: compactArchived,
+              masteryMap: normalizedMap,
+              currentIdx: cleanState.currentIdx,
+            };
+            localStorage.setItem(userKey, JSON.stringify(compactState));
+          } catch (compactErr) {
+            notifyQuotaExceeded(compactErr);
+          }
         }
       }
       saveSessionItem(userKey, cleanState).catch(() => {});
