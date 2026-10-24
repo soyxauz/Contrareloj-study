@@ -1112,6 +1112,45 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * Convierte un Blob de imagen a DataURL optimizado limitando dimensiones a maxDim (1200px)
+ * para evitar colapsar la memoria RAM con imágenes innecesariamente gigantes.
+ */
+async function blobToOptimizedDataUrl(blob: Blob, maxDim = 1200): Promise<string> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bmp = await createImageBitmap(blob);
+      let targetW = bmp.width;
+      let targetH = bmp.height;
+      if (targetW > maxDim || targetH > maxDim) {
+        if (targetW >= targetH) {
+          targetH = Math.round((targetH * maxDim) / targetW);
+          targetW = maxDim;
+        } else {
+          targetW = Math.round((targetW * maxDim) / targetH);
+          targetH = maxDim;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(bmp, 0, 0, targetW, targetH);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          canvas.width = 0;
+          canvas.height = 0;
+          bmp.close();
+          return dataUrl;
+        }
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      bmp.close();
+    } catch {}
+  }
+  return blobToDataUrl(blob);
+}
+
 /** Acceso ultrarrápido a dimensiones con createImageBitmap si está disponible o Image como fallback */
 async function getBlobDimensions(blob: Blob): Promise<{ w: number; h: number } | null> {
   if (typeof createImageBitmap === 'function') {
@@ -1143,44 +1182,45 @@ function getImageDimensions(dataUrl: string): Promise<{ w: number; h: number } |
 
 /**
  * Detecta si un lienzo de Canvas contiene un color plano (negro sólido, blanco puro o fondo uniforme)
- * para evitar la extracción de máscaras de recorte, separadores o fondos opacos sin valor pedagógico.
+ * Muestrea un thumbnail diminuto de 24x24 sin reservar decenas de megabytes en memoria.
  */
-function isSolidOrBlankCanvas(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
+function isSolidOrBlankCanvas(ctx: CanvasRenderingContext2D, _w?: number, _h?: number): boolean {
   try {
-    const stepX = Math.max(1, Math.floor(w / 6));
-    const stepY = Math.max(1, Math.floor(h / 6));
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const data = imgData.data;
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 24;
+    sampleCanvas.height = 24;
+    const sCtx = sampleCanvas.getContext('2d');
+    if (!sCtx) return false;
 
+    sCtx.drawImage(ctx.canvas, 0, 0, 24, 24);
+    const imgData = sCtx.getImageData(0, 0, 24, 24);
+    sampleCanvas.width = 0;
+    sampleCanvas.height = 0;
+
+    const data = imgData.data;
     let allDark = true;
     let allWhite = true;
     let firstR = -1, firstG = -1, firstB = -1;
     let allIdentical = true;
     let sampledCount = 0;
 
-    for (let y = stepY; y < h; y += stepY) {
-      for (let x = stepX; x < w; x += stepX) {
-        const idx = (y * w + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        const a = data[idx + 3];
+    for (let i = 0; i < data.length; i += 4) {
+      const a = data[i + 3];
+      if (a < 20) continue; // Píxel transparente
+      sampledCount++;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
 
-        if (a < 20) continue; // Píxel transparente
-        sampledCount++;
+      if (r > 20 || g > 20 || b > 20) allDark = false;
+      if (r < 235 || g < 235 || b < 235) allWhite = false;
 
-        // No es casi negro
-        if (r > 20 || g > 20 || b > 20) allDark = false;
-        // No es casi blanco
-        if (r < 235 || g < 235 || b < 235) allWhite = false;
-
-        if (firstR === -1) {
-          firstR = r;
-          firstG = g;
-          firstB = b;
-        } else if (Math.abs(r - firstR) > 12 || Math.abs(g - firstG) > 12 || Math.abs(b - firstB) > 12) {
-          allIdentical = false;
-        }
+      if (firstR === -1) {
+        firstR = r;
+        firstG = g;
+        firstB = b;
+      } else if (Math.abs(r - firstR) > 12 || Math.abs(g - firstG) > 12 || Math.abs(b - firstB) > 12) {
+        allIdentical = false;
       }
     }
 
@@ -1279,39 +1319,34 @@ async function extractEmbeddedImagesFromBinary(
     pos++;
   }
 
-  // Fase 2: Decodificación y validación concurrente con Promise.all
-  const decodedAssets = await Promise.all(
-    candidates.map(async (cand) => {
-      try {
-        const imgBytes = bytes.subarray(cand.start, cand.end);
-        const blob = new Blob([imgBytes], { type: cand.type });
-        const dims = await getBlobDimensions(blob);
-
-        if (dims && dims.w >= 60 && dims.h >= 60) {
-          const dataUrl = await blobToDataUrl(blob);
-          return { dataUrl, w: dims.w, h: dims.h };
-        }
-      } catch {}
-      return null;
-    })
-  );
-
+  // Fase 2: Decodificación y validación secuencial y acotada para no saturar memoria RAM
   const assets: DocumentAsset[] = [];
   const seenSigs = new Set<string>();
 
-  for (const item of decodedAssets) {
-    if (!item || assets.length >= maxAssets) continue;
-    const sig = getImageSignature(item.dataUrl);
-    if (!seenSigs.has(sig)) {
-      seenSigs.add(sig);
-      assets.push({
-        id: `asset-img-${uid()}`,
-        type: 'image',
-        dataUrl: item.dataUrl,
-        caption: `Figura ${assets.length + 1} (${fileName})`,
-        contextNearby: `Recurso visual extraído de ${fileName}`,
-      });
-    }
+  for (let i = 0; i < candidates.length && assets.length < maxAssets; i++) {
+    const cand = candidates[i];
+    try {
+      const imgBytes = bytes.subarray(cand.start, cand.end);
+      const blob = new Blob([imgBytes], { type: cand.type });
+      const dims = await getBlobDimensions(blob);
+
+      if (dims && dims.w >= 60 && dims.h >= 60) {
+        const dataUrl = await blobToOptimizedDataUrl(blob, 1200);
+        if (dataUrl && dataUrl.length > 250) {
+          const sig = getImageSignature(dataUrl);
+          if (!seenSigs.has(sig)) {
+            seenSigs.add(sig);
+            assets.push({
+              id: `asset-img-${uid()}`,
+              type: 'image',
+              dataUrl,
+              caption: `Figura ${assets.length + 1} (${fileName})`,
+              contextNearby: `Recurso visual extraído de ${fileName}`,
+            });
+          }
+        }
+      }
+    } catch {}
   }
 
   return assets;
@@ -1422,141 +1457,205 @@ async function extractContentFromPDF(file: File): Promise<{ text: string; assets
       const totalPages = pdf.numPages;
       const maxAssets = 300;
 
-      for (let i = 1; i <= totalPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        let lastY: number | null = null;
-        let pageStr = '';
+      try {
+        for (let i = 1; i <= totalPages; i++) {
+          let page: any = null;
+          try {
+            page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            let lastY: number | null = null;
+            let pageStr = '';
 
-        for (const item of textContent.items as any[]) {
-          if (!item.str) continue;
-          if (lastY !== null && Math.abs(item.transform[5] - lastY) > 8) {
-            pageStr += '\n';
-          } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !item.str.startsWith(' ')) {
-            pageStr += ' ';
-          }
-          pageStr += item.str;
-          lastY = item.transform[5];
-        }
-
-        if (pageStr.trim()) {
-          extracted += `\n[Página ${i}]\n` + pageStr.trim() + '\n\n';
-        }
-
-        // Extracción exhaustiva de imágenes reales (fotos, figuras y esquemas incrustados)
-        try {
-          const ops = await page.getOperatorList();
-          const fnArray = ops.fnArray;
-          const argsArray = ops.argsArray;
-          const OPS = pdfjs.OPS || {};
-
-          for (let j = 0; j < fnArray.length && assets.length < maxAssets; j++) {
-            const fn = fnArray[j];
-            if (
-              fn === OPS.paintImageXObject ||
-              fn === OPS.paintInlineImageXObject ||
-              fn === (OPS as any).paintJpegXObject
-            ) {
-              const arg = argsArray[j][0];
-              let imgObj: any = null;
-
-              if (arg && typeof arg === 'object' && (arg.width || arg.data || arg.bitmap)) {
-                imgObj = arg;
-              } else if (typeof arg === 'string') {
-                imgObj = await getPdfImageObject(page, pdf, arg, 1000);
+            for (const item of textContent.items as any[]) {
+              if (!item.str) continue;
+              if (lastY !== null && Math.abs(item.transform[5] - lastY) > 8) {
+                pageStr += '\n';
+              } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !item.str.startsWith(' ')) {
+                pageStr += ' ';
               }
+              pageStr += item.str;
+              lastY = item.transform[5];
+            }
 
-              if (imgObj) {
-                try {
-                  const w = imgObj.width || (imgObj.bitmap && imgObj.bitmap.width);
-                  const h = imgObj.height || (imgObj.bitmap && imgObj.bitmap.height);
-                  // Filtro dimensional estricto: descartar elementos menores a 60x60 (iconos, separadores)
-                  if (w >= 60 && h >= 60) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                      if (imgObj.bitmap) {
-                        ctx.drawImage(imgObj.bitmap, 0, 0);
-                      } else if (imgObj.data) {
-                        const imgDataObj = ctx.createImageData(w, h);
-                        if (imgObj.data.length === w * h * 4) {
-                          imgDataObj.data.set(imgObj.data);
-                        } else if (imgObj.data.length === w * h * 3) {
-                          for (let p = 0, q = 0; p < imgObj.data.length; p += 3, q += 4) {
-                            imgDataObj.data[q] = imgObj.data[p];
-                            imgDataObj.data[q + 1] = imgObj.data[p + 1];
-                            imgDataObj.data[q + 2] = imgObj.data[p + 2];
-                            imgDataObj.data[q + 3] = 255;
+            if (pageStr.trim()) {
+              extracted += `\n[Página ${i}]\n` + pageStr.trim() + '\n\n';
+            }
+
+            // Extracción exhaustiva de imágenes reales (fotos, figuras y esquemas incrustados)
+            try {
+              const ops = await page.getOperatorList();
+              const fnArray = ops.fnArray;
+              const argsArray = ops.argsArray;
+              const OPS = pdfjs.OPS || {};
+
+              for (let j = 0; j < fnArray.length && assets.length < maxAssets; j++) {
+                const fn = fnArray[j];
+                if (
+                  fn === OPS.paintImageXObject ||
+                  fn === OPS.paintInlineImageXObject ||
+                  fn === (OPS as any).paintJpegXObject
+                ) {
+                  const arg = argsArray[j][0];
+                  let imgObj: any = null;
+
+                  if (arg && typeof arg === 'object' && (arg.width || arg.data || arg.bitmap)) {
+                    imgObj = arg;
+                  } else if (typeof arg === 'string') {
+                    imgObj = await getPdfImageObject(page, pdf, arg, 1000);
+                  }
+
+                  if (imgObj) {
+                    try {
+                      const w = imgObj.width || (imgObj.bitmap && imgObj.bitmap.width);
+                      const h = imgObj.height || (imgObj.bitmap && imgObj.bitmap.height);
+                      // Filtro dimensional estricto: descartar elementos menores a 60x60 (iconos, separadores)
+                      if (w >= 60 && h >= 60) {
+                        const MAX_DIM = 1200;
+                        let targetW = w;
+                        let targetH = h;
+                        if (targetW > MAX_DIM || targetH > MAX_DIM) {
+                          if (targetW >= targetH) {
+                            targetH = Math.round((targetH * MAX_DIM) / targetW);
+                            targetW = MAX_DIM;
+                          } else {
+                            targetW = Math.round((targetW * MAX_DIM) / targetH);
+                            targetH = MAX_DIM;
                           }
                         }
-                        ctx.putImageData(imgDataObj, 0, 0);
-                      } else if (imgObj instanceof Image || (typeof Image !== 'undefined' && imgObj instanceof Image)) {
-                        ctx.drawImage(imgObj, 0, 0);
-                      }
 
-                      // Descartar rectángulos de color plano, negros sólidos o fondos sin valor pedagógico
-                      if (!isSolidOrBlankCanvas(ctx, w, h)) {
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
-                        if (dataUrl && dataUrl.length > 250) {
-                          const sig = getImageSignature(dataUrl);
-                          if (!seenSignatures.has(sig)) {
-                            seenSignatures.add(sig);
-                            assets.push({
-                              id: `asset-img-${uid()}`,
-                              type: 'image',
-                              dataUrl,
-                              pageOrSlide: i,
-                              caption: `Figura de la página ${i} (${file.name})`,
-                              contextNearby: pageStr.slice(0, 200) || `Página ${i}`,
-                            });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = targetW;
+                        canvas.height = targetH;
+                        const ctx = canvas.getContext('2d');
+                        try {
+                          if (ctx) {
+                            if (imgObj.bitmap) {
+                              ctx.drawImage(imgObj.bitmap, 0, 0, targetW, targetH);
+                            } else if (imgObj.data) {
+                              if (targetW === w && targetH === h) {
+                                const imgDataObj = ctx.createImageData(w, h);
+                                if (imgObj.data.length === w * h * 4) {
+                                  imgDataObj.data.set(imgObj.data);
+                                } else if (imgObj.data.length === w * h * 3) {
+                                  for (let p = 0, q = 0; p < imgObj.data.length; p += 3, q += 4) {
+                                    imgDataObj.data[q] = imgObj.data[p];
+                                    imgDataObj.data[q + 1] = imgObj.data[p + 1];
+                                    imgDataObj.data[q + 2] = imgObj.data[p + 2];
+                                    imgDataObj.data[q + 3] = 255;
+                                  }
+                                }
+                                ctx.putImageData(imgDataObj, 0, 0);
+                              } else {
+                                const bufferCanvas = document.createElement('canvas');
+                                bufferCanvas.width = w;
+                                bufferCanvas.height = h;
+                                const bufCtx = bufferCanvas.getContext('2d');
+                                if (bufCtx) {
+                                  const imgDataObj = bufCtx.createImageData(w, h);
+                                  if (imgObj.data.length === w * h * 4) {
+                                    imgDataObj.data.set(imgObj.data);
+                                  } else if (imgObj.data.length === w * h * 3) {
+                                    for (let p = 0, q = 0; p < imgObj.data.length; p += 3, q += 4) {
+                                      imgDataObj.data[q] = imgObj.data[p];
+                                      imgDataObj.data[q + 1] = imgObj.data[p + 1];
+                                      imgDataObj.data[q + 2] = imgObj.data[p + 2];
+                                      imgDataObj.data[q + 3] = 255;
+                                    }
+                                  }
+                                  bufCtx.putImageData(imgDataObj, 0, 0);
+                                  ctx.drawImage(bufferCanvas, 0, 0, targetW, targetH);
+                                }
+                                bufferCanvas.width = 0;
+                                bufferCanvas.height = 0;
+                              }
+                            } else if (imgObj instanceof Image || (typeof Image !== 'undefined' && imgObj instanceof Image)) {
+                              ctx.drawImage(imgObj, 0, 0, targetW, targetH);
+                            }
+
+                            // Descartar rectángulos de color plano, negros sólidos o fondos sin valor pedagógico
+                            if (!isSolidOrBlankCanvas(ctx, targetW, targetH)) {
+                              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                              if (dataUrl && dataUrl.length > 250) {
+                                const sig = getImageSignature(dataUrl);
+                                if (!seenSignatures.has(sig)) {
+                                  seenSignatures.add(sig);
+                                  assets.push({
+                                    id: `asset-img-${uid()}`,
+                                    type: 'image',
+                                    dataUrl,
+                                    pageOrSlide: i,
+                                    caption: `Figura de la página ${i} (${file.name})`,
+                                    contextNearby: pageStr.slice(0, 200) || `Página ${i}`,
+                                  });
+                                }
+                              }
+                            }
                           }
+                        } finally {
+                          canvas.width = 0;
+                          canvas.height = 0;
                         }
                       }
+                    } catch {
+                      // ignore single image decode error
                     }
                   }
-                } catch {
-                  // ignore single image decode error
                 }
+              }
+            } catch {
+              // ignore operator list error
+            }
+          } finally {
+            if (page && typeof page.cleanup === 'function') {
+              try {
+                page.cleanup();
+              } catch {}
+            }
+          }
+        }
+
+        // Escaneo directo de imágenes JPEG binarias del PDF para asegurar que ninguna foto se quede sin extraer
+        try {
+          const rawJpegs = await extractRawJpegsFromPdf(arrayBuffer, file.name);
+          for (const raw of rawJpegs) {
+            if (assets.length >= maxAssets) break;
+            if (raw.dataUrl) {
+              const sig = getImageSignature(raw.dataUrl);
+              if (!seenSignatures.has(sig)) {
+                seenSignatures.add(sig);
+                assets.push(raw);
               }
             }
           }
         } catch {
-          // ignore operator list error
+          // ignore raw jpeg scanning errors
         }
-      }
 
-      // Escaneo directo de imágenes JPEG binarias del PDF para asegurar que ninguna foto se quede sin extraer
-      try {
-        const rawJpegs = await extractRawJpegsFromPdf(arrayBuffer, file.name);
-        for (const raw of rawJpegs) {
-          if (assets.length >= maxAssets) break;
-          if (raw.dataUrl) {
-            const sig = getImageSignature(raw.dataUrl);
-            if (!seenSignatures.has(sig)) {
-              seenSignatures.add(sig);
-              assets.push(raw);
-            }
+        const cleanText = sanitizeExtractedText(extracted);
+        const validSents = sentences(cleanText);
+
+        // Si el texto extraido es corto pero tiene imagenes reales extraidas
+        if (cleanText.length < 60 || validSents.length === 0) {
+          if (assets.length > 0) {
+            const fallbackText = `Documento PDF: ${file.name}. Contiene ${totalPages} pagina(s) y ${assets.length} figura(s) extraida(s) para estudio academico.`;
+            return { text: fallbackText, assets };
           }
         }
-      } catch {
-        // ignore raw jpeg scanning errors
-      }
 
-      const cleanText = sanitizeExtractedText(extracted);
-      const validSents = sentences(cleanText);
-
-      // Si el texto extraido es corto pero tiene imagenes reales extraidas
-      if (cleanText.length < 60 || validSents.length === 0) {
-        if (assets.length > 0) {
-          const fallbackText = `Documento PDF: ${file.name}. Contiene ${totalPages} pagina(s) y ${assets.length} figura(s) extraida(s) para estudio academico.`;
-          return { text: fallbackText, assets };
+        if (cleanText.length > 60 && validSents.length > 0) {
+          return { text: cleanText, assets };
         }
-      }
-
-      if (cleanText.length > 60 && validSents.length > 0) {
-        return { text: cleanText, assets };
+      } finally {
+        if (pdf && typeof pdf.destroy === 'function') {
+          try {
+            await pdf.destroy();
+          } catch {}
+        }
+        if (loadingTask && typeof loadingTask.destroy === 'function') {
+          try {
+            await loadingTask.destroy();
+          } catch {}
+        }
       }
     } catch (e) {
       console.warn('PDF.js falló al extraer contenido:', e);

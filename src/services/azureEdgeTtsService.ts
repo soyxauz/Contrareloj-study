@@ -108,8 +108,49 @@ const DB_NAME = 'ContrarelojAudioDB';
 const DB_VERSION = 2;
 const STORE_NAME = 'azure_edge_audio_cache';
 
+const MAX_ACTIVE_AUDIO_URLS = 4;
 const memoryAudioUrlCache = new Map<string, string>();
 const ongoingRequests = new Map<string, Promise<string>>();
+
+/**
+ * Registra un Object URL en la caché acotada en memoria y revoca inmediatamente
+ * cualquier URL antigua que sea desalojada, evitando fugas de memoria por Blobs de audio.
+ */
+function registerAudioUrl(cacheKey: string, url: string): void {
+  if (memoryAudioUrlCache.has(cacheKey)) {
+    const prevUrl = memoryAudioUrlCache.get(cacheKey);
+    if (prevUrl && prevUrl !== url) {
+      try {
+        URL.revokeObjectURL(prevUrl);
+      } catch {}
+    }
+    memoryAudioUrlCache.delete(cacheKey);
+  } else if (memoryAudioUrlCache.size >= MAX_ACTIVE_AUDIO_URLS) {
+    const oldestKey = memoryAudioUrlCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      const evictedUrl = memoryAudioUrlCache.get(oldestKey);
+      if (evictedUrl) {
+        try {
+          URL.revokeObjectURL(evictedUrl);
+        } catch {}
+      }
+      memoryAudioUrlCache.delete(oldestKey);
+    }
+  }
+  memoryAudioUrlCache.set(cacheKey, url);
+}
+
+/**
+ * Revoca y libera inmediatamente todos los Object URLs de audio activos en la memoria RAM.
+ */
+export function revokeAllAzureAudioUrls(): void {
+  for (const url of memoryAudioUrlCache.values()) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+  }
+  memoryAudioUrlCache.clear();
+}
 
 /**
  * Obtiene la conexión a la base de datos IndexedDB para caché persistente de audios.
@@ -218,7 +259,7 @@ export async function synthesizeAzureEdgeSpeech(
   const cachedBlob = await getCachedAudioBlob(cacheKey);
   if (cachedBlob) {
     const url = URL.createObjectURL(cachedBlob);
-    memoryAudioUrlCache.set(cacheKey, url);
+    registerAudioUrl(cacheKey, url);
     return url;
   }
 
@@ -265,7 +306,7 @@ export async function synthesizeAzureEdgeSpeech(
           saveAudioBlobToCache(cacheKey, blob);
 
           const objectUrl = URL.createObjectURL(blob);
-          memoryAudioUrlCache.set(cacheKey, objectUrl);
+          registerAudioUrl(cacheKey, objectUrl);
           return objectUrl;
         } catch (attemptErr: unknown) {
           lastErr = attemptErr instanceof Error ? attemptErr : new Error(String(attemptErr));
@@ -320,7 +361,7 @@ export function preloadEntireAzurePodcast(
  * Limpia la memoria y la base de datos de audio cacheado.
  */
 export async function clearAzureAudioCache(): Promise<void> {
-  memoryAudioUrlCache.clear();
+  revokeAllAzureAudioUrls();
   const db = await getAudioDatabase();
   if (!db) return;
   try {

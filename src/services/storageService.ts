@@ -12,7 +12,28 @@ const ASSET_STORE = 'assets';
 const SESSION_STORE = 'persistent_session';
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
+const MAX_ASSET_CACHE_SIZE = 10;
 const assetMemoryCache = new Map<string, DocumentAsset>();
+
+function putInAssetMemoryCache(id: string, asset: DocumentAsset): void {
+  if (!id || !asset) return;
+  if (assetMemoryCache.has(id)) {
+    assetMemoryCache.delete(id);
+  } else if (assetMemoryCache.size >= MAX_ASSET_CACHE_SIZE) {
+    const oldestKey = assetMemoryCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      assetMemoryCache.delete(oldestKey);
+    }
+  }
+  assetMemoryCache.set(id, asset);
+}
+
+/**
+ * Libera de forma inmediata todos los activos pesados cacheados en la memoria RAM.
+ */
+export function purgeAssetMemoryCache(): void {
+  assetMemoryCache.clear();
+}
 
 /**
  * Inicializa o recupera la conexión a la base de datos IndexedDB.
@@ -138,19 +159,11 @@ export async function removeSessionItem(key: string): Promise<void> {
 }
 
 /**
- * Guarda un lote de activos en IndexedDB y los sincroniza en la memoria rápida.
+ * Guarda un lote de activos en IndexedDB sin retenerlos indiscriminadamente en la memoria RAM global.
  * Divide los guardados en transacciones seguras por lotes de 30 para evitar saturación de memoria.
  */
 export async function saveAssetsToIndexedDB(assets: DocumentAsset[]): Promise<void> {
   if (!assets || assets.length === 0) return;
-
-  // Actualizar memoria inmediata
-  for (let i = 0; i < assets.length; i++) {
-    const a = assets[i];
-    if (a.id && a.dataUrl) {
-      assetMemoryCache.set(a.id, a);
-    }
-  }
 
   const db = await getDatabase();
   if (!db) return;
@@ -223,6 +236,7 @@ export async function saveAssetsFromKits(kits: StudyKit[]): Promise<void> {
 
 /**
  * Recupera todos los activos almacenados en IndexedDB para sincronización en la nube.
+ * No retiene los objetos binarios en la caché en RAM global para proteger la memoria.
  */
 export async function getAllStoredAssets(): Promise<DocumentAsset[]> {
   const db = await getDatabase();
@@ -238,12 +252,6 @@ export async function getAllStoredAssets(): Promise<DocumentAsset[]> {
 
       req.onsuccess = () => {
         const assets = (req.result as DocumentAsset[]) || [];
-        for (let i = 0; i < assets.length; i++) {
-          const a = assets[i];
-          if (a.id && a.dataUrl) {
-            assetMemoryCache.set(a.id, a);
-          }
-        }
         resolve(assets);
       };
 
@@ -257,11 +265,14 @@ export async function getAllStoredAssets(): Promise<DocumentAsset[]> {
 }
 
 /**
- * Recupera un activo por su identificador único.
+ * Recupera un activo por su identificador único utilizando un LRU cache ultraligero (máx 10 elementos).
  */
 export async function getAssetById(id: string): Promise<DocumentAsset | null> {
   if (assetMemoryCache.has(id)) {
-    return assetMemoryCache.get(id) || null;
+    const item = assetMemoryCache.get(id)!;
+    assetMemoryCache.delete(id);
+    assetMemoryCache.set(id, item);
+    return item;
   }
 
   const db = await getDatabase();
@@ -276,7 +287,7 @@ export async function getAssetById(id: string): Promise<DocumentAsset | null> {
       req.onsuccess = () => {
         const result = (req.result as DocumentAsset) || null;
         if (result && result.id) {
-          assetMemoryCache.set(result.id, result);
+          putInAssetMemoryCache(result.id, result);
         }
         resolve(result);
       };
@@ -289,7 +300,7 @@ export async function getAssetById(id: string): Promise<DocumentAsset | null> {
 }
 
 /**
- * Obtiene un mapa de activos a partir de un conjunto de IDs.
+ * Obtiene un mapa de activos a partir de un conjunto de IDs con gestión acotada de memoria LRU.
  */
 export async function getAssetsMap(ids: string[]): Promise<Map<string, DocumentAsset>> {
   const result = new Map<string, DocumentAsset>();
@@ -298,7 +309,10 @@ export async function getAssetsMap(ids: string[]): Promise<Map<string, DocumentA
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
     if (assetMemoryCache.has(id)) {
-      result.set(id, assetMemoryCache.get(id)!);
+      const item = assetMemoryCache.get(id)!;
+      assetMemoryCache.delete(id);
+      assetMemoryCache.set(id, item);
+      result.set(id, item);
     } else {
       missingIds.push(id);
     }
@@ -321,7 +335,7 @@ export async function getAssetsMap(ids: string[]): Promise<Map<string, DocumentA
         req.onsuccess = () => {
           if (req.result) {
             const asset = req.result as DocumentAsset;
-            assetMemoryCache.set(id, asset);
+            putInAssetMemoryCache(id, asset);
             result.set(id, asset);
           }
           pending--;
@@ -380,7 +394,7 @@ export async function hydrateKitAssets(kit: StudyKit): Promise<StudyKit> {
         driveMap.forEach((asset, id) => {
           if (asset && asset.dataUrl) {
             assetsMap.set(id, asset);
-            assetMemoryCache.set(id, asset);
+            putInAssetMemoryCache(id, asset);
           }
         });
       }
@@ -479,6 +493,44 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
       return f;
     }),
   }));
+}
+
+/**
+ * Aligera un kit individual removiendo las cadenas binarias base64 de la memoria de React
+ * una vez que no se encuentra en visualización activa. Los datos permanecen a salvo en IndexedDB.
+ */
+export function stripAssetDataUrlsFromKit(kit: StudyKit): StudyKit {
+  if (!kit) return kit;
+  return {
+    ...kit,
+    assets: kit.assets?.map((a) => {
+      if (a.dataUrl && a.dataUrl.length > 500) {
+        const { dataUrl: _, ...rest } = a;
+        return rest;
+      }
+      return a;
+    }),
+    questions: kit.questions?.map((q) => {
+      if (q.sourceAsset && q.sourceAsset.dataUrl && q.sourceAsset.dataUrl.length > 500) {
+        const { dataUrl: _, ...restAsset } = q.sourceAsset;
+        return {
+          ...q,
+          sourceAsset: restAsset,
+        };
+      }
+      return q;
+    }),
+    flashcards: kit.flashcards?.map((f) => {
+      if (f.sourceAsset && f.sourceAsset.dataUrl && f.sourceAsset.dataUrl.length > 500) {
+        const { dataUrl: _, ...restAsset } = f.sourceAsset;
+        return {
+          ...f,
+          sourceAsset: restAsset,
+        };
+      }
+      return f;
+    }),
+  };
 }
 
 /**

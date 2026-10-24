@@ -59,8 +59,49 @@ const DB_NAME = 'ContrarelojAudioDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'podcast_audio_cache';
 
+const MAX_ACTIVE_AUDIO_URLS = 4;
 const memoryAudioUrlCache = new Map<string, string>();
 const ongoingRequests = new Map<string, Promise<string>>();
+
+/**
+ * Registra un Object URL en la caché acotada en memoria y revoca inmediatamente
+ * cualquier URL antigua que sea desalojada, evitando fugas de memoria por Blobs de audio.
+ */
+function registerAudioUrl(cacheKey: string, url: string): void {
+  if (memoryAudioUrlCache.has(cacheKey)) {
+    const prevUrl = memoryAudioUrlCache.get(cacheKey);
+    if (prevUrl && prevUrl !== url) {
+      try {
+        URL.revokeObjectURL(prevUrl);
+      } catch {}
+    }
+    memoryAudioUrlCache.delete(cacheKey);
+  } else if (memoryAudioUrlCache.size >= MAX_ACTIVE_AUDIO_URLS) {
+    const oldestKey = memoryAudioUrlCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      const evictedUrl = memoryAudioUrlCache.get(oldestKey);
+      if (evictedUrl) {
+        try {
+          URL.revokeObjectURL(evictedUrl);
+        } catch {}
+      }
+      memoryAudioUrlCache.delete(oldestKey);
+    }
+  }
+  memoryAudioUrlCache.set(cacheKey, url);
+}
+
+/**
+ * Revoca y libera inmediatamente todos los Object URLs de audio generados en la memoria RAM.
+ */
+export function revokeAllPodcastAudioUrls(): void {
+  for (const url of memoryAudioUrlCache.values()) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+  }
+  memoryAudioUrlCache.clear();
+}
 
 /**
  * Acceso a la base de datos IndexedDB para caché persistente de audios.
@@ -329,7 +370,7 @@ async function getCachedAudioUrl(cacheKey: string): Promise<string | null> {
       req.onsuccess = () => {
         if (req.result && req.result.blob) {
           const url = URL.createObjectURL(req.result.blob);
-          memoryAudioUrlCache.set(cacheKey, url);
+          registerAudioUrl(cacheKey, url);
           resolve(url);
         } else {
           resolve(null);
@@ -673,7 +714,7 @@ async function executeSingleSynthesis(
 
   const cacheKey = computeCacheKey(voiceName, cleanText);
   const objectUrl = URL.createObjectURL(finalBlob);
-  memoryAudioUrlCache.set(cacheKey, objectUrl);
+  registerAudioUrl(cacheKey, objectUrl);
   await saveAudioBlobToCache(cacheKey, finalBlob);
   return objectUrl;
 }
@@ -875,4 +916,17 @@ export function preloadEntirePodcast(
     const voice = isFemale ? sofiaVoice : mateoVoice;
     prefetchGeminiSpeech(item.text, voice, apiKey, 'normal');
   }
+}
+
+/**
+ * Limpia la memoria RAM y la base de datos de audio de podcast.
+ */
+export async function clearPodcastAudioCache(): Promise<void> {
+  revokeAllPodcastAudioUrls();
+  const db = await getAudioDatabase();
+  if (!db) return;
+  try {
+    const tx = db.transaction([STORE_NAME], 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+  } catch (_) {}
 }

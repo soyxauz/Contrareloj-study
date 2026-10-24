@@ -8,11 +8,14 @@ import {
   requestPersistentStorage,
   mergeKitsByUpdatedAt,
   recordDeletedKitId,
-  recordDeletedKitIds
+  recordDeletedKitIds,
+  purgeAssetMemoryCache,
+  stripAssetDataUrlsFromKit
 } from './services/storageService';
+import { revokeAllAzureAudioUrls } from './services/azureEdgeTtsService';
+import { revokeAllPodcastAudioUrls, savePodcastSettings } from './services/geminiAudioService';
 import { googleDriveService, type DriveSyncState } from './services/googleDriveService';
 import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
-import { savePodcastSettings } from './services/geminiAudioService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
@@ -293,6 +296,18 @@ export const App: React.FC = () => {
   };
 
   const handleSelectMode = (mode: StudyMode, pushToHistory = true) => {
+    // Revocar activamente audios en memoria al cambiar de vista o de sección de estudio
+    if (mode !== currentMode) {
+      revokeAllAzureAudioUrls();
+      revokeAllPodcastAudioUrls();
+
+      // Si se sale de una vista que no requiere activos visuales, liberar caché RAM de activos
+      if (!['images', 'study-guide', 'smart-study'].includes(mode)) {
+        purgeAssetMemoryCache();
+        setKits(prev => prev.map(k => (k.id === currentKit?.id ? k : stripAssetDataUrlsFromKit(k))));
+      }
+    }
+
     if (['images', 'study-guide', 'smart-study'].includes(mode) && currentKit) {
       const hasMissing =
         currentKit.assets?.some(a => !a.dataUrl) ||
@@ -302,7 +317,7 @@ export const App: React.FC = () => {
         hydrateKitAssets(currentKit)
           .then(hydrated => {
             setCurrentKit(hydrated);
-            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : k)));
+            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : stripAssetDataUrlsFromKit(k))));
           })
           .catch(() => {});
       }
@@ -504,7 +519,7 @@ export const App: React.FC = () => {
         hydrateKitAssets(kitToHydrate)
           .then(hydrated => {
             setCurrentKit(hydrated);
-            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : k)));
+            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : stripAssetDataUrlsFromKit(k))));
           })
           .catch(err => {
             console.warn('[App] Error al hidratar activos desde IndexedDB:', err);
@@ -681,6 +696,14 @@ export const App: React.FC = () => {
 
   const handleSelectKit = (kit: StudyKit, pushToHistory = false) => {
     if (!kit || isCorruptedKit(kit)) return;
+
+    if (currentKit && currentKit.id !== kit.id) {
+      purgeAssetMemoryCache();
+      revokeAllAzureAudioUrls();
+      revokeAllPodcastAudioUrls();
+      setKits(prev => prev.map(k => (k.id === kit.id ? k : stripAssetDataUrlsFromKit(k))));
+    }
+
     const fullKit = kits.find(k => k.id === kit.id);
     const bestKit = (fullKit && (fullKit.questions?.length || 0) > (kit.questions?.length || 0)) ? fullKit : kit;
     setCurrentKit(bestKit);
