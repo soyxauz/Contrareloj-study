@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Cloud,
   RefreshCw,
@@ -8,13 +8,9 @@ import {
   LogOut,
   FolderSync,
   User,
-  Key,
-  ChevronDown,
-  ChevronUp,
   ShieldCheck,
 } from 'lucide-react';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
-import { validateGoogleClientId } from '../utils/validation';
 import type { StudyKit, User as AppUser } from '../types';
 
 interface GoogleDriveModalProps {
@@ -39,10 +35,6 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   const [syncState, setSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
   const [isProcessing, setIsProcessing] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
-  const [clientIdInput, setClientIdInput] = useState<string>(() => googleDriveService.getClientId());
-  const [clientSecretInput, setClientSecretInput] = useState<string>(() => googleDriveService.getClientSecret());
-  const [showConfig, setShowConfig] = useState<boolean>(() => !googleDriveService.hasClientId());
-  const [isSavedKey, setIsSavedKey] = useState(false);
 
   useEffect(() => {
     const unsubscribe = googleDriveService.subscribe((state) => {
@@ -51,33 +43,9 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     return unsubscribe;
   }, []);
 
-  const clientIdValidation = useMemo(() => {
-    return validateGoogleClientId(clientIdInput, false);
-  }, [clientIdInput]);
-
-  const handleSaveCredentials = () => {
-    if (!clientIdValidation.isValid) return;
-    googleDriveService.setClientId(clientIdInput.trim());
-    googleDriveService.setClientSecret(clientSecretInput.trim());
-    setIsSavedKey(true);
-    setTimeout(() => setIsSavedKey(false), 2000);
-  };
-
   if (!isOpen) return null;
 
   const handleConnect = async () => {
-    if (!googleDriveService.hasClientId()) {
-      if (!clientIdValidation.isValid) {
-        setNoticeMessage(clientIdValidation.error || 'Debes ingresar un Client ID de Google OAuth válido.');
-        setShowConfig(true);
-        return;
-      }
-      googleDriveService.setClientId(clientIdInput.trim());
-    }
-    if (clientSecretInput.trim() && !googleDriveService.getClientSecret()) {
-      googleDriveService.setClientSecret(clientSecretInput.trim());
-    }
-
     setIsProcessing(true);
     setNoticeMessage(null);
     try {
@@ -297,7 +265,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
 
             <button
               onClick={handleConnect}
-              disabled={isProcessing || (!googleDriveService.hasClientId() && !clientIdValidation.isValid)}
+              disabled={isProcessing}
               className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-emerald-600 hover:from-violet-500 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs shadow-lg shadow-violet-900/30 flex items-center justify-center gap-2.5 cursor-pointer transition-all"
             >
               {isProcessing ? (
@@ -314,91 +282,6 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
             </button>
           </div>
         )}
-
-        {/* Client ID & Secret Configuration Section */}
-        <div className="bg-thea-surfaceLight/40 border border-thea-border/80 rounded-2xl p-4 space-y-3 mb-3">
-          <button
-            type="button"
-            onClick={() => setShowConfig(!showConfig)}
-            className="w-full flex items-center justify-between text-left text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <Key className="w-4 h-4 text-emerald-400" />
-              <span>Configuración OAuth y Sesión Permanente</span>
-              {googleDriveService.hasClientId() && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  {syncState.hasRefreshToken ? 'Permanente' : 'Activo'}
-                </span>
-              )}
-            </div>
-            {showConfig ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-          </button>
-
-          {showConfig && (
-            <div className="pt-2 border-t border-thea-border/60 space-y-3 animate-fadeIn">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Google Client ID</label>
-                <input
-                  type="text"
-                  value={clientIdInput}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setClientIdInput(val);
-                    const valid = validateGoogleClientId(val);
-                    if (valid.isValid) {
-                      googleDriveService.setClientId(val.trim());
-                    }
-                  }}
-                  placeholder="123456789-ejemplo.apps.googleusercontent.com"
-                  className={`w-full px-3 py-2 rounded-xl bg-thea-bg border text-white text-xs font-mono focus:outline-none transition-colors ${
-                    clientIdInput.trim() && !clientIdValidation.isValid
-                      ? 'border-rose-500 focus:border-rose-500'
-                      : 'border-thea-border focus:border-emerald-500'
-                  }`}
-                />
-                {clientIdInput.trim() && !clientIdValidation.isValid && (
-                  <p className="mt-1.5 text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-fadeIn">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                    <span>{clientIdValidation.error}</span>
-                  </p>
-                )}
-                {clientIdValidation.isValid && (
-                  <p className="mt-1.5 text-[11px] text-emerald-400 font-medium flex items-center gap-1.5 animate-fadeIn">
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                    <span>Formato de Client ID válido.</span>
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  Google Client Secret <span className="text-[10px] text-slate-400 font-normal">(Opcional, habilita Refresh Token permanente)</span>
-                </label>
-                <input
-                  type="password"
-                  value={clientSecretInput}
-                  onChange={(e) => setClientSecretInput(e.target.value)}
-                  placeholder="GOCSPX-ejemploClaveSecretaGoogle"
-                  className="w-full px-3 py-2 rounded-xl bg-thea-bg border border-thea-border focus:border-emerald-500 text-white text-xs font-mono focus:outline-none transition-colors"
-                />
-                <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
-                  Permite renovar sesiones de servidor a servidor sin interrupciones por meses. También puede configurarse en el archivo .env o en Vercel como GOOGLE_CLIENT_SECRET.
-                </p>
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={handleSaveCredentials}
-                  disabled={!clientIdValidation.isValid}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {isSavedKey ? 'Credenciales guardadas' : 'Guardar Credenciales'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
 
       </div>
     </div>
