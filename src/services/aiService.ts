@@ -2214,6 +2214,33 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   return [];
 }
 
+/**
+ * Remueve resúmenes ejecutivos, visiones epistémicas y preámbulos meta-analíticos
+ * de las guías de estudio para entrar directamente en la materia.
+ */
+export function stripExecutiveSummaryPreamble(markdownText: string): string {
+  if (!markdownText) return '';
+  let cleaned = markdownText;
+
+  // 1. Quitar bloques blockquote (> ...) que contengan 'resumen ejecutivo' o 'visión epistémica'
+  cleaned = cleaned.replace(/(?:^|\n)(>[^\n]*\n*)+/gi, (match) => {
+    if (/resumen\s+ejecutivo|visi[oó]n\s+epist[eé]mica/i.test(match)) {
+      return '\n';
+    }
+    return match;
+  });
+
+  // 2. Quitar párrafos o encabezados directos de 'Resumen Ejecutivo' o 'Visión Epistémica'
+  cleaned = cleaned.replace(/(?:^|\n)(?:#{1,4}\s*)?\*{0,2}(?:Resumen\s+Ejecutivo|Visi[oó]n\s+Epist[eé]mica)[^\n]*\*{0,2}[:\-]?\s*(?:\n+(?:(?!#{1,3}\s)[^\n]+\n*)*)?/gi, () => {
+    return '\n';
+  });
+
+  // 3. Quitar introducciones meta-analíticas redundantes iniciales antes del primer ##
+  cleaned = cleaned.replace(/^(#\s+[^\n]+\n+)(?:(?:El presente tratado|Este documento analiza|En esta gu[íi]a de estudio)[^\n]+\n+)+/gi, '$1\n');
+
+  return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+}
+
 /** Generación de Guía de Estudio bajo demanda con 3 niveles de extensión (1x, 2x, 3x) y generación modular continua */
 export async function generateAIStudyGuide(
   rawText: string,
@@ -2241,9 +2268,12 @@ Condensa los pilares teóricos, núcleos conceptuales ineludibles, definiciones 
 
 ${translationDirective}
 
+REGLA ESTRICTA DE ENTRADA:
+- PROHIBIDO incluir resúmenes ejecutivos, visiones epistémicas o párrafos meta-introductorios (ej. 'El presente tratado...', 'Este documento analiza...').
+- Entra DIRECTAMENTE a la materia desde la primera línea bajo el título.
+
 ESTRUCTURA DIDÁCTICA EXIGIDA:
 # Guía de Estudio Esencial: ${title}
-> **Resumen Ejecutivo:** Visión condensada y trascendencia del tema en el examen.
 
 ## 1. Núcleos Conceptuales y Definiciones Clave
 (Definiciones precisas de los términos basales del material)
@@ -2273,7 +2303,7 @@ Genera la Guía de Estudio Esencial en español (Markdown):`;
         { max_tokens: 4096 }
       );
       onProgress?.('Guía Esencial completada.', 100);
-      return res?.trim() || '';
+      return stripExecutiveSummaryPreamble(res?.trim() || '');
     } catch (e) {
       console.warn('[StudyGuide AI] Error en guía esencial:', e);
       return '';
@@ -2291,9 +2321,12 @@ Esta fase debe cubrir con exhaustividad los fundamentos teóricos y el recorrido
 
 ${translationDirective}
 
+REGLA ESTRICTA DE ENTRADA:
+- PROHIBIDO incluir resúmenes ejecutivos, visiones epistémicas o párrafos meta-introductorios (ej. 'El presente tratado...', 'Este documento analiza...').
+- Entra DIRECTAMENTE a los fundamentos y desarrollo temático.
+
 ESTRUCTURA DE LA FASE 1:
 # Guía de Estudio Completa: ${title}
-> **Resumen Ejecutivo:** Análisis panorámico y alcance académico.
 
 ## 1. Fundamentos y Marco Teórico Integral
 (Principios basales, taxonomía, definiciones formales y antecedentes)
@@ -2362,22 +2395,25 @@ Redacta la Fase 2 (Tablas comparativas, perlas de examen y mnemotecnias) en espa
 
     onProgress?.('Guía Completa (2x) consolidada con éxito.', 100);
     const combined2x = [part1.trim(), part2.trim()].filter(p => p.length > 50).join('\n\n---\n\n');
-    return combined2x || part1 || part2 || '';
+    return stripExecutiveSummaryPreamble(combined2x || part1 || part2 || '');
   }
 
   // --- MODO 3: ULTRA-EXHAUSTIVA (3x - Tratado académico profundo sin límites) ---
-  onProgress?.('Fase 1/3: Fundamentación estructural, marco epistémico y glosario profundo...', 15);
+  onProgress?.('Fase 1/3: Fundamentación estructural, marco conceptual y glosario profundo...', 15);
 
-  // Fase 1: Marco Epistémico, Fundamentación Fisiopatológica/Estructural y Glosario Exhaustivo
+  // Fase 1: Marco Conceptual, Fundamentación Fisiopatológica/Estructural y Glosario Exhaustivo
   const p1System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
 Tu misión es redactar el MÓDULO 1 de una GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
 Este módulo debe ser de máxima profundidad científica y académica, sin recortar ni condensar nada.
 
 ${translationDirective}
 
+REGLA ESTRICTA DE ENTRADA:
+- PROHIBIDO incluir resúmenes ejecutivos, visiones epistémicas ni párrafos de preámbulo meta-analíticos (ej. 'El presente tratado constituye una disección analítica...', 'Este documento analiza...').
+- Entra DIRECTAMENTE a los fundamentos conceptuales y fisiopatológicos/estructurales.
+
 ESTRUCTURA DEL MÓDULO 1:
 # Tratado y Guía de Estudio Magna: ${title}
-> **Resumen Ejecutivo y Visión Epistémica:** Contextualización profunda, relevancia disciplinar y mapa conceptual del documento.
 
 ## 1. Fundamentos Teóricos, Marco Conceptual y Fisiopatológico / Estructural
 (Principios basales, leyes o axiomas que rigen el tema, taxonomía detallada y causalidad profunda)
@@ -2485,7 +2521,7 @@ Redacta el Módulo 3 (Grandes tablas matriciales, casos prácticos, perlas y mne
   onProgress?.('Tratado y Guía Magna Ultra-Exhaustiva (3x) consolidada con éxito.', 100);
 
   const sections = [mod1.trim(), mod2.trim(), mod3.trim()].filter(s => s.length > 50);
-  return sections.join('\n\n---\n\n') || mod1 || mod2 || mod3 || '';
+  return stripExecutiveSummaryPreamble(sections.join('\n\n---\n\n') || mod1 || mod2 || mod3 || '');
 }
 
 /** Generación de Episodio de Podcast bajo demanda con opciones avanzadas de Formato, Duración y Diferenciación */

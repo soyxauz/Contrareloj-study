@@ -34,7 +34,7 @@ export const DEPTH_OPTIONS: Array<{
     badge: 'Concisa y Rápida',
     desc: 'Núcleos conceptuales basales, definiciones clave y cuadros rápidos para consolidación veloz antes de un examen.',
     features: [
-      'Resumen ejecutivo de alto impacto',
+      'Síntesis conceptual directa de alto impacto',
       'Definiciones y axiomas nucleares',
       'Cuadro comparativo sintetizado',
       'Mnemotecnias basales de retención'
@@ -63,14 +63,14 @@ export const DEPTH_OPTIONS: Array<{
     desc: 'Tratado exhaustivo sin límites que cubre estrictamente todo el documento, casos de examen, tablas matriciales y mnemotecnias avanzadas.',
     features: [
       'Cobertura estricta de cada diapositiva/página',
-      'Glosario técnico profundo y epistemología',
+      'Glosario técnico y marco conceptual profundo',
       'Grandes cuadros matriciales y diferenciales',
       'Casos clínicos/prácticos y preguntas trampa'
     ],
     icon: Sparkles,
   },
 ];
-import { generateAIStudyGuide } from '../services/aiService';
+import { generateAIStudyGuide, stripExecutiveSummaryPreamble } from '../services/aiService';
 import { FormattedText } from './FormattedText';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { hydrateKitAssets } from '../services/storageService';
@@ -84,7 +84,9 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   const [currentKitState, setCurrentKitState] = useState<StudyKit>(kit);
   const [activeTab, setActiveTab] = useState<'guide' | 'gallery'>('guide');
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
-  const [markdown, setMarkdown] = useState(kit.studyGuideMarkdown);
+  const [markdown, setMarkdown] = useState(() =>
+    kit.studyGuideMarkdown ? stripExecutiveSummaryPreamble(kit.studyGuideMarkdown) : ''
+  );
   const [selectedDepth, setSelectedDepth] = useState<StudyGuideDepth>(kit.studyGuideDepth || 'ultra');
   const [showSmartEditModal, setShowSmartEditModal] = useState(false);
   const [showDepthModal, setShowDepthModal] = useState(false);
@@ -102,7 +104,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
   useEffect(() => {
     setCurrentKitState(kit);
-    setMarkdown(kit.studyGuideMarkdown);
+    setMarkdown(kit.studyGuideMarkdown ? stripExecutiveSummaryPreamble(kit.studyGuideMarkdown) : '');
     if (kit.studyGuideDepth) {
       setSelectedDepth(kit.studyGuideDepth);
       setModalDepthChoice(kit.studyGuideDepth);
@@ -166,11 +168,12 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         }
       );
       if (generated) {
-        setMarkdown(generated);
+        const cleaned = stripExecutiveSummaryPreamble(generated);
+        setMarkdown(cleaned);
         setSelectedDepth(depthToUse);
         setModalDepthChoice(depthToUse);
         if (onUpdateKit) {
-          onUpdateKit({ ...kit, studyGuideMarkdown: generated, studyGuideDepth: depthToUse });
+          onUpdateKit({ ...kit, studyGuideMarkdown: cleaned, studyGuideDepth: depthToUse });
         }
       }
     } catch (e) {
@@ -628,7 +631,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               )}
 
               <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-10 shadow-xl">
-                <FormattedText text={markdown} />
+                <FormattedText text={stripExecutiveSummaryPreamble(markdown)} />
               </div>
             </div>
           )}
