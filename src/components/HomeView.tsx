@@ -372,78 +372,50 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return [activeKit, ...rest];
   }, [kits, selectedMateria, currentKit]);
 
+const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  Lungs: LungsIllustration,
+  HeartPulse,
+  Germ,
+  Virus,
+  Bone,
+  Eye,
+  Droplets,
+  Syringe,
+  Wind,
+  CloudRain,
+  Leaf,
+  Hospital,
+  Microscope,
+  Scale,
+  Dna,
+  Stethoscope,
+  Pill,
+  Atom,
+  FlaskConical,
+  Binary,
+  Cpu,
+  TrendingUp,
+  Landmark,
+  Calculator,
+  Brain,
+  BookOpen,
+};
+
   const renderKitIcon = (iconName: string, colorHex?: string) => {
-    const style = colorHex ? { color: colorHex } : undefined;
-    const cls = "w-5 h-5";
-    switch (iconName) {
-      case 'Lungs': return <LungsIllustration className={cls} style={style} />;
-      case 'HeartPulse': return <HeartPulse className={cls} style={style} />;
-      case 'Germ': return <Germ className={cls} style={style} />;
-      case 'Virus': return <Virus className={cls} style={style} />;
-      case 'Bone': return <Bone className={cls} style={style} />;
-      case 'Eye': return <Eye className={cls} style={style} />;
-      case 'Droplets': return <Droplets className={cls} style={style} />;
-      case 'Syringe': return <Syringe className={cls} style={style} />;
-      case 'Wind': return <Wind className={cls} style={style} />;
-      case 'CloudRain': return <CloudRain className={cls} style={style} />;
-      case 'Leaf': return <Leaf className={cls} style={style} />;
-      case 'Hospital': return <Hospital className={cls} style={style} />;
-      case 'Microscope': return <Microscope className={cls} style={style} />;
-      case 'Scale': return <Scale className={cls} style={style} />;
-      case 'Dna': return <Dna className={cls} style={style} />;
-      case 'Stethoscope': return <Stethoscope className={cls} style={style} />;
-      case 'Pill': return <Pill className={cls} style={style} />;
-      case 'Atom': return <Atom className={cls} style={style} />;
-      case 'FlaskConical': return <FlaskConical className={cls} style={style} />;
-      case 'Binary': return <Binary className={cls} style={style} />;
-      case 'Cpu': return <Cpu className={cls} style={style} />;
-      case 'TrendingUp': return <TrendingUp className={cls} style={style} />;
-      case 'Landmark': return <Landmark className={cls} style={style} />;
-      case 'Calculator': return <Calculator className={cls} style={style} />;
-      case 'Brain': return <Brain className={cls} style={style} />;
-      case 'BookOpen': return <BookOpen className={cls} style={style} />;
-      default: return <GraduationCap className={cls} style={style} />;
-    }
+    const IconComp = KIT_ICON_COMPONENTS[iconName] || GraduationCap;
+    return <IconComp className="w-5 h-5" style={colorHex ? { color: colorHex } : undefined} />;
   };
 
   const renderWatermarkIcon = (iconName: string, category?: string, title?: string) => {
-    const cls = "w-28 h-28 stroke-[2.2] fill-current/25";
-    switch (iconName) {
-      case 'Lungs': return <LungsIllustration className={cls} />;
-      case 'HeartPulse': return <HeartPulse className={cls} />;
-      case 'Germ': return <Germ className={cls} />;
-      case 'Virus': return <Virus className={cls} />;
-      case 'Bone': return <Bone className={cls} />;
-      case 'Eye': return <Eye className={cls} />;
-      case 'Droplets': return <Droplets className={cls} />;
-      case 'Syringe': return <Syringe className={cls} />;
-      case 'Wind': return <Wind className={cls} />;
-      case 'CloudRain': return <CloudRain className={cls} />;
-      case 'Leaf': return <Leaf className={cls} />;
-      case 'Microscope': return <Microscope className={cls} />;
-      case 'Scale': return <Scale className={cls} />;
-      case 'Dna': return <Dna className={cls} />;
-      case 'Pill': return <Pill className={cls} />;
-      case 'Atom': return <Atom className={cls} />;
-      case 'FlaskConical': return <FlaskConical className={cls} />;
-      case 'Binary': return <Binary className={cls} />;
-      case 'Cpu': return <Cpu className={cls} />;
-      case 'TrendingUp': return <TrendingUp className={cls} />;
-      case 'Landmark': return <Landmark className={cls} />;
-      case 'Calculator': return <Calculator className={cls} />;
-      case 'Brain': return <Brain className={cls} />;
-      case 'BookOpen': return <BookOpen className={cls} />;
-      case 'Hospital':
-      case 'Stethoscope':
-        return <HospitalIllustration className="w-28 h-28" />;
-      default: {
-        const isMed = /fisiopatolog|medicin|salud|enfermedad|hospital|clinica/i.test(`${category || ''} ${title || ''}`);
-        if (isMed && (iconName === 'Hospital' || iconName === 'Stethoscope')) {
-          return <HospitalIllustration className="w-28 h-28" />;
-        }
-        return <GraduationCap className={cls} />;
-      }
+    if (iconName === 'Hospital' || iconName === 'Stethoscope') {
+      return <HospitalIllustration className="w-28 h-28" />;
     }
+    const isMed = /fisiopatolog|medicin|salud|enfermedad|hospital|clinica/i.test(`${category || ''} ${title || ''}`);
+    if (isMed && (iconName === 'Hospital' || iconName === 'Stethoscope')) {
+      return <HospitalIllustration className="w-28 h-28" />;
+    }
+    const IconComp = KIT_ICON_COMPONENTS[iconName] || GraduationCap;
+    return <IconComp className="w-28 h-28 stroke-[2.2] fill-current/25" />;
   };
 
   const [statsVersion, setStatsVersion] = React.useState(0);

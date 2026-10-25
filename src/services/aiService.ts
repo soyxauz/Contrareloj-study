@@ -1064,6 +1064,178 @@ export async function queryAICompletion(
   }
 }
 
+/**
+ * Repara de forma heurística fragmentos de JSON truncados por límites de tokens en modelos de IA.
+ * Balancea comillas, corchetes y llaves abiertas para producir una estructura sintácticamente parseable.
+ */
+export function repairTruncatedJSON(str: string): string | null {
+  if (!str) return null;
+
+  let inString = false;
+  let isEscaped = false;
+  const stack: Array<'{' | '['> = [];
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (char === '\\') {
+        isEscaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+      } else if (char === '{' || char === '[') {
+        stack.push(char);
+      } else if (char === '}') {
+        if (stack.length > 0 && stack[stack.length - 1] === '{') {
+          stack.pop();
+        }
+      } else if (char === ']') {
+        if (stack.length > 0 && stack[stack.length - 1] === '[') {
+          stack.pop();
+        }
+      }
+    }
+  }
+
+  if (stack.length === 0 && !inString) {
+    return null;
+  }
+
+  let result = str.trim();
+  if (inString) {
+    result += '"';
+  }
+  result = result.replace(/,\s*$/, '');
+  while (stack.length > 0) {
+    const openChar = stack.pop();
+    if (openChar === '{') {
+      result += '}';
+    } else if (openChar === '[') {
+      result += ']';
+    }
+  }
+  return result;
+}
+
+/**
+ * Analizador y extractor resiliente multinivel de JSON para respuestas de modelos de IA.
+ * 1. Parseo directo si el modelo devolvió JSON puro.
+ * 2. Extracción de bloques Markdown (```json ... ```).
+ * 3. Detección y recorte de límites del primer '{' o '[' al último '}' o ']'.
+ * 4. Sanitización de trailing commas, caracteres de control no imprimibles y escapes ilegales.
+ * 5. Reparación heurística ante truncamientos de tokens.
+ */
+export function safeParseAIJSON<T = any>(raw: string): T | null {
+  if (!raw || typeof raw !== 'string') return null;
+
+  const trimmed = raw.trim();
+
+  // 1. Intento directo
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {}
+
+  // 2. Extracción de bloque de código Markdown
+  let snippet = trimmed;
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    snippet = codeBlockMatch[1].trim();
+    try {
+      return JSON.parse(snippet) as T;
+    } catch {}
+  }
+
+  // 3. Delimitación de llaves y corchetes principales
+  const firstBrace = snippet.indexOf('{');
+  const firstBracket = snippet.indexOf('[');
+
+  let startIdx = -1;
+  let isArray = false;
+  if (firstBrace !== -1 && firstBracket !== -1) {
+    if (firstBrace < firstBracket) {
+      startIdx = firstBrace;
+      isArray = false;
+    } else {
+      startIdx = firstBracket;
+      isArray = true;
+    }
+  } else if (firstBrace !== -1) {
+    startIdx = firstBrace;
+    isArray = false;
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    isArray = true;
+  }
+
+  if (startIdx !== -1) {
+    const endChar = isArray ? ']' : '}';
+    const lastEnd = snippet.lastIndexOf(endChar);
+    if (lastEnd > startIdx) {
+      snippet = snippet.substring(startIdx, lastEnd + 1);
+      try {
+        return JSON.parse(snippet) as T;
+      } catch {}
+    } else {
+      snippet = snippet.substring(startIdx);
+    }
+  }
+
+  // 4. Sanitización sintáctica (comas sobrantes, escapes ilegales, caracteres de control)
+  const sanitize = (str: string): string => {
+    return str
+      .replace(/,\s*([}\]])/g, '$1')
+      .replace(/[\u0000-\u001F]+/g, (m) => (m === '\n' ? '\\n' : m === '\t' ? '\\t' : m === '\r' ? '\\r' : ''))
+      .replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+  };
+
+  const cleaned = sanitize(snippet);
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {}
+
+  // 5. Reparación heurística de truncamiento
+  try {
+    const repaired = repairTruncatedJSON(cleaned);
+    if (repaired) {
+      return JSON.parse(repaired) as T;
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Ejecuta una consulta estructurada a la IA asegurando modo JSON, sanitización
+ * multinivel y reparación automática ante respuestas truncadas.
+ */
+export async function executeStructuredPrompt<T = any>(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  options?: {
+    override?: AISettings;
+    temperature?: number;
+    max_tokens?: number;
+    validator?: (data: any) => boolean;
+  }
+): Promise<T | null> {
+  const raw = await queryAICompletion(
+    messages,
+    true,
+    options?.override,
+    { temperature: options?.temperature, max_tokens: options?.max_tokens }
+  );
+
+  const parsed = safeParseAIJSON<T>(raw);
+  if (parsed && options?.validator) {
+    return options.validator(parsed) ? parsed : null;
+  }
+  return parsed;
+}
+
 /** Normalizador ultra-robusto del índice correcto para preguntas de opción múltiple y V/F */
 export function parseCorrectIndex(
   rawAnswer: unknown,
@@ -1400,33 +1572,8 @@ Genera el JSON completo respetando la estructura exigida:`;
       true
     );
 
-    // Extracción tolerante y robusta de JSON
-    const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
-    const firstBrace = cleanOutput.indexOf('{');
-    const lastBrace = cleanOutput.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-      throw new Error('La respuesta del modelo de IA no contuvo un objeto JSON válido.');
-    }
-
-    const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
-    let parsed: any;
-    try {
-      parsed = JSON.parse(jsonSnippet);
-    } catch {
-      let cleaned = jsonSnippet.replace(/,\s*([}\]])/g, '$1');
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        cleaned = cleaned.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
-        try {
-          parsed = JSON.parse(cleaned);
-        } catch {
-          cleaned = cleaned.replace(/[\u0000-\u001F]+/g, (m) => m === '\n' ? '\\n' : m === '\t' ? '\\t' : '');
-          parsed = JSON.parse(cleaned);
-        }
-      }
-    }
-
+    // Extracción tolerante y robusta de JSON unificada
+    const parsed = safeParseAIJSON<any>(rawResponse);
     if (!parsed || !Array.isArray(parsed.preguntas) || parsed.preguntas.length === 0) {
       throw new Error('El modelo de IA devolvió un JSON sin lista de preguntas.');
     }
@@ -1740,21 +1887,18 @@ Responde ÚNICAMENTE con un JSON con la estructura:
         ],
         true
       );
-      const match = res.match(/\{[\s\S]*\}/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        if (Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
-          return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
-            const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
-            return {
-              id: `fc-ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-              term: f.term,
-              definition: f.definition,
-              mastery: 'to-learn' as const,
-              type: isQ ? ('question' as const) : ('concept' as const),
-            };
-          });
-        }
+      const parsed = safeParseAIJSON<any>(res);
+      if (parsed && Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
+        return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
+          const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
+          return {
+            id: `fc-ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+            term: f.term,
+            definition: f.definition,
+            mastery: 'to-learn' as const,
+            type: isQ ? ('question' as const) : ('concept' as const),
+          };
+        });
       }
     } catch (e) {
       console.warn('[Flashcards AI] Error generando flashcards con IA:', e);
@@ -1806,21 +1950,18 @@ Responde ÚNICAMENTE con un JSON con la estructura:
         ],
         true
       );
-      const match = res.match(/\{[\s\S]*\}/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        if (Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
-          return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
-            const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
-            return {
-              id: `fc-ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-              term: f.term,
-              definition: f.definition,
-              mastery: 'to-learn' as const,
-              type: isQ ? ('question' as const) : ('concept' as const),
-            };
-          });
-        }
+      const parsed = safeParseAIJSON<any>(res);
+      if (parsed && Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
+        return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
+          const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
+          return {
+            id: `fc-ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+            term: f.term,
+            definition: f.definition,
+            mastery: 'to-learn' as const,
+            type: isQ ? ('question' as const) : ('concept' as const),
+          };
+        });
       }
     } catch (e) {
       console.warn('[Flashcards AI] Error generando flashcards adicionales con IA:', e);
@@ -1953,21 +2094,18 @@ Responde ÚNICAMENTE con un JSON con la estructura:
         ],
         true
       );
-      const match = res.match(/\{[\s\S]*\}/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        if (Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
-          return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
-            const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
-            return {
-              id: `fc-calibrated-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-              term: f.term,
-              definition: f.definition,
-              mastery: 'to-learn' as const,
-              type: isQ ? ('question' as const) : ('concept' as const),
-            };
-          });
-        }
+      const parsed = safeParseAIJSON<any>(res);
+      if (parsed && Array.isArray(parsed.flashcards) && parsed.flashcards.length > 0) {
+        return parsed.flashcards.map((f: { term: string; definition: string; type?: 'concept' | 'question' }, i: number) => {
+          const isQ = f.type === 'question' || /^\s*¿|\?\s*$/.test(f.term);
+          return {
+            id: `fc-calibrated-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+            term: f.term,
+            definition: f.definition,
+            mastery: 'to-learn' as const,
+            type: isQ ? ('question' as const) : ('concept' as const),
+          };
+        });
       }
     } catch (e) {
       console.warn('[Flashcards Targeted AI] Error generando flashcards calibradas con IA:', e);
@@ -2049,10 +2187,8 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       true
     );
 
-    const match = res.match(/\{[\s\S]*\}/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      if (Array.isArray(parsed.cases) && parsed.cases.length > 0) {
+    const parsed = safeParseAIJSON<any>(res);
+    if (parsed && Array.isArray(parsed.cases) && parsed.cases.length > 0) {
         return parsed.cases.map((c: any, idx: number) => {
           const target = targetCards[idx]?.term || c.targetTerm;
           let opts: string[] = Array.isArray(c.options) ? c.options.map((o: any) => String(o).trim()) : [];
@@ -2084,7 +2220,6 @@ Responde ÚNICAMENTE con un JSON con la estructura:
           };
         });
       }
-    }
   } catch (err) {
     console.warn('[GuessWho AI] Error generando casos con IA:', err);
   }
@@ -2194,10 +2329,8 @@ Responde ÚNICAMENTE con un JSON con la estructura:
       true
     );
 
-    const match = rawRes.match(/\{[\s\S]*\}/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      if (Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
+    const parsed = safeParseAIJSON<any>(rawRes);
+    if (parsed && Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
         return parsed.preguntas.map((p: any, idx: number): Question => {
           const isMulti = p.tipo === 'multi-select';
           let options: string[] = [];
@@ -2238,7 +2371,6 @@ Responde ÚNICAMENTE con un JSON con la estructura:
           };
         });
       }
-    }
   } catch (err) {
     console.warn('[False Concept Generator] Error generando preguntas de afirmación falsa:', err);
   }
@@ -2765,30 +2897,8 @@ Responde ÚNICAMENTE con un JSON con la estructura:
         { temperature: 0.75, max_tokens: 8192 }
       );
 
-      // Extracción y recuperación tolerante de JSON
-      let parsed: any = null;
-      const cleanRes = res.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-      const match = cleanRes.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch {
-          try {
-            const dialogueIdx = match[0].indexOf('"dialogue"');
-            if (dialogueIdx !== -1) {
-              const before = match[0].slice(0, dialogueIdx);
-              const after = match[0].slice(dialogueIdx);
-              const lastClosing = after.lastIndexOf('}');
-              if (lastClosing !== -1) {
-                const repaired = `${before}${after.slice(0, lastClosing + 1)}]}}`;
-                parsed = JSON.parse(repaired);
-              }
-            }
-          } catch (repairErr) {
-            console.warn('[Podcast AI] No se pudo reparar JSON truncado:', repairErr);
-          }
-        }
-      }
+      // Extracción y recuperación tolerante de JSON unificada
+      const parsed = safeParseAIJSON<any>(res);
 
       if (parsed?.podcast && Array.isArray(parsed.podcast.dialogue) && parsed.podcast.dialogue.length > 0) {
         // Normalización continua de marcas de tiempo basada en conteo de palabras
@@ -3208,20 +3318,9 @@ Genera la pregunta socrática reformulada en formato JSON:`;
     true
   );
 
-  const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
-  const firstBrace = cleanOutput.indexOf('{');
-  const lastBrace = cleanOutput.lastIndexOf('}');
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+  const parsed = safeParseAIJSON<any>(rawResponse);
+  if (!parsed || typeof parsed !== 'object') {
     throw new Error('La respuesta de reformulación socrática no contuvo un objeto JSON válido.');
-  }
-
-  const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
-  let parsed: any;
-  try {
-    parsed = JSON.parse(jsonSnippet);
-  } catch {
-    const sanitizedJson = jsonSnippet.replace(/,\s*([}\]])/g, '$1');
-    parsed = JSON.parse(sanitizedJson);
   }
 
   const optsObj = parsed.opciones || {};
@@ -3453,32 +3552,7 @@ Genera las ${count} preguntas en formato JSON estricto:`;
     true
   );
 
-  const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
-  const firstBrace = cleanOutput.indexOf('{');
-  const lastBrace = cleanOutput.lastIndexOf('}');
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    throw new Error('La respuesta de generación calibrada no contuvo un objeto JSON válido.');
-  }
-
-  const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
-  let parsed: any;
-  try {
-    parsed = JSON.parse(jsonSnippet);
-  } catch {
-    let cleaned = jsonSnippet.replace(/,\s*([}\]])/g, '$1');
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      cleaned = cleaned.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        cleaned = cleaned.replace(/[\u0000-\u001F]+/g, (m) => m === '\n' ? '\\n' : m === '\t' ? '\\t' : '');
-        parsed = JSON.parse(cleaned);
-      }
-    }
-  }
-
+  const parsed = safeParseAIJSON<any>(rawResponse);
   if (!parsed || !Array.isArray(parsed.preguntas) || parsed.preguntas.length === 0) {
     throw new Error('El modelo de IA no devolvió preguntas en el formato esperado.');
   }
@@ -4164,20 +4238,9 @@ ${sampleText}`;
       true
     );
 
-    const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
-    const firstBrace = cleanOutput.indexOf('{');
-    const lastBrace = cleanOutput.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    const parsed = safeParseAIJSON<any>(rawResponse);
+    if (!parsed || typeof parsed !== 'object') {
       throw new Error('No se detectó JSON válido en la clasificación.');
-    }
-
-    const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
-    let parsed: any;
-    try {
-      parsed = JSON.parse(jsonSnippet);
-    } catch {
-      const sanitized = jsonSnippet.replace(/,\s*([}\]])/g, '$1');
-      parsed = JSON.parse(sanitized);
     }
 
     const tema = String(parsed.tema || '').trim() || 'Material de Estudio';
@@ -4314,12 +4377,8 @@ Genera tu evaluación académica en formato JSON:`;
       true
     );
 
-    const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
-    const firstBrace = cleanOutput.indexOf('{');
-    const lastBrace = cleanOutput.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
-      const parsed = JSON.parse(jsonSnippet);
+    const parsed = safeParseAIJSON<any>(rawResponse);
+    if (parsed && typeof parsed === 'object') {
       const sim = Math.min(100, Math.max(0, Math.round(Number(parsed.similarity) || 0)));
       return {
         similarity: sim,
@@ -4478,20 +4537,8 @@ Redacta las ${count} preguntas en formato JSON estricto:`;
       true
     );
 
-    const cleanOutput = rawResponse.replace(/```(?:json)?/gi, '').trim();
-    const firstBrace = cleanOutput.indexOf('{');
-    const lastBrace = cleanOutput.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const jsonSnippet = cleanOutput.substring(firstBrace, lastBrace + 1);
-      let parsed: any;
-      try {
-        parsed = JSON.parse(jsonSnippet);
-      } catch {
-        const sanitized = jsonSnippet.replace(/,\s*([}\]])/g, '$1');
-        parsed = JSON.parse(sanitized);
-      }
-
-      if (parsed && Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
+    const parsed = safeParseAIJSON<any>(rawResponse);
+    if (parsed && Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
         return parsed.preguntas.map((p: any, idx: number): Question => {
           const rawType = String(p.tipo || '').toLowerCase();
           const isShort = rawType.includes('short') || rawType.includes('abierta') || formatPreference === 'short-answer';
@@ -4523,7 +4570,6 @@ Redacta las ${count} preguntas en formato JSON estricto:`;
           };
         });
       }
-    }
   } catch (err) {
     console.warn('[generateSpecializedExamQuestions] Fallback a preguntas adaptadas del material:', err);
   }
