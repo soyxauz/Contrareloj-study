@@ -2717,7 +2717,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               {currentQ.sourceAsset.dataUrl && (
                 <div
                   onClick={() => setZoomAsset(currentQ.sourceAsset || null)}
-                  className="rounded-xl overflow-hidden bg-black/40 border border-thea-border/60 flex items-center justify-center p-2 mb-2 max-h-72 cursor-pointer hover:border-violet-500/60 transition-colors group relative"
+                  className="rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center p-2 mb-2 max-h-72 cursor-pointer hover:border-violet-500/60 transition-colors group relative"
                   title="Clic para ampliar y hacer zoom interactivo"
                 >
                   <img
@@ -3138,7 +3138,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 {modalChunk.asset.dataUrl && (
                   <div
                     onClick={() => setZoomAsset(modalChunk.asset)}
-                    className="rounded-xl overflow-hidden bg-black/40 border border-thea-border/60 flex items-center justify-center p-2 max-h-60 cursor-pointer hover:border-violet-500/80 transition-colors group relative"
+                    className="rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center p-2 max-h-60 cursor-pointer hover:border-violet-500/80 transition-colors group relative"
                     title="Clic para ampliar con zoom interactivo"
                   >
                     <img

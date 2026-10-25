@@ -225,16 +225,16 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
         >
           <div
             onClick={handleImageClick}
-            className="group relative w-full rounded-xl overflow-hidden bg-[#181138]/60 shadow-xl cursor-pointer border border-[#35255c]/60 hover:border-[#a78bfa]/60 transition-all flex items-center justify-center min-h-[160px] max-h-[260px]"
+            className="group relative w-full rounded-xl overflow-hidden bg-white shadow-xl cursor-pointer border border-slate-200 hover:border-[#a78bfa] transition-all flex items-center justify-center min-h-[160px] max-h-[260px] p-2"
             title="Clic para ampliar diagrama en alta definición"
           >
             <img
               src={imageResult.imageUrl}
               alt={imageResult.caption || 'Ilustración médica de referencia'}
               onLoad={() => setIsImgLoaded(true)}
-              className="w-full h-auto max-h-[260px] object-contain rounded-xl group-hover:scale-[1.02] transition-transform duration-300"
+              className="w-full h-auto max-h-[244px] object-contain rounded-lg group-hover:scale-[1.02] transition-transform duration-300"
             />
-            <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
               <div className="w-8 h-8 rounded-full bg-[#7c3aed]/90 text-white flex items-center justify-center shadow-lg">
                 <ZoomIn className="w-4 h-4" />
               </div>

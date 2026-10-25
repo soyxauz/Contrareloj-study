@@ -359,7 +359,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                   transformOrigin: 'center center',
                   transition: isDragging ? 'none' : 'transform 0.1s ease-out'
                 }}
-                className={`max-h-[68vh] sm:max-h-[72vh] max-w-full object-contain rounded-lg shadow-2xl pointer-events-auto ${
+                className={`max-h-[68vh] sm:max-h-[72vh] max-w-full object-contain rounded-lg shadow-2xl pointer-events-auto bg-white p-3 ${
                   zoomLevel > 1
                     ? isDragging
                       ? 'cursor-grabbing'
