@@ -24,7 +24,6 @@ import {
   Database,
   Image as ImageIcon,
   FileText,
-  Compass,
   Settings,
   ThumbsUp,
   ThumbsDown,
@@ -37,7 +36,6 @@ import {
   ChevronDown,
   ZoomIn,
   CheckCheck,
-  Send,
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
@@ -59,6 +57,15 @@ import {
 } from '../engine/socraticEngine';
 import { FormattedText } from './FormattedText';
 import { QuestionPrompt } from './QuestionPrompt';
+import {
+  MultipleChoiceRenderer,
+  MultiSelectRenderer,
+  MatchingRenderer,
+  DragDropRenderer,
+  ImageLabelingRenderer,
+  TrueFalseRenderer,
+  ShortAnswerRenderer,
+} from './smart-study';
 import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 
 // ── 4-Pointed Sparkle Star for Level Indicators (Nivel 1, 2, 3) ────────────
@@ -2765,684 +2772,104 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
           {/* ── QUESTION TYPE RENDERERS ────────────────────────────────────── */}
 
-          {/* 1. MULTIPLE CHOICE RENDERER (2x2 GRID ACCORDING TO SCREENSHOT) */}
+          {/* 1. MULTIPLE CHOICE RENDERER */}
           {qType === 'multiple-choice' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
-              {safeOptions.map((option, idx) => {
-                const isSelected = selectedOption === idx;
-                const isCorrect = idx === safeCorrectIndex;
-
-                let cardClasses = 'bg-[#181138]/90 border border-[#2b2053] hover:border-violet-500/50 hover:bg-[#20174a] text-slate-200 active:scale-[0.985]';
-                let badgeClasses = 'bg-[#2f1f58] text-[#cbb8e8]';
-
-                if (isAnswered) {
-                  if (isCorrect) {
-                    cardClasses = 'border-2 border-emerald-500 bg-[#10252b]/95 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] ring-1 ring-emerald-500/40 animate-cardCorrect';
-                    badgeClasses = 'bg-[#22c55e] text-white scale-105';
-                  } else if (isSelected) {
-                    cardClasses = 'border-2 border-rose-500 bg-rose-950/60 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] ring-1 ring-rose-500/40 animate-cardError';
-                    badgeClasses = 'bg-[#ef4444] text-white scale-105';
-                  } else {
-                    cardClasses = 'border border-[#2b2053] bg-[#181138]/90 text-slate-200';
-                    badgeClasses = 'bg-[#2f1f58] text-[#cbb8e8]';
-                  }
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    disabled={isAnswered}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleSelectSingleOption(idx);
-                    }}
-                    className={`w-full text-left p-4 sm:p-5 rounded-2xl transition-all duration-150 ease-out flex items-center gap-3.5 sm:gap-4 group cursor-pointer ${cardClasses}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-all duration-150 ${badgeClasses}`}>
-                      {isAnswered && isCorrect ? (
-                        <Check className="w-4 h-4 stroke-[3]" />
-                      ) : isAnswered && isSelected ? (
-                        <X className="w-4 h-4 stroke-[3]" />
-                      ) : (
-                        <span>{idx + 1}</span>
-                      )}
-                    </div>
-                    <span className="font-medium text-sm sm:text-base leading-snug flex-1">
-                      <FormattedText text={option} inlineOnly={true} />
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <MultipleChoiceRenderer
+              safeOptions={safeOptions}
+              safeCorrectIndex={safeCorrectIndex}
+              selectedOption={selectedOption}
+              isAnswered={isAnswered}
+              onSelectOption={handleSelectSingleOption}
+            />
           )}
 
-        {/* 2. MULTI-SELECT RENDERER */}
-        {qType === 'multi-select' && (
-          <div className="space-y-4 mb-8">
-            <p className="text-xs text-slate-400 font-medium">
-              Selecciona una o más respuestas válidas y presiona "Comprobar Selección":
-            </p>
-            <div className="space-y-3">
-              {safeOptions.map((option, idx) => {
-                const isSelected = selectedMultiIndices.includes(idx);
-                const isCorrect = safeCorrectIndices.includes(idx);
-
-                let optionStyles = 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-200';
-                if (isSelected && !isAnswered) {
-                  optionStyles = 'border-violet-500 bg-violet-950/30 text-white ring-1 ring-violet-500';
-                }
-                if (isAnswered) {
-                  if (isCorrect && isSelected) {
-                    optionStyles = 'border-emerald-500 bg-emerald-950/40 text-emerald-200 ring-1 ring-emerald-500 animate-cardCorrect';
-                  } else if (!isCorrect && isSelected) {
-                    optionStyles = 'border-rose-500 bg-rose-950/40 text-rose-200 ring-1 ring-rose-500 animate-cardError';
-                  } else if (isCorrect && !isSelected) {
-                    optionStyles = 'border-amber-500 bg-amber-950/30 text-amber-200 ring-1 ring-amber-500/60';
-                  } else {
-                    optionStyles = 'border-thea-border/40 text-slate-500 opacity-40';
-                  }
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    disabled={isAnswered}
-                    onClick={() => handleToggleMultiIndex(idx)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all duration-150 ease-out flex items-center justify-between ${optionStyles}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${
-                        isSelected ? 'bg-violet-600 border-violet-500 text-white' : 'border-slate-500 bg-thea-surface'
-                      }`}>
-                        {isSelected && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                      <span className="text-sm font-medium">
-                        <FormattedText text={option} inlineOnly={true} />
-                      </span>
-                    </div>
-
-                    {isAnswered && isCorrect && isSelected && (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                    )}
-                    {isAnswered && !isCorrect && isSelected && (
-                      <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {!isAnswered && (
-              <button
-                disabled={selectedMultiIndices.length === 0}
-                onClick={handleCheckMultiSelect}
-                className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-bold text-sm shadow-md transition-all"
-              >
-                Comprobar Selección ({selectedMultiIndices.length} seleccionada{selectedMultiIndices.length !== 1 ? 's' : ''})
-              </button>
-            )}
-          </div>
-        )}
+          {/* 2. MULTI-SELECT RENDERER */}
+          {qType === 'multi-select' && (
+            <MultiSelectRenderer
+              safeOptions={safeOptions}
+              safeCorrectIndices={safeCorrectIndices}
+              selectedMultiIndices={selectedMultiIndices}
+              isAnswered={isAnswered}
+              onToggleIndex={handleToggleMultiIndex}
+              onCheckSelection={handleCheckMultiSelect}
+            />
+          )}
 
         {/* 3. MATCHING (CONCEPT PAIRING) RENDERER */}
         {qType === 'matching' && currentQ.matchingPairs && (
-          <div className="space-y-6 mb-8">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-xs text-slate-300 font-medium">
-                Haz clic en un concepto numerado de la izquierda y luego en su definición correspondiente a la derecha:
-              </p>
-              {matchingChecked && (
-                <span className="text-xs font-bold text-violet-300 bg-violet-950/70 px-3 py-1 rounded-full border border-violet-500/40">
-                  Solución: {correctMatchingFormula}
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-              {/* Left Column: Terms */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold text-violet-300 uppercase tracking-wider block">
-                    Conceptos ({currentQ.matchingPairs.length})
-                  </span>
-                  <span className="text-[11px] text-slate-400">Paso 1: Selecciona concepto</span>
-                </div>
-                {currentQ.matchingPairs.map((pair, leftIdx) => {
-                  const leftNum = leftIdx + 1;
-                  const isPaired = Boolean(matchingPairsMap[pair.term]);
-                  const isActive = activeMatchingTerm === pair.term;
-                  const pairedDef = matchingPairsMap[pair.term];
-                  const pairedRightIdx = shuffledDefinitions.findIndex(d => d === pairedDef);
-                  const pairedRightNum = pairedRightIdx >= 0 ? pairedRightIdx + 1 : null;
-
-                  const correctRightIdx = shuffledDefinitions.findIndex(d => d === pair.definition);
-                  const correctRightNum = correctRightIdx >= 0 ? correctRightIdx + 1 : null;
-                  const isMatchCorrect = matchingChecked && isPaired && matchingPairsMap[pair.term] === pair.definition;
-
-                  let borderStyles = 'border-thea-border bg-thea-surfaceLight/40 hover:border-violet-500/60';
-                  if (isActive) borderStyles = 'border-violet-400 bg-violet-950/50 ring-2 ring-violet-500 shadow-md';
-                  if (isPaired && !matchingChecked) borderStyles = 'border-indigo-500/60 bg-indigo-950/30';
-                  if (matchingChecked) {
-                    borderStyles = isMatchCorrect
-                      ? 'border-emerald-500 bg-emerald-950/30 animate-cardCorrect'
-                      : 'border-rose-500 bg-rose-950/30 animate-cardError';
-                  }
-
-                  return (
-                    <button
-                      key={leftIdx}
-                      type="button"
-                      disabled={isAnswered}
-                      onClick={() => handleTermClick(pair.term)}
-                      className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-150 ease-out flex items-center justify-between gap-3 cursor-pointer ${borderStyles}`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="w-7 h-7 rounded-xl bg-violet-600/30 border border-violet-500/40 text-violet-200 font-extrabold text-xs flex items-center justify-center shrink-0">
-                          {leftNum}
-                        </span>
-                        <span className="font-semibold text-sm text-white truncate sm:text-wrap">
-                          <FormattedText text={pair.term} inlineOnly={true} />
-                        </span>
-                      </div>
-
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        {!matchingChecked && isPaired && pairedRightNum && (
-                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
-                            Unido con [{pairedRightNum}]
-                          </span>
-                        )}
-
-                        {matchingChecked && (
-                          isMatchCorrect ? (
-                            <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 flex items-center gap-1">
-                              <Check className="w-3.5 h-3.5 stroke-[3]" />
-                              {leftNum}:{correctRightNum} (Correcto)
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-500/30 text-rose-300 border border-rose-400/40 flex items-center gap-1">
-                              <X className="w-3.5 h-3.5 stroke-[3]" />
-                              Tu: {pairedRightNum ? `${leftNum}:${pairedRightNum}` : 'Sin unión'} • Iba con {leftNum}:{correctRightNum}
-                            </span>
-                          )
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Right Column: Definitions */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold text-purple-300 uppercase tracking-wider block">
-                    Definiciones / Roles ({shuffledDefinitions.length})
-                  </span>
-                  <span className="text-[11px] text-slate-400">Paso 2: Empareja con definición</span>
-                </div>
-                {shuffledDefinitions.map((def, rightIdx) => {
-                  const rightNum = rightIdx + 1;
-                  const pairedTerm = Object.keys(matchingPairsMap).find(t => matchingPairsMap[t] === def);
-                  const pairedLeftIdx = pairedTerm
-                    ? currentQ.matchingPairs?.findIndex(p => p.term === pairedTerm) ?? -1
-                    : -1;
-                  const pairedLeftNum = pairedLeftIdx >= 0 ? pairedLeftIdx + 1 : null;
-
-                  const correctPair = currentQ.matchingPairs?.find(p => p.definition === def);
-                  const correctLeftIdx = correctPair
-                    ? currentQ.matchingPairs?.findIndex(p => p.term === correctPair.term) ?? -1
-                    : -1;
-                  const correctLeftNum = correctLeftIdx >= 0 ? correctLeftIdx + 1 : null;
-
-                  const isMatchCorrect = matchingChecked && pairedTerm && correctPair?.term === pairedTerm;
-
-                  let borderStyles = 'border-thea-border bg-thea-surfaceLight/40 hover:border-violet-500/60';
-                  if (pairedTerm && !matchingChecked) borderStyles = 'border-indigo-500/60 bg-indigo-950/30';
-                  if (matchingChecked) {
-                    borderStyles = isMatchCorrect
-                      ? 'border-emerald-500 bg-emerald-950/30 animate-cardCorrect'
-                      : 'border-rose-500 bg-rose-950/30 animate-cardError';
-                  }
-
-                  return (
-                    <button
-                      key={rightIdx}
-                      type="button"
-                      disabled={isAnswered}
-                      onClick={() => handleDefClick(def)}
-                      className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-150 ease-out flex items-start justify-between gap-3 cursor-pointer ${borderStyles}`}
-                    >
-                      <div className="flex items-start gap-3 min-w-0">
-                        <span className="w-7 h-7 rounded-xl bg-purple-600/30 border border-purple-500/40 text-purple-200 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                          {rightNum}
-                        </span>
-                        <span className="text-xs text-slate-200 leading-relaxed">
-                          <FormattedText text={def} inlineOnly={true} />
-                        </span>
-                      </div>
-
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        {!matchingChecked && pairedLeftNum && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-600/40 text-violet-200 border border-violet-400/30 shrink-0">
-                            Unido a [{pairedLeftNum}]
-                          </span>
-                        )}
-
-                        {matchingChecked && (
-                          isMatchCorrect ? (
-                            <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 shrink-0 flex items-center gap-1">
-                              <Check className="w-3 h-3 stroke-[3]" />
-                              {pairedLeftNum}:{rightNum}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-500/30 text-rose-300 border border-rose-400/40 shrink-0 flex items-center gap-1">
-                              Iba con [{correctLeftNum}]
-                            </span>
-                          )
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {!isAnswered && (
-              <button
-                type="button"
-                disabled={Object.keys(matchingPairsMap).length < (currentQ.matchingPairs?.length || 4)}
-                onClick={handleCheckMatching}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-all cursor-pointer"
-              >
-                Comprobar Emparejamientos ({Object.keys(matchingPairsMap).length}/{currentQ.matchingPairs?.length || 4})
-              </button>
-            )}
-          </div>
+          <MatchingRenderer
+            matchingPairs={currentQ.matchingPairs}
+            shuffledDefinitions={shuffledDefinitions}
+            matchingPairsMap={matchingPairsMap}
+            matchingChecked={matchingChecked}
+            activeMatchingTerm={activeMatchingTerm}
+            correctMatchingFormula={correctMatchingFormula}
+            isAnswered={isAnswered}
+            onTermClick={handleTermClick}
+            onDefClick={handleDefClick}
+            onCheckMatching={handleCheckMatching}
+          />
         )}
 
         {/* 4. DRAG & DROP / WORD BANK RENDERER */}
         {qType === 'drag-drop' && effectiveTemplateSentence && effectiveBlanksCorrect.length > 0 && (
-          <div className="space-y-6 mb-8">
-            <p className="text-xs text-slate-300 font-medium">
-              Haz clic o arrastra las fichas de abajo para rellenar los espacios correspondientes:
-            </p>
-
-            {/* Template sentence with interactive slots */}
-            <div className="p-5 sm:p-6 rounded-2xl bg-thea-surfaceLight/70 border border-thea-border text-base sm:text-lg leading-loose text-slate-100 shadow-inner">
-              {effectiveTemplateSentence.split(/(\{\d+\})/).map((part, pIdx) => {
-                const match = part.match(/\{(\d+)\}/);
-                if (match) {
-                  const slotIdx = parseInt(match[1], 10);
-                  const placed = placedChips[slotIdx];
-                  const isCorrectSlot = dragDropChecked && placed?.trim().toLowerCase() === effectiveBlanksCorrect?.[slotIdx]?.trim().toLowerCase();
-
-                  let slotBorder = 'border-dashed border-violet-400/80 bg-violet-950/30 text-violet-300';
-                  if (placed) slotBorder = 'border-solid border-violet-500 bg-violet-600/30 text-white font-bold';
-                  if (dragDropChecked) {
-                    slotBorder = isCorrectSlot ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200 animate-cardCorrect' : 'border-rose-500 bg-rose-950/40 text-rose-200 animate-cardError';
-                  }
-
-                  return (
-                    <button
-                      key={pIdx}
-                      type="button"
-                      disabled={isAnswered}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (draggedChip) handlePlaceChip(draggedChip, slotIdx);
-                      }}
-                      onClick={() => placed && handleRemovePlacedChip(slotIdx)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 mx-1.5 rounded-xl border text-sm transition-all duration-150 ease-out cursor-pointer ${slotBorder}`}
-                    >
-                      <span>{placed || `[ Espacio ${slotIdx + 1} ]`}</span>
-                      {placed && !isAnswered && <X className="w-3 h-3 text-slate-400 hover:text-white" />}
-                    </button>
-                  );
-                }
-                return <span key={pIdx}>{part}</span>;
-              })}
-            </div>
-
-            {/* Word Bank */}
-            <div>
-              <span className="text-xs font-bold text-violet-300 uppercase tracking-wider block mb-2.5">
-                Banco de Fichas ({effectiveWordBank.length}):
-              </span>
-              <div className="flex flex-wrap gap-2.5">
-                {effectiveWordBank.map((chip, cIdx) => {
-                  const isUsed = placedChips.includes(chip);
-                  return (
-                    <button
-                      key={cIdx}
-                      disabled={isAnswered || isUsed}
-                      draggable={!isAnswered && !isUsed}
-                      onDragStart={() => setDraggedChip(chip)}
-                      onDragEnd={() => setDraggedChip(null)}
-                      onClick={() => handlePlaceChip(chip)}
-                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all cursor-pointer ${
-                        isUsed
-                          ? 'opacity-30 border-thea-border bg-thea-surfaceLight text-slate-600 line-through'
-                          : 'border-thea-border bg-thea-surfaceLight text-slate-200 hover:border-violet-500 hover:text-white hover:bg-violet-950/40 active:scale-95'
-                      }`}
-                    >
-                      {chip}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {!isAnswered && (
-              <button
-                disabled={placedChips.some(c => c === null) || placedChips.length < effectiveBlanksCorrect.length}
-                onClick={handleCheckDragDrop}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-all cursor-pointer"
-              >
-                Comprobar Respuestas
-              </button>
-            )}
-          </div>
+          <DragDropRenderer
+            effectiveTemplateSentence={effectiveTemplateSentence}
+            effectiveBlanksCorrect={effectiveBlanksCorrect}
+            effectiveWordBank={effectiveWordBank}
+            placedChips={placedChips}
+            dragDropChecked={dragDropChecked}
+            isAnswered={isAnswered}
+            draggedChip={draggedChip}
+            onSetDraggedChip={setDraggedChip}
+            onPlaceChip={handlePlaceChip}
+            onRemovePlacedChip={handleRemovePlacedChip}
+            onCheckDragDrop={handleCheckDragDrop}
+          />
         )}
 
 
-        {/* 6. IMAGE & DIAGRAM LABELING (MOVER CUADROS DE TEXTO EN IMAGEN O DIAGRAMA) */}
+        {/* 5. IMAGE & DIAGRAM LABELING RENDERER */}
         {qType === 'image-labeling' && (
-          <div className="space-y-6 mb-8">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-xs text-slate-400 font-medium">
-                Arrastra o selecciona un cuadro de texto del banco inferior y colócalo en el punto correspondiente del esquema:
-              </p>
-              {currentQ.diagramTitle && (
-                <span className="text-xs font-bold text-violet-300 px-2.5 py-1 rounded-lg bg-violet-950/40 border border-violet-500/30">
-                  {currentQ.diagramTitle}
-                </span>
-              )}
-            </div>
-
-            {/* Canvas contenedor de la imagen o esquema pedagógico */}
-            <div className="relative w-full rounded-2xl bg-gradient-to-br from-slate-950 via-thea-surface to-slate-900 border border-thea-border overflow-hidden min-h-[300px] sm:min-h-[360px] p-4 flex items-center justify-center shadow-inner select-none">
-              {(currentQ.sourceAsset?.dataUrl || kit.assets?.[0]?.dataUrl) ? (
-                <img
-                  src={currentQ.sourceAsset?.dataUrl || kit.assets?.[0]?.dataUrl}
-                  alt={currentQ.diagramTitle || 'Diagrama de estudio'}
-                  className="max-h-80 object-contain mx-auto rounded-xl opacity-90"
-                />
-              ) : (
-                <div className="w-full h-72 rounded-xl border border-dashed border-violet-500/30 bg-violet-950/15 flex flex-col items-center justify-center p-6 text-center space-y-2">
-                  <div className="w-12 h-12 rounded-full bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-300 mb-1">
-                    <Compass className="w-6 h-6" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-200">
-                    {currentQ.diagramTitle || currentQ.topic}
-                  </span>
-                  <span className="text-xs text-slate-400 max-w-sm">
-                    Ubica los cuadros de texto en las posiciones esquemáticas del diagrama.
-                  </span>
-                </div>
-              )}
-
-              {/* Hotspots interactivos ubicados sobre el lienzo */}
-              {(currentQ.imageHotspots || [
-                { id: 'pin-1', label: currentQ.topic, xPercent: 30, yPercent: 35, hint: 'Fase 1' },
-                { id: 'pin-2', label: currentQ.explanation.slice(0, 20), xPercent: 70, yPercent: 65, hint: 'Fase 2' }
-              ]).map((hotspot, hIdx) => {
-                const placed = placedImageLabels[hotspot.id];
-                const isCorrect = imageLabelChecked && placed?.trim().toLowerCase() === hotspot.label.trim().toLowerCase();
-
-                let pinStyles = 'bg-violet-950/90 border-violet-400 text-violet-200 hover:border-violet-300 hover:scale-105';
-                if (placed && !imageLabelChecked) {
-                  pinStyles = 'bg-indigo-600 text-white border-white shadow-lg shadow-indigo-900/50';
-                }
-                if (imageLabelChecked) {
-                  pinStyles = isCorrect
-                    ? 'bg-emerald-900/90 border-emerald-400 text-emerald-200 shadow-emerald-950/50'
-                    : 'bg-rose-900/90 border-rose-400 text-rose-200 shadow-rose-950/50';
-                }
-
-                return (
-                  <div
-                    key={hotspot.id}
-                    style={{
-                      left: `${Math.min(85, Math.max(12, hotspot.xPercent))}%`,
-                      top: `${Math.min(85, Math.max(12, hotspot.yPercent))}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                    onClick={() => {
-                      if (activeLabelChip) {
-                        handlePlaceImageLabel(hotspot.id, activeLabelChip);
-                      } else if (placed) {
-                        handleRemoveImageLabel(hotspot.id);
-                      }
-                    }}
-                    className={`absolute z-20 px-3 py-1.5 rounded-xl border backdrop-blur-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md max-w-[200px] truncate ${pinStyles}`}
-                    title={placed ? 'Clic para retirar cuadro' : (activeLabelChip ? `Colocar "${activeLabelChip}" aquí` : 'Toca una ficha de abajo para colocarla aquí')}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-black/40 text-[10px] flex items-center justify-center shrink-0">
-                      {hIdx + 1}
-                    </span>
-                    <span className="truncate">
-                      {placed || (activeLabelChip ? 'Toca para ubicar' : (hotspot.hint || `Punto ${hIdx + 1}`))}
-                    </span>
-                    {placed && !isAnswered && (
-                      <X className="w-3 h-3 text-slate-300 hover:text-white shrink-0 ml-0.5" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Banco de Fichas / Cuadros de texto para mover */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  Banco de Cuadros de Texto:
-                </span>
-                {activeLabelChip && (
-                  <span className="text-xs text-amber-300 font-medium">
-                    Ficha activa: <strong>{activeLabelChip}</strong> (toca un punto en la imagen)
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-2.5">
-                {(currentQ.imageWordBank || currentQ.imageHotspots?.map(h => h.label) || []).map((term, tIdx) => {
-                  const isUsed = Object.values(placedImageLabels).includes(term);
-                  const isSelected = activeLabelChip === term;
-
-                  return (
-                    <button
-                      key={tIdx}
-                      type="button"
-                      disabled={isAnswered || isUsed}
-                      onClick={() => setActiveLabelChip(isSelected ? null : term)}
-                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                        isUsed
-                          ? 'opacity-30 border-thea-border bg-thea-surfaceLight text-slate-600 line-through'
-                          : isSelected
-                          ? 'border-amber-400 bg-amber-950/50 text-amber-200 ring-2 ring-amber-400 shadow-md scale-105'
-                          : 'border-thea-border bg-thea-surfaceLight text-slate-200 hover:border-violet-500 hover:text-white hover:bg-violet-950/40 active:scale-95'
-                      }`}
-                    >
-                      <span>{term}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {!isAnswered && (
-              <button
-                type="button"
-                disabled={
-                  (currentQ.imageHotspots?.length || 2) > Object.keys(placedImageLabels).length
-                }
-                onClick={handleCheckImageLabel}
-                className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
-              >
-                Comprobar Ubicaciones ({Object.keys(placedImageLabels).length}/{currentQ.imageHotspots?.length || 2})
-              </button>
-            )}
-          </div>
+          <ImageLabelingRenderer
+            diagramTitle={currentQ.diagramTitle}
+            imageUrl={currentQ.sourceAsset?.dataUrl || kit.assets?.[0]?.dataUrl}
+            topic={currentQ.topic}
+            explanation={currentQ.explanation}
+            imageHotspots={currentQ.imageHotspots}
+            imageWordBank={currentQ.imageWordBank}
+            placedImageLabels={placedImageLabels}
+            imageLabelChecked={imageLabelChecked}
+            activeLabelChip={activeLabelChip}
+            isAnswered={isAnswered}
+            onPlaceImageLabel={handlePlaceImageLabel}
+            onRemoveImageLabel={handleRemoveImageLabel}
+            onSetActiveLabelChip={setActiveLabelChip}
+            onCheckImageLabel={handleCheckImageLabel}
+          />
         )}
 
-        {/* 6. TRUE / FALSE RENDERER (CUADROS VISUALES CON ICONOS CENTRALES) */}
+        {/* 6. TRUE / FALSE RENDERER */}
         {qType === 'true-false' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
-            {['Verdadero', 'Falso'].map((label, idx) => {
-              const isSelected = selectedOption === idx;
-              const isCorrect = idx === safeCorrectIndex;
-              const isVerdadero = idx === 0;
-
-              let cardClasses = 'bg-[#181138]/90 border border-[#2b2053] hover:border-violet-500/60 hover:bg-[#20174a] text-slate-200 hover:scale-[1.02] active:scale-98';
-              let iconClasses = isVerdadero ? 'text-emerald-400' : 'text-rose-400';
-              let iconBgClasses = isVerdadero ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30';
-
-              if (isAnswered) {
-                if (isCorrect) {
-                  cardClasses = 'border-2 border-emerald-400 bg-[#10252b]/95 text-white shadow-[0_0_24px_rgba(52,211,153,0.4)] ring-2 ring-emerald-400/50 animate-cardCorrect';
-                  iconClasses = 'text-emerald-300';
-                  iconBgClasses = 'bg-emerald-500/25 border-emerald-400 scale-105';
-                } else if (isSelected) {
-                  cardClasses = 'border-2 border-rose-500 bg-rose-950/60 text-rose-100 shadow-[0_0_22px_rgba(244,63,94,0.35)] ring-2 ring-rose-500/50 animate-cardError';
-                  iconClasses = 'text-rose-300';
-                  iconBgClasses = 'bg-rose-500/25 border-rose-400 scale-105';
-                } else {
-                  cardClasses = 'border-[#221742]/50 bg-[#120a2a]/40 text-slate-500 opacity-40';
-                  iconClasses = 'text-slate-600';
-                  iconBgClasses = 'bg-slate-800/30 border-slate-700/30';
-                }
-              }
-
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  disabled={isAnswered}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleSelectSingleOption(idx);
-                  }}
-                  className={`w-full py-8 sm:py-10 px-6 rounded-3xl transition-all duration-150 ease-out flex flex-col items-center justify-center gap-3 cursor-pointer shadow-lg ${cardClasses}`}
-                >
-                  <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all ${iconBgClasses}`}>
-                    {isVerdadero ? (
-                      <Check className={`w-7 h-7 stroke-[2.5] ${iconClasses}`} />
-                    ) : (
-                      <X className={`w-7 h-7 stroke-[2.5] ${iconClasses}`} />
-                    )}
-                  </div>
-                  <span className="font-bold text-lg sm:text-xl tracking-wide">
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <TrueFalseRenderer
+            selectedOption={selectedOption}
+            safeCorrectIndex={safeCorrectIndex}
+            isAnswered={isAnswered}
+            onSelectOption={handleSelectSingleOption}
+          />
         )}
 
-        {/* 7. SHORT ANSWER (PREGUNTAS ABIERTAS CORTAS) RENDERER */}
+        {/* 7. SHORT ANSWER RENDERER */}
         {qType === 'short-answer' && (
-          <div className="space-y-4 mb-6 sm:mb-8">
-            <div className="p-5 rounded-3xl bg-thea-surfaceLight/60 border border-thea-border space-y-3.5 shadow-md">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Escribe tu respuesta analítica / técnica:
-                </label>
-                <span className="text-[11px] font-semibold text-violet-300 bg-violet-950/60 px-2.5 py-0.5 rounded-full border border-violet-500/30">
-                  Respuesta Abierta Corta
-                </span>
-              </div>
-              <textarea
-                rows={3}
-                disabled={isAnswered || isEvaluatingShortAnswer}
-                value={shortAnswerInput}
-                onChange={e => setShortAnswerInput(e.target.value)}
-                placeholder="Escribe una respuesta fundamentada de 1 a 4 líneas. La IA evaluará la similitud conceptual y los puntos clave con la respuesta modelo..."
-                className="w-full bg-thea-bg border border-thea-border rounded-2xl p-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all resize-y disabled:opacity-60"
-              />
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>{shortAnswerInput.trim().split(/\s+/).filter(Boolean).length} palabras</span>
-                {!isAnswered && (
-                  <button
-                    type="button"
-                    disabled={!shortAnswerInput.trim() || isEvaluatingShortAnswer}
-                    onClick={handleSubmitShortAnswer}
-                    className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center gap-2 active:scale-95"
-                  >
-                    {isEvaluatingShortAnswer ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
-                        <span>Evaluando con IA...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        <span>Comprobar Respuesta</span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Desglose de Evaluación de IA */}
-            {isAnswered && shortAnswerEvalResult && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-violet-950/20 border border-violet-500/30 text-xs space-y-3 animate-fadeIn">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-200">Similitud Conceptual con el Modelo:</span>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-extrabold border ${
-                      shortAnswerEvalResult.similarity >= 65
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                    }`}
-                  >
-                    {shortAnswerEvalResult.similarity}% de coincidencia
-                  </span>
-                </div>
-                <p className="text-violet-200 leading-relaxed">
-                  <strong className="text-white">Diagnóstico de la IA:</strong> {shortAnswerEvalResult.feedback}
-                </p>
-                <div className="p-3 rounded-xl bg-thea-surface border border-thea-border space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-emerald-400 block">
-                    Respuesta modelo de referencia:
-                  </span>
-                  <span className="text-slate-200 font-medium">
-                    {currentQ.idealAnswer || currentQ.explanation}
-                  </span>
-                </div>
-                {shortAnswerEvalResult.keyPointsCovered.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] text-slate-400">Puntos cubiertos:</span>
-                    {shortAnswerEvalResult.keyPointsCovered.map((kp, kIdx) => (
-                      <span
-                        key={kIdx}
-                        className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]"
-                      >
-                        {kp}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {shortAnswerEvalResult.keyPointsMissed.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] text-slate-400">Puntos que faltaron:</span>
-                    {shortAnswerEvalResult.keyPointsMissed.map((kp, kIdx) => (
-                      <span
-                        key={kIdx}
-                        className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border-rose-500/30 text-[10px]"
-                      >
-                        {kp}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <ShortAnswerRenderer
+            shortAnswerInput={shortAnswerInput}
+            isAnswered={isAnswered}
+            isEvaluatingShortAnswer={isEvaluatingShortAnswer}
+            shortAnswerEvalResult={shortAnswerEvalResult}
+            idealAnswerOrExplanation={currentQ.idealAnswer || currentQ.explanation}
+            onInputChange={setShortAnswerInput}
+            onSubmit={handleSubmitShortAnswer}
+          />
         )}
 
         {/* ── ESTADO INMEDIATO DE LA RESPUESTA PARA PREGUNTAS ABIERTAS Y EMPAREJAMIENTO ─── */}
