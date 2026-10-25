@@ -557,13 +557,22 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   }, [kit.id, userId]);
 
-  // Al salir de la pantalla de flashcards o cambiar de kit, sincronizar inmediatamente cambios pendientes en kit y Drive
+  // Al salir de la pantalla de flashcards, refrescar o cerrar pestaña, sincronizar inmediatamente cambios pendientes en kit y Drive
   useEffect(() => {
-    return () => {
+    const handleBeforeUnload = () => {
       flushKitUpdate();
       googleDriveService.flushAutoSync();
     };
-  }, []);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+      flushKitUpdate();
+      googleDriveService.flushAutoSync();
+    };
+  }, [flushKitUpdate]);
   const [isFlipped, setIsFlipped] = useState(false);
   const [gameMode, setGameMode] = useState<'study' | 'guess-who'>('study');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -854,8 +863,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       currentIdx: nextIdx,
     });
 
-    // 3. Debounce de 1.5s para sincronizar hacia el kit padre:
-    // Evita re-renderizar todo App.tsx y evita clonar megabytes de kits en cada clic rápido ("dominada, dominada...")
+    // 3. Debounce corto de 200ms para sincronizar hacia el kit padre y App.tsx:
     pendingKitUpdateRef.current = {
       cards: updated,
       archived: archivedCardsRef.current,
@@ -865,7 +873,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
     debounceKitTimerRef.current = setTimeout(() => {
       flushKitUpdate();
-    }, 1500);
+    }, 200);
   };
 
   const handlePrevCard = () => {
@@ -875,6 +883,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       const safePrev = typeof prev === 'number' && !isNaN(prev) ? prev : 0;
       const next = (safePrev - 1 + len) % len;
       currentIdxRef.current = next;
+      authService.saveFlashcardProgress(userId, kit.id, {
+        version: 1,
+        updatedAt: Date.now(),
+        kitId: kit.id,
+        cards: cardsRef.current,
+        archivedCards: archivedCardsRef.current,
+        masteryMap: masteryMapRef.current,
+        currentIdx: next,
+      });
       return next;
     });
   };
@@ -886,6 +903,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       const safePrev = typeof prev === 'number' && !isNaN(prev) ? prev : 0;
       const next = (safePrev + 1) % len;
       currentIdxRef.current = next;
+      authService.saveFlashcardProgress(userId, kit.id, {
+        version: 1,
+        updatedAt: Date.now(),
+        kitId: kit.id,
+        cards: cardsRef.current,
+        archivedCards: archivedCardsRef.current,
+        masteryMap: masteryMapRef.current,
+        currentIdx: next,
+      });
       return next;
     });
   };
@@ -1687,6 +1713,11 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                         <Star className="w-3 h-3 text-amber-400" /> La conozco
                       </span>
                     )}
+                    {currentCard?.mastery === 'to-learn' && (
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/70 text-rose-300 font-bold text-[10px] shadow-sm">
+                        <RotateCcw className="w-3 h-3 text-rose-400" /> Aún no la sé
+                      </span>
+                    )}
                     <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
                       isQuestionCard
                         ? 'bg-cyan-900/40 border-cyan-500/30 text-cyan-300'
@@ -1744,6 +1775,11 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                         <Star className="w-3 h-3 text-amber-400" /> La conozco
                       </span>
                     )}
+                    {currentCard?.mastery === 'to-learn' && (
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/70 text-rose-300 font-bold text-[10px] shadow-sm">
+                        <RotateCcw className="w-3 h-3 text-rose-400" /> Aún no la sé
+                      </span>
+                    )}
                     <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
                       isQuestionCard
                         ? 'bg-sky-900/40 border-sky-500/30 text-sky-300'
@@ -1793,21 +1829,33 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('to-learn')}
-                className="flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95 flex items-center justify-center"
+                className={`flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm active:scale-95 ${
+                  currentCard?.mastery === 'to-learn'
+                    ? 'bg-rose-900/90 border-2 border-rose-400 text-rose-100 font-extrabold shadow-lg shadow-rose-950/60 ring-2 ring-rose-500/50 scale-[1.02]'
+                    : 'bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-200 font-bold shadow-md hover:scale-[1.02]'
+                }`}
               >
                 Aún no la sé
               </button>
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('known')}
-                className="flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-amber-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95 flex items-center justify-center"
+                className={`flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm active:scale-95 ${
+                  currentCard?.mastery === 'known'
+                    ? 'bg-amber-900/90 border-2 border-amber-400 text-amber-100 font-extrabold shadow-lg shadow-amber-950/60 ring-2 ring-amber-500/50 scale-[1.02]'
+                    : 'bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-amber-200 font-bold shadow-md hover:scale-[1.02]'
+                }`}
               >
                 La conozco
               </button>
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('mastered')}
-                className="flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-200 font-bold text-xs sm:text-sm transition-all text-center cursor-pointer shadow-md hover:scale-[1.02] active:scale-95 flex items-center justify-center"
+                className={`flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm active:scale-95 ${
+                  currentCard?.mastery === 'mastered'
+                    ? 'bg-emerald-900/90 border-2 border-emerald-400 text-emerald-100 font-extrabold shadow-lg shadow-emerald-950/60 ring-2 ring-emerald-500/50 scale-[1.02]'
+                    : 'bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-200 font-bold shadow-md hover:scale-[1.02]'
+                }`}
               >
                 ¡Dominada!
               </button>

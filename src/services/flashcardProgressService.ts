@@ -5,6 +5,7 @@ import {
   removeSessionItem,
   notifyQuotaExceeded,
 } from './storageService';
+import { kitRepositoryService } from './kitRepositoryService';
 
 const flashcardIdbTimers = new Map<string, any>();
 
@@ -146,7 +147,16 @@ export const flashcardProgressService = {
         archivedCards: state.archivedCards,
       };
 
-      // Persistencia diferida hacia IndexedDB y eventos en vivo con debounce de 350ms
+      // 3. Sincronizar inmediatamente el kit en kitRepositoryService si vienen tarjetas
+      if (state.cards && Array.isArray(state.cards) && state.cards.length > 0) {
+        try {
+          kitRepositoryService.updateKitFlashcards(userId, kitId, state.cards, state.archivedCards);
+        } catch (err) {
+          console.warn('[flashcardProgressService] Error actualizando kitRepositoryService:', err);
+        }
+      }
+
+      // 4. Persistencia diferida hacia IndexedDB y eventos en vivo con debounce de 150ms
       // Previene saturacion del bucle de eventos y de memoria (OOM) ante clics sucesivos ultrarrapidos
       if (flashcardIdbTimers.has(userKey)) {
         clearTimeout(flashcardIdbTimers.get(userKey));
@@ -159,7 +169,7 @@ export const flashcardProgressService = {
             detail: { userId, kitId, state: fullStateForIdb }
           }));
         }
-      }, 350);
+      }, 150);
       flashcardIdbTimers.set(userKey, timer);
     } catch (e) {
       console.warn('[flashcardProgressService] Error al guardar memoria de Flashcards:', e);

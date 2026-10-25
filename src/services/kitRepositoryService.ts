@@ -1,4 +1,4 @@
-import type { StudyKit } from '../types';
+import type { StudyKit, Flashcard } from '../types';
 import { DEFAULT_STUDY_KITS } from '../data/defaultKits';
 import {
   saveAssetsFromKits,
@@ -14,6 +14,51 @@ import {
 
 export const inMemoryKitsCache = new Map<string, StudyKit[]>();
 
+/**
+ * Hidrata las flashcards de cada kit con el estado de dominio más reciente guardado en memoria y LocalStorage.
+ * Garantiza que cualquier cambio ("dominada", "no dominada", "la conozco") persista de inmediato en todo el sistema.
+ */
+function hydrateFlashcardsMastery(userId: string | null, kits: StudyKit[]): StudyKit[] {
+  if (!Array.isArray(kits) || kits.length === 0 || typeof localStorage === 'undefined') return kits;
+  try {
+    return kits.map(k => {
+      if (!k.flashcards || !Array.isArray(k.flashcards) || k.flashcards.length === 0) return k;
+      const userKey = `thea_fc_mem_${userId || 'guest'}_${k.id}`;
+      const raw = localStorage.getItem(userKey);
+      if (!raw) return k;
+      try {
+        const parsed = JSON.parse(raw);
+        const map = parsed?.masteryMap;
+        if (!map || typeof map !== 'object') return k;
+
+        let hasChange = false;
+        const updatedCards = k.flashcards.map(f => {
+          const cleanTerm = f.term ? f.term.trim() : '';
+          const cleanLower = cleanTerm.toLowerCase();
+          const targetMastery = (f.id && map[f.id]) ||
+                                (f.term && map[f.term]) ||
+                                (cleanTerm && map[cleanTerm]) ||
+                                (cleanLower && map[cleanLower]) ||
+                                f.mastery ||
+                                'to-learn';
+          if (targetMastery !== f.mastery) {
+            hasChange = true;
+            return { ...f, mastery: targetMastery };
+          }
+          return f;
+        });
+
+        if (hasChange) {
+          return { ...k, flashcards: updatedCards };
+        }
+      } catch {}
+      return k;
+    });
+  } catch {
+    return kits;
+  }
+}
+
 export const kitRepositoryService = {
   /**
    * Obtiene los kits de estudio del usuario actual o de la sesion de invitado de forma inmediata y sincronica.
@@ -27,7 +72,7 @@ export const kitRepositoryService = {
         const mem = inMemoryKitsCache.get(key);
         if (mem && Array.isArray(mem) && mem.length > 0) {
           const cleanMem = mem.filter(k => !isCorruptedKit(k));
-          if (cleanMem.length > 0) return cleanMem;
+          if (cleanMem.length > 0) return hydrateFlashcardsMastery(userId, cleanMem);
         }
       }
 
@@ -41,8 +86,9 @@ export const kitRepositoryService = {
           if (Array.isArray(parsed) && parsed.length > 0) {
             const clean = parsed.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
             if (clean.length > 0) {
-              inMemoryKitsCache.set(key, clean);
-              return clean;
+              const hydrated = hydrateFlashcardsMastery(userId, clean);
+              inMemoryKitsCache.set(key, hydrated);
+              return hydrated;
             }
           }
         } catch {}
@@ -59,7 +105,7 @@ export const kitRepositoryService = {
             if (cleanIndex.length > 0) {
               const existingMem = inMemoryKitsCache.get(key);
               if (existingMem && existingMem.some(k => k.questions && k.questions.length > 0)) {
-                return existingMem;
+                return hydrateFlashcardsMastery(userId, existingMem);
               }
               const partialKits: StudyKit[] = cleanIndex.map(item => ({
                 id: item.id,
@@ -74,8 +120,9 @@ export const kitRepositoryService = {
                 podcast: null,
                 updatedAt: item.updatedAt || 0,
               }));
-              inMemoryKitsCache.set(key, partialKits);
-              return partialKits;
+              const hydrated = hydrateFlashcardsMastery(userId, partialKits);
+              inMemoryKitsCache.set(key, hydrated);
+              return hydrated;
             }
           }
         } catch {}
@@ -90,16 +137,18 @@ export const kitRepositoryService = {
             if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
               const cleanLegacy = parsedLegacy.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
               if (cleanLegacy.length > 0) {
-                inMemoryKitsCache.set(key, cleanLegacy);
-                return cleanLegacy;
+                const hydrated = hydrateFlashcardsMastery(userId, cleanLegacy);
+                inMemoryKitsCache.set(key, hydrated);
+                return hydrated;
               }
             }
           } catch {}
         }
 
         const defaultKits = JSON.parse(JSON.stringify(DEFAULT_STUDY_KITS));
-        inMemoryKitsCache.set(key, defaultKits);
-        return defaultKits;
+        const hydratedDefaults = hydrateFlashcardsMastery(userId, defaultKits);
+        inMemoryKitsCache.set(key, hydratedDefaults);
+        return hydratedDefaults;
       }
 
       // Para usuario registrado sin datos en LocalStorage: no sobreescribir con kits por defecto
@@ -136,10 +185,11 @@ export const kitRepositoryService = {
       }
 
       if (merged.length > 0) {
-        inMemoryKitsCache.set(key, merged);
-        this.writeIndexToLocalStorage(userId, merged, false);
-        saveKitsToIndexedDB(key, merged).catch(() => {});
-        return merged;
+        const hydrated = hydrateFlashcardsMastery(userId, merged);
+        inMemoryKitsCache.set(key, hydrated);
+        this.writeIndexToLocalStorage(userId, hydrated, false);
+        saveKitsToIndexedDB(key, hydrated).catch(() => {});
+        return hydrated;
       }
 
       // 2. Fallback sincrono si IndexedDB aun no tenia datos
@@ -286,5 +336,35 @@ export const kitRepositoryService = {
     saveAssetsFromKits(cleanKits).catch((err) => {
       console.warn('[kitRepositoryService] Error guardando activos en IndexedDB:', err);
     });
+  },
+
+  /**
+   * Actualiza inmediatamente las flashcards y su estado de dominio en el kit especificado,
+   * sincronizando la memoria y la persistencia en tiempo real sin perder ningún cambio.
+   */
+  updateKitFlashcards(
+    userId: string | null,
+    kitId: string,
+    flashcards: Flashcard[],
+    archivedFlashcards?: Flashcard[]
+  ): void {
+    if (!kitId || !Array.isArray(flashcards)) return;
+    const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
+    const kits = inMemoryKitsCache.get(key) || this.getUserKits(userId);
+    const targetIdx = kits.findIndex(k => k.id === kitId);
+    if (targetIdx === -1) return;
+
+    const currentKit = kits[targetIdx];
+    const updatedKit: StudyKit = {
+      ...currentKit,
+      flashcards: flashcards.map(f => ({ ...f })),
+      archivedFlashcards: archivedFlashcards ? archivedFlashcards.map(f => ({ ...f })) : (currentKit.archivedFlashcards || []),
+      updatedAt: Date.now(),
+    };
+
+    const updatedKits = [...kits];
+    updatedKits[targetIdx] = updatedKit;
+
+    this.saveUserKits(userId, updatedKits);
   },
 };
