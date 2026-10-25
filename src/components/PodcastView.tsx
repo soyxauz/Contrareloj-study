@@ -14,16 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings2,
-  Check,
-  X,
-  AlertTriangle,
-  Trash2,
-  Clock,
-  BookOpen,
-  Zap,
-  Award,
-  MessageSquare,
-  RefreshCw,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
 
@@ -54,74 +44,16 @@ import {
   clearAzureAudioCache,
 } from '../services/azureEdgeTtsService';
 import { googleDriveService } from '../services/googleDriveService';
+import {
+  ConfirmReplacePodcastModal,
+  PodcastVoiceModal,
+  PodcastSetupView,
+  PodcastTranscriptView,
+  PODCAST_FORMAT_OPTIONS,
+  PODCAST_DURATION_OPTIONS,
+} from './podcast';
 
-export const PODCAST_FORMAT_OPTIONS: {
-  id: PodcastFormat;
-  title: string;
-  description: string;
-  badge: string;
-  icon: React.ComponentType<{ className?: string }>;
-  accentColor: string;
-}[] = [
-  {
-    id: 'detailed',
-    title: 'Información detallada',
-    description: 'Una animada conversación entre dos presentadores que analizan y conectan temas de tus fuentes.',
-    badge: 'Recomendado',
-    icon: BookOpen,
-    accentColor: 'amber',
-  },
-  {
-    id: 'brief',
-    title: 'Breve',
-    description: 'Un resumen breve que sirve para que captes rápidamente las ideas principales de tus fuentes.',
-    badge: 'Rápido',
-    icon: Zap,
-    accentColor: 'blue',
-  },
-  {
-    id: 'critique',
-    title: 'Crítica',
-    description: 'Una revisión experta de tus fuentes, con comentarios constructivos para ayudarte a mejorar tu material.',
-    badge: 'Evaluación',
-    icon: Award,
-    accentColor: 'rose',
-  },
-  {
-    id: 'debate',
-    title: 'Debate',
-    description: 'Un debate reflexivo entre dos presentadores que arroja luz sobre diferentes perspectivas de tus fuentes.',
-    badge: 'Perspectivas',
-    icon: MessageSquare,
-    accentColor: 'violet',
-  },
-];
-
-export const PODCAST_DURATION_OPTIONS: {
-  id: PodcastDuration;
-  title: string;
-  subtitle: string;
-  detail: string;
-}[] = [
-  {
-    id: 'short',
-    title: 'Corto',
-    subtitle: '-2 minutos',
-    detail: '6 a 8 turnos rápidos (~200 palabras), ideal para un repaso ultra rápido.',
-  },
-  {
-    id: 'normal',
-    title: 'Normal',
-    subtitle: '4 a 6 minutos',
-    detail: '14 a 18 turnos equilibrados (~700 palabras), análisis completo del tema.',
-  },
-  {
-    id: 'long',
-    title: 'Largo',
-    subtitle: '10 a 30 minutos',
-    detail: 'Explicación exhaustiva y profunda (10 a 30 min, hasta 43 min máx). Desglose paso a paso sin bajar de 10 min.',
-  },
-];
+export { PODCAST_FORMAT_OPTIONS, PODCAST_DURATION_OPTIONS };
 
 interface PodcastViewProps {
   kit: StudyKit;
@@ -1687,971 +1619,82 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
   };
 
-  const renderConfirmReplaceModal = () => {
-    if (!showConfirmReplaceModal) return null;
-    const formatObj = PODCAST_FORMAT_OPTIONS.find((f) => f.id === selectedFormat);
-    const durationObj = PODCAST_DURATION_OPTIONS.find((d) => d.id === selectedDuration);
+  const renderConfirmReplaceModal = () => (
+    <ConfirmReplacePodcastModal
+      show={showConfirmReplaceModal}
+      formatTitle={PODCAST_FORMAT_OPTIONS.find((f) => f.id === selectedFormat)?.title || 'Personalizado'}
+      durationSubtitle={PODCAST_DURATION_OPTIONS.find((d) => d.id === selectedDuration)?.subtitle || 'Normal'}
+      onClose={() => setShowConfirmReplaceModal(false)}
+      onConfirm={async () => {
+        setShowConfirmReplaceModal(false);
+        setShowVoiceModal(false);
+        await handleGeneratePodcast({
+          format: selectedFormat,
+          duration: selectedDuration,
+          orientation: orientationInput,
+          isReplacement: true,
+        });
+      }}
+    />
+  );
 
-    return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-        <div className="bg-thea-surface border border-rose-500/40 rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative mb-14 sm:mb-0">
-          <div className="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
-            <AlertTriangle className="w-7 h-7" />
-          </div>
-          <div>
-            <h4 className="text-lg font-bold text-white mb-2">
-              ¿Reemplazar y generar nuevo episodio?
-            </h4>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Se eliminará el episodio de podcast actual y todo su audio precalculado para generar un nuevo episodio con formato{' '}
-              <span className="text-amber-300 font-bold">{formatObj?.title || 'Personalizado'}</span> y duración{' '}
-              <span className="text-violet-300 font-bold">{durationObj?.subtitle || 'Normal'}</span>.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowConfirmReplaceModal(false)}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                setShowConfirmReplaceModal(false);
-                setShowVoiceModal(false);
-                await handleGeneratePodcast({
-                  format: selectedFormat,
-                  duration: selectedDuration,
-                  orientation: orientationInput,
-                  isReplacement: true,
-                });
-              }}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-slate-950 text-xs font-black transition-all shadow-lg shadow-rose-950/40 cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Sí, reemplazar</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderVoiceModal = () => {
-    if (!showVoiceModal) return null;
-    const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
-    const candidateVoices = esVoices.length > 0 ? esVoices : voices;
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-        <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl relative text-left mb-14 sm:mb-0">
-          {/* Encabezado del Modal */}
-          <div className="flex items-center justify-between pb-4 border-b border-thea-border mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${
-                voiceModalTab === 'new_episode'
-                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                  : voiceEngine === 'edge'
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                  : 'bg-violet-600/20 border-violet-500/40 text-violet-400'
-              }`}>
-                {voiceModalTab === 'new_episode' ? (
-                  <Sparkles className="w-5 h-5" />
-                ) : voiceEngine === 'edge' ? (
-                  <Headphones className="w-5 h-5" />
-                ) : (
-                  <Volume2 className="w-5 h-5" />
-                )}
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  {voiceModalTab === 'new_episode'
-                    ? 'Crear Nuevo Episodio de Podcast'
-                    : 'Configuración de Voces y Locutores'}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {voiceModalTab === 'new_episode'
-                    ? 'Configura un formato o duración distinta para este material'
-                    : 'Personaliza el motor acústico para Sofía y Mateo'}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleCloseVoiceModal}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Pestañas de Selección del Modal: Azure Neural | Voces Locales | Nuevo Episodio */}
-          <div className="grid grid-cols-3 gap-2 p-1.5 bg-thea-surfaceLight/80 border border-thea-border rounded-2xl mb-4">
-            <button
-              type="button"
-              onClick={() => {
-                setVoiceModalTab('azure');
-                handleSwitchEngine('edge');
-              }}
-              className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                voiceModalTab === 'azure'
-                  ? 'bg-emerald-500/25 border border-emerald-500/50 text-emerald-300 shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Headphones className="w-4 h-4 text-emerald-400 shrink-0" />
-              <div className="text-left hidden sm:block">
-                <div className="font-bold">Azure Neural</div>
-                <div className="text-[10px] font-normal text-emerald-400/90">Voces Oficiales</div>
-              </div>
-              <span className="sm:hidden text-xs font-bold">Azure</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setVoiceModalTab('browser');
-                handleSwitchEngine('browser');
-              }}
-              className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                voiceModalTab === 'browser'
-                  ? 'bg-violet-600/25 border border-violet-500/50 text-violet-300 shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Volume2 className="w-4 h-4 text-violet-400 shrink-0" />
-              <div className="text-left hidden sm:block">
-                <div className="font-bold">Voces Locales</div>
-                <div className="text-[10px] font-normal text-violet-400/90">Navegador offline</div>
-              </div>
-              <span className="sm:hidden text-xs font-bold">Locales</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setVoiceModalTab('new_episode')}
-              className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                voiceModalTab === 'new_episode'
-                  ? 'bg-amber-500/25 border border-amber-500/50 text-amber-300 shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-              <div className="text-left hidden sm:block">
-                <div className="font-bold">Nuevo Episodio</div>
-                <div className="text-[10px] font-normal text-amber-400/90">Reemplazar podcast</div>
-              </div>
-              <span className="sm:hidden text-xs font-bold">Nuevo</span>
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {/* PESTAÑA 1: AZURE NEURAL */}
-            {voiceModalTab === 'azure' && (
-              <div className="space-y-4">
-                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1.5">
-                  <div className="flex items-center justify-between text-emerald-300 font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <Headphones className="w-4 h-4 text-emerald-400" />
-                      Microsoft Azure Neural Voices (Edge TTS)
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    Voces neuronales auténticas de Microsoft Azure con entonación natural, cadencia humana y emoción conversacional. Todo el audio se precarga automáticamente en segundo plano y se almacena en IndexedDB para respuesta a 0ms sin pausas.
-                  </p>
-                </div>
-
-                {/* Sofía */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Voz de Sofía (Host Principal)</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold lowercase">
-                        femenina • azure neural
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                    {AZURE_EDGE_VOICES.filter(v => v.gender === 'female').map((v) => {
-                      const isSelected = edgeSofiaVoice === v.id;
-                      return (
-                        <div
-                          key={`edge-sofia-${v.id}`}
-                          onClick={() => {
-                            setEdgeSofiaVoice(v.id);
-                            const updated = savePodcastSettings({ edgeSofiaVoice: v.id });
-                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                            }
-                          }}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                            isSelected
-                              ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-bold text-sm text-white">{v.name.replace(' Neural', '')}</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-thea-bg border border-thea-border text-amber-300 font-medium">
-                                  {v.country}
-                                </span>
-                                {isSelected && <Check className="w-4 h-4 text-amber-400" />}
-                              </div>
-                            </div>
-                            <p className="text-[11px] text-slate-300 line-clamp-1">{v.tone}</p>
-                            {v.roleHint && <span className="text-[10px] text-amber-400/90 block mt-0.5 font-medium">{v.roleHint}</span>}
-                          </div>
-                          <div className="flex justify-end mt-2">
-                            <button
-                              type="button"
-                              disabled={isTestingVoice}
-                              onClick={(e) => previewAzureVoiceSample(e, v)}
-                              className="px-2.5 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40"
-                              title={`Escuchar muestra de ${v.name}`}
-                            >
-                              <Volume2 className="w-3 h-3 text-amber-400" />
-                              <span>Escuchar</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Mateo */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Voz de Mateo (Co-Host Analítico)</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/30 font-semibold lowercase">
-                        masculina • azure neural
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                    {AZURE_EDGE_VOICES.filter(v => v.gender === 'male').map((v) => {
-                      const isSelected = edgeMateoVoice === v.id;
-                      return (
-                        <div
-                          key={`edge-mateo-${v.id}`}
-                          onClick={() => {
-                            setEdgeMateoVoice(v.id);
-                            const updated = savePodcastSettings({ edgeMateoVoice: v.id });
-                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                            }
-                          }}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                            isSelected
-                              ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-bold text-sm text-white">{v.name.replace(' Neural', '')}</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-thea-bg border border-thea-border text-violet-300 font-medium">
-                                  {v.country}
-                                </span>
-                                {isSelected && <Check className="w-4 h-4 text-violet-400" />}
-                              </div>
-                            </div>
-                            <p className="text-[11px] text-slate-300 line-clamp-1">{v.tone}</p>
-                            {v.roleHint && <span className="text-[10px] text-violet-400/90 block mt-0.5 font-medium">{v.roleHint}</span>}
-                          </div>
-                          <div className="flex justify-end mt-2">
-                            <button
-                              type="button"
-                              disabled={isTestingVoice}
-                              onClick={(e) => previewAzureVoiceSample(e, v)}
-                              className="px-2.5 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40"
-                              title={`Escuchar muestra de ${v.name}`}
-                            >
-                              <Volume2 className="w-3 h-3 text-violet-400" />
-                              <span>Escuchar</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* PESTAÑA 2: VOCES LOCALES */}
-            {voiceModalTab === 'browser' && (
-              <div className="space-y-4">
-                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1.5">
-                  <div className="flex items-center justify-between text-emerald-300 font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <Headphones className="w-4 h-4 text-emerald-400" />
-                      Síntesis Vocal Local ({candidateVoices.length} voces disponibles)
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                      Ilimitado
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    THEA modula automáticamente los registros: Sofía en tono agudo vivaz (1.25x) y Mateo en barítono grave (0.68x). Puedes seleccionar una voz instalada específica para cada uno o usar la asignación automática recomendada.
-                  </p>
-                </div>
-
-                {/* Sofía Local */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Voz para Sofía (Host Principal)</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold lowercase">
-                        femenina • pitch 1.25
-                      </span>
-                    </label>
-                    {localSofiaVoice && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalSofiaVoice('');
-                          const updated = savePodcastSettings({ localSofiaVoice: '' });
-                          if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                            googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                          }
-                        }}
-                        className="text-[11px] text-slate-400 hover:text-amber-300 underline cursor-pointer"
-                      >
-                        Restablecer a automática
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
-                    <div
-                      onClick={() => {
-                        setLocalSofiaVoice('');
-                        const updated = savePodcastSettings({ localSofiaVoice: '' });
-                        if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                          googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                        }
-                      }}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                        !localSofiaVoice
-                          ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
-                          : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-sm text-white">Automática Inteligente</span>
-                        {!localSofiaVoice && <Check className="w-4 h-4 text-amber-400" />}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mb-2">
-                        Asignación óptima detectada con modulación femenina 1.25x.
-                      </p>
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={(e) => previewAutomaticLocalSample(e, 'female')}
-                          className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                          title="Escuchar muestra automática de Sofía"
-                        >
-                          <Volume2 className="w-3 h-3 text-amber-400" />
-                          <span>Escuchar</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {candidateVoices.map((v) => {
-                      const isSelected = localSofiaVoice === v.name;
-                      const cleanName = v.name
-                        .replace(/^(Microsoft|Google|Apple)\s*/i, '')
-                        .replace(/\s*-\s*(Spanish|español|Spain|Mexico|United States).*$/i, '')
-                        .trim() || v.name;
-                      return (
-                        <div
-                          key={`sofia-${v.name}`}
-                          onClick={() => {
-                            setLocalSofiaVoice(v.name);
-                            const updated = savePodcastSettings({ localSofiaVoice: v.name });
-                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                            }
-                          }}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                            isSelected
-                              ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-sm text-white">{cleanName}</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-400 font-mono">
-                                {v.lang}
-                              </span>
-                            </div>
-                            {isSelected && <Check className="w-4 h-4 text-amber-400" />}
-                          </div>
-                          <p className="text-[11px] text-slate-400 mb-2 truncate" title={v.name}>
-                            {v.name}
-                          </p>
-                          <div className="flex justify-end">
-                            <button
-                              type="button"
-                              onClick={(e) => previewLocalVoice(e, v, 'female')}
-                              className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                              title={`Escuchar a Sofía con la voz de ${cleanName}`}
-                            >
-                              <Volume2 className="w-3 h-3 text-amber-400" />
-                              <span>Escuchar</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Mateo Local */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Voz para Mateo (Co-Host Analítico)</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/30 font-semibold lowercase">
-                        masculina • pitch 0.68
-                      </span>
-                    </label>
-                    {localMateoVoice && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalMateoVoice('');
-                          const updated = savePodcastSettings({ localMateoVoice: '' });
-                          if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                            googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                          }
-                        }}
-                        className="text-[11px] text-slate-400 hover:text-violet-300 underline cursor-pointer"
-                      >
-                        Restablecer a automática
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
-                    <div
-                      onClick={() => {
-                        setLocalMateoVoice('');
-                        const updated = savePodcastSettings({ localMateoVoice: '' });
-                        if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                          googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                        }
-                      }}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                        !localMateoVoice
-                          ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
-                          : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-sm text-white">Automática Inteligente</span>
-                        {!localMateoVoice && <Check className="w-4 h-4 text-violet-400" />}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mb-2">
-                        Asignación masculina o barítono grave modulado a 0.68x.
-                      </p>
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={(e) => previewAutomaticLocalSample(e, 'male')}
-                          className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                          title="Escuchar muestra automática de Mateo"
-                        >
-                          <Volume2 className="w-3 h-3 text-violet-400" />
-                          <span>Escuchar</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {candidateVoices.map((v) => {
-                      const isSelected = localMateoVoice === v.name;
-                      const cleanName = v.name
-                        .replace(/^(Microsoft|Google|Apple)\s*/i, '')
-                        .replace(/\s*-\s*(Spanish|español|Spain|Mexico|United States).*$/i, '')
-                        .trim() || v.name;
-                      return (
-                        <div
-                          key={`mateo-${v.name}`}
-                          onClick={() => {
-                            setLocalMateoVoice(v.name);
-                            const updated = savePodcastSettings({ localMateoVoice: v.name });
-                            if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-                              googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-                            }
-                          }}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                            isSelected
-                              ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-sm text-white">{cleanName}</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-400 font-mono">
-                                {v.lang}
-                              </span>
-                            </div>
-                            {isSelected && <Check className="w-4 h-4 text-violet-400" />}
-                          </div>
-                          <p className="text-[11px] text-slate-400 mb-2 truncate" title={v.name}>
-                            {v.name}
-                          </p>
-                          <div className="flex justify-end">
-                            <button
-                              type="button"
-                              onClick={(e) => previewLocalVoice(e, v, 'male')}
-                              className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                              title={`Escuchar a Mateo con la voz de ${cleanName}`}
-                            >
-                              <Volume2 className="w-3 h-3 text-violet-400" />
-                              <span>Escuchar</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* PESTAÑA 3: NUEVO EPISODIO */}
-            {voiceModalTab === 'new_episode' && (
-              <div className="space-y-4">
-                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1.5">
-                  <div className="flex items-center justify-between text-amber-300 font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      Crear un nuevo episodio y reemplazar el actual
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40">
-                      Regeneración
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    Elige un nuevo formato y duración para generar otra perspectiva sobre tus fuentes de estudio. El episodio actual y los audios en caché se borrarán para dar paso al nuevo guión.
-                  </p>
-                </div>
-
-                {/* Formato */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                      Formato del Podcast
-                    </label>
-                    <span className="text-[10px] text-amber-400 font-medium">Estilo NotebookLM</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {PODCAST_FORMAT_OPTIONS.map((f) => {
-                      const isSelected = selectedFormat === f.id;
-                      const IconComp = f.icon;
-                      return (
-                        <div
-                          key={`modal-fmt-${f.id}`}
-                          onClick={() => setSelectedFormat(f.id)}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                            isSelected
-                              ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
-                                  isSelected ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-thea-bg text-slate-400 border border-thea-border'
-                                }`}>
-                                  <IconComp className="w-3.5 h-3.5" />
-                                </div>
-                                <span className="font-bold text-sm text-white">{f.title}</span>
-                              </div>
-                              {isSelected && <Check className="w-4 h-4 text-amber-400" />}
-                            </div>
-                            <p className="text-[11px] text-slate-300 leading-relaxed">
-                              {f.description}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Duración */}
-                <div>
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                    Duración del Podcast
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {PODCAST_DURATION_OPTIONS.map((d) => {
-                      const isSelected = selectedDuration === d.id;
-                      return (
-                        <div
-                          key={`modal-dur-${d.id}`}
-                          onClick={() => setSelectedDuration(d.id)}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
-                              : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-xs text-white">{d.title}</span>
-                            <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                              isSelected ? 'bg-violet-500/30 text-violet-200' : 'bg-thea-bg text-slate-400'
-                            }`}>
-                              {d.subtitle}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-400 leading-snug">
-                            {d.detail}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Orientación */}
-                <div>
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
-                    Orientación Personalizada (Opcional)
-                  </label>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setOrientationInput('Enfoque riguroso para examen: conceptos clave, definiciones exactas, fórmulas o leyes relevantes y posibles preguntas trampa.')}
-                      className="px-2 py-0.5 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[10px] text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
-                    >
-                      Examen riguroso
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrientationInput('Debate dinámico y conversacional entre Sofía y Mateo: usan analogías de la vida real, tono entretenido y explicaciones frescas.')}
-                      className="px-2 py-0.5 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[10px] text-slate-300 hover:text-violet-300 transition-colors cursor-pointer"
-                    >
-                      Debate ameno
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrientationInput('Explicación pedagógica paso a paso desde los fundamentos básicos hasta los avanzados, ideal para aprender el tema por primera vez.')}
-                      className="px-2 py-0.5 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[10px] text-slate-300 hover:text-emerald-300 transition-colors cursor-pointer"
-                    >
-                      Explicación pedagógica
-                    </button>
-                  </div>
-                  <textarea
-                    rows={2}
-                    value={orientationInput}
-                    onChange={(e) => setOrientationInput(e.target.value)}
-                    placeholder="Instrucciones adicionales para la IA en este nuevo episodio..."
-                    className="w-full bg-thea-bg border border-thea-border rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed font-sans"
-                  />
-                </div>
-
-                {/* Botones de Acción */}
-                <div className="pt-3 border-t border-thea-border flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseVoiceModal}
-                    className="px-4 py-2 rounded-xl bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-slate-300 text-xs font-semibold cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmReplaceModal(true)}
-                    disabled={isGenerating}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-900/30 cursor-pointer flex items-center gap-1.5"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Crear y reemplazar episodio actual</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* SECCIÓN INFERIOR PARA PESTAÑAS AZURE Y BROWSER (BOTONES DE PRUEBA) */}
-            {voiceModalTab !== 'new_episode' && (
-              <div className="pt-3 border-t border-thea-border">
-                <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <button
-                      type="button"
-                      disabled={isTestingVoice}
-                      onClick={() => testVoiceSample('sofia')}
-                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-amber-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-                    >
-                      {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
-                      <span>Probar Sofía</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isTestingVoice}
-                      onClick={() => testVoiceSample('mateo')}
-                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-violet-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-                    >
-                      {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-400" />}
-                      <span>Probar Mateo</span>
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleCloseVoiceModal}
-                    className="px-4 py-1.5 sm:px-5 sm:py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
-                  >
-                    Listo
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderVoiceModal = () => (
+    <PodcastVoiceModal
+      show={showVoiceModal}
+      voiceModalTab={voiceModalTab}
+      onTabChange={setVoiceModalTab}
+      voiceEngine={voiceEngine}
+      onSwitchEngine={handleSwitchEngine}
+      onClose={handleCloseVoiceModal}
+      voices={voices}
+      edgeSofiaVoice={edgeSofiaVoice}
+      onSelectEdgeSofiaVoice={setEdgeSofiaVoice}
+      edgeMateoVoice={edgeMateoVoice}
+      onSelectEdgeMateoVoice={setEdgeMateoVoice}
+      localSofiaVoice={localSofiaVoice}
+      onSelectLocalSofiaVoice={setLocalSofiaVoice}
+      localMateoVoice={localMateoVoice}
+      onSelectLocalMateoVoice={setLocalMateoVoice}
+      isTestingVoice={isTestingVoice}
+      onPreviewAzureVoice={previewAzureVoiceSample}
+      onPreviewLocalVoice={previewLocalVoice}
+      onPreviewAutomaticLocalSample={previewAutomaticLocalSample}
+      onTestVoiceSample={testVoiceSample}
+      selectedFormat={selectedFormat}
+      onSelectFormat={setSelectedFormat}
+      selectedDuration={selectedDuration}
+      onSelectDuration={setSelectedDuration}
+      orientationInput={orientationInput}
+      onOrientationChange={setOrientationInput}
+      onRequestConfirmReplace={() => setShowConfirmReplaceModal(true)}
+      isGenerating={isGenerating}
+    />
+  );
 
   const speeds = [0.75, 1, 1.25, 1.5, 2];
 
   if (!podcast || !podcast.dialogue || podcast.dialogue.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-2 sm:pt-6 pb-32 sm:pb-12 animate-fadeIn">
-        {/* Encabezado */}
-        <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2 sm:mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            Configuración Previa del Podcast
-          </div>
-          <h1 className="text-xl sm:text-3xl font-extrabold text-white mb-2">
-            Personaliza tu Episodio Educativo
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Elige el formato de análisis, la duración estimada y el enfoque temático con el que Sofía y Mateo repasarán este material de estudio.
-          </p>
-        </div>
-
-        <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl space-y-5 sm:space-y-6">
-          {/* SECCIÓN 1: FORMATO */}
-          <div>
-            <div className="mb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>Formato</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Personaliza tu resumen de audio eligiendo el formato que mejor se adapte a tus necesidades.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {PODCAST_FORMAT_OPTIONS.map((f) => {
-                const isSelected = selectedFormat === f.id;
-                const IconComponent = f.icon;
-                return (
-                  <div
-                    key={`pre-format-${f.id}`}
-                    onClick={() => setSelectedFormat(f.id)}
-                    className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between relative group ${
-                      isSelected
-                        ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
-                        : 'border-thea-border bg-thea-surfaceLight/40 hover:bg-thea-surfaceLight/80 text-slate-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                            isSelected ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-thea-surface text-slate-400 border border-thea-border'
-                          }`}>
-                            <IconComponent className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <span className="font-bold text-sm text-white block">{f.title}</span>
-                            <span className="text-[10px] text-amber-300/80 font-semibold">{f.badge}</span>
-                          </div>
-                        </div>
-
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
-                          isSelected ? 'border-amber-400 bg-amber-400 text-slate-950' : 'border-slate-600 bg-thea-bg'
-                        }`}>
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-300 leading-relaxed">
-                        {f.description}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* SECCIÓN 2: DURACIÓN */}
-          <div className="pt-4 border-t border-thea-border">
-            <div className="mb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Clock className="w-4 h-4 text-violet-400" />
-                <span>Duración del Podcast</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Selecciona la extensión deseada según el tiempo que tengas disponible para estudiar.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {PODCAST_DURATION_OPTIONS.map((d) => {
-                const isSelected = selectedDuration === d.id;
-                return (
-                  <div
-                    key={`pre-duration-${d.id}`}
-                    onClick={() => setSelectedDuration(d.id)}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative ${
-                      isSelected
-                        ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
-                        : 'border-thea-border bg-thea-surfaceLight/40 hover:bg-thea-surfaceLight/80 text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-bold text-sm text-white">{d.title}</span>
-                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                        isSelected ? 'bg-violet-500/30 text-violet-200 border border-violet-400/50' : 'bg-thea-bg text-slate-400 border border-thea-border'
-                      }`}>
-                        {d.subtitle}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-snug">
-                      {d.detail}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* SECCIÓN 3: ORIENTACIÓN Y ENFOQUE */}
-          <div className="pt-4 border-t border-thea-border">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>Orientación Personalizada (Opcional)</span>
-              </label>
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 mb-2.5">
-              <button
-                type="button"
-                onClick={() => setOrientationInput('Enfoque riguroso para examen: conceptos clave, definiciones exactas, fórmulas o leyes relevantes y posibles preguntas trampa.')}
-                className="px-2.5 py-1 rounded-xl bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-xs text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
-              >
-                Examen riguroso
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrientationInput('Debate dinámico y conversacional entre Sofía y Mateo: usan analogías de la vida real, tono entretenido y explicaciones frescas.')}
-                className="px-2.5 py-1 rounded-xl bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-xs text-slate-300 hover:text-violet-300 transition-colors cursor-pointer"
-              >
-                Debate ameno
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrientationInput('Explicación pedagógica paso a paso desde los fundamentos básicos hasta los avanzados, ideal para aprender el tema por primera vez.')}
-                className="px-2.5 py-1 rounded-xl bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-xs text-slate-300 hover:text-emerald-300 transition-colors cursor-pointer"
-              >
-                Explicación pedagógica
-              </button>
-            </div>
-
-            <textarea
-              rows={2}
-              value={orientationInput}
-              onChange={(e) => setOrientationInput(e.target.value)}
-              placeholder="Instrucciones adicionales para el podcast (ej: haz énfasis en los antecedentes históricos, debate las ventajas y desventajas, prepara para un quiz...)"
-              className="w-full bg-thea-bg border border-thea-border rounded-2xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed"
-            />
-          </div>
-
-          {/* SECCIÓN 4: MOTOR Y VOCES */}
-          <div className="pt-4 border-t border-thea-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-thea-surfaceLight/30 p-4 rounded-2xl border border-thea-border">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${
-                voiceEngine === 'edge' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-violet-600/20 border-violet-500/40 text-violet-400'
-              }`}>
-                {voiceEngine === 'edge' ? <Headphones className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white">
-                    {voiceEngine === 'edge' ? 'Azure Neural (Microsoft Edge)' : 'Voces del Navegador'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  {voiceEngine === 'edge'
-                    ? `Sofía: ${AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira'} • Mateo: ${AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro'}`
-                    : 'Modulación acústica: Sofía (1.25x) y Mateo (0.68x)'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setVoiceModalTab(voiceEngine === 'edge' ? 'azure' : 'browser');
-                setShowVoiceModal(true);
-              }}
-              className="px-3.5 py-1.5 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-xs text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto"
-            >
-              <Settings2 className="w-3.5 h-3.5 text-amber-400" />
-              <span>Configurar Voces</span>
-            </button>
-          </div>
-
-          {/* BOTÓN PRINCIPAL DE GENERACIÓN */}
-          <div className="pt-3">
-            <button
-              onClick={() => handleGeneratePodcast()}
-              disabled={isGenerating}
-              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-rose-500 hover:from-amber-400 hover:to-rose-400 disabled:opacity-50 text-slate-950 font-black text-sm sm:text-base shadow-xl shadow-amber-900/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2.5 cursor-pointer"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Generando Guión y Diálogo de Podcast con IA...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  <span>Generar Podcast con IA</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
+      <PodcastSetupView
+        selectedFormat={selectedFormat}
+        onSelectFormat={setSelectedFormat}
+        selectedDuration={selectedDuration}
+        onSelectDuration={setSelectedDuration}
+        orientationInput={orientationInput}
+        onOrientationChange={setOrientationInput}
+        voiceEngine={voiceEngine}
+        edgeSofiaVoice={edgeSofiaVoice}
+        edgeMateoVoice={edgeMateoVoice}
+        isGenerating={isGenerating}
+        onOpenVoiceModal={() => {
+          setVoiceModalTab(voiceEngine === "edge" ? "azure" : "browser");
+          setShowVoiceModal(true);
+        }}
+        onGeneratePodcast={() => handleGeneratePodcast()}
+      >
         {renderVoiceModal()}
         {renderConfirmReplaceModal()}
-      </div>
+      </PodcastSetupView>
     );
   }
 
@@ -3098,37 +2141,15 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           </div>
         </div>
       ) : (
-        /* Full Transcript View */
-        <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-8 space-y-3 sm:space-y-4 shadow-xl">
-          <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-thea-border">
-            <h3 className="font-bold text-white text-sm sm:text-base">Transcripción Completa del Episodio</h3>
-            <span className="text-xs text-amber-400 font-semibold">{podcast.dialogue.length} intervenciones</span>
-          </div>
-
-          <div className="space-y-3 sm:space-y-4">
-            {podcast.dialogue.map((item, idx) => (
-              <div
-                key={idx}
-                onClick={() => {
-                  handleSeek(idx);
-                  setIsPlaying(true);
-                  setActiveTab('player');
-                }}
-                className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer ${
-                  currentLineIndex === idx
-                    ? 'border-amber-500/50 bg-amber-500/10 shadow-md ring-1 ring-amber-500/30'
-                    : 'border-thea-border/60 bg-thea-surfaceLight/40 hover:bg-thea-surfaceLight'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-violet-300">{item.speaker}</span>
-                  <span className="text-[10px] sm:text-[11px] text-slate-500 font-mono">{item.time}</span>
-                </div>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{item.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <PodcastTranscriptView
+          dialogue={podcast.dialogue}
+          currentLineIndex={currentLineIndex}
+          onSelectLine={(idx) => {
+            handleSeek(idx);
+            setIsPlaying(true);
+            setActiveTab('player');
+          }}
+        />
       )}
 
       {renderVoiceModal()}
