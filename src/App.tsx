@@ -552,8 +552,15 @@ export const App: React.FC = () => {
       if (hasStrippedAssets) {
         hydrateKitAssets(kitToHydrate)
           .then(hydrated => {
-            setCurrentKit(hydrated);
-            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : stripAssetDataUrlsFromKit(k))));
+            const countBefore = (kitToHydrate.assets?.filter(a => !!a.dataUrl).length || 0) +
+              (kitToHydrate.questions?.filter(q => !!q.sourceAsset?.dataUrl).length || 0);
+            const countAfter = (hydrated.assets?.filter(a => !!a.dataUrl).length || 0) +
+              (hydrated.questions?.filter(q => !!q.sourceAsset?.dataUrl).length || 0);
+
+            if (countAfter > countBefore) {
+              setCurrentKit(hydrated);
+              setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : stripAssetDataUrlsFromKit(k))));
+            }
           })
           .catch(err => {
             console.warn('[App] Error al hidratar activos desde IndexedDB:', err);

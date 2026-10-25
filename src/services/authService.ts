@@ -657,10 +657,11 @@ export const authService = {
     this.writeIndexToLocalStorage(userId, cleanKits, true);
 
     // 3. Intentar guardar versión aligerada en LocalStorage protegiendo la cuota
+    // Umbral acotado a 350KB para asegurar que nunca sature la cuota global de LocalStorage (5MB)
     try {
       const lightweight = stripHeavyAssetsForLocalStorage(cleanKits);
       const serialized = JSON.stringify(lightweight);
-      if (serialized.length < 2500000) {
+      if (serialized.length < 350000) {
         localStorage.setItem(key, serialized);
       } else {
         localStorage.removeItem(key);
@@ -874,59 +875,46 @@ export const authService = {
           if (m) {
             if (c.id) normalizedMap[c.id] = m;
             if (c.term) {
-              normalizedMap[c.term] = m;
-              normalizedMap[c.term.trim()] = m;
-              normalizedMap[c.term.trim().toLowerCase()] = m;
+              const termStr = String(c.term).trim();
+              if (termStr) {
+                normalizedMap[termStr] = m;
+                normalizedMap[termStr.toLowerCase()] = m;
+              }
             }
           }
         });
       }
 
-      const cleanState: FlashcardProgressState = {
+      const safeIdx = typeof state.currentIdx === 'number' && !isNaN(state.currentIdx)
+        ? Math.max(0, state.currentIdx)
+        : 0;
+
+      // 1. En LocalStorage: guardar EXCLUSIVAMENTE el estado ultra-compacto (< 500 bytes)
+      // NUNCA almacenar definiciones ni colecciones enteras de tarjetas aquí.
+      // Esto elimina de raíz el QuotaExceededError y la saturación de memoria (OOM).
+      const minimalStorageState: FlashcardProgressState = {
         version: 1,
         updatedAt: state.updatedAt || Date.now(),
         kitId,
-        cards: state.cards,
-        archivedCards: state.archivedCards,
         masteryMap: normalizedMap,
-        currentIdx: typeof state.currentIdx === 'number' ? state.currentIdx : 0,
+        currentIdx: safeIdx,
       };
 
       if (typeof localStorage !== 'undefined') {
         try {
-          localStorage.setItem(userKey, JSON.stringify(cleanState));
+          localStorage.setItem(userKey, JSON.stringify(minimalStorageState));
         } catch (err) {
-          try {
-            // Si la cuota de LocalStorage está saturada, guardar versión ultra-compacta (sin imágenes)
-            const compactCards = cleanState.cards?.map(c => ({
-              id: c.id,
-              term: c.term,
-              definition: c.definition ? c.definition.slice(0, 200) : '',
-              mastery: c.mastery,
-              type: c.type,
-            }));
-            const compactArchived = cleanState.archivedCards?.map(c => ({
-              id: c.id,
-              term: c.term,
-              definition: c.definition ? c.definition.slice(0, 200) : '',
-              mastery: c.mastery,
-              type: c.type,
-            }));
-            const compactState: FlashcardProgressState = {
-              version: 1,
-              updatedAt: cleanState.updatedAt,
-              kitId,
-              cards: compactCards,
-              archivedCards: compactArchived,
-              masteryMap: normalizedMap,
-              currentIdx: cleanState.currentIdx,
-            };
-            localStorage.setItem(userKey, JSON.stringify(compactState));
-          } catch (compactErr) {
-            notifyQuotaExceeded(compactErr);
-          }
+          notifyQuotaExceeded(err);
         }
       }
+
+      // 2. En IndexedDB: guardar la copia completa con tarjetas y archivadas
+      const fullStateForIdb: FlashcardProgressState = {
+        ...minimalStorageState,
+        cards: state.cards,
+        archivedCards: state.archivedCards,
+      };
+
       // Persistencia diferida hacia IndexedDB y eventos en vivo con debounce de 350ms
       // Previene saturacion del bucle de eventos y de memoria (OOM) ante clics sucesivos ultrarrapidos
       if (flashcardIdbTimers.has(userKey)) {
@@ -934,10 +922,10 @@ export const authService = {
       }
       const timer = setTimeout(() => {
         flashcardIdbTimers.delete(userKey);
-        saveSessionItem(userKey, cleanState).catch(() => {});
+        saveSessionItem(userKey, fullStateForIdb).catch(() => {});
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('thea_flashcard_saved', {
-            detail: { userId, kitId, state: cleanState }
+            detail: { userId, kitId, state: fullStateForIdb }
           }));
         }
       }, 350);

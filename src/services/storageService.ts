@@ -667,6 +667,12 @@ export async function getKitsFromIndexedDB(key: string): Promise<StudyKit[] | nu
 }
 
 /**
+ * Cache liviano en memoria para evitar escanear y deserializar LocalStorage
+ * repetitivamente por cada tarjeta individual durante una fusión.
+ */
+const fcMasteryCache = new Map<string, { map: Record<string, 'to-learn' | 'known' | 'mastered'>; timestamp: number }>();
+
+/**
  * Consulta la memoria persistente de flashcards para garantizar que las tarjetas
  * marcadas como dominadas o conocidas nunca retrocedan durante una fusion.
  */
@@ -675,20 +681,35 @@ function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' |
   try {
     const cleanKey = cardKey.trim();
     const lowerKey = cleanKey.toLowerCase();
+
+    // 1. Revisar si tenemos el mapa de este kit en caché reciente (< 2.5s)
+    const cached = fcMasteryCache.get(kitId);
+    if (cached && (Date.now() - cached.timestamp < 2500)) {
+      const m = cached.map;
+      return m[cardKey] || m[cleanKey] || m[lowerKey] || null;
+    }
+
+    // 2. Si no está en caché, buscar la clave directamente
+    let foundMap: Record<string, any> | null = null;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.includes('_fc_mem_') && k.endsWith(`_${kitId}`)) {
         const raw = localStorage.getItem(k);
         if (raw) {
-          const parsed = JSON.parse(raw);
-          const map = parsed?.masteryMap;
-          if (map) {
-            if (map[cardKey]) return map[cardKey];
-            if (map[cleanKey]) return map[cleanKey];
-            if (map[lowerKey]) return map[lowerKey];
-          }
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && parsed.masteryMap) {
+              foundMap = parsed.masteryMap;
+              break;
+            }
+          } catch {}
         }
       }
+    }
+
+    if (foundMap) {
+      fcMasteryCache.set(kitId, { map: foundMap, timestamp: Date.now() });
+      return foundMap[cardKey] || foundMap[cleanKey] || foundMap[lowerKey] || null;
     }
   } catch {}
   return null;

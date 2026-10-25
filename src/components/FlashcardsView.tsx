@@ -513,11 +513,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   useEffect(() => {
     authService.restoreFlashcardProgressAsync(userId, kit.id).then(idbProgress => {
       if (!idbProgress || !idbProgress.masteryMap) return;
-      masteryMapRef.current = { ...masteryMapRef.current, ...idbProgress.masteryMap };
+      // Lo que ya esté en RAM en tiempo real siempre tiene prioridad sobre la instantánea asíncrona de IndexedDB
+      masteryMapRef.current = { ...idbProgress.masteryMap, ...masteryMapRef.current };
 
       setCards(prevCards => {
         const sourceCards = (prevCards.length > 0) ? prevCards : (idbProgress.cards || kit.flashcards || []);
-        const map = idbProgress.masteryMap;
+        const map = masteryMapRef.current;
         return sourceCards.map(c => ({
           ...c,
           mastery: getCardMastery(c, map),
@@ -804,35 +805,43 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   };
 
-  const currentCard = cards[currentIdx % (cards.length || 1)];
+  const safeCurrentIdx = (typeof currentIdx === 'number' && !isNaN(currentIdx)) ? Math.max(0, currentIdx) : 0;
+  const currentCard = cards[safeCurrentIdx % (cards.length || 1)];
   const isQuestionCard =
     currentCard?.type === 'question' ||
     Boolean(currentCard?.term && /^\s*¿|\?\s*$/.test(currentCard.term));
 
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
     const currentCards = cardsRef.current;
-    if (!currentCards || currentCards.length === 0) return;
-    const targetIdx = currentIdxRef.current % currentCards.length;
+    if (!Array.isArray(currentCards) || currentCards.length === 0) return;
+    const len = currentCards.length;
+    const rawIdx = typeof currentIdxRef.current === 'number' && !isNaN(currentIdxRef.current)
+      ? currentIdxRef.current
+      : 0;
+    const safeIdx = Math.max(0, rawIdx);
+    const targetIdx = safeIdx % len;
     const targetCard = currentCards[targetIdx];
     if (!targetCard) return;
 
-    const nextIdx = (targetIdx + 1) % currentCards.length;
+    const nextIdx = (targetIdx + 1) % len;
     const updated = currentCards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
 
     // 1. Actualización visual instantánea sin bloqueo de hilo
-    setCards(updated);
     cardsRef.current = updated;
+    currentIdxRef.current = nextIdx;
+    setCards(updated);
     setIsFlipped(false);
     setCurrentIdx(nextIdx);
-    currentIdxRef.current = nextIdx;
 
     // 2. Actualizar mapa en memoria y persistir progreso ligero en LocalStorage inmediatamente
     const currentMap = masteryMapRef.current;
     if (targetCard.id) currentMap[targetCard.id] = mastery;
     if (targetCard.term) {
-      currentMap[targetCard.term] = mastery;
-      currentMap[targetCard.term.trim()] = mastery;
-      currentMap[targetCard.term.trim().toLowerCase()] = mastery;
+      const termStr = String(targetCard.term).trim();
+      if (termStr) {
+        currentMap[termStr] = mastery;
+        currentMap[termStr.toLowerCase()] = mastery;
+      }
     }
 
     authService.saveFlashcardProgress(userId, kit.id, {
@@ -861,8 +870,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
   const handlePrevCard = () => {
     setIsFlipped(false);
+    const len = cardsRef.current?.length || cards.length || 1;
     setCurrentIdx(prev => {
-      const next = (prev - 1 + cards.length) % cards.length;
+      const safePrev = typeof prev === 'number' && !isNaN(prev) ? prev : 0;
+      const next = (safePrev - 1 + len) % len;
       currentIdxRef.current = next;
       return next;
     });
@@ -870,8 +881,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
   const handleNextCard = () => {
     setIsFlipped(false);
+    const len = cardsRef.current?.length || cards.length || 1;
     setCurrentIdx(prev => {
-      const next = (prev + 1) % cards.length;
+      const safePrev = typeof prev === 'number' && !isNaN(prev) ? prev : 0;
+      const next = (safePrev + 1) % len;
       currentIdxRef.current = next;
       return next;
     });
