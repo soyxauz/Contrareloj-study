@@ -493,7 +493,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
           ) : (
             <button
               onClick={() => (onOpenAISettings ? onOpenAISettings() : onNavigate('create'))}
-              className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-400 hover:text-slate-200 font-semibold text-sm sm:text-base transition-all group shrink-0 cursor-pointer min-h-[48px] shadow-none"
+              className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-thea-surfaceLight/80 hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-slate-200 font-semibold text-sm sm:text-base transition-all group shrink-0 cursor-pointer min-h-[48px] shadow-none"
               title="Configura tu API Key funcional para habilitar la creación de Study Kits"
             >
               <Lock className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
@@ -551,7 +551,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   key={src.label}
                   type="button"
                   onClick={onOpenAISettings}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-500 text-xs font-medium cursor-pointer transition-all active:scale-95 group shrink-0 grayscale hover:text-slate-300 hover:border-slate-700"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-thea-surface/60 border border-thea-border/80 text-slate-500 text-xs font-medium cursor-pointer transition-all active:scale-95 group shrink-0 grayscale hover:text-slate-300 hover:border-thea-border"
                   title="Configura tu API Key funcional para habilitar esta opción"
                 >
                   <span className="opacity-50 shrink-0">{src.icon}</span>
@@ -659,7 +659,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
                 selectedMateria === 'all'
                   ? 'bg-violet-600 text-white shadow-sm shadow-violet-950/60'
-                  : 'bg-[#12141a] border border-slate-700/50 text-slate-400 hover:text-white hover:border-violet-500/40'
+                  : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white hover:border-violet-500/40'
               }`}
             >
               Todas ({kits.length})
@@ -859,7 +859,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                         {/* Dropdown contextual */}
                         {isMenuOpen && (
                           <div
-                            className="absolute right-0 top-full mt-1.5 w-44 rounded-2xl bg-[#141720] border border-slate-700 shadow-2xl py-1.5 z-30 animate-fadeIn"
+                            className="absolute right-0 top-full mt-1.5 w-44 rounded-2xl bg-thea-surface border border-thea-border shadow-2xl py-1.5 z-30 animate-fadeIn"
                             onClick={e => e.stopPropagation()}
                           >
                             <button
@@ -868,7 +868,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                                 setKitMenuOpenId(null);
                                 setReassignKitModal(kit);
                               }}
-                              className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
+                              className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-thea-surfaceLight hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
                             >
                               <FolderInput className="w-3.5 h-3.5 text-amber-400" />
                               <span>Cambiar Materia</span>
@@ -883,7 +883,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                                     onDeleteKit(kit.id);
                                   }
                                 }}
-                                className="w-full px-3.5 py-2 text-left text-xs text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 flex items-center gap-2 transition-colors cursor-pointer border-t border-slate-800/80"
+                                className="w-full px-3.5 py-2 text-left text-xs text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 flex items-center gap-2 transition-colors cursor-pointer border-t border-thea-border/80"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 <span>Eliminar Kit</span>
@@ -938,7 +938,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             {/* Create New Kit Card */}
             <button
               onClick={() => onNavigate('create')}
-              className="group flex flex-col items-center justify-center p-6 rounded-3xl border-2 border-dashed border-slate-700/60 hover:border-violet-500 bg-[#0d0f14] hover:bg-violet-950/20 transition-all duration-200 min-h-[185px] cursor-pointer"
+              className="group flex flex-col items-center justify-center p-6 rounded-3xl border-2 border-dashed border-thea-border hover:border-violet-500 bg-thea-surface/40 hover:bg-violet-950/20 transition-all duration-200 min-h-[185px] cursor-pointer"
             >
               <div className="w-12 h-12 rounded-2xl bg-violet-600/20 group-hover:bg-violet-600/30 flex items-center justify-center mb-2.5 transition-colors">
                 <Plus className="w-6 h-6 text-violet-400 group-hover:text-violet-300 group-hover:rotate-90 transition-all duration-300" />
@@ -1137,7 +1137,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
       {/* ── Barra Flotante de Acciones en Lote (Portal) ── */}
       {isSelectionMode && createPortal(
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl bg-[#12151f]/95 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl p-3 sm:p-4 flex items-center justify-between gap-3 animate-slideUp">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl bg-thea-surface/95 backdrop-blur-md border border-thea-border rounded-2xl shadow-2xl p-3 sm:p-4 flex items-center justify-between gap-3 animate-slideUp">
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="w-8 h-8 rounded-xl bg-violet-600/25 border border-violet-500/40 flex items-center justify-center text-violet-300 font-bold text-xs shrink-0">
               {selectedKitIds.size}
@@ -1195,7 +1195,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                 setIsSelectionMode(false);
                 setSelectedKitIds(new Set());
               }}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               title="Cerrar modo selección"
             >
               <X className="w-4 h-4" />
@@ -1214,11 +1214,11 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
           onClick={() => setShowBatchMateriaModal(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-[#0f1117] border border-slate-800 shadow-2xl flex flex-col overflow-hidden text-slate-100"
+            className="w-full max-w-md rounded-2xl bg-thea-surface border border-thea-border shadow-2xl flex flex-col overflow-hidden text-slate-100"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#131620]">
+            <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
                   <FolderInput className="w-5 h-5" />
@@ -1235,7 +1235,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               <button
                 type="button"
                 onClick={() => setShowBatchMateriaModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1288,7 +1288,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       setBatchSelectedMateria('');
                     }
                   }}
-                  className="w-full bg-[#0c0e14] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  className="w-full bg-thea-bg border border-thea-border rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
                 />
               </div>
 
@@ -1297,7 +1297,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                 <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">
                   Libros seleccionados ({selectedKitIds.size}):
                 </span>
-                <div className="bg-[#0c0e14] border border-slate-800 rounded-xl p-2.5 max-h-28 overflow-y-auto space-y-1 scrollbar-none">
+                <div className="bg-thea-bg/80 border border-thea-border rounded-xl p-2.5 max-h-28 overflow-y-auto space-y-1 scrollbar-none">
                   {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
                     <div key={k.id} className="text-[11px] text-slate-300 flex items-center gap-2 truncate">
                       <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
@@ -1310,11 +1310,11 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </div>
 
             {/* Footer */}
-            <div className="p-3 sm:p-4 border-t border-slate-800 bg-[#131620] flex items-center justify-end gap-2 shrink-0">
+            <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowBatchMateriaModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
@@ -1342,11 +1342,11 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
           onClick={() => setShowBatchDeleteModal(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-[#0f1117] border border-rose-500/40 shadow-2xl flex flex-col overflow-hidden text-slate-100"
+            className="w-full max-w-md rounded-2xl bg-thea-surface border border-rose-500/40 shadow-2xl flex flex-col overflow-hidden text-slate-100"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#131620]">
+            <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
                   <AlertTriangle className="w-5 h-5" />
@@ -1363,7 +1363,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               <button
                 type="button"
                 onClick={() => setShowBatchDeleteModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1376,7 +1376,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               </p>
 
               {/* Lista previa de libros a eliminar */}
-              <div className="bg-[#0c0e14] border border-slate-800 rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1.5 scrollbar-none">
+              <div className="bg-thea-bg/80 border border-thea-border rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1.5 scrollbar-none">
                 {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
                   <div key={k.id} className="text-xs text-slate-300 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
@@ -1387,11 +1387,11 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </div>
 
             {/* Footer */}
-            <div className="p-3 sm:p-4 border-t border-slate-800 bg-[#131620] flex items-center justify-end gap-2 shrink-0">
+            <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowBatchDeleteModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
@@ -1482,11 +1482,11 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl max-h-[85vh] rounded-2xl bg-[#0f1117] border border-slate-800 shadow-2xl flex flex-col overflow-hidden text-slate-100"
+        className="w-full max-w-xl max-h-[85vh] rounded-2xl bg-thea-surface border border-thea-border shadow-2xl flex flex-col overflow-hidden text-slate-100"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#131620]">
+        <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <FolderEdit className="w-5 h-5" />
@@ -1502,7 +1502,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -1524,14 +1524,14 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                   return (
                     <div
                       key={m.name}
-                      className="p-3.5 rounded-xl bg-[#171b26] border border-amber-500/50 space-y-2.5"
+                      className="p-3.5 rounded-xl bg-thea-surfaceLight/80 border border-amber-500/50 space-y-2.5"
                     >
                       <div className="flex gap-2">
                         <input
                           type="text"
                           value={editingName}
                           onChange={e => setEditingName(e.target.value)}
-                          className="flex-1 bg-[#0c0e14] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                          className="flex-1 bg-thea-bg border border-thea-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
                         />
                         <button
                           type="button"
@@ -1543,7 +1543,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setEditingMateriaName(null)}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs hover:text-white cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-lg bg-thea-surface text-slate-300 text-xs hover:text-white border border-thea-border cursor-pointer"
                         >
                           Cancelar
                         </button>
@@ -1560,7 +1560,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                               onClick={() => setEditingColor(key)}
                               style={{ backgroundColor: p.cardBgHex }}
                               className={`px-2 py-1 rounded border text-[10px] flex items-center gap-1 cursor-pointer ${
-                                editingColor === key ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-800'
+                                editingColor === key ? 'border-amber-400 ring-1 ring-amber-400' : 'border-thea-border'
                               }`}
                             >
                               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.hex }} />
@@ -1597,7 +1597,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleStartEdit(m)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
                         title="Personalizar color o nombre"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -1621,10 +1621,10 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-3 sm:p-4 border-t border-slate-800 bg-[#131620] flex justify-end shrink-0">
+        <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex justify-end shrink-0">
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+            className="px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 hover:text-white bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border transition-colors cursor-pointer"
           >
             Cerrar
           </button>
@@ -1680,11 +1680,11 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-[#0f1117] border border-slate-800 shadow-2xl flex flex-col overflow-hidden text-slate-100"
+        className="w-full max-w-lg rounded-2xl bg-thea-surface border border-thea-border shadow-2xl flex flex-col overflow-hidden text-slate-100"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#131620]">
+        <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-violet-600/15 border border-violet-500/30 flex items-center justify-center text-violet-400">
               <FolderInput className="w-5 h-5" />
@@ -1700,7 +1700,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -1708,9 +1708,9 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
 
         {/* Content */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 max-h-[70vh]">
-          <div className="p-3 rounded-xl bg-[#141722] border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
+          <div className="p-3 rounded-xl bg-thea-surfaceLight/60 border border-thea-border text-xs text-slate-400 flex items-center justify-between">
             <span>Materia actual del kit:</span>
-            <span className="font-bold text-white px-2 py-0.5 rounded bg-slate-800">
+            <span className="font-bold text-white px-2 py-0.5 rounded bg-thea-surface border border-thea-border">
               {currentCategory}
             </span>
           </div>
@@ -1760,14 +1760,14 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCreatingNew(true)}
-                className="w-full mt-2 py-2 px-3 rounded-xl border border-dashed border-slate-700 hover:border-violet-500 text-xs text-slate-400 hover:text-violet-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full mt-2 py-2 px-3 rounded-xl border border-dashed border-thea-border hover:border-violet-500 text-xs text-slate-400 hover:text-violet-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Crear y asignar a una materia nueva</span>
               </button>
             </div>
           ) : (
-            <div className="space-y-3 p-4 rounded-xl bg-[#141722] border border-slate-800">
+            <div className="space-y-3 p-4 rounded-xl bg-thea-surfaceLight/60 border border-thea-border">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-amber-400">Crear nueva materia:</span>
                 <button
@@ -1784,7 +1784,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                 value={newMateriaInput}
                 onChange={e => setNewMateriaInput(e.target.value)}
                 placeholder="Nombre de la nueva materia..."
-                className="w-full bg-[#0c0e14] border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500"
+                className="w-full bg-thea-bg border border-thea-border rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500"
               />
 
               <div>
@@ -1802,7 +1802,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                         onClick={() => setNewMateriaColor(key)}
                         style={{ backgroundColor: pal.cardBgHex }}
                         className={`p-1.5 rounded-lg border text-left flex items-center gap-1.5 text-[10px] cursor-pointer ${
-                          isSelected ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-800'
+                          isSelected ? 'border-amber-400 ring-1 ring-amber-400' : 'border-thea-border'
                         }`}
                       >
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pal.hex }} />
@@ -1817,11 +1817,11 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-3 sm:p-4 border-t border-slate-800 bg-[#131620] flex items-center justify-end gap-2 shrink-0">
+        <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex items-center justify-end gap-2 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
           >
             Cancelar
           </button>

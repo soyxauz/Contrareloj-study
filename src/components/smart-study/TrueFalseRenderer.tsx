@@ -21,13 +21,13 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
         const isCorrect = idx === safeCorrectIndex;
         const isVerdadero = idx === 0;
 
-        let cardClasses = 'bg-[#181138]/90 border border-[#2b2053] hover:border-violet-500/60 hover:bg-[#20174a] text-slate-200 hover:scale-[1.02] active:scale-98';
+        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 hover:scale-[1.02] active:scale-98';
         let iconClasses = isVerdadero ? 'text-emerald-400' : 'text-rose-400';
         let iconBgClasses = isVerdadero ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30';
 
         if (isAnswered) {
           if (isCorrect) {
-            cardClasses = 'border-2 border-emerald-400 bg-[#10252b]/95 text-white shadow-[0_0_24px_rgba(52,211,153,0.4)] ring-2 ring-emerald-400/50 animate-cardCorrect';
+            cardClasses = 'border-2 border-emerald-400 bg-emerald-950/80 text-white shadow-[0_0_24px_rgba(52,211,153,0.4)] ring-2 ring-emerald-400/50 animate-cardCorrect';
             iconClasses = 'text-emerald-300';
             iconBgClasses = 'bg-emerald-500/25 border-emerald-400 scale-105';
           } else if (isSelected) {
@@ -35,9 +35,9 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
             iconClasses = 'text-rose-300';
             iconBgClasses = 'bg-rose-500/25 border-rose-400 scale-105';
           } else {
-            cardClasses = 'border-[#221742]/50 bg-[#120a2a]/40 text-slate-500 opacity-40';
+            cardClasses = 'border-thea-border/50 bg-thea-surface/40 text-slate-500 opacity-40';
             iconClasses = 'text-slate-600';
-            iconBgClasses = 'bg-slate-800/30 border-slate-700/30';
+            iconBgClasses = 'bg-thea-surfaceLight/30 border-thea-border/30';
           }
         }
 

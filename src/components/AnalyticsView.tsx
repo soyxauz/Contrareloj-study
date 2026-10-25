@@ -511,7 +511,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                             <span className="font-bold text-slate-100">{item.topic}</span>
                             {/* Badges de estado */}
                             {isUnstarted && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-medium border border-slate-700">
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-thea-surfaceLight text-slate-400 font-medium border border-thea-border">
                                 Sin practicar
                               </span>
                             )}
@@ -841,7 +841,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                               </span>
                             ) : (
                               <div className="flex items-center gap-2">
-                                <span className="text-[11px] px-2.5 py-1 rounded-lg font-semibold bg-slate-900/80 text-slate-400 border border-thea-border/80 flex items-center gap-1">
+                                <span className="text-[11px] px-2.5 py-1 rounded-lg font-semibold bg-thea-surface/80 text-slate-400 border border-thea-border/80 flex items-center gap-1">
                                   <Lock className="w-3 h-3 text-slate-500" />
                                   <span>Censurada</span>
                                 </span>
@@ -874,7 +874,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setQuestionToUnlock(q)}
-                                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#1b113b] hover:bg-[#251752] border border-amber-500/40 text-amber-300 text-xs font-bold shadow-lg transition-all cursor-pointer transform hover:scale-105"
+                                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-amber-500/40 text-amber-300 text-xs font-bold shadow-lg transition-all cursor-pointer transform hover:scale-105"
                               >
                                 <EyeOff className="w-4 h-4 text-amber-400" />
                                 <span>Pregunta no resuelta censurada • Clic para desbloquear</span>
@@ -1066,7 +1066,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               if (e.target === e.currentTarget) setQuestionToUnlock(null);
             }}
           >
-            <div className="bg-[#181138] border border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
+            <div className="bg-thea-surface border border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
               <button
                 type="button"
                 onClick={() => setQuestionToUnlock(null)}

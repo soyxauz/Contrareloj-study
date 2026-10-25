@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    /* RGB channels for Tailwind alpha-value support */
+    --thea-bg: 9 3 20;
+    --thea-surface: 19 9 36;
+    --thea-surface-light: 29 15 54;
+    --thea-border: 44 25 79;
+    --thea-accent: 139 92 246;
+    --thea-accent-hover: 124 58 237;
+    --thea-plus-gold: 245 158 11;
+    --thea-plus-rose: 236 72 153;
+    --thea-cyan: 6 182 212;
+
+    /* Hex references for SVG/Canvas or standard CSS properties */
+    --thea-bg-hex: #090314;
+    --thea-surface-hex: #130924;
+    --thea-surface-light-hex: #1d0f36;
+    --thea-border-hex: #2c194f;
+    --thea-accent-hex: #8b5cf6;
+  }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }

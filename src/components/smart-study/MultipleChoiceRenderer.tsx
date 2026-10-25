@@ -23,19 +23,19 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
 
-        let cardClasses = 'bg-[#181138]/90 border border-[#2b2053] hover:border-violet-500/50 hover:bg-[#20174a] text-slate-200 active:scale-[0.985]';
-        let badgeClasses = 'bg-[#2f1f58] text-[#cbb8e8]';
+        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/50 hover:bg-thea-surfaceLight text-slate-200 active:scale-[0.985]';
+        let badgeClasses = 'bg-thea-surfaceLight text-violet-200 border border-thea-border/80';
 
         if (isAnswered) {
           if (isCorrect) {
-            cardClasses = 'border-2 border-emerald-500 bg-[#10252b]/95 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] ring-1 ring-emerald-500/40 animate-cardCorrect';
-            badgeClasses = 'bg-[#22c55e] text-white scale-105';
+            cardClasses = 'border-2 border-emerald-500 bg-emerald-950/80 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] ring-1 ring-emerald-500/40 animate-cardCorrect';
+            badgeClasses = 'bg-emerald-500 text-white scale-105';
           } else if (isSelected) {
             cardClasses = 'border-2 border-rose-500 bg-rose-950/60 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] ring-1 ring-rose-500/40 animate-cardError';
-            badgeClasses = 'bg-[#ef4444] text-white scale-105';
+            badgeClasses = 'bg-rose-500 text-white scale-105';
           } else {
-            cardClasses = 'border border-[#2b2053] bg-[#181138]/90 text-slate-200';
-            badgeClasses = 'bg-[#2f1f58] text-[#cbb8e8]';
+            cardClasses = 'border border-thea-border bg-thea-surface/90 text-slate-400 opacity-60';
+            badgeClasses = 'bg-thea-surfaceLight text-violet-300/60';
           }
         }
 

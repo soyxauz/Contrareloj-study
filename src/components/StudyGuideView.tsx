@@ -572,8 +572,8 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                       onClick={() => !isGenerating && setSelectedDepth(opt.id)}
                       className={`relative p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group ${
                         isSelected
-                          ? 'bg-gradient-to-b from-[#25184a] to-[#170e33] border-violet-500 ring-2 ring-violet-400/50 shadow-lg shadow-violet-900/30'
-                          : 'bg-[#150f2e]/80 border-thea-border/80 hover:border-violet-500/50 hover:bg-[#1a133b]'
+                          ? 'bg-gradient-to-b from-thea-surfaceLight to-thea-surface border-violet-500 ring-2 ring-violet-400/50 shadow-lg shadow-violet-900/30'
+                          : 'bg-thea-surface/80 border-thea-border/80 hover:border-violet-500/50 hover:bg-thea-surfaceLight/60'
                       }`}
                     >
                       <div>
@@ -943,8 +943,8 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                     onClick={() => setModalDepthChoice(opt.id)}
                     className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
                       isSelected
-                        ? 'bg-gradient-to-b from-[#281850] to-[#170e33] border-violet-500 ring-2 ring-violet-400/50 shadow-md'
-                        : 'bg-[#150f2e]/80 border-thea-border/80 hover:border-violet-500/50 hover:bg-[#1a133b]'
+                        ? 'bg-gradient-to-b from-thea-surfaceLight to-thea-surface border-violet-500 ring-2 ring-violet-400/50 shadow-md'
+                        : 'bg-thea-surface/80 border-thea-border/80 hover:border-violet-500/50 hover:bg-thea-surfaceLight/60'
                     }`}
                   >
                     <div>

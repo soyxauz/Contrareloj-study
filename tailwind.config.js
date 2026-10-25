@@ -12,15 +12,15 @@ export default {
       },
       colors: {
         thea: {
-          bg: '#090314',
-          surface: '#130924',
-          surfaceLight: '#1d0f36',
-          border: '#2c194f',
-          accent: '#8b5cf6',
-          accentHover: '#7c3aed',
-          plusGold: '#f59e0b',
-          plusRose: '#ec4899',
-          cyan: '#06b6d4',
+          bg: 'rgb(var(--thea-bg) / <alpha-value>)',
+          surface: 'rgb(var(--thea-surface) / <alpha-value>)',
+          surfaceLight: 'rgb(var(--thea-surface-light) / <alpha-value>)',
+          border: 'rgb(var(--thea-border) / <alpha-value>)',
+          accent: 'rgb(var(--thea-accent) / <alpha-value>)',
+          accentHover: 'rgb(var(--thea-accent-hover) / <alpha-value>)',
+          plusGold: 'rgb(var(--thea-plus-gold) / <alpha-value>)',
+          plusRose: 'rgb(var(--thea-plus-rose) / <alpha-value>)',
+          cyan: 'rgb(var(--thea-cyan) / <alpha-value>)',
         }
       }
     },

@@ -574,8 +574,8 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
       {/* Aviso de bloqueo si no hay API verificada */}
       {!isAIActive && (
-        <div className="mb-6 p-6 rounded-3xl bg-slate-900/90 border border-slate-700/80 text-center shadow-xl animate-fadeIn">
-          <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 mx-auto flex items-center justify-center mb-3 text-amber-400">
+        <div className="mb-6 p-6 rounded-3xl bg-thea-surface/90 border border-thea-border text-center shadow-xl animate-fadeIn">
+          <div className="w-12 h-12 rounded-2xl bg-thea-surfaceLight border border-thea-border mx-auto flex items-center justify-center mb-3 text-amber-400">
             <Lock className="w-6 h-6" />
           </div>
           <h2 className="text-base sm:text-lg font-bold text-slate-200 mb-1">

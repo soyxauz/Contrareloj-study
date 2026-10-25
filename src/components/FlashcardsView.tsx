@@ -1114,7 +1114,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Indicador de Caso */}
             {guessWhoCases.length > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#20183d] border border-violet-500/40 text-violet-200 font-mono text-xs font-extrabold shadow-inner">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-thea-surfaceLight border border-violet-500/40 text-violet-200 font-mono text-xs font-extrabold shadow-inner">
                 <Layers className="w-3.5 h-3.5 text-violet-400" />
                 <span>Caso {currentCaseIdx + 1} de {guessWhoCases.length}</span>
               </div>
@@ -1191,7 +1191,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             {/* Tarjeta Central: Entidad Misteriosa */}
             <div className="shrink-0 my-1.5">
               {!isCaseSolved ? (
-                <div className="h-24 sm:h-26 rounded-2xl border border-violet-500/40 bg-gradient-to-r from-[#19103c] via-[#21164e] to-[#160d33] p-3 sm:p-4 flex items-center justify-between shadow-lg relative overflow-hidden">
+                <div className="h-24 sm:h-26 rounded-2xl border border-violet-500/40 bg-gradient-to-r from-thea-surface via-thea-surfaceLight to-thea-surface p-3 sm:p-4 flex items-center justify-between shadow-lg relative overflow-hidden">
                   <div className="flex items-center gap-3 sm:gap-4 z-10">
                     <div className="w-12 h-12 rounded-2xl bg-violet-600/30 border border-violet-400/40 flex items-center justify-center text-violet-300 shadow-inner">
                       <HelpCircle className="w-6 h-6 text-amber-400 animate-pulse" />
@@ -1231,7 +1231,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   </div>
                 </div>
               ) : (
-                <div className="h-24 sm:h-26 rounded-2xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-950/90 via-[#0e2920] to-teal-950/90 p-3 sm:p-4 flex items-center justify-between shadow-[0_0_25px_rgba(52,211,153,0.3)] animate-cardCorrect">
+                <div className="h-24 sm:h-26 rounded-2xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-950/90 via-emerald-900/90 to-teal-950/90 p-3 sm:p-4 flex items-center justify-between shadow-[0_0_25px_rgba(52,211,153,0.3)] animate-cardCorrect">
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300">
                       <Trophy className="w-6 h-6 text-emerald-300 animate-iconPop" />
@@ -1278,7 +1278,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   return (
                     <div
                       key={clue.level}
-                      className="h-full min-h-0 rounded-2xl border border-violet-500/40 bg-[#181138]/95 p-2.5 sm:p-3 flex flex-col justify-between shadow-sm animate-fadeIn"
+                      className="h-full min-h-0 rounded-2xl border border-violet-500/40 bg-thea-surface/95 p-2.5 sm:p-3 flex flex-col justify-between shadow-sm animate-fadeIn"
                     >
                       <div className="flex items-center justify-between pb-1 border-b border-violet-900/40 shrink-0">
                         <span className="text-[11px] font-extrabold text-violet-300 flex items-center gap-1.5 uppercase tracking-wide">
@@ -1323,7 +1323,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 return (
                   <div
                     key={clue.level}
-                    className="h-full min-h-0 rounded-2xl border border-violet-900/30 bg-[#120a2a]/50 p-2.5 sm:p-3 flex flex-col items-center justify-center text-center opacity-40 select-none"
+                    className="h-full min-h-0 rounded-2xl border border-thea-border/50 bg-thea-surface/50 p-2.5 sm:p-3 flex flex-col items-center justify-center text-center opacity-40 select-none"
                   >
                     <Lock className="w-4 h-4 text-slate-500 mb-1" />
                     <span className="text-xs font-bold text-slate-400">{clue.title}</span>
@@ -1340,7 +1340,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 const isCorrect = isCaseSolved && option === currentCase.targetTerm;
                 const isChosenWinner = selectedGuessOption === option;
 
-                let btnStyle = 'border-thea-border/80 bg-[#181138]/90 hover:border-violet-500/60 hover:bg-[#20174a] text-slate-200 cursor-pointer active:scale-[0.99]';
+                let btnStyle = 'border-thea-border/80 bg-thea-surface/90 hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 cursor-pointer active:scale-[0.99]';
                 if (isWrong) {
                   btnStyle = 'border-rose-900/60 bg-rose-950/30 text-rose-300/60 line-through opacity-50 cursor-not-allowed';
                 }
@@ -1396,8 +1396,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
         {/* Modal de Victoria Final (5 casos completados) */}
         {isGameFinished && (
-          <div className="absolute inset-0 z-30 bg-[#0f0a21]/95 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-            <div className="max-w-md w-full bg-[#181138] border border-emerald-500/40 rounded-3xl p-6 sm:p-7 text-center shadow-2xl relative overflow-hidden animate-feedbackPop">
+          <div className="absolute inset-0 z-30 bg-thea-bg/95 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+            <div className="max-w-md w-full bg-thea-surface border border-emerald-500/40 rounded-3xl p-6 sm:p-7 text-center shadow-2xl relative overflow-hidden animate-feedbackPop">
               <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center mx-auto mb-3 text-emerald-300 shadow-lg shadow-emerald-500/10">
                 <Trophy className="w-8 h-8 animate-iconPop" />
               </div>
@@ -1662,7 +1662,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <div className={`card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border-2 ${
                 isQuestionCard
                   ? 'bg-gradient-to-tr from-[#0a182a] via-[#10243e] to-[#163659] border-cyan-500/50 group-hover:border-cyan-400'
-                  : 'bg-gradient-to-tr from-[#140e2e] via-[#1a123d] to-[#25184f] border-[#332263] group-hover:border-violet-500/70'
+                  : 'bg-gradient-to-tr from-thea-bg via-thea-surface to-thea-surfaceLight border-thea-border group-hover:border-violet-500/70'
               }`}>
                 <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                   {isQuestionCard ? (
