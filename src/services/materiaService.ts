@@ -167,6 +167,246 @@ export const OPAQUE_DARK_PALETTES: Record<string, MateriaColorDef> = {
     chipActiveBgClass: 'bg-orange-600 text-slate-950 font-bold shadow-sm shadow-orange-950/40',
     chipInactiveClass: 'bg-[#361b0c] border-orange-500/40 text-orange-300 hover:border-orange-400/60',
   },
+  crimson: {
+    id: 'crimson',
+    name: 'Rojo Rubí / Sangre',
+    hex: '#f43f5e',
+    cardBgHex: '#421017',
+    cardBorderClass: 'border-rose-700/30 hover:border-rose-500/60',
+    iconBgHex: '#551720',
+    iconBorderClass: 'border-rose-500/40',
+    badgeBgHex: '#300b10',
+    badgeBgClass: 'bg-[#300b10]',
+    badgeBorderClass: 'border-rose-500/40',
+    badgeTextClass: 'text-rose-300',
+    chipActiveBgClass: 'bg-rose-600 text-white shadow-sm shadow-rose-950/40',
+    chipInactiveClass: 'bg-[#421017] border-rose-500/40 text-rose-300 hover:border-rose-400/60',
+  },
+  fuchsia: {
+    id: 'fuchsia',
+    name: 'Fucsia Orquídea',
+    hex: '#e879f9',
+    cardBgHex: '#380e3c',
+    cardBorderClass: 'border-fuchsia-600/30 hover:border-fuchsia-500/60',
+    iconBgHex: '#4a144f',
+    iconBorderClass: 'border-fuchsia-500/40',
+    badgeBgHex: '#280a2b',
+    badgeBgClass: 'bg-[#280a2b]',
+    badgeBorderClass: 'border-fuchsia-500/40',
+    badgeTextClass: 'text-fuchsia-300',
+    chipActiveBgClass: 'bg-fuchsia-600 text-white shadow-sm shadow-fuchsia-950/40',
+    chipInactiveClass: 'bg-[#380e3c] border-fuchsia-500/40 text-fuchsia-300 hover:border-fuchsia-400/60',
+  },
+  violet: {
+    id: 'violet',
+    name: 'Violeta Iris',
+    hex: '#a78bfa',
+    cardBgHex: '#241445',
+    cardBorderClass: 'border-violet-600/30 hover:border-violet-500/60',
+    iconBgHex: '#321b5e',
+    iconBorderClass: 'border-violet-500/40',
+    badgeBgHex: '#1a0e33',
+    badgeBgClass: 'bg-[#1a0e33]',
+    badgeBorderClass: 'border-violet-500/40',
+    badgeTextClass: 'text-violet-300',
+    chipActiveBgClass: 'bg-violet-600 text-white shadow-sm shadow-violet-950/40',
+    chipInactiveClass: 'bg-[#241445] border-violet-500/40 text-violet-300 hover:border-violet-400/60',
+  },
+  cobalt: {
+    id: 'cobalt',
+    name: 'Azul Cobalto',
+    hex: '#60a5fa',
+    cardBgHex: '#0d204d',
+    cardBorderClass: 'border-blue-600/30 hover:border-blue-500/60',
+    iconBgHex: '#132b66',
+    iconBorderClass: 'border-blue-500/40',
+    badgeBgHex: '#091636',
+    badgeBgClass: 'bg-[#091636]',
+    badgeBorderClass: 'border-blue-500/40',
+    badgeTextClass: 'text-blue-300',
+    chipActiveBgClass: 'bg-blue-600 text-white shadow-sm shadow-blue-950/40',
+    chipInactiveClass: 'bg-[#0d204d] border-blue-500/40 text-blue-300 hover:border-blue-400/60',
+  },
+  cerulean: {
+    id: 'cerulean',
+    name: 'Azul Cerúleo / Océano',
+    hex: '#38bdf8',
+    cardBgHex: '#0a2e47',
+    cardBorderClass: 'border-sky-700/30 hover:border-sky-500/60',
+    iconBgHex: '#0e3c5c',
+    iconBorderClass: 'border-sky-500/40',
+    badgeBgHex: '#071f30',
+    badgeBgClass: 'bg-[#071f30]',
+    badgeBorderClass: 'border-sky-500/40',
+    badgeTextClass: 'text-sky-300',
+    chipActiveBgClass: 'bg-sky-600 text-white shadow-sm shadow-sky-950/40',
+    chipInactiveClass: 'bg-[#0a2e47] border-sky-500/40 text-sky-300 hover:border-sky-400/60',
+  },
+  aquamarine: {
+    id: 'aquamarine',
+    name: 'Aguamarina / Menta',
+    hex: '#5eead4',
+    cardBgHex: '#0a3d3b',
+    cardBorderClass: 'border-teal-500/30 hover:border-teal-400/60',
+    iconBgHex: '#0e4f4c',
+    iconBorderClass: 'border-teal-400/40',
+    badgeBgHex: '#072b2a',
+    badgeBgClass: 'bg-[#072b2a]',
+    badgeBorderClass: 'border-teal-400/40',
+    badgeTextClass: 'text-teal-200',
+    chipActiveBgClass: 'bg-teal-500 text-slate-950 font-bold shadow-sm shadow-teal-950/40',
+    chipInactiveClass: 'bg-[#0a3d3b] border-teal-500/40 text-teal-200 hover:border-teal-300/60',
+  },
+  forest: {
+    id: 'forest',
+    name: 'Verde Bosque / Pino',
+    hex: '#4ade80',
+    cardBgHex: '#0c361e',
+    cardBorderClass: 'border-green-600/30 hover:border-green-500/60',
+    iconBgHex: '#124727',
+    iconBorderClass: 'border-green-500/40',
+    badgeBgHex: '#092615',
+    badgeBgClass: 'bg-[#092615]',
+    badgeBorderClass: 'border-green-500/40',
+    badgeTextClass: 'text-green-300',
+    chipActiveBgClass: 'bg-green-600 text-white shadow-sm shadow-green-950/40',
+    chipInactiveClass: 'bg-[#0c361e] border-green-500/40 text-green-300 hover:border-green-400/60',
+  },
+  lime: {
+    id: 'lime',
+    name: 'Verde Lima / Bio',
+    hex: '#a3e635',
+    cardBgHex: '#273a0e',
+    cardBorderClass: 'border-lime-600/30 hover:border-lime-500/60',
+    iconBgHex: '#344d13',
+    iconBorderClass: 'border-lime-500/40',
+    badgeBgHex: '#1a2609',
+    badgeBgClass: 'bg-[#1a2609]',
+    badgeBorderClass: 'border-lime-500/40',
+    badgeTextClass: 'text-lime-300',
+    chipActiveBgClass: 'bg-lime-600 text-slate-950 font-bold shadow-sm shadow-lime-950/40',
+    chipInactiveClass: 'bg-[#273a0e] border-lime-500/40 text-lime-300 hover:border-lime-400/60',
+  },
+  olive: {
+    id: 'olive',
+    name: 'Verde Oliva / Salvia',
+    hex: '#84cc16',
+    cardBgHex: '#2c3514',
+    cardBorderClass: 'border-lime-700/30 hover:border-lime-500/60',
+    iconBgHex: '#3a461b',
+    iconBorderClass: 'border-lime-600/40',
+    badgeBgHex: '#1e240e',
+    badgeBgClass: 'bg-[#1e240e]',
+    badgeBorderClass: 'border-lime-600/40',
+    badgeTextClass: 'text-lime-200',
+    chipActiveBgClass: 'bg-lime-700 text-white shadow-sm shadow-lime-950/40',
+    chipInactiveClass: 'bg-[#2c3514] border-lime-600/40 text-lime-200 hover:border-lime-500/60',
+  },
+  gold: {
+    id: 'gold',
+    name: 'Oro Imperial',
+    hex: '#facc15',
+    cardBgHex: '#3b300b',
+    cardBorderClass: 'border-yellow-600/30 hover:border-yellow-500/60',
+    iconBgHex: '#4d3f0f',
+    iconBorderClass: 'border-yellow-500/40',
+    badgeBgHex: '#292107',
+    badgeBgClass: 'bg-[#292107]',
+    badgeBorderClass: 'border-yellow-500/40',
+    badgeTextClass: 'text-yellow-300',
+    chipActiveBgClass: 'bg-yellow-500 text-slate-950 font-bold shadow-sm shadow-yellow-950/40',
+    chipInactiveClass: 'bg-[#3b300b] border-yellow-500/40 text-yellow-300 hover:border-yellow-400/60',
+  },
+  terracotta: {
+    id: 'terracotta',
+    name: 'Terracota / Arcilla',
+    hex: '#ea580c',
+    cardBgHex: '#421d12',
+    cardBorderClass: 'border-orange-700/30 hover:border-orange-500/60',
+    iconBgHex: '#572618',
+    iconBorderClass: 'border-orange-500/40',
+    badgeBgHex: '#2e140d',
+    badgeBgClass: 'bg-[#2e140d]',
+    badgeBorderClass: 'border-orange-500/40',
+    badgeTextClass: 'text-orange-300',
+    chipActiveBgClass: 'bg-orange-600 text-white shadow-sm shadow-orange-950/40',
+    chipInactiveClass: 'bg-[#421d12] border-orange-500/40 text-orange-300 hover:border-orange-400/60',
+  },
+  coral: {
+    id: 'coral',
+    name: 'Coral Tropical',
+    hex: '#f87171',
+    cardBgHex: '#3d191b',
+    cardBorderClass: 'border-red-600/30 hover:border-red-500/60',
+    iconBgHex: '#522124',
+    iconBorderClass: 'border-red-500/40',
+    badgeBgHex: '#291113',
+    badgeBgClass: 'bg-[#291113]',
+    badgeBorderClass: 'border-red-500/40',
+    badgeTextClass: 'text-red-300',
+    chipActiveBgClass: 'bg-red-500 text-white shadow-sm shadow-red-950/40',
+    chipInactiveClass: 'bg-[#3d191b] border-red-500/40 text-red-300 hover:border-red-400/60',
+  },
+  plum: {
+    id: 'plum',
+    name: 'Ciruela Profundo',
+    hex: '#d946ef',
+    cardBgHex: '#360c38',
+    cardBorderClass: 'border-fuchsia-700/30 hover:border-fuchsia-500/60',
+    iconBgHex: '#47104a',
+    iconBorderClass: 'border-fuchsia-500/40',
+    badgeBgHex: '#260828',
+    badgeBgClass: 'bg-[#260828]',
+    badgeBorderClass: 'border-fuchsia-500/40',
+    badgeTextClass: 'text-fuchsia-300',
+    chipActiveBgClass: 'bg-fuchsia-700 text-white shadow-sm shadow-fuchsia-950/40',
+    chipInactiveClass: 'bg-[#360c38] border-fuchsia-500/40 text-fuchsia-300 hover:border-fuchsia-400/60',
+  },
+  coffee: {
+    id: 'coffee',
+    name: 'Café Moca / Espresso',
+    hex: '#d97706',
+    cardBgHex: '#2e1e12',
+    cardBorderClass: 'border-amber-700/30 hover:border-amber-600/60',
+    iconBgHex: '#3d2818',
+    iconBorderClass: 'border-amber-600/40',
+    badgeBgHex: '#1f140c',
+    badgeBgClass: 'bg-[#1f140c]',
+    badgeBorderClass: 'border-amber-600/40',
+    badgeTextClass: 'text-amber-200',
+    chipActiveBgClass: 'bg-amber-700 text-white shadow-sm shadow-amber-950/40',
+    chipInactiveClass: 'bg-[#2e1e12] border-amber-600/40 text-amber-200 hover:border-amber-500/60',
+  },
+  zinc: {
+    id: 'zinc',
+    name: 'Zinc Platino / Neutro',
+    hex: '#a1a1aa',
+    cardBgHex: '#1e1e24',
+    cardBorderClass: 'border-zinc-700/40 hover:border-zinc-500/60',
+    iconBgHex: '#272730',
+    iconBorderClass: 'border-zinc-600/40',
+    badgeBgHex: '#141418',
+    badgeBgClass: 'bg-[#141418]',
+    badgeBorderClass: 'border-zinc-600/40',
+    badgeTextClass: 'text-zinc-300',
+    chipActiveBgClass: 'bg-zinc-700 text-white shadow-sm shadow-zinc-950/40',
+    chipInactiveClass: 'bg-[#1e1e24] border-zinc-700/40 text-zinc-300 hover:border-zinc-600/60',
+  },
+  wine: {
+    id: 'wine',
+    name: 'Vino Borgoña / Sangría',
+    hex: '#e11d48',
+    cardBgHex: '#360b18',
+    cardBorderClass: 'border-rose-800/40 hover:border-rose-600/60',
+    iconBgHex: '#4a1022',
+    iconBorderClass: 'border-rose-700/40',
+    badgeBgHex: '#240710',
+    badgeBgClass: 'bg-[#240710]',
+    badgeBorderClass: 'border-rose-700/40',
+    badgeTextClass: 'text-rose-200',
+    chipActiveBgClass: 'bg-rose-800 text-white shadow-sm shadow-rose-950/40',
+    chipInactiveClass: 'bg-[#360b18] border-rose-800/40 text-rose-200 hover:border-rose-700/60',
+  },
   slate: {
     id: 'slate',
     name: 'Pizarra Grafito',
@@ -184,7 +424,34 @@ export const OPAQUE_DARK_PALETTES: Record<string, MateriaColorDef> = {
   },
 };
 
-const PALETTE_ROTATION = ['blue', 'emerald', 'amber', 'purple', 'indigo', 'rose', 'teal', 'cyan', 'orange'];
+const PALETTE_ROTATION = [
+  'blue',
+  'emerald',
+  'amber',
+  'purple',
+  'indigo',
+  'rose',
+  'teal',
+  'cyan',
+  'orange',
+  'crimson',
+  'violet',
+  'forest',
+  'gold',
+  'terracotta',
+  'fuchsia',
+  'cobalt',
+  'aquamarine',
+  'lime',
+  'coral',
+  'plum',
+  'coffee',
+  'wine',
+  'cerulean',
+  'olive',
+  'zinc',
+  'slate',
+];
 export const getMateriaStorageKey = (userId?: string | null): string => {
   return userId ? `thea_custom_materias_${userId}` : 'thea_custom_materias';
 };
@@ -347,30 +614,35 @@ export function getColorIdForCategory(categoryName: string | undefined, userId?:
   }
 
   // 2. Afinidad semántica determinista por materia (inmune a reordenamientos)
-  if (lower.includes('meteorolog') || lower.includes('clima') || lower.includes('atmósfer') || lower.includes('tiempo')) return 'blue';
+  if (lower.includes('meteorolog') || lower.includes('clima') || lower.includes('atmósfer') || lower.includes('tiempo')) return 'cerulean';
   if (lower.includes('gastro') || lower.includes('digestiv') || lower.includes('esófago') || lower.includes('estómag') || lower.includes('hígado') || lower.includes('intest')) return 'emerald';
   if (lower.includes('otorrino') || lower.includes('oído') || lower.includes('nariz') || lower.includes('laring') || lower.includes('audiolog')) return 'amber';
-  if (lower.includes('bioquím') || lower.includes('metabol') || lower.includes('enzim') || lower.includes('molecular')) return 'purple';
+  if (lower.includes('bioquím') || lower.includes('metabol') || lower.includes('enzim') || lower.includes('molecular')) return 'violet';
   if (lower.includes('dermato') || lower.includes('piel') || lower.includes('cutáne') || lower.includes('herpes') || lower.includes('tegument')) return 'indigo';
   if (lower.includes('ginecol') || lower.includes('obstetr') || lower.includes('embaraz') || lower.includes('endometri') || lower.includes('parto')) return 'rose';
-  if (lower.includes('neumo') || lower.includes('pulmon') || lower.includes('respirat') || lower.includes('asma') || lower.includes('tórax')) return 'teal';
-  if (lower.includes('cardio') || lower.includes('vascular') || lower.includes('corazón') || lower.includes('hematol') || lower.includes('sangre')) return 'rose';
-  if (lower.includes('neuro') || lower.includes('cerebro') || lower.includes('psiquiatr') || lower.includes('psicolog') || lower.includes('mental')) return 'purple';
-  if (lower.includes('pediatr') || lower.includes('infant') || lower.includes('niñ')) return 'cyan';
-  if (lower.includes('traumato') || lower.includes('ortoped') || lower.includes('óseo') || lower.includes('hueso') || lower.includes('múscul')) return 'orange';
-  if (lower.includes('oftalmo') || lower.includes('ojo') || lower.includes('visión') || lower.includes('óptica')) return 'cyan';
-  if (lower.includes('nefro') || lower.includes('urolog') || lower.includes('renal') || lower.includes('riñón')) return 'amber';
+  if (lower.includes('neumo') || lower.includes('pulmon') || lower.includes('respirat') || lower.includes('asma') || lower.includes('tórax')) return 'aquamarine';
+  if (lower.includes('hematol') || lower.includes('sangre') || lower.includes('anemia') || lower.includes('leucem') || lower.includes('plaquet')) return 'crimson';
+  if (lower.includes('cirug') || lower.includes('quirúrg') || lower.includes('quirófano') || lower.includes('operatori')) return 'wine';
+  if (lower.includes('cardio') || lower.includes('vascular') || lower.includes('corazón') || lower.includes('hemodinám')) return 'coral';
+  if (lower.includes('neuro') || lower.includes('cerebro') || lower.includes('nervios')) return 'purple';
+  if (lower.includes('psiquiatr') || lower.includes('psicolog') || lower.includes('mental') || lower.includes('conducta')) return 'fuchsia';
+  if (lower.includes('pediatr') || lower.includes('infant') || lower.includes('niñ') || lower.includes('neonat')) return 'cyan';
+  if (lower.includes('traumato') || lower.includes('ortoped') || lower.includes('óseo') || lower.includes('hueso') || lower.includes('múscul') || lower.includes('articulac')) return 'terracotta';
+  if (lower.includes('oftalmo') || lower.includes('ojo') || lower.includes('visión') || lower.includes('óptica') || lower.includes('retina')) return 'cobalt';
+  if (lower.includes('nefro') || lower.includes('urolog') || lower.includes('renal') || lower.includes('riñón')) return 'gold';
   if (lower.includes('endocrin') || lower.includes('hormon') || lower.includes('tiroides') || lower.includes('diabetes')) return 'orange';
-  if (lower.includes('infectolog') || lower.includes('microbiol') || lower.includes('bacteri') || lower.includes('virolog') || lower.includes('inmunol')) return 'teal';
+  if (lower.includes('infectolog') || lower.includes('microbiol') || lower.includes('bacteri') || lower.includes('virolog') || lower.includes('inmunol') || lower.includes('parásit')) return 'teal';
   if (lower.includes('fisiolog') || lower.includes('médic') || lower.includes('medic') || lower.includes('salud') || lower.includes('farmac')) return 'blue';
-  if (lower.includes('bio') || lower.includes('ecolog') || lower.includes('botán')) return 'emerald';
-  if (lower.includes('derecho') || lower.includes('ley') || lower.includes('legal') || lower.includes('juríd')) return 'amber';
-  if (lower.includes('computer') || lower.includes('software') || lower.includes('sistemas') || lower.includes('algoritmo') || lower.includes('código')) return 'indigo';
-  if (lower.includes('human') || lower.includes('filosof') || lower.includes('histori') || lower.includes('literat') || lower.includes('arte')) return 'purple';
-  if (lower.includes('econ') || lower.includes('finanz') || lower.includes('comerc')) return 'rose';
+  if (lower.includes('genétic') || lower.includes('adn') || lower.includes('arn') || lower.includes('herenci')) return 'lime';
+  if (lower.includes('nutric') || lower.includes('dietét') || lower.includes('alimento') || lower.includes('salvia')) return 'olive';
+  if (lower.includes('ecolog') || lower.includes('botán') || lower.includes('medio ambiente') || lower.includes('forest')) return 'forest';
+  if (lower.includes('derecho') || lower.includes('ley') || lower.includes('legal') || lower.includes('juríd') || lower.includes('bioétic')) return 'coffee';
+  if (lower.includes('computer') || lower.includes('software') || lower.includes('sistemas') || lower.includes('algoritmo') || lower.includes('código') || lower.includes('programac')) return 'indigo';
+  if (lower.includes('human') || lower.includes('filosof') || lower.includes('histori') || lower.includes('literat') || lower.includes('arte')) return 'plum';
+  if (lower.includes('econ') || lower.includes('finanz') || lower.includes('comerc') || lower.includes('administrac')) return 'zinc';
   if (lower.includes('químic') || lower.includes('laborat')) return 'teal';
-  if (lower.includes('matemát') || lower.includes('físic') || lower.includes('álgebra')) return 'cyan';
-  if (lower.includes('idioma') || lower.includes('comunic')) return 'orange';
+  if (lower.includes('matemát') || lower.includes('físic') || lower.includes('álgebra') || lower.includes('estadíst')) return 'blue';
+  if (lower.includes('idioma') || lower.includes('comunic') || lower.includes('lenguaj')) return 'orange';
 
   // 3. Hash determinista estricto del nombre si no hubo coincidencia semántica
   let hash = 0;

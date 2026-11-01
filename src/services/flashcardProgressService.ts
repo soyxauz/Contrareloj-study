@@ -201,14 +201,47 @@ export const flashcardProgressService = {
   },
 
   /**
-   * Guarda o actualiza un lote completo de progresos de flashcards (ej. descargados de Google Drive).
+   * Guarda o actualiza un lote completo de progresos de flashcards con fusión aditiva de dominio.
    */
   saveAllFlashcardProgress(userId: string | null, progressMap: Record<string, FlashcardProgressState>): void {
     if (!progressMap || typeof progressMap !== 'object') return;
-    for (const [kitId, state] of Object.entries(progressMap)) {
-      if (kitId && state && state.masteryMap) {
-        this.saveFlashcardProgress(userId, kitId, state);
+    for (const [kitId, incomingState] of Object.entries(progressMap)) {
+      if (!kitId || !incomingState || !incomingState.masteryMap) continue;
+
+      const currentState = this.getFlashcardProgress(userId, kitId);
+      if (!currentState) {
+        this.saveFlashcardProgress(userId, kitId, incomingState);
+        continue;
       }
+
+      // Fusión aditiva: el nivel más alto de dominio prevalece (mastered > known > to-learn)
+      type MasteryLevel = 'to-learn' | 'known' | 'mastered';
+      const rank = (lvl: string) => lvl === 'mastered' ? 3 : (lvl === 'known' ? 2 : 1);
+      const mergedMastery: Record<string, MasteryLevel> = {
+        ...(currentState.masteryMap || {}),
+      };
+
+      for (const [cardId, incLvl] of Object.entries(incomingState.masteryMap || {})) {
+        const curLvl = mergedMastery[cardId];
+        if (!curLvl || rank(incLvl) >= rank(curLvl)) {
+          mergedMastery[cardId] = incLvl as MasteryLevel;
+        }
+      }
+
+      const merged: FlashcardProgressState = {
+        ...incomingState,
+        masteryMap: mergedMastery,
+        currentIdx: Math.max(currentState.currentIdx || 0, incomingState.currentIdx || 0),
+        cards: incomingState.cards || currentState.cards,
+        archivedCards: incomingState.archivedCards || currentState.archivedCards,
+        updatedAt: Math.max(currentState.updatedAt || 0, incomingState.updatedAt || 0, Date.now()),
+      };
+
+      this.saveFlashcardProgress(userId, kitId, merged);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('thea_flashcard_saved', { detail: { userId } }));
     }
   },
 

@@ -117,16 +117,30 @@ function saveStoredUsers(users: StoredUserRecord[]): void {
 export function sanitizeSmartStudySession(session: SmartStudySessionState | null | undefined): SmartStudySessionState | null {
   if (!session || typeof session !== 'object') return null;
 
+  let l1 = typeof session.levelCorrectCounts?.[1] === 'number' ? Math.max(0, session.levelCorrectCounts[1]) : 0;
+  let l2 = typeof session.levelCorrectCounts?.[2] === 'number' ? Math.max(0, session.levelCorrectCounts[2]) : 0;
+  let l3 = typeof session.levelCorrectCounts?.[3] === 'number' ? Math.max(0, session.levelCorrectCounts[3]) : 0;
+
+  // Si no venía levelCorrectCounts detallado pero sí levelCorrectCount
+  if (!session.levelCorrectCounts && typeof session.levelCorrectCount === 'number') {
+    if (session.level === 1) l1 = session.levelCorrectCount;
+    else if (session.level === 2) { l1 = 25; l2 = session.levelCorrectCount; }
+    else if (session.level === 3) { l1 = 25; l2 = 25; l3 = session.levelCorrectCount; }
+  }
+
+  const rawCorrect = l1 + l2 + l3;
   const history = Array.isArray(session.history) ? session.history : [];
   const correctInHistory = history.filter((h: any) => h && h.isCorrect).length;
+
   const answeredTotal = Math.max(
     typeof session.questionsAnsweredTotal === 'number' ? session.questionsAnsweredTotal : 0,
     history.length,
-    correctInHistory
+    correctInHistory,
+    rawCorrect
   );
 
-  // Si no hay ninguna pregunta respondida ni aciertos en historial, el nivel exacto es 1 con 0 aciertos
-  if (answeredTotal === 0 && correctInHistory === 0) {
+  // Si no hay ninguna pregunta respondida ni aciertos en ningún lado, el nivel exacto es 1 con 0 aciertos
+  if (answeredTotal === 0 && correctInHistory === 0 && rawCorrect === 0) {
     return {
       ...session,
       level: 1,
@@ -137,35 +151,15 @@ export function sanitizeSmartStudySession(session: SmartStudySessionState | null
     };
   }
 
-  let l1 = typeof session.levelCorrectCounts?.[1] === 'number' ? session.levelCorrectCounts[1] : 0;
-  let l2 = typeof session.levelCorrectCounts?.[2] === 'number' ? session.levelCorrectCounts[2] : 0;
-  let l3 = typeof session.levelCorrectCounts?.[3] === 'number' ? session.levelCorrectCounts[3] : 0;
-
-  // Si no venía levelCorrectCounts detallado
-  if (!session.levelCorrectCounts && typeof session.levelCorrectCount === 'number') {
-    if (session.level === 1) l1 = session.levelCorrectCount;
-    else if (session.level === 2) { l1 = 25; l2 = session.levelCorrectCount; }
-    else if (session.level === 3) { l1 = 25; l2 = 25; l3 = session.levelCorrectCount; }
-  }
-
-  // Si los aciertos declarados exceden el total respondido, calibrar con el historial
-  const claimedCorrect = l1 + l2 + l3;
-  if (claimedCorrect > answeredTotal && answeredTotal > 0) {
-    if (correctInHistory > 0) {
-      l1 = history.filter((h: any) => h.isCorrect && (h.level === 1 || !h.level)).length;
-      l2 = history.filter((h: any) => h.isCorrect && h.level === 2).length;
-      l3 = history.filter((h: any) => h.isCorrect && h.level === 3).length;
-    } else {
-      l1 = Math.min(25, answeredTotal);
-      l2 = 0;
-      l3 = 0;
-    }
-  }
-
   // Determinar el nivel real exacto ganado:
+  // Nivel 1: < 25 aciertos en L1
+  // Nivel 2: nivel 1 completado (>= 25) y nivel 2 en progreso (< 25)
+  // Nivel 3: niveles 1 y 2 completados (>= 25 cada uno)
   let realLevel: 1 | 2 | 3 = 1;
   if (l1 >= 25) {
+    l1 = 25;
     if (l2 >= 25) {
+      l2 = 25;
       realLevel = 3;
     } else {
       realLevel = 2;
@@ -174,10 +168,6 @@ export function sanitizeSmartStudySession(session: SmartStudySessionState | null
   } else {
     realLevel = 1;
     l2 = 0;
-    l3 = 0;
-  }
-
-  if (realLevel === 2) {
     l3 = 0;
   }
 
@@ -580,47 +570,62 @@ export const authService = {
 
     const localSession = sanitizeSmartStudySession(rawCurrent) || rawCurrent;
 
-    // Comparar aciertos acumulados reales para que la sincronización sea exacta
-    const localTotalCorrect = (localSession.levelCorrectCounts?.[1] || 0) + (localSession.levelCorrectCounts?.[2] || 0) + (localSession.levelCorrectCounts?.[3] || 0);
-    const incomingTotalCorrect = (sanitizedIncoming.levelCorrectCounts?.[1] || 0) + (sanitizedIncoming.levelCorrectCounts?.[2] || 0) + (sanitizedIncoming.levelCorrectCounts?.[3] || 0);
+    // Fusión aditiva inteligente (conserva el mayor nivel alcanzado y el máximo de aciertos por nivel de ambas máquinas)
+    const mergedL1 = Math.min(25, Math.max(localSession.levelCorrectCounts?.[1] || 0, sanitizedIncoming.levelCorrectCounts?.[1] || 0));
+    const mergedL2 = Math.min(25, Math.max(localSession.levelCorrectCounts?.[2] || 0, sanitizedIncoming.levelCorrectCounts?.[2] || 0));
+    const mergedL3 = Math.min(25, Math.max(localSession.levelCorrectCounts?.[3] || 0, sanitizedIncoming.levelCorrectCounts?.[3] || 0));
 
-    let isIncomingBetter = false;
-    if (incomingTotalCorrect > localTotalCorrect) {
-      isIncomingBetter = true;
-    } else if (incomingTotalCorrect === localTotalCorrect) {
-      const localAnswered = localSession.questionsAnsweredTotal || (localSession.history ? localSession.history.length : 0);
-      const incomingAnswered = sanitizedIncoming.questionsAnsweredTotal || (sanitizedIncoming.history ? sanitizedIncoming.history.length : 0);
-      if (incomingAnswered > localAnswered) {
-        isIncomingBetter = true;
-      } else if (incomingAnswered === localAnswered) {
-        isIncomingBetter = (sanitizedIncoming.lastUpdated || 0) > (localSession.lastUpdated || 0);
+    let finalLevel: 1 | 2 | 3 = 1;
+    let finalCurrentCount = mergedL1;
+    if (mergedL1 >= 25) {
+      if (mergedL2 >= 25) {
+        finalLevel = 3;
+        finalCurrentCount = mergedL3;
+      } else {
+        finalLevel = 2;
+        finalCurrentCount = mergedL2;
       }
     }
 
-    const baseSession = isIncomingBetter ? sanitizedIncoming : localSession;
-    const otherSession = isIncomingBetter ? localSession : sanitizedIncoming;
-
     const mergedRevealed = Array.from(new Set([
-      ...(baseSession.revealedQuestionIds || []),
-      ...(otherSession.revealedQuestionIds || []),
+      ...(localSession.revealedQuestionIds || []),
+      ...(sanitizedIncoming.revealedQuestionIds || []),
     ]));
 
-    const existingHistKeys = new Set((baseSession.history || []).map((h: any) => `${h.questionId || ''}_${h.timestamp || ''}`));
-    const mergedHistory = [...(baseSession.history || [])];
-    for (const h of (otherSession.history || [])) {
+    const existingHistKeys = new Set((localSession.history || []).map((h: any) => `${h.questionId || ''}_${h.timestamp || ''}`));
+    const mergedHistory = [...(localSession.history || [])];
+    for (const h of (sanitizedIncoming.history || [])) {
       const key = `${h.questionId || ''}_${h.timestamp || ''}`;
       if (!existingHistKeys.has(key)) {
         mergedHistory.push(h);
         existingHistKeys.add(key);
       }
     }
+    // Ordenar historial por fecha más reciente
+    mergedHistory.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    // Determinar cuál sesión tenía el contexto activo más reciente para cursor y estado de pregunta actual
+    const isIncomingMoreRecent = (sanitizedIncoming.lastUpdated || 0) >= (localSession.lastUpdated || 0);
+    const activeContext = isIncomingMoreRecent ? sanitizedIncoming : localSession;
 
     const mergedSession: SmartStudySessionState = {
-      ...baseSession,
+      ...activeContext,
+      level: finalLevel,
+      levelCorrectCount: finalCurrentCount,
+      levelCorrectCounts: {
+        1: mergedL1,
+        2: finalLevel >= 2 ? mergedL2 : 0,
+        3: finalLevel === 3 ? mergedL3 : 0,
+      },
       revealedQuestionIds: mergedRevealed,
       history: mergedHistory.slice(0, 50),
-      questionsAnsweredTotal: Math.max(baseSession.questionsAnsweredTotal || 0, otherSession.questionsAnsweredTotal || 0, mergedHistory.length),
-      lastUpdated: Math.max(baseSession.lastUpdated || 0, otherSession.lastUpdated || 0, Date.now()),
+      questionsAnsweredTotal: Math.max(
+        localSession.questionsAnsweredTotal || 0,
+        sanitizedIncoming.questionsAnsweredTotal || 0,
+        mergedL1 + mergedL2 + mergedL3,
+        mergedHistory.length
+      ),
+      lastUpdated: Math.max(localSession.lastUpdated || 0, sanitizedIncoming.lastUpdated || 0, Date.now()),
     };
 
     this.saveSmartStudySession(userId, kitId, mergedSession);
@@ -650,6 +655,10 @@ export const authService = {
           } catch {}
         }
       }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
     }
   },
 

@@ -2043,6 +2043,46 @@ export const googleDriveService = {
   },
 
   /**
+   * Descarga e integra rápidamente solo el progreso de Smart Study y Flashcards desde Google Drive (sub-segundo).
+   * Ideal para cuando el usuario cambia de ventana o regresa a la aplicación desde otra PC.
+   */
+  async pullProgressFromDrive(userId: string): Promise<boolean> {
+    if (!userId || userId === 'guest') return false;
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) return false;
+
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const userProgressFileName = `thea_progress_${userId}.json`;
+      const progressFile = await this.findFileInFolder(token, rootFolderId, userProgressFileName) ||
+                           await this.findFileInFolder(token, rootFolderId, 'thea_progress.json');
+
+      if (!progressFile) return false;
+
+      const cloudProgress = await this.readJsonFromDrive<any>(token, progressFile.id);
+      if (!cloudProgress || typeof cloudProgress !== 'object') return false;
+
+      if (cloudProgress.sessions && typeof cloudProgress.sessions === 'object') {
+        authService.saveAllSmartStudySessions(userId, cloudProgress.sessions, cloudProgress.revealedQuestions);
+      }
+      if (cloudProgress.flashcards && typeof cloudProgress.flashcards === 'object') {
+        authService.saveAllFlashcardProgress(userId, cloudProgress.flashcards);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
+      }
+      return true;
+    } catch (e: any) {
+      console.warn('[GoogleDriveService] Error en pullProgressFromDrive:', e);
+      return false;
+    }
+  },
+
+  /**
    * Sube inmediatamente a Google Drive los colores y materias personalizadas en segundo plano.
    * Realiza fusión previa por marca temporal para que prevalezca la modificación más reciente.
    */

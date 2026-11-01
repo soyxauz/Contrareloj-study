@@ -521,25 +521,62 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
     let debounceTimer: any = null;
+    let hasPendingPush = false;
+    let lastPullTime = 0;
+
+    const flushPush = () => {
+      if (!hasPendingPush) return;
+      hasPendingPush = false;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (isLoggingOutRef.current) return;
+      if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+
+      googleDriveService.pushProgressToDrive(currentUser.id).catch((err) => {
+        console.warn('[App] Error al sincronizar progreso en Google Drive:', err);
+      });
+    };
 
     const handleProgressSaved = () => {
       if (isLoggingOutRef.current) return;
       if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
 
+      hasPendingPush = true;
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        googleDriveService.pushProgressToDrive(currentUser.id).catch((err) => {
-          console.warn('[App] Error al sincronizar progreso en Google Drive:', err);
-        });
-      }, 2500);
+        flushPush();
+      }, 500);
+    };
+
+    // Al regresar a la pestaña o cambiar de ventana (ej. tras estudiar en otra PC), comprobar y fusionar novedades
+    const handleTabFocus = () => {
+      if (isLoggingOutRef.current) return;
+      if (document.visibilityState === 'hidden') {
+        flushPush();
+        return;
+      }
+      const now = Date.now();
+      if (now - lastPullTime > 15000) {
+        lastPullTime = now;
+        if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+          googleDriveService.pullProgressFromDrive(currentUser.id).catch(() => {});
+        }
+      }
     };
 
     window.addEventListener('thea_session_saved', handleProgressSaved);
     window.addEventListener('thea_flashcard_saved', handleProgressSaved);
+    window.addEventListener('visibilitychange', handleTabFocus);
+    window.addEventListener('pagehide', flushPush);
+    window.addEventListener('beforeunload', flushPush);
+
     return () => {
-      clearTimeout(debounceTimer);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      flushPush();
       window.removeEventListener('thea_session_saved', handleProgressSaved);
       window.removeEventListener('thea_flashcard_saved', handleProgressSaved);
+      window.removeEventListener('visibilitychange', handleTabFocus);
+      window.removeEventListener('pagehide', flushPush);
+      window.removeEventListener('beforeunload', flushPush);
     };
   }, [currentUser]);
 

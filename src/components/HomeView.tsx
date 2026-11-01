@@ -1559,7 +1559,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                       </div>
 
                       {/* Paleta color en edicion */}
-                      <div className="flex flex-wrap gap-1.5 pt-1">
+                      <div className="flex flex-wrap gap-1.5 pt-1 max-h-48 overflow-y-auto pr-1">
                         {paletteKeys.map(key => {
                           const p = OPAQUE_DARK_PALETTES[key];
                           return (
@@ -1800,7 +1800,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                 <label className="text-[11px] font-semibold text-slate-400 block mb-1.5">
                   Color opaco:
                 </label>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1">
                   {paletteKeys.map(key => {
                     const pal = OPAQUE_DARK_PALETTES[key];
                     const isSelected = newMateriaColor === key;

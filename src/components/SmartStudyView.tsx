@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import type { StudyKit, Question, StudyMode, DocumentAsset, ShortAnswerEvaluation, SmartStudyTypeFilters } from '../types';
 import { authService } from '../services/authService';
+import { googleDriveService } from '../services/googleDriveService';
 import {
   CheckCircle2,
   XCircle,
@@ -1347,6 +1348,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     return () => {
       if (latestSessionRef.current && kit?.id) {
         authService.saveSmartStudySession(userId || null, kit.id, latestSessionRef.current);
+        if (userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
+          googleDriveService.pushProgressToDrive(userId).catch(() => {});
+        }
       }
     };
   }, [userId, kit?.id]);
