@@ -149,6 +149,77 @@ const parseExplanationDetails = (rawText: string) => {
   return { main, reference };
 };
 
+/**
+ * Normaliza y sanea la estructura de una pregunta para garantizar integridad pedagógica:
+ * 1. Si la pregunta tiene un prefijo mutado ('tf-', 'mc-', 'sa-'), recupera la pregunta original del kit si existe.
+ * 2. Si la pregunta está marcada como 'true-false' o tiene opciones ['Verdadero', 'Falso'], pero su enunciado
+ *    contiene fórmulas de selección múltiple (ej. 'cuál de los siguientes', 'selecciona', 'indica la opción'):
+ *    - Si aún conserva 3 o más opciones reales, la restaura como 'multiple-choice'.
+ *    - Si solo tiene ['Verdadero', 'Falso'], reestructura el enunciado a una afirmación conceptual declarativa
+ *      para que la evaluación de Verdadero/Falso tenga coherencia gramatical y didáctica.
+ */
+function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Question {
+  if (!q) return q;
+
+  // 1. Recuperar del kit original si tenía un id mutado artificialmente (ej. tf-*, mc-*, sa-*)
+  if (allKitQuestions && allKitQuestions.length > 0 && /^(tf-|sa-|mc-)/.test(q.id)) {
+    const rawId = q.id.replace(/^(tf-|sa-|mc-)/, '');
+    const original = allKitQuestions.find(item => item.id === rawId);
+    if (original && Array.isArray(original.options) && original.options.length >= 3) {
+      return { ...original };
+    }
+  }
+
+  const promptText = q.question || '';
+  const isSelectionPrompt = /\b(cu[aá]l(es)? de (las|los)|selecciona|indica|señala (la|el|cu[aá]l)|de las siguientes|de los siguientes|de las alternativas|todas las siguientes)\b/i.test(promptText);
+
+  // 2. Si tiene 3 o más opciones reales y estaba erróneamente tipada como true-false, restaurarla a multiple-choice
+  if (Array.isArray(q.options) && q.options.length >= 3) {
+    if (q.type === 'true-false') {
+      return {
+        ...q,
+        type: 'multiple-choice',
+      };
+    }
+    return q;
+  }
+
+  // 3. Si solo tiene opciones ['Verdadero', 'Falso'] pero el enunciado pide seleccionar opciones
+  const isTFOptions = Array.isArray(q.options) &&
+    q.options.length === 2 &&
+    q.options.some(o => /verdadero/i.test(o)) &&
+    q.options.some(o => /falso/i.test(o));
+
+  if ((q.type === 'true-false' || isTFOptions) && isSelectionPrompt) {
+    let assertion = '';
+    if (q.idealAnswer && q.idealAnswer.trim().length > 10 && !/\bcu[aá]l\b/i.test(q.idealAnswer)) {
+      assertion = q.idealAnswer.trim();
+    } else if (q.explanation) {
+      const cleanExpl = q.explanation
+        .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '')
+        .replace(/^[*\s]*(Verdadero|Falso|Opción [A-D]|Justificación|Fundamentación):?\s*/i, '')
+        .trim();
+      const firstSentence = cleanExpl.split(/\.\s+/)[0]?.trim();
+      if (firstSentence && firstSentence.length > 12) {
+        assertion = firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
+      }
+    }
+
+    if (assertion) {
+      const topicTag = q.topic ? ` sobre **${q.topic}**` : '';
+      return {
+        ...q,
+        type: 'true-false',
+        question: `Evalúa la veracidad de la siguiente proposición conceptual${topicTag}:\n\n«${assertion}»`,
+        options: ['Verdadero', 'Falso'],
+        correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+      };
+    }
+  }
+
+  return q;
+}
+
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
   // ── Session Restoration (Memoria Total en Tiempo Real) ────────────────────
   const savedSession = useMemo(() => {
@@ -781,49 +852,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     return 'multipleChoice';
   }, []);
 
-  const adaptQuestionToCategory = useCallback((baseQ: Question, targetCat: keyof SmartStudyTypeFilters): Question => {
+  const adaptQuestionToCategory = useCallback((baseQ: Question, _targetCat: keyof SmartStudyTypeFilters): Question => {
     if (!baseQ) return baseQ;
-    if (getCategoryForQuestion(baseQ) === targetCat) return baseQ;
-
-    if (targetCat === 'shortAnswer') {
-      const correctOpt = baseQ.options && baseQ.correctIndex !== undefined
-        ? baseQ.options[baseQ.correctIndex]
-        : undefined;
-      return {
-        ...baseQ,
-        id: baseQ.id.startsWith('sa-') ? baseQ.id : `sa-${baseQ.id}`,
-        type: 'short-answer',
-        idealAnswer: baseQ.idealAnswer || correctOpt || baseQ.explanation,
-        keyPoints: baseQ.keyPoints || (correctOpt ? correctOpt.split(' ').filter(w => w.length > 4) : undefined),
-        rubric: baseQ.rubric || 'Respuesta concisa que sintetice con exactitud el concepto evaluado.',
-        acceptableAnswers: baseQ.acceptableAnswers || (correctOpt ? [correctOpt] : undefined),
-      };
-    }
-
-    if (targetCat === 'trueFalse') {
-      return {
-        ...baseQ,
-        id: baseQ.id.startsWith('tf-') ? baseQ.id : `tf-${baseQ.id}`,
-        type: 'true-false',
-        options: ['Verdadero', 'Falso'],
-        correctIndex: 0,
-      };
-    }
-
-    if (targetCat === 'multipleChoice') {
-      return {
-        ...baseQ,
-        id: baseQ.id.startsWith('mc-') ? baseQ.id : `mc-${baseQ.id}`,
-        type: 'multiple-choice',
-        options: baseQ.options && baseQ.options.length >= 2
-          ? baseQ.options
-          : ['Opción A fundamentada', 'Opción B plausible', 'Opción C alternativa', 'Opción D alternativa'],
-        correctIndex: baseQ.correctIndex ?? 0,
-      };
-    }
-
-    return baseQ;
-  }, [getCategoryForQuestion]);
+    return sanitizeQuestionStructure(baseQ, kit.questions);
+  }, [kit.questions]);
 
   // Helper determinista para resolver la siguiente pregunta al avanzar sin repeticiones inmediatas
   const resolveNextQuestion = useCallback((
@@ -886,7 +918,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           getCategoryForQuestion(candidate) === targetCat &&
           isFalseConceptQuestion(candidate)
         ) {
-          return candidate;
+          return sanitizeQuestionStructure(candidate, kit.questions);
         }
       }
     }
@@ -901,7 +933,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         getCategoryForQuestion(candidate) === targetCat &&
         (!shouldPreferFalseConcept ? !isFalseConceptQuestion(candidate) : true)
       ) {
-        return candidate;
+        return sanitizeQuestionStructure(candidate, kit.questions);
       }
     }
 
@@ -913,35 +945,53 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         !answeredQuestionIdsRef.current.has(candidate.id) &&
         getCategoryForQuestion(candidate) === targetCat
       ) {
-        return candidate;
+        return sanitizeQuestionStructure(candidate, kit.questions);
       }
     }
 
-    // Prioridad 2: Buscar cualquier no respondida del nivel y adaptarla al formato seleccionado
+    // Si targetCat era 'trueFalse' y el nivel carece de preguntas nativas de Verdadero/Falso:
+    // Disparar en segundo plano la generación predictiva para incorporar preguntas legítimas de V/F al kit
+    if (targetCat === 'trueFalse' && !pool.some(q => getCategoryForQuestion(q) === 'trueFalse')) {
+      checkAndPrefetchQuestions(targetLevel, targetIndex);
+    }
+
+    // Prioridad 2: Buscar cualquier no respondida del nivel que coincida con ALGUNA de las categorías activas
+    for (const i of shuffledIndices) {
+      const candidate = pool[i];
+      if (
+        candidate.id !== excludeQuestionId &&
+        !answeredQuestionIdsRef.current.has(candidate.id) &&
+        safeActiveCategories.includes(getCategoryForQuestion(candidate))
+      ) {
+        return sanitizeQuestionStructure(candidate, kit.questions);
+      }
+    }
+
+    // Prioridad 2b: Buscar cualquier no respondida del nivel
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (candidate.id !== excludeQuestionId && !answeredQuestionIdsRef.current.has(candidate.id)) {
-        return adaptQuestionToCategory(candidate, targetCat);
+        return sanitizeQuestionStructure(candidate, kit.questions);
       }
     }
 
-    // Prioridad 3: Si ya se respondieron todas las del nivel, elegir al azar una del pool y adaptarla
+    // Prioridad 3: Si ya se respondieron todas las del nivel, elegir al azar una del pool
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (candidate.id !== excludeQuestionId) {
-        return adaptQuestionToCategory(candidate, targetCat);
+        return sanitizeQuestionStructure(candidate, kit.questions);
       }
     }
 
     // Prioridad 4: En kit general
     const randomKitQ = kit.questions[Math.floor(Math.random() * kit.questions.length)] || kit.questions[0];
-    return adaptQuestionToCategory(randomKitQ, targetCat);
-  }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory, isFalseConceptQuestion]);
+    return sanitizeQuestionStructure(randomKitQ, kit.questions);
+  }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory, isFalseConceptQuestion, checkAndPrefetchQuestions]);
 
   // Pregunta activa fijada en estado: NUNCA cambia por efectos secundarios en segundo plano
   const [currentQuestion, setCurrentQuestion] = useState<Question>(() => {
     if (savedSession?.errorQueue && savedSession.errorQueue.length > 0 && savedSession.isReinforcementMode) {
-      return savedSession.errorQueue[0];
+      return sanitizeQuestionStructure(savedSession.errorQueue[0], kit.questions);
     }
 
     const wasAnswered = Boolean(savedSession?.isAnswered);
@@ -950,28 +1000,16 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Preservar exactamente la misma pregunta para que el usuario pueda continuar respondiendo justo donde se quedó.
     if (!wasAnswered) {
       if (savedSession?.currentQuestion && savedSession.currentQuestion.id) {
-        return savedSession.currentQuestion;
+        const currQ = savedSession.currentQuestion;
+        const rawId = currQ.id.replace(/^(tf-|sa-|mc-)/, '');
+        const found = kit.questions?.find(q => q.id === rawId || q.id === currQ.id);
+        return sanitizeQuestionStructure(found || currQ, kit.questions);
       }
       if (savedSession?.currentQuestionId && kit.questions && kit.questions.length > 0) {
-        let found = kit.questions.find(q => q.id === savedSession.currentQuestionId);
-        if (!found) {
-          const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
-          found = kit.questions.find(q => q.id === rawId);
-          if (found) {
-            const prefix = savedSession.currentQuestionId.startsWith('tf-')
-              ? 'trueFalse'
-              : savedSession.currentQuestionId.startsWith('sa-')
-              ? 'shortAnswer'
-              : savedSession.currentQuestionId.startsWith('mc-')
-              ? 'multipleChoice'
-              : null;
-            if (prefix) {
-              return adaptQuestionToCategory(found, prefix as any);
-            }
-          }
-        }
+        const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
+        const found = kit.questions.find(q => q.id === rawId || q.id === savedSession.currentQuestionId);
         if (found) {
-          return found;
+          return sanitizeQuestionStructure(found, kit.questions);
         }
       }
     }
@@ -1002,7 +1040,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         prevQId
       );
       if (nextQ) {
-        return nextQ;
+        return sanitizeQuestionStructure(nextQ, kit.questions);
       }
     }
 
@@ -1016,27 +1054,27 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     // Aleatorio puro desde el primer segundo: barajar todo el banco y tipos sin restricciones
     const randomCat = safeActiveCategories[Math.floor(Math.random() * safeActiveCategories.length)];
-    const randomIdx = Math.floor(Math.random() * finalPool.length);
-    const raw = finalPool[randomIdx] || kit.questions[0];
-    return adaptQuestionToCategory(raw, randomCat) || raw || kit.questions[0];
+    const matchingCatQ = finalPool.find(q => getCategoryForQuestion(q) === randomCat);
+    const raw = matchingCatQ || finalPool[Math.floor(Math.random() * finalPool.length)] || kit.questions[0];
+    return sanitizeQuestionStructure(raw, kit.questions);
   });
 
   // Hidratar pregunta activa si el kit llega asíncronamente con preguntas completas
   useEffect(() => {
     if (kit.questions && kit.questions.length > 0) {
-      if (!currentQuestion || currentQuestion.id === 'thea-placeholder-loading') {
+      if (!currentQuestion || currentQuestion.id === 'thea-placeholder-loading' || /^(tf-|sa-|mc-)/.test(currentQuestion?.id || '')) {
         if (savedSession?.currentQuestion && savedSession.currentQuestion.id) {
-          setCurrentQuestion(savedSession.currentQuestion);
+          const currQ = savedSession.currentQuestion;
+          const rawId = currQ.id.replace(/^(tf-|sa-|mc-)/, '');
+          const matched = kit.questions.find(q => q.id === rawId || q.id === currQ.id) || currQ;
+          setCurrentQuestion(sanitizeQuestionStructure(matched, kit.questions));
           return;
         }
         if (savedSession?.currentQuestionId) {
-          let found = kit.questions.find(q => q.id === savedSession.currentQuestionId);
-          if (!found) {
-            const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
-            found = kit.questions.find(q => q.id === rawId);
-          }
+          const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
+          const found = kit.questions.find(q => q.id === rawId || q.id === savedSession.currentQuestionId);
           if (found) {
-            setCurrentQuestion(found);
+            setCurrentQuestion(sanitizeQuestionStructure(found, kit.questions));
             return;
           }
         }
@@ -1046,7 +1084,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         const finalPool = pool.length > 0 ? pool : kit.questions;
         const first = finalPool[0] || kit.questions[0];
         if (first) {
-          setCurrentQuestion(first);
+          setCurrentQuestion(sanitizeQuestionStructure(first, kit.questions));
         }
       }
     }
@@ -1112,8 +1150,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (effectiveTemplateSentence && /\{\d+\}/.test(effectiveTemplateSentence) && effectiveBlanksCorrect.length > 0) {
       return 'drag-drop';
     }
+    if (baseType === 'true-false' && Array.isArray(currentQ?.options) && currentQ.options.length >= 3) {
+      return 'multiple-choice';
+    }
     return baseType;
-  }, [currentQ?.type, effectiveTemplateSentence, effectiveBlanksCorrect]);
+  }, [currentQ?.type, currentQ?.options, effectiveTemplateSentence, effectiveBlanksCorrect]);
 
   // ── Distribución Equitativa y Aleatoria de Opciones (Misma probabilidad del 25% para cada opción) ──
   const { safeOptions, safeCorrectIndex, safeCorrectIndices } = useMemo(() => {
@@ -1448,11 +1489,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const markQuestionResult = (
     correct: boolean,
     userAnswerText: string,
-    correctAnswerText: string
+    correctAnswerText: string,
+    overrideSelectedOption?: number | null
   ) => {
     setIsAnswered(true);
     setIsCurrentCorrect(correct);
-    setQuestionsAnsweredTotal(prev => prev + 1);
+    const nextQuestionsAnsweredTotal = questionsAnsweredTotal + 1;
+    setQuestionsAnsweredTotal(nextQuestionsAnsweredTotal);
 
     // Guardar en el Historial de Preguntas
     const historyItem: StudyHistoryItem = {
@@ -1469,7 +1512,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       level,
     };
-    setHistory(prev => [historyItem, ...prev].slice(0, 25));
+    const nextHistory = [historyItem, ...history].slice(0, 25);
+    setHistory(nextHistory);
 
     // Actualizar motor socrático adaptativo y Active Recall
     const { updatedProfile, interventionScheduled } = updateSocraticProfileOnAnswer(
@@ -1504,11 +1548,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       });
     }
 
+    let nextLevelCorrectCount = currentLevelCorrect;
+    let nextLevelCorrectCounts = { ...levelCorrectCounts };
+    let nextTotalErrorsReinforced = totalErrorsReinforced;
+    let nextErrorQueue = errorQueue;
+
     if (isReinforcementMode) {
       // En modo refuerzo: registrar estadística de refuerzo sin modificar errorQueue aquí.
       // errorQueue solo avanza en handleNext cuando el estudiante pulsa 'Siguiente pregunta'.
       if (correct) {
-        setTotalErrorsReinforced(prev => prev + 1);
+        nextTotalErrorsReinforced = totalErrorsReinforced + 1;
+        setTotalErrorsReinforced(nextTotalErrorsReinforced);
       }
     } else {
       // En modo normal:
@@ -1517,15 +1567,16 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         // Si la pregunta fue revelada previamente en el Banco de Preguntas, NO suma porcentaje de avance
         if (!isCurrentQRevealed) {
           const prevCount = levelCorrectCounts[level] ?? levelCorrectCount ?? 0;
-          const newCount = Math.min(levelTarget, prevCount + 1);
-          setLevelCorrectCounts(prev => ({
-            ...prev,
-            [level]: newCount,
-          }));
-          setLevelCorrectCount(newCount);
+          nextLevelCorrectCount = Math.min(levelTarget, prevCount + 1);
+          nextLevelCorrectCounts = {
+            ...levelCorrectCounts,
+            [level]: nextLevelCorrectCount,
+          };
+          setLevelCorrectCounts(nextLevelCorrectCounts);
+          setLevelCorrectCount(nextLevelCorrectCount);
 
           // Si alcanzó la meta de 25 aciertos (100%) con este acierto
-          if (newCount >= levelTarget) {
+          if (nextLevelCorrectCount >= levelTarget) {
             confetti({
               particleCount: 100,
               spread: 70,
@@ -1535,12 +1586,52 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         }
       } else {
         // Encolar pregunta fallada para la ronda de refuerzo obligatoria
-        setErrorQueue(prev => {
-          if (prev.some(q => q.id === currentQ.id)) return prev;
-          return [...prev, currentQ];
-        });
+        if (!errorQueue.some(q => q.id === currentQ.id)) {
+          nextErrorQueue = [...errorQueue, currentQ];
+          setErrorQueue(nextErrorQueue);
+        }
       }
     }
+
+    // PERSISTENCIA SÍNCRONA INMEDIATA:
+    // Guarda el progreso en este milisegundo exacto en LocalStorage e IndexedDB,
+    // y despacha el evento 'thea_session_saved' para que si el estudiante sale inmediatamente
+    // a la pantalla principal (HomeView), la barra y porcentaje del libro reflejen el acierto al 100%.
+    const immediateState: any = {
+      ...(latestSessionRef.current || {}),
+      currentIndex,
+      level,
+      activePracticeLevel,
+      currentQuestionId: currentQ?.id,
+      currentQuestion: currentQ,
+      shortAnswerInput,
+      levelCorrectCount: nextLevelCorrectCount,
+      levelCorrectCounts: nextLevelCorrectCounts,
+      errorQueue: nextErrorQueue,
+      isReinforcementMode,
+      selectedOption: overrideSelectedOption !== undefined ? overrideSelectedOption : selectedOption,
+      selectedMultiIndices,
+      matchingPairsMap,
+      matchingChecked,
+      placedChips,
+      dragDropChecked,
+      isAnswered: true,
+      isCurrentCorrect: correct,
+      activeTab,
+      history: nextHistory,
+      historyFilter,
+      historyLevelFilter,
+      questionsAnsweredTotal: nextQuestionsAnsweredTotal,
+      totalErrorsReinforced: nextTotalErrorsReinforced,
+      socraticProfile: updatedProfile,
+      revealedQuestionIds,
+      seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
+      lastUpdated: Date.now(),
+      shuffleSeed,
+    };
+
+    latestSessionRef.current = immediateState;
+    authService.saveSmartStudySession(userId || null, kit.id, immediateState);
   };
 
   // ── Manejadores de Preguntas Abiertas Cortas (Short Answer) ───────────────
@@ -1584,26 +1675,31 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setIsManuallyOverridden(true);
 
     // Actualizar el historial para que quede registrada como correcta
-    setHistory(prev =>
-      prev.map(item =>
-        item.questionId === currentQ.id ? { ...item, isCorrect: true } : item
-      )
+    const nextHistory = history.map(item =>
+      item.questionId === currentQ.id ? { ...item, isCorrect: true } : item
     );
+    setHistory(nextHistory);
 
     // Remover de la cola de fallos de refuerzo
-    setErrorQueue(prev => prev.filter(q => q.id !== currentQ.id));
+    const nextErrorQueue = errorQueue.filter(q => q.id !== currentQ.id);
+    setErrorQueue(nextErrorQueue);
+
+    let nextCount = currentLevelCorrect;
+    let nextCounts = { ...levelCorrectCounts };
+    let nextTotalErrorsReinforced = totalErrorsReinforced;
 
     // Si no está en refuerzo y no estaba revelada, sumar avance
     if (!isReinforcementMode && !isCurrentQRevealed) {
       const prevCount = levelCorrectCounts[level] ?? levelCorrectCount ?? 0;
-      const newCount = Math.min(levelTarget, prevCount + 1);
-      setLevelCorrectCounts(prev => ({
-        ...prev,
-        [level]: newCount,
-      }));
-      setLevelCorrectCount(newCount);
+      nextCount = Math.min(levelTarget, prevCount + 1);
+      nextCounts = {
+        ...levelCorrectCounts,
+        [level]: nextCount,
+      };
+      setLevelCorrectCounts(nextCounts);
+      setLevelCorrectCount(nextCount);
 
-      if (newCount >= levelTarget) {
+      if (nextCount >= levelTarget) {
         confetti({
           particleCount: 100,
           spread: 70,
@@ -1611,8 +1707,28 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         });
       }
     } else if (isReinforcementMode) {
-      setTotalErrorsReinforced(prev => prev + 1);
+      nextTotalErrorsReinforced = totalErrorsReinforced + 1;
+      setTotalErrorsReinforced(nextTotalErrorsReinforced);
     }
+
+    const immediateSession: any = {
+      ...(latestSessionRef.current || {}),
+      currentIndex,
+      level,
+      activePracticeLevel,
+      currentQuestionId: currentQ?.id,
+      currentQuestion: currentQ,
+      isAnswered: true,
+      isCurrentCorrect: true,
+      levelCorrectCount: nextCount,
+      levelCorrectCounts: nextCounts,
+      errorQueue: nextErrorQueue,
+      totalErrorsReinforced: nextTotalErrorsReinforced,
+      history: nextHistory,
+      lastUpdated: Date.now(),
+    };
+    latestSessionRef.current = immediateSession;
+    authService.saveSmartStudySession(userId || null, kit.id, immediateSession);
   };
 
   // 1. Multiple Choice & True/False Selection
@@ -1624,7 +1740,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const userAns = safeOptions[index] || `Opción ${index + 1}`;
     const correctAns = safeOptions[safeCorrectIndex] || 'Opción correcta';
 
-    markQuestionResult(correct, userAns, correctAns);
+    markQuestionResult(correct, userAns, correctAns, index);
   };
 
   // 2. Multi-Select Toggle & Submit
@@ -1943,8 +2059,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (nextQ) {
       setCurrentQuestion(nextQ);
       lastQId.current = nextQ.id;
-      authService.saveSmartStudySession(userId || null, kit.id, {
-        ...savedSession,
+
+      const nextSession: any = {
+        ...(latestSessionRef.current || {}),
         currentIndex: currentIndex + 1,
         level,
         activePracticeLevel,
@@ -1959,8 +2076,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         isAnswered: false,
         isCurrentCorrect: null,
         shortAnswerInput: '',
+        levelCorrectCount: currentLevelCorrect,
+        levelCorrectCounts,
+        errorQueue,
+        isReinforcementMode,
+        history: history.slice(0, 25),
+        questionsAnsweredTotal,
+        totalErrorsReinforced,
         lastUpdated: Date.now(),
-      } as any);
+      };
+      latestSessionRef.current = nextSession;
+      authService.saveSmartStudySession(userId || null, kit.id, nextSession);
     }
 
     // 3. Limpieza DIRECTA e INCONDICIONAL de todos los estados para que NUNCA quede bloqueada
@@ -3378,8 +3504,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     setIsAnswered(false);
                     setIsCurrentCorrect(null);
                     setShortAnswerInput('');
-                    authService.saveSmartStudySession(userId || null, kit.id, {
-                      ...savedSession,
+                    const drawerSession: any = {
+                      ...(latestSessionRef.current || {}),
                       currentIndex: 0,
                       currentQuestionId: q.id,
                       currentQuestion: q,
@@ -3388,8 +3514,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                       isAnswered: false,
                       isCurrentCorrect: null,
                       shortAnswerInput: '',
+                      levelCorrectCount: currentLevelCorrect,
+                      levelCorrectCounts,
+                      errorQueue,
+                      isReinforcementMode,
+                      history: history.slice(0, 25),
+                      questionsAnsweredTotal,
+                      totalErrorsReinforced,
                       lastUpdated: Date.now(),
-                    } as any);
+                    };
+                    latestSessionRef.current = drawerSession;
+                    authService.saveSmartStudySession(userId || null, kit.id, drawerSession);
                     setShowConfigDrawer(false);
                   }}
                   className="p-3 rounded-2xl border border-thea-border bg-thea-surfaceLight text-slate-300 hover:text-white hover:border-violet-500/50 flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all active:scale-95"

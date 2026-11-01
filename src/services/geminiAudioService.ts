@@ -387,6 +387,58 @@ async function getCachedAudioUrl(cacheKey: string): Promise<string | null> {
   });
 }
 
+let isPruningPodcastAudio = false;
+
+/**
+ * Poda automática LRU para el caché de audios de podcast en IndexedDB.
+ * Mantiene un límite de 40 episodios/segmentos y elimina los de más de 14 días de inactividad.
+ */
+export async function prunePodcastAudioCacheIfNeeded(maxEntries = 40, maxAgeDays = 14): Promise<void> {
+  if (isPruningPodcastAudio) return;
+  isPruningPodcastAudio = true;
+
+  try {
+    const db = await getAudioDatabase();
+    if (!db) return;
+
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const records = (req.result as { key: string; blob: Blob; timestamp?: number }[]) || [];
+      if (records.length <= maxEntries) return;
+
+      const cutoffTime = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+      records.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      const toDelete: string[] = [];
+      for (const rec of records) {
+        if (rec.timestamp && rec.timestamp < cutoffTime) {
+          toDelete.push(rec.key);
+        }
+      }
+
+      const remainingCount = records.length - toDelete.length;
+      if (remainingCount > maxEntries) {
+        const excess = remainingCount - maxEntries;
+        const remainingRecords = records.filter(r => !toDelete.includes(r.key));
+        for (let i = 0; i < excess; i++) {
+          toDelete.push(remainingRecords[i].key);
+        }
+      }
+
+      for (const k of toDelete) {
+        store.delete(k);
+      }
+    };
+  } catch (err) {
+    console.warn('[GeminiAudio] Error podando caché de audios de podcast:', err);
+  } finally {
+    isPruningPodcastAudio = false;
+  }
+}
+
 /**
  * Guarda un blob de audio en IndexedDB.
  */
@@ -405,6 +457,9 @@ async function saveAudioBlobToCache(cacheKey: string, blob: Blob): Promise<void>
   } catch (err) {
     console.warn('[GeminiAudio] No se pudo guardar en caché IndexedDB:', err);
   }
+
+  // Poda silenciosa en segundo plano
+  prunePodcastAudioCacheIfNeeded().catch(() => {});
 }
 
 /**

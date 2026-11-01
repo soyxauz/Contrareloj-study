@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Question, DocumentAsset } from '../types';
-import { searchIllustrationForQuestion } from '../services/imageSearchService';
+import { searchIllustrationForQuestion, type WebImageResult } from '../services/imageSearchService';
 import { ZoomIn, ExternalLink, Search } from 'lucide-react';
 
 export function cleanExplanationBullet(text: string): string {
@@ -30,11 +30,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
   kitAssets = [],
   onZoomImage,
 }) => {
-  const [imageResult, setImageResult] = useState<{
-    imageUrl: string;
-    sourceUrl: string;
-    caption?: string;
-  } | null>(null);
+  const [imageResult, setImageResult] = useState<WebImageResult | null>(null);
   const [isImgLoaded, setIsImgLoaded] = useState(false);
 
   // 1. Extraer o formular exactamente 3 viñetas pedagógicas limpias
@@ -119,6 +115,8 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
             ? `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(question.googleOverview.imageSearchTerm)}`
             : `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`,
         caption: question.googleOverview.imageCaption || searchTerm,
+        title: question.googleOverview.imageCaption || searchTerm,
+        sourceName: 'Google',
       });
       return;
     }
@@ -136,12 +134,16 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
               imageUrl: docAsset.dataUrl,
               sourceUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`,
               caption: docAsset.caption || searchTerm,
+              title: docAsset.caption || searchTerm,
+              sourceName: 'Material del Kit',
             });
           } else {
             setImageResult({
               imageUrl: '',
               sourceUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`,
               caption: searchTerm,
+              title: searchTerm,
+              sourceName: 'Google Imágenes',
             });
           }
         }
@@ -191,14 +193,18 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
                 <ExternalLink className="w-3 h-3 text-amber-400" />
               </a>
               <a
-                href={question.googleOverview?.wikipediaUrl || `https://es.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(searchTerm)}`}
+                href={
+                  imageResult?.sourceUrl ||
+                  question.googleOverview?.wikipediaUrl ||
+                  `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
-                title="Consultar en Wikipedia"
+                title={imageResult?.sourceName ? `Consultar en ${imageResult.sourceName}` : 'Consultar fuente web'}
               >
-                <span>Wikipedia</span>
-                <ExternalLink className="w-3 h-3 text-slate-400" />
+                <span className="truncate max-w-[120px]">{imageResult?.sourceName || 'Web'}</span>
+                <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
               </a>
             </div>
           </div>
@@ -242,15 +248,16 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
           </div>
 
           <figcaption className="mt-2 text-xs text-slate-400 flex items-center justify-center gap-1.5 flex-wrap">
-            <span>Crédito:</span>
+            <span>Fuente:</span>
             <a
               href={imageResult.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#a78bfa] hover:text-white underline decoration-[#a78bfa]/50 hover:decoration-white transition-colors cursor-pointer flex items-center gap-1"
+              className="text-[#a78bfa] hover:text-white underline decoration-[#a78bfa]/50 hover:decoration-white transition-colors cursor-pointer flex items-center gap-1 max-w-[260px] truncate"
+              title={imageResult.title || imageResult.sourceName || 'Abrir fuente de la imagen'}
             >
-              <span>Enlace a la fuente</span>
-              <ExternalLink className="w-3 h-3 opacity-70" />
+              <span className="truncate">{imageResult.sourceName || 'Enlace a la fuente'}</span>
+              <ExternalLink className="w-3 h-3 opacity-70 shrink-0" />
             </a>
           </figcaption>
         </figure>
@@ -264,7 +271,9 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
           >
             <ExternalLink className="w-5 h-5 text-[#a78bfa] group-hover:scale-110 transition-transform" />
             <span className="text-xs text-slate-300 font-medium">Ver diagrama en la fuente</span>
-            <span className="text-[11px] text-[#a78bfa] underline">Enlace a la fuente</span>
+            <span className="text-[11px] text-[#a78bfa] underline truncate max-w-[220px]">
+              {imageResult.sourceName || 'Enlace a la fuente'}
+            </span>
           </a>
         </figure>
       ) : null}

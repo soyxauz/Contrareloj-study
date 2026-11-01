@@ -425,13 +425,22 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
     const handleProgressUpdate = () => {
       setStatsVersion(v => v + 1);
     };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setStatsVersion(v => v + 1);
+      }
+    };
     window.addEventListener('thea_session_saved', handleProgressUpdate);
     window.addEventListener('thea_flashcard_saved', handleProgressUpdate);
     window.addEventListener('thea_progress_synced', handleProgressUpdate);
+    window.addEventListener('focus', handleProgressUpdate);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       window.removeEventListener('thea_session_saved', handleProgressUpdate);
       window.removeEventListener('thea_flashcard_saved', handleProgressUpdate);
       window.removeEventListener('thea_progress_synced', handleProgressUpdate);
+      window.removeEventListener('focus', handleProgressUpdate);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 

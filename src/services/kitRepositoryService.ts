@@ -9,6 +9,7 @@ import {
   mergeKitsByUpdatedAt,
   getDeletedKitIds,
   notifyQuotaExceeded,
+  safeLocalStorageSetItem,
   type StudyKitIndexItem,
 } from './storageService';
 
@@ -231,7 +232,7 @@ export const kitRepositoryService = {
       pendingDriveSync,
     }));
     try {
-      localStorage.setItem(indexKey, JSON.stringify(index));
+      safeLocalStorageSetItem(indexKey, JSON.stringify(index));
     } catch (err) {
       notifyQuotaExceeded(err);
     }
@@ -316,7 +317,7 @@ export const kitRepositoryService = {
       const lightweight = stripHeavyAssetsForLocalStorage(cleanKits);
       const serialized = JSON.stringify(lightweight);
       if (serialized.length < 350000) {
-        localStorage.setItem(key, serialized);
+        safeLocalStorageSetItem(key, serialized);
       } else {
         localStorage.removeItem(key);
       }

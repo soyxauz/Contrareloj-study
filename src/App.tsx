@@ -10,7 +10,8 @@ import {
   recordDeletedKitId,
   recordDeletedKitIds,
   purgeAssetMemoryCache,
-  stripAssetDataUrlsFromKit
+  stripAssetDataUrlsFromKit,
+  cleanOrphanAssetsFromIndexedDB,
 } from './services/storageService';
 import { revokeAllAzureAudioUrls } from './services/azureEdgeTtsService';
 import { revokeAllPodcastAudioUrls, savePodcastSettings } from './services/geminiAudioService';
@@ -237,6 +238,16 @@ export const App: React.FC = () => {
       }
     });
   }, []);
+
+  // Garbage Collection silencioso de activos huérfanos en IndexedDB
+  useEffect(() => {
+    if (kits && kits.length > 0 && isHydratedRef.current) {
+      const timer = setTimeout(() => {
+        cleanOrphanAssetsFromIndexedDB(kits).catch(() => {});
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [kits?.length]);
 
 
   // Volcado de seguridad (Safety Flush) ante pagehide o cambio de pestaña

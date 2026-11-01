@@ -211,6 +211,60 @@ async function getCachedAudioBlob(key: string): Promise<Blob | null> {
   });
 }
 
+let isPruningAudio = false;
+
+/**
+ * Poda automática LRU para evitar que la base de datos de audio crezca sin control.
+ * Mantiene un límite de 120 audios y elimina audios de más de 14 días.
+ */
+export async function pruneAudioCacheIfNeeded(maxEntries = 120, maxAgeDays = 14): Promise<void> {
+  if (isPruningAudio) return;
+  isPruningAudio = true;
+
+  try {
+    const db = await getAudioDatabase();
+    if (!db) return;
+
+    const tx = db.transaction([STORE_NAME], 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const records = (req.result as { key: string; blob: Blob; timestamp?: number }[]) || [];
+      if (records.length <= maxEntries) {
+        return;
+      }
+
+      const cutoffTime = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+      records.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      const toDelete: string[] = [];
+      for (const rec of records) {
+        if (rec.timestamp && rec.timestamp < cutoffTime) {
+          toDelete.push(rec.key);
+        }
+      }
+
+      const remainingCount = records.length - toDelete.length;
+      if (remainingCount > maxEntries) {
+        const excess = remainingCount - maxEntries;
+        const remainingRecords = records.filter(r => !toDelete.includes(r.key));
+        for (let i = 0; i < excess; i++) {
+          toDelete.push(remainingRecords[i].key);
+        }
+      }
+
+      for (const k of toDelete) {
+        store.delete(k);
+      }
+    };
+  } catch (err) {
+    console.warn('[AzureEdgeTTS] Error podando caché de audio:', err);
+  } finally {
+    isPruningAudio = false;
+  }
+}
+
 async function saveAudioBlobToCache(key: string, blob: Blob): Promise<void> {
   const db = await getAudioDatabase();
   if (!db) return;
@@ -226,6 +280,9 @@ async function saveAudioBlobToCache(key: string, blob: Blob): Promise<void> {
   } catch (err) {
     console.warn('[AzureEdgeTTS] No se pudo guardar audio en caché persistente:', err);
   }
+
+  // Ejecución silenciosa y en background de la poda LRU
+  pruneAudioCacheIfNeeded().catch(() => {});
 }
 
 /**

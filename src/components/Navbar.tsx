@@ -56,10 +56,24 @@ export const Navbar: React.FC<NavbarProps> = ({
       setDriveState(state);
     });
   }, []);
+  const [navStatsVersion, setNavStatsVersion] = useState(0);
+
+  useEffect(() => {
+    const onSessionSaved = () => setNavStatsVersion(v => v + 1);
+    window.addEventListener('thea_session_saved', onSessionSaved);
+    window.addEventListener('thea_flashcard_saved', onSessionSaved);
+    window.addEventListener('thea_progress_synced', onSessionSaved);
+    return () => {
+      window.removeEventListener('thea_session_saved', onSessionSaved);
+      window.removeEventListener('thea_flashcard_saved', onSessionSaved);
+      window.removeEventListener('thea_progress_synced', onSessionSaved);
+    };
+  }, []);
+
   const realStreak = useMemo(() => {
     const sessions = kits.map(k => authService.getSmartStudySession(currentUser?.id || null, k.id));
     return calculateRealStreak(sessions);
-  }, [kits, currentUser]);
+  }, [kits, currentUser, navStatsVersion]);
   const modes: { id: StudyMode; label: string; icon: React.ReactNode }[] = [
     { id: 'smart-study', label: 'Smart Study', icon: <Brain className="w-4 h-4" /> },
     { id: 'study-guide', label: 'Guía de Estudio', icon: <BookOpen className="w-4 h-4" /> },

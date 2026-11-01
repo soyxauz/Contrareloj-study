@@ -861,6 +861,187 @@ export function mergeKitsByUpdatedAt(
 }
 
 /**
+ * Guarda un elemento en LocalStorage de manera protegida contra QuotaExceededError.
+ * Si LocalStorage se satura (5MB):
+ * 1. Intenta purgar claves secundarias no críticas (cachés temporales, logs, etc.).
+ * 2. Si es una sesión o un kit, poda historiales largos.
+ * 3. Si aún así la cuota está llena, asegura la persistencia en IndexedDB sin fallar ni interrumpir al usuario.
+ */
+export function safeLocalStorageSetItem(key: string, value: string): boolean {
+  if (typeof localStorage === 'undefined') return false;
+
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err: any) {
+    const isQuota =
+      err?.name === 'QuotaExceededError' ||
+      err?.code === 22 ||
+      err?.code === 1014 ||
+      err?.number === -2147024882 ||
+      err?.message?.toLowerCase().includes('quota');
+
+    if (!isQuota) {
+      console.warn(`[StorageService] Error inesperado guardando clave '${key}':`, err);
+      return false;
+    }
+
+    console.warn(`[StorageService] Alerta de cuota en LocalStorage al guardar '${key}'. Iniciando purga automática LRU.`);
+
+    // 1. Purga de claves temporales secundarias en LocalStorage
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (
+          k &&
+          (k.startsWith('contrareloj_azure_') ||
+           k.startsWith('thea_temp_') ||
+           k.startsWith('thea_cache_') ||
+           k.includes('_log_') ||
+           k.includes('disambig'))
+        ) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+
+      // Reintentar guardado tras limpiar temporales
+      localStorage.setItem(key, value);
+      return true;
+    } catch {}
+
+    // 2. Podar historiales de sesiones de Smart Study antiguas en LocalStorage
+    try {
+      const sessionKeys: { key: string; updatedAt: number }[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('thea_ss_mem_')) {
+          try {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              sessionKeys.push({ key: k, updatedAt: parsed.lastUpdated || 0 });
+            }
+          } catch {}
+        }
+      }
+
+      sessionKeys.sort((a, b) => a.updatedAt - b.updatedAt);
+
+      for (const item of sessionKeys) {
+        try {
+          const raw = localStorage.getItem(item.key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.history) && parsed.history.length > 5) {
+              parsed.history = parsed.history.slice(0, 5);
+              localStorage.setItem(item.key, JSON.stringify(parsed));
+            }
+          }
+        } catch {}
+      }
+
+      localStorage.setItem(key, value);
+      return true;
+    } catch {}
+
+    // 3. Fallback definitivo: Guardar íntegro en IndexedDB
+    try {
+      const parsedVal = JSON.parse(value);
+      saveSessionItem(key, parsedVal).catch(() => {});
+      console.info(`[StorageService] Clave '${key}' preservada de forma íntegra en IndexedDB como salvaguarda.`);
+      return true;
+    } catch {
+      saveSessionItem(key, value).catch(() => {});
+      return true;
+    }
+  }
+}
+
+/**
+ * Garbage Collector de Activos Huérfanos:
+ * Inspecciona el almacén de activos en IndexedDB y elimina cualquier imagen o gráfico
+ * que pertenezca a kits que ya fueron eliminados, liberando espacio automáticamente.
+ */
+export async function cleanOrphanAssetsFromIndexedDB(activeKits: StudyKit[]): Promise<{ deletedCount: number }> {
+  const db = await getDatabase();
+  if (!db || !Array.isArray(activeKits)) return { deletedCount: 0 };
+
+  const validAssetIds = new Set<string>();
+
+  for (const kit of activeKits) {
+    if (kit.assets && Array.isArray(kit.assets)) {
+      for (const a of kit.assets) {
+        if (a && a.id) validAssetIds.add(a.id);
+      }
+    }
+    if (kit.questions && Array.isArray(kit.questions)) {
+      for (const q of kit.questions) {
+        if (q?.sourceAsset?.id) validAssetIds.add(q.sourceAsset.id);
+      }
+    }
+    if (kit.flashcards && Array.isArray(kit.flashcards)) {
+      for (const f of kit.flashcards) {
+        if (f?.sourceAsset?.id) validAssetIds.add(f.sourceAsset.id);
+      }
+    }
+  }
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(ASSET_STORE, 'readwrite');
+      const store = tx.objectStore(ASSET_STORE);
+      const req = store.getAllKeys();
+
+      req.onsuccess = () => {
+        const allKeys = (req.result as string[]) || [];
+        let deletedCount = 0;
+
+        for (const key of allKeys) {
+          if (!validAssetIds.has(key)) {
+            store.delete(key);
+            deletedCount++;
+            if (assetMemoryCache.has(key)) {
+              assetMemoryCache.delete(key);
+            }
+          }
+        }
+
+        tx.oncomplete = () => {
+          if (deletedCount > 0) {
+            console.info(`[StorageService Garbage Collector] Se depuraron ${deletedCount} activos huérfanos de IndexedDB.`);
+          }
+          resolve({ deletedCount });
+        };
+        tx.onerror = () => resolve({ deletedCount: 0 });
+      };
+
+      req.onerror = () => resolve({ deletedCount: 0 });
+    } catch (e) {
+      console.warn('[StorageService] Error en Garbage Collector de activos:', e);
+      resolve({ deletedCount: 0 });
+    }
+  });
+}
+
+/**
+ * Consulta la estimación de uso y cuota global del navegador mediante la Storage API.
+ */
+export async function getStorageUsageEstimate(): Promise<{ usageMB: number; quotaMB: number; percentUsed: number }> {
+  if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+    try {
+      const estimate = await navigator.storage.estimate();
+      const usageMB = Math.round(((estimate.usage || 0) / (1024 * 1024)) * 10) / 10;
+      const quotaMB = Math.round(((estimate.quota || 0) / (1024 * 1024)) * 10) / 10;
+      const percentUsed = quotaMB > 0 ? Math.round((usageMB / quotaMB) * 1000) / 10 : 0;
+      return { usageMB, quotaMB, percentUsed };
+    } catch {}
+  }
+  return { usageMB: 0, quotaMB: 0, percentUsed: 0 };
+}
+
+/**
  * Gestiona silenciosamente cuando la cuota de LocalStorage ha sido alcanzada,
  * apoyándose automáticamente en IndexedDB sin interrumpir al usuario en la interfaz.
  */

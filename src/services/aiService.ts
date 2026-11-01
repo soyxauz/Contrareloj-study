@@ -1458,7 +1458,7 @@ Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosam
    - Preguntas de detección de concepto equivocado, afirmación falsa o elemento impostor de forma moderada (~15%-20% del total de opción múltiple: ej. '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:').
 2. El 55% restante DEBE distribuirse de forma equitativa y activa entre los otros 5 formatos interactivos:
    - "matching": Emparejar conceptos (3 o 4 pares de "termino" <-> "definicion" exacta del texto).
-   - "true-false": Pregunta de Verdadero o Falso enfocada en un matiz normativo, biológico, técnico o conceptual clave.
+   - "true-false": Pregunta de Verdadero o Falso donde el campo "pregunta" DEBE ser una afirmación conceptual declarativa directa (ej. "La fosforilación oxidativa se produce en la membrana interna mitocondrial.") para juzgar si es Verdadera o Falsa, con "opciones": { "A": "Verdadero", "B": "Falso" } y "respuesta_correcta": "A" o "B". ESTÁ ESTRICTAMENTE PROHIBIDO redactar 'true-false' como pregunta de selección múltiple (ej. "¿Cuál de las siguientes..." o "Selecciona la opción...").
    - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas (tanto para marcar afirmaciones verdaderas como ocasionalmente para identificar errores).
    - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
    - "image-labeling": Etiquetado de diagrama o esquema funcional descrito en el texto (ubicar partes o fases en un esquema).
@@ -1617,8 +1617,6 @@ Genera el JSON completo respetando la estructura exigida:`;
         qType = 'multi-select';
       } else if (detectedType.includes('image') || detectedType.includes('labeling') || (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 2)) {
         qType = 'image-labeling';
-      } else if (detectedType.includes('true-false') || detectedType.includes('verdadero')) {
-        qType = 'true-false';
       } else {
         qType = 'multiple-choice';
       }
@@ -1633,6 +1631,20 @@ Genera el JSON completo respetando la estructura exigida:`;
             String(optsObj.C || optsObj['c'] || 'Opción C').trim(),
             String(optsObj.D || optsObj['d'] || 'Opción D').trim(),
           ];
+
+      const hasMultipleOptions = (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 3) ||
+        Boolean(optsObj.C || optsObj['c'] || optsObj.D || optsObj['d']);
+      const isSelectionPrompt = /\b(cu[aá]l(es)? de (las|los)|selecciona|indica|señala (la|el|cu[aá]l)|de las siguientes|de los siguientes|de las alternativas|todas las siguientes)\b/i.test(String(p.pregunta || ''));
+
+      // Solo clasificar como true-false si es declarativa directa, sin 4 opciones y sin enunciado de selección
+      if (
+        (detectedType === 'true-false' || detectedType === 'verdadero-falso' || detectedType === 'true/false' || detectedType === 'verdadero_falso') &&
+        !hasMultipleOptions &&
+        !isSelectionPrompt
+      ) {
+        qType = 'true-false';
+      }
+
       const correctIndex = parseCorrectIndex(p.respuesta_correcta, optionsArray, qType);
 
       let finalOptions = optionsArray;
@@ -3479,7 +3491,7 @@ DIRECTRICES GENERALES DE GENERACIÓN:
    - "drag-drop": Oración con huecos {0}, {1} y banco de palabras con distractores.
    - "multi-select": 4 o 5 opciones con 2 o 3 respuestas a marcar (tanto para seleccionar las correctas como para seleccionar las afirmaciones falsas).
    - "image-labeling": Etiquetar zonas de un diagrama o esquema.
-   - "true-false": Afirmación conceptual directa.
+   - "true-false": Afirmación conceptual declarativa directa para evaluar veracidad (afirmación declarativa con opciones Verdadero o Falso, NUNCA redactar como "¿Cuál de las siguientes..." ni con 4 alternativas).
 4. EXTENSIÓN BALANCEADA: El 50% de las preguntas DEBEN tener enunciados CORTOS Y DIRECTOS (1 a 2 líneas concisas) para memorizar conceptos específicos; el otro 50% casos prácticos o de análisis.
 5. LÍMITES ESTRICTOS DE EXTENSIÓN (MÁXIMO 50 O 80 PALABRAS):
    - Todo enunciado estándar DEBE TENER UN MÁXIMO DE 50 PALABRAS. Evita redundancias o textos inflados.
@@ -3596,8 +3608,6 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       qType = 'multi-select';
     } else if (detectedType.includes('image') || detectedType.includes('labeling') || (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 1)) {
       qType = 'image-labeling';
-    } else if (detectedType.includes('true-false') || detectedType.includes('verdadero')) {
-      qType = 'true-false';
     } else {
       qType = 'multiple-choice';
     }
@@ -3611,6 +3621,20 @@ Genera las ${count} preguntas en formato JSON estricto:`;
           String(optsObj.C || optsObj['c'] || 'Opción C').trim(),
           String(optsObj.D || optsObj['d'] || 'Opción D').trim(),
         ];
+
+    const hasMultipleOptions = (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 3) ||
+      Boolean(optsObj.C || optsObj['c'] || optsObj.D || optsObj['d']);
+    const isSelectionPrompt = /\b(cu[aá]l(es)? de (las|los)|selecciona|indica|señala (la|el|cu[aá]l)|de las siguientes|de los siguientes|de las alternativas|todas las siguientes)\b/i.test(String(p.pregunta || ''));
+
+    // Solo clasificar como true-false si es declarativa directa, sin 4 opciones y sin enunciado de selección
+    if (
+      (detectedType === 'true-false' || detectedType === 'verdadero-falso' || detectedType === 'true/false' || detectedType === 'verdadero_falso') &&
+      !hasMultipleOptions &&
+      !isSelectionPrompt
+    ) {
+      qType = 'true-false';
+    }
+
     const correctIndex = parseCorrectIndex(p.respuesta_correcta, optionsArray, qType);
 
     let finalOptions = optionsArray;

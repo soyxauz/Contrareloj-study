@@ -372,12 +372,116 @@ function edgeTtsPlugin(): Plugin {
   }
 }
 
+function imageSearchPlugin(): Plugin {
+  return {
+    name: 'image-search',
+    configureServer(server) {
+      server.middlewares.use('/api/image-search', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 200;
+          res.end();
+          return;
+        }
+
+        try {
+          const parsedUrl = new URL(req.url || '', 'http://localhost');
+          let query = parsedUrl.searchParams.get('q') || '';
+          if (!query && req.method === 'POST') {
+            let body = '';
+            for await (const chunk of req) {
+              body += chunk;
+            }
+            if (body) {
+              const parsed = JSON.parse(body);
+              query = parsed.query || parsed.q || '';
+            }
+          }
+
+          if (!query.trim()) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Query parameter required', results: [] }));
+            return;
+          }
+
+          const searchParam = encodeURIComponent(query.trim());
+          const ddgHome = await fetch(`https://duckduckgo.com/?q=${searchParam}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          });
+          const html = await ddgHome.text();
+          const vqdMatch = html.match(/vqd=['"]?([0-9-]+)/);
+
+          if (vqdMatch) {
+            const vqd = vqdMatch[1];
+            const imgRes = await fetch(
+              `https://duckduckgo.com/i.js?l=es-es&o=json&q=${searchParam}&vqd=${vqd}`,
+              {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              }
+            );
+
+            if (imgRes.ok) {
+              const data: any = await imgRes.json();
+              if (Array.isArray(data?.results) && data.results.length > 0) {
+                const valid = data.results.filter((r: any) =>
+                  r.image &&
+                  typeof r.image === 'string' &&
+                  r.image.startsWith('https://') &&
+                  !r.image.includes('favicon') &&
+                  !r.image.includes('1x1') &&
+                  !r.image.includes('pixel')
+                );
+
+                if (valid.length > 0) {
+                  const results = valid.slice(0, 6).map((r: any) => {
+                    let sourceHost = '';
+                    try {
+                      sourceHost = new URL(r.url || r.image).hostname.replace(/^www\./, '');
+                    } catch {
+                      sourceHost = r.source || 'Web';
+                    }
+                    return {
+                      imageUrl: r.image,
+                      sourceUrl: r.url || r.image,
+                      title: r.title || query,
+                      caption: r.title || query,
+                      sourceName: sourceHost,
+                    };
+                  });
+
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ results }));
+                  return;
+                }
+              }
+            }
+          }
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ results: [] }));
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: msg, results: [] }));
+        }
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     base: './',
-    plugins: [react(), aiProxyPlugin(), edgeTtsPlugin(), googleAuthPlugin(env)],
+    plugins: [react(), aiProxyPlugin(), edgeTtsPlugin(), imageSearchPlugin(), googleAuthPlugin(env)],
     build: {
       rollupOptions: {
         output: {

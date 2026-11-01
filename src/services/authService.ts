@@ -5,6 +5,7 @@ import {
   getSessionItem,
   removeSessionItem,
   requestPersistentStorage,
+  safeLocalStorageSetItem,
 } from './storageService';
 import { kitRepositoryService, inMemoryKitsCache } from './kitRepositoryService';
 import { flashcardProgressService } from './flashcardProgressService';
@@ -469,7 +470,7 @@ export const authService = {
     try {
       const sanitized = sanitizeSmartStudySession(state) || state;
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
-      localStorage.setItem(key, JSON.stringify(sanitized));
+      safeLocalStorageSetItem(key, JSON.stringify(sanitized));
       saveSessionItem(key, sanitized).catch(() => {});
 
       if (typeof window !== 'undefined') {
