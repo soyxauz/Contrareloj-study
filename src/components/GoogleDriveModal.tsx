@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
+import { authService } from '../services/authService';
 import type { StudyKit, User as AppUser } from '../types';
 
 interface GoogleDriveModalProps {
@@ -86,20 +87,26 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     setIsProcessing(true);
     setNoticeMessage(null);
     try {
-      // Primero descargamos actualizaciones remotas (incluyendo thea_ai_settings.json)
+      // 1. Descargamos y fusionamos todo lo existente en Drive (kits, sesiones, materias de todas las PCs)
       const pulled = await googleDriveService.pullFromDrive(effectiveUserId);
+      const unifiedKits = (pulled && pulled.length > 0)
+        ? pulled
+        : (authService.getUserKits(effectiveUserId) || kits);
+
       if (pulled && onKitsSynced) {
         onKitsSynced(pulled);
       }
-      // Luego respaldamos el estado actual
-      await googleDriveService.pushToDrive(effectiveUserId, kits);
+      // 2. Respaldamos el estado consolidado completo hacia Drive
+      await googleDriveService.pushToDrive(effectiveUserId, unifiedKits);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('thea_ai_settings_changed'));
+        window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId: effectiveUserId } }));
       }
       setNoticeMessage('Sincronización bidireccional completada con éxito.');
     } catch (err: any) {
       console.error('Error durante la sincronización manual:', err);
+      setNoticeMessage('Error al sincronizar con Google Drive.');
     } finally {
       setIsProcessing(false);
     }

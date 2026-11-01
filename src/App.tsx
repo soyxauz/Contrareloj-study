@@ -1142,8 +1142,12 @@ export const App: React.FC = () => {
             onKitsSynced={(syncedKits) => {
               const clean = syncedKits.filter(k => !isCorruptedKit(k));
               if (clean.length > 0) {
-                setKits(clean);
-                setCurrentKit(clean[0]);
+                setKits(prev => mergeKitsByUpdatedAt(prev, clean));
+                setCurrentKit(prev => {
+                  if (!prev) return clean[0];
+                  const match = clean.find(k => k.id === prev.id);
+                  return match ? mergeKitsByUpdatedAt([prev], [match])[0] : clean[0];
+                });
               }
             }}
             onLogout={handleLogout}
