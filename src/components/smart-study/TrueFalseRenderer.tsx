@@ -21,7 +21,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
         const isCorrect = idx === safeCorrectIndex;
         const isVerdadero = idx === 0;
 
-        let cardClasses = 'bg-white/[0.025] hover:bg-white/[0.05] border border-white/[0.08] hover:border-white/20 text-slate-200 glass-specular hover:-translate-y-0.5';
+        let cardClasses = 'bg-[#1e0711]/75 hover:bg-[#2c0b19]/90 border border-[#881337]/40 hover:border-[#be123c]/60 text-slate-100 shadow-md shadow-[#28030d]/30 hover:-translate-y-0.5';
         let iconClasses = isVerdadero ? 'text-emerald-400' : 'text-rose-400';
         let iconBgClasses = isVerdadero ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20';
 
@@ -35,7 +35,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
             iconClasses = 'text-rose-300';
             iconBgClasses = 'bg-rose-500 text-white font-bold border-rose-400 scale-105';
           } else {
-            cardClasses = 'border border-white/[0.04] bg-white/[0.01] text-slate-500 opacity-40';
+            cardClasses = 'border border-[#4c0519]/30 bg-[#14040b]/40 text-slate-500 opacity-40';
             iconClasses = 'text-slate-600';
             iconBgClasses = 'bg-white/[0.03] border-white/[0.05]';
           }

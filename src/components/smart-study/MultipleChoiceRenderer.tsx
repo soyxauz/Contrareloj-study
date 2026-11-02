@@ -23,8 +23,8 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
 
-        let cardClasses = 'bg-white/[0.025] hover:bg-white/[0.05] border border-white/[0.08] hover:border-white/20 text-slate-200 glass-specular hover:-translate-y-0.5';
-        let badgeClasses = 'bg-white/[0.05] text-slate-300 border border-white/[0.1]';
+        let cardClasses = 'bg-[#1e0711]/75 hover:bg-[#2c0b19]/90 border border-[#881337]/40 hover:border-[#be123c]/60 text-slate-100 shadow-md shadow-[#28030d]/30 hover:-translate-y-0.5';
+        let badgeClasses = 'bg-[#881337]/30 text-rose-200 border border-[#9f1239]/50 group-hover:bg-[#881337]/50 group-hover:text-white group-hover:border-[#be123c]/70';
 
         if (isAnswered) {
           if (isCorrect) {
@@ -34,7 +34,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
             cardClasses = 'border border-rose-500/60 bg-rose-500/10 text-white shadow-lg shadow-rose-950/30 ring-1 ring-rose-500/30 animate-cardError';
             badgeClasses = 'bg-rose-500 text-white font-bold border border-rose-400';
           } else {
-            cardClasses = 'border border-white/[0.05] bg-white/[0.01] text-slate-500 opacity-40';
+            cardClasses = 'border border-[#4c0519]/30 bg-[#14040b]/40 text-slate-500 opacity-40';
             badgeClasses = 'bg-white/[0.03] text-slate-600 border border-white/[0.05]';
           }
         }
@@ -44,7 +44,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
             key={idx}
             type="button"
             disabled={isAnswered}
-            style={{ animationDelay: `${idx * 30}ms` }}
+            style={{ animationDelay: `${idx * 30}ms`, boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 16px -2px rgba(40, 3, 13, 0.4)' }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

@@ -66,7 +66,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
             const correctRightNum = correctRightIdx >= 0 ? correctRightIdx + 1 : null;
             const isMatchCorrect = matchingChecked && isPaired && matchingPairsMap[pair.term] === pair.definition;
 
-            let borderStyles = 'border-thea-border bg-thea-surfaceLight/40 hover:border-violet-500/60';
+            let borderStyles = 'border-[#881337]/40 bg-[#1e0711]/75 hover:border-[#be123c]/60 hover:bg-[#2c0b19]/90 text-slate-100';
             if (isActive) borderStyles = 'border-violet-400 bg-violet-950/50 ring-2 ring-violet-500 shadow-md';
             if (isPaired && !matchingChecked) borderStyles = 'border-indigo-500/60 bg-indigo-950/30';
             if (matchingChecked) {
@@ -142,7 +142,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
 
             const isMatchCorrect = matchingChecked && pairedTerm && correctPair?.term === pairedTerm;
 
-            let borderStyles = 'border-thea-border bg-thea-surfaceLight/40 hover:border-violet-500/60';
+            let borderStyles = 'border-[#881337]/40 bg-[#1e0711]/75 hover:border-[#be123c]/60 hover:bg-[#2c0b19]/90 text-slate-100';
             if (pairedTerm && !matchingChecked) borderStyles = 'border-indigo-500/60 bg-indigo-950/30';
             if (matchingChecked) {
               borderStyles = isMatchCorrect

@@ -29,9 +29,9 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           const isSelected = selectedMultiIndices.includes(idx);
           const isCorrect = safeCorrectIndices.includes(idx);
 
-          let optionStyles = 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/20 text-slate-200 glass-specular hover:-translate-y-0.5';
+          let optionStyles = 'border-[#881337]/40 bg-[#1e0711]/75 hover:bg-[#2c0b19]/90 hover:border-[#be123c]/60 text-slate-100 shadow-md shadow-[#28030d]/30 hover:-translate-y-0.5';
           if (isSelected && !isAnswered) {
-            optionStyles = 'border-white/30 bg-white/[0.08] text-white shadow-sm ring-1 ring-white/20 glass-specular';
+            optionStyles = 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white shadow-lg shadow-[#4c0519]/40 ring-1 ring-[#be123c]/50';
           }
           if (isAnswered) {
             if (isCorrect && isSelected) {
@@ -41,7 +41,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
             } else if (isCorrect && !isSelected) {
               optionStyles = 'border-amber-500/50 bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/30';
             } else {
-              optionStyles = 'border-white/[0.04] bg-white/[0.01] text-slate-500 opacity-40';
+              optionStyles = 'border border-[#4c0519]/30 bg-[#14040b]/40 text-slate-500 opacity-40';
             }
           }
 

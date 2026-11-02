@@ -5,22 +5,22 @@
 @layer base {
   :root {
     /* RGB channels for Tailwind alpha-value support */
-    --thea-bg: 9 3 20;
-    --thea-surface: 19 9 36;
-    --thea-surface-light: 29 15 54;
-    --thea-border: 44 25 79;
-    --thea-accent: 139 92 246;
-    --thea-accent-hover: 124 58 237;
+    --thea-bg: 13 4 8;
+    --thea-surface: 24 8 16;
+    --thea-surface-light: 38 12 25;
+    --thea-border: 70 20 40;
+    --thea-accent: 190 18 60;
+    --thea-accent-hover: 159 18 57;
     --thea-plus-gold: 245 158 11;
     --thea-plus-rose: 236 72 153;
     --thea-cyan: 6 182 212;
 
     /* Hex references for SVG/Canvas or standard CSS properties */
-    --thea-bg-hex: #090314;
-    --thea-surface-hex: #130924;
-    --thea-surface-light-hex: #1d0f36;
-    --thea-border-hex: #2c194f;
-    --thea-accent-hex: #8b5cf6;
+    --thea-bg-hex: #0d0408;
+    --thea-surface-hex: #180810;
+    --thea-surface-light-hex: #260c19;
+    --thea-border-hex: #461428;
+    --thea-accent-hex: #be123c;
 
     /* Emil Kowalski & Apple Design Easing Curves */
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -227,8 +227,8 @@ html {
 }
 
 .bg-cyber-grid {
-  background-image: linear-gradient(to right, rgba(139, 92, 246, 0.08) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(139, 92, 246, 0.08) 1px, transparent 1px);
+  background-image: linear-gradient(to right, rgba(190, 18, 60, 0.08) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(190, 18, 60, 0.08) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 

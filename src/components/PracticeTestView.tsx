@@ -420,16 +420,12 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                       key={optIdx}
                       onClick={() => setUserAnswers(prev => ({ ...prev, [currentIdx]: optIdx }))}
                       className={`active-press w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 cursor-pointer ${
-                        isSelected
-                          ? 'border-white/30 bg-white/[0.08] text-white ring-1 ring-white/20 glass-specular shadow-sm'
-                          : 'border-white/[0.08] bg-white/[0.025] text-slate-300 hover:border-white/20 hover:bg-white/[0.05] glass-specular'
+                        isSelected ? 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white ring-1 ring-[#be123c]/50 shadow-md' : 'border-[#881337]/40 bg-[#1e0711]/75 text-slate-200 hover:border-[#be123c]/60 hover:bg-[#2c0b19]/90 shadow-sm'
                       }`}
                     >
                       <div
                         className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 tabular-nums transition-colors shadow-sm ${
-                          isSelected
-                            ? 'bg-white text-zinc-950 border border-white'
-                            : 'bg-white/[0.04] border border-white/[0.1] text-slate-300'
+                          isSelected ? 'bg-[#be123c] text-white border border-[#e11d48]' : 'bg-[#881337]/30 border border-[#9f1239]/45 text-rose-200'
                         }`}
                       >
                         {String.fromCharCode(65 + optIdx)}

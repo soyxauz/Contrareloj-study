@@ -2738,7 +2738,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             {/* Pill Progress Bar: Nivel {level}: {pct}% */}
             <div className="flex-1 max-w-xl h-7 sm:h-8 rounded-full bg-white/[0.04] border border-white/[0.08] p-1 flex items-center relative overflow-hidden shadow-inner">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 transition-all duration-300 ease-out shadow-sm"
+                className="h-full rounded-full bg-gradient-to-r from-rose-700 via-rose-600 to-rose-500 transition-all duration-300 ease-out shadow-sm"
                 style={{ width: `${Math.max(6, Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100)))}%` }}
               />
               <span className="absolute left-4 text-xs font-semibold text-white tracking-wide select-none drop-shadow-sm tabular-nums">
@@ -2798,7 +2798,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           )}
 
           {isSwitchingDifficulty ? (
-            <div className="p-10 sm:p-16 rounded-3xl bg-[#181138]/90 border border-amber-500/40 flex flex-col items-center justify-center text-center animate-fadeIn my-4 shadow-2xl">
+            <div className="p-10 sm:p-16 rounded-3xl bg-[#200814]/90 border border-amber-500/40 flex flex-col items-center justify-center text-center animate-fadeIn my-4 shadow-2xl">
               <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center mb-5 shadow-lg shadow-amber-500/10">
                 <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
               </div>
@@ -2813,7 +2813,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             <>
               {/* Visual Diagram/Asset if strictly necessary */}
           {isImageStrictlyNecessary(currentQ) && currentQ.sourceAsset && (
-            <div className="mb-6 p-4 rounded-2xl bg-[#181138]/80 border border-violet-500/30 overflow-hidden">
+            <div className="mb-6 p-4 rounded-2xl bg-[#200814]/80 border border-violet-500/30 overflow-hidden">
               <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <span className="text-xs font-bold text-violet-300 flex items-center gap-1.5 uppercase tracking-wider">
                   <ImageIcon className="w-3.5 h-3.5 text-violet-400" />
@@ -3629,7 +3629,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           if (e.target === e.currentTarget) setShowResetConfirmModal(false);
         }}
       >
-        <div className="bg-[#181138] border border-violet-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
+        <div className="bg-[#200814] border border-violet-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
           <button
             type="button"
             onClick={() => setShowResetConfirmModal(false)}
