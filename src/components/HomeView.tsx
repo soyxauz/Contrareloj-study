@@ -422,41 +422,35 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
     <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 animate-fadeIn">
 
       {/* ── Header de Espacio de Estudio (Estilo Linear / Raycast Studio) ── */}
-      <section className="mb-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-                <BookOpen className="w-6 h-6 text-violet-400 shrink-0" />
-                <span>Tus Study Kits</span>
-              </h1>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/[0.08] text-violet-300 border border-white/10 font-bold tabular-nums">
-                {kits.length}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Accede a tus bancos de preguntas y fichas, o añade nuevo material de estudio.
-            </p>
+      <section className="mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div className="flex items-baseline gap-2.5">
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-white">
+              Tus Study Kits
+            </h1>
+            <span className="text-xs text-slate-500 font-mono tabular-nums">
+              {kits.length}
+            </span>
           </div>
 
-          {/* Barra de Acciones Globales */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Barra de Acciones Globales Unificada (Sin botones de colores dispares) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
               onClick={() => onNavigate('create', 'topic')}
-              className="active-press px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs flex items-center gap-2 shadow-md shadow-violet-950/40 cursor-pointer"
+              className="active-press px-3 py-1.5 rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 font-medium text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>Nuevo Study Kit</span>
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Nuevo Kit</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowMateriaManagerModal(true)}
-              className="active-press text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-950/25 border border-amber-500/30 hover:border-amber-500/50 cursor-pointer font-medium"
-              title="Crear, editar y gestionar materias de estudio"
+              className="active-press text-xs text-slate-300 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 transition-colors cursor-pointer font-medium"
+              title="Gestionar materias de estudio"
             >
-              <FolderEdit className="w-3.5 h-3.5" />
+              <FolderEdit className="w-3.5 h-3.5 text-slate-400" />
               <span>Materias</span>
             </button>
 
@@ -471,14 +465,14 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     setIsSelectionMode(true);
                   }
                 }}
-                className={`active-press text-xs flex items-center gap-1.5 px-3 py-2 rounded-xl border cursor-pointer font-medium ${
+                className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium transition-colors cursor-pointer ${
                   isSelectionMode
-                    ? 'bg-violet-600/30 border-violet-500 text-violet-200'
-                    : 'text-slate-300 hover:text-white border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+                    ? 'bg-white/[0.12] border-white/25 text-white'
+                    : 'text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/15'
                 }`}
                 title={isSelectionMode ? 'Salir del modo selección' : 'Seleccionar libros para cambiarlos de materia o eliminarlos'}
               >
-                <CheckSquare className="w-3.5 h-3.5 text-violet-400" />
+                <CheckSquare className="w-3.5 h-3.5 text-slate-400" />
                 <span>{isSelectionMode ? 'Cancelar' : 'Seleccionar'}</span>
               </button>
             )}
@@ -486,37 +480,37 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               type="button"
               onClick={() => onNavigate('analytics')}
-              className="active-press text-xs text-slate-300 hover:text-white flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer font-medium"
+              className="active-press text-xs text-slate-300 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 transition-colors cursor-pointer font-medium"
             >
-              <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+              <BarChart3 className="w-3.5 h-3.5 text-slate-400" />
               <span>Analíticas</span>
             </button>
           </div>
         </div>
 
-        {/* ── Cinta Minimalista de Métricas (Zero-Lag Ribbon) ── */}
-        <div className="flex items-center gap-4 sm:gap-6 px-4 py-2 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-xs text-slate-400 overflow-x-auto scrollbar-none tabular-nums">
-          <div className="flex items-center gap-2 shrink-0">
-            <Flame className="w-4 h-4 text-orange-400 fill-orange-500" />
-            <span className="font-semibold text-white">{globalStats.realStreakDays} {globalStats.realStreakDays === 1 ? 'día' : 'días'}</span>
+        {/* ── Metadata Ribbon Minimalista (Sin iconos multicolor) ── */}
+        <div className="flex items-center gap-4 sm:gap-6 py-2 text-xs text-slate-400 overflow-x-auto scrollbar-none tabular-nums border-b border-white/[0.06] mb-5">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Flame className="w-3.5 h-3.5 text-slate-500" />
+            <span className="font-medium text-slate-200">{globalStats.realStreakDays} {globalStats.realStreakDays === 1 ? 'día' : 'días'}</span>
             <span className="text-[11px] text-slate-500">racha</span>
           </div>
-          <div className="w-px h-3.5 bg-white/10 shrink-0" />
-          <div className="flex items-center gap-2 shrink-0">
-            <Brain className="w-4 h-4 text-violet-400" />
-            <span className="font-semibold text-white">{globalStats.totalQuestions}</span>
+          <span className="text-white/10 shrink-0">·</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Brain className="w-3.5 h-3.5 text-slate-500" />
+            <span className="font-medium text-slate-200">{globalStats.totalQuestions}</span>
             <span className="text-[11px] text-slate-500">preguntas</span>
           </div>
-          <div className="w-px h-3.5 bg-white/10 shrink-0" />
-          <div className="flex items-center gap-2 shrink-0">
-            <Layers className="w-4 h-4 text-amber-400" />
-            <span className="font-semibold text-white">{globalStats.totalFlashcardsMastered}/{globalStats.totalFlashcards}</span>
+          <span className="text-white/10 shrink-0">·</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Layers className="w-3.5 h-3.5 text-slate-500" />
+            <span className="font-medium text-slate-200">{globalStats.totalFlashcardsMastered}/{globalStats.totalFlashcards}</span>
             <span className="text-[11px] text-slate-500">flashcards</span>
           </div>
-          <div className="w-px h-3.5 bg-white/10 shrink-0" />
-          <div className="flex items-center gap-2 shrink-0">
-            <Trophy className="w-4 h-4 text-emerald-400" />
-            <span className="font-semibold text-white">{kits.length}</span>
+          <span className="text-white/10 shrink-0">·</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Trophy className="w-3.5 h-3.5 text-slate-500" />
+            <span className="font-medium text-slate-200">{kits.length}</span>
             <span className="text-[11px] text-slate-500">kits activos</span>
           </div>
         </div>
@@ -528,7 +522,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         {availableMateriasList.length > 0 && (
           <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1.5 scrollbar-none">
             <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0 mr-1 font-medium">
-              <Filter className="w-3.5 h-3.5 text-violet-400" />
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
               Materia:
             </span>
 

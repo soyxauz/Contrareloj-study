@@ -87,37 +87,34 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-xl bg-thea-bg/85 border-b border-thea-border">
+    <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a0712]/80 border-b border-white/[0.06]">
       {/* Top Brand & Status Bar */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left Side: Logo & Kit Selector */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 sm:gap-4">
+        {/* Left Side: Logo & Minimal Wordmark */}
         <div className="flex items-center gap-2 sm:gap-5 min-w-0 shrink-0">
-          {/* Logo — goes to Home */}
-          <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-amber-400 p-[2px] flex items-center justify-center shadow-lg shadow-violet-900/30 shrink-0">
-              <div className="w-full h-full bg-thea-bg rounded-[9px] sm:rounded-[10px] flex items-center justify-center font-bold text-base sm:text-lg text-white">
-                C
-              </div>
+          <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
+            <div className="w-7 h-7 rounded-lg bg-white/[0.08] border border-white/10 flex items-center justify-center font-semibold text-xs text-white shrink-0 tracking-tight shadow-sm">
+              C
             </div>
             <div className="flex items-center whitespace-nowrap">
-              <span className="text-lg sm:text-xl font-bold tracking-tight text-white">Contrareloj</span>
-              <span className="ml-1 text-sm sm:text-base font-semibold text-violet-400">Study</span>
+              <span className="text-sm sm:text-base font-semibold tracking-tight text-white">Contrareloj</span>
+              <span className="ml-1 text-xs text-slate-400 font-normal">Study</span>
             </div>
           </div>
         </div>
 
-        {/* Right Badges & Controls with separated logical sections */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {/* Group 1: Navigation Actions (Desktop only, mobile uses bottom bar) */}
-          <div className="hidden md:flex items-center gap-2">
+        {/* Right Badges & Controls */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Navigation Actions */}
+          <div className="hidden md:flex items-center gap-1.5">
             {/* Create Kit Button */}
             <button
               onClick={() => onSelectMode('create')}
               title="Crear nuevo Study Kit"
-              className={`active-press flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold glass-specular transition-[transform,background-color,border-color] ${
+              className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 currentMode === 'create'
-                  ? 'bg-violet-600 text-white border-violet-500 shadow-md shadow-violet-900/30'
-                  : 'bg-thea-surface border border-thea-border text-violet-300 hover:bg-violet-600/20 hover:border-violet-500/40'
+                  ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white'
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -128,101 +125,76 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => onSelectMode('home')}
               title="Inicio"
-              className={`active-press p-2 rounded-xl border glass-specular transition-[transform,background-color,border-color] ${
+              className={`active-press p-1.5 rounded-lg border transition-colors cursor-pointer ${
                 currentMode === 'home'
-                  ? 'bg-violet-600 text-white border-violet-500 shadow-md shadow-violet-900/30'
-                  : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
+                  ? 'bg-white/[0.12] text-white border-white/20'
+                  : 'bg-transparent text-slate-400 hover:text-white hover:bg-white/[0.04] border-transparent'
               }`}
             >
               <Home className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Subtle Divider (Desktop only) */}
-          <div className="hidden md:block h-5 w-px bg-thea-border/80" />
+          {/* Subtle Divider */}
+          <div className="hidden md:block h-4 w-px bg-white/[0.08] mx-1" />
 
-          {/* Group 2: Status & Streaks */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            {/* Streak indicator real */}
-            <div
-              title={`Racha de estudio: ${realStreak} ${realStreak === 1 ? 'día consecutivo' : 'días consecutivos'}`}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-thea-surface/80 border border-thea-border text-xs text-orange-400 font-semibold shrink-0 tabular-nums glass-specular"
-            >
-              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-orange-500 text-orange-500 shrink-0" />
-              <span>{realStreak}</span>
-            </div>
+          {/* Streak Indicator */}
+          <div
+            title={`Racha de estudio: ${realStreak} ${realStreak === 1 ? 'día consecutivo' : 'días consecutivos'}`}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-slate-400 font-medium tabular-nums"
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
+            <span className="text-slate-200">{realStreak}</span>
           </div>
 
-          {/* Group 3: Cloud & AI Engine */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            {/* Google Drive Cloud Sync */}
-            <button
-              onClick={onOpenGoogleDrive}
-              title={
-                driveState.status === 'needs_reauth'
-                  ? 'Sesión de Google Drive expirada - Clic para reconectar en 1 clic'
-                  : driveState.userEmail
-                  ? `Google Drive sincronizado (${driveState.userEmail})`
-                  : 'Conectar Google Drive para respaldo en la nube'
-              }
-              className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl border transition-[transform,background-color,border-color] text-xs font-semibold glass-specular cursor-pointer shrink-0 ${
-                driveState.status === 'syncing'
-                  ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
-                  : driveState.status === 'needs_reauth'
-                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 hover:border-amber-400'
-                  : driveState.userEmail
-                  ? 'bg-emerald-950/30 hover:bg-emerald-900/40 border-emerald-500/40 text-emerald-300 hover:text-white'
-                  : 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-slate-300 hover:text-white'
-              }`}
-            >
-              {driveState.status === 'syncing' ? (
-                <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
-              ) : (
-                <Cloud
-                  className={`w-3.5 h-3.5 ${
-                    driveState.status === 'needs_reauth'
-                      ? 'text-amber-400'
-                      : driveState.userEmail
-                      ? 'text-emerald-400'
-                      : 'text-slate-400'
-                  }`}
-                />
-              )}
-              <span className="hidden sm:inline">Drive</span>
-              {driveState.userEmail && (
-                <span
-                  className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                    driveState.status === 'needs_reauth'
-                      ? 'bg-amber-400 animate-pulse'
-                      : 'bg-emerald-400'
-                  }`}
-                />
-              )}
-            </button>
+          {/* Google Drive Cloud Sync */}
+          <button
+            onClick={onOpenGoogleDrive}
+            title={
+              driveState.status === 'needs_reauth'
+                ? 'Sesión de Google Drive expirada - Clic para reconectar en 1 clic'
+                : driveState.userEmail
+                ? `Google Drive sincronizado (${driveState.userEmail})`
+                : 'Conectar Google Drive para respaldo en la nube'
+            }
+            className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+              driveState.userEmail
+                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
+                : 'bg-transparent hover:bg-white/[0.04] border-transparent text-slate-400 hover:text-white'
+            }`}
+          >
+            {driveState.status === 'syncing' ? (
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+            ) : (
+              <Cloud className="w-3.5 h-3.5 text-slate-400" />
+            )}
+            <span className="hidden sm:inline">Drive</span>
+            {driveState.userEmail && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/90 shadow-sm" />
+            )}
+          </button>
 
-            {/* AI Engine (desktop header, on mobile available in bottom bar) */}
-            <button
-              onClick={onOpenAISettings}
-              title="Configuración de IA (Ollama Cloud / API)"
-              className="active-press hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-950/40 hover:bg-violet-900/50 border border-violet-500/40 text-violet-300 hover:text-white transition-[transform,background-color,border-color] text-xs font-semibold glass-specular cursor-pointer"
-            >
-              <Bot className="w-3.5 h-3.5 text-violet-400" />
-              <span>IA Engine</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            </button>
-          </div>
+          {/* AI Engine */}
+          <button
+            onClick={onOpenAISettings}
+            title="Configuración de IA (Ollama Cloud / API)"
+            className="active-press hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+          >
+            <Bot className="w-3.5 h-3.5 text-slate-400" />
+            <span>IA Engine</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/90 shadow-sm" />
+          </button>
 
-          {/* Group 4: User Profile & Inspector (Desktop only, mobile uses bottom navigation bar) */}
-          <div className="hidden md:flex items-center gap-2">
-            {/* Subtle Divider */}
-            <div className="h-5 w-px bg-thea-border/80 mr-1" />
+          {/* User Profile */}
+          <div className="hidden md:flex items-center gap-1.5 ml-1">
+            <div className="h-4 w-px bg-white/[0.08] mr-1" />
             {currentUser ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <div
                   title={`Conectado como @${currentUser.username}`}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-200 text-xs font-semibold glass-specular"
+                  className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-medium text-slate-300"
                 >
-                  <div className="w-5 h-5 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+                  <div className="w-5 h-5 rounded-full bg-white/[0.12] border border-white/10 flex items-center justify-center text-[10px] font-semibold text-white">
                     {currentUser.displayName.charAt(0).toUpperCase()}
                   </div>
                   <span className="hidden md:inline max-w-[90px] truncate">{currentUser.displayName}</span>
@@ -230,7 +202,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={onLogout}
                   title="Cerrar Sesión"
-                  className="active-press p-1.5 rounded-xl bg-thea-surface hover:bg-rose-950/40 border border-thea-border hover:border-rose-500/40 text-slate-400 hover:text-rose-400 transition-[transform,background-color,border-color]"
+                  className="active-press p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -239,7 +211,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onOpenAuth}
                 title="Iniciar Sesión o Crear Cuenta"
-                className="active-press flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold glass-specular transition-[transform,background-color] shadow-sm cursor-pointer"
+                className="active-press flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-zinc-950 font-medium text-xs hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer"
               >
                 <UserIcon className="w-3.5 h-3.5" />
                 <span>Ingresar</span>
