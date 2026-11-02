@@ -1377,9 +1377,9 @@ export function shuffleOptionsWithEqualProbability(
 }
 
 /**
- * Limita la extensión de un enunciado respetando la regla pedagógica estricta:
- * - Límite general: Máximo 50 palabras para enunciados estándar.
- * - Excepción: Si es descripción de un caso / supuesto de hecho / viñeta práctica, sube a 80 palabras máximo.
+ * Limita la extensión de un enunciado respetando la regla pedagógica de concisión:
+ * - Predominio general (~75%-80%): Preguntas cortas y directas de máximo 28 palabras (1-2 líneas).
+ * - Excepción para casos prácticos (~20%-25%): Viñetas clínicas o supuestos analíticos de hasta 55 palabras máximo.
  */
 export function enforceQuestionLengthLimit(questionText: string, isCaseExplicit?: boolean): string {
   if (!questionText) return '';
@@ -1388,10 +1388,22 @@ export function enforceQuestionLengthLimit(questionText: string, isCaseExplicit?
 
   const isCase = isCaseExplicit ?? (
     /\b(caso\s+(clínico|práctico|jurídico|de estudio|real)|supuesto\s+de\s+hecho|paciente\s+de|en\s+el\s+siguiente\s+caso|viñeta\s+clínica|escenario\s+práctico)\b/i.test(clean) ||
-    /^(en\s+un\s+caso|supongamos\s+que|un\s+paciente|una\s+persona|un\s+tribunal|en\s+un\s+juicio)/i.test(clean)
+    /^(en\s+un\s+caso|supongamos\s+que|un\s+paciente|una\s+paciente|una\s+persona|un\s+tribunal|en\s+un\s+juicio)/i.test(clean)
   );
 
-  const maxWords = isCase ? 80 : 50;
+  const maxWords = isCase ? 55 : 28;
+
+  // Si no es caso y tiene preámbulo largo, extraer la pregunta interrogativa directa nuclear si existe
+  if (!isCase && words.length > 28) {
+    const qIndex = clean.lastIndexOf('¿');
+    if (qIndex > 0) {
+      const directQ = clean.slice(qIndex).trim();
+      const directWords = directQ.split(/\s+/).filter(Boolean);
+      if (directWords.length >= 4 && directWords.length <= 28) {
+        return directQ;
+      }
+    }
+  }
 
   if (words.length <= maxWords) {
     return clean;
@@ -1401,12 +1413,12 @@ export function enforceQuestionLengthLimit(questionText: string, isCaseExplicit?
   const truncatedWords = words.slice(0, maxWords);
   const truncatedText = truncatedWords.join(' ');
 
-  // Si hay punto o cierre de interrogación en el último 25% del texto recortado, cortar limpiamente
+  // Si hay punto o cierre de interrogación en el último tramo del texto recortado, cortar limpiamente
   const lastPeriod = truncatedText.lastIndexOf('.');
   const lastQuestion = truncatedText.lastIndexOf('?');
   const cutPoint = Math.max(lastPeriod, lastQuestion);
 
-  if (cutPoint > truncatedText.length * 0.75) {
+  if (cutPoint > truncatedText.length * 0.7) {
     return truncatedText.slice(0, cutPoint + 1).trim();
   }
 
@@ -1463,11 +1475,10 @@ Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosam
    - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
    - "image-labeling": Etiquetado de diagrama o esquema funcional descrito en el texto (ubicar partes o fases en un esquema).
 
-FASE 3: LÍMITES ESTRICTOS DE EXTENSIÓN DEL ENUNCIADO (MÁXIMO 50 O 80 PALABRAS)
-- REGLA GENERAL: Todo enunciado estándar DEBE TENER UN MÁXIMO DE 50 PALABRAS. Evita rodeos, redundancias o textos inflados; la formulación debe ser directa, ágil y de alto impacto memorístico.
-- EXCEPCIÓN ÚNICA (DESCRIPCIÓN DE CASO): Únicamente si la pregunta describe un caso práctico, viñeta clínica, supuesto de hecho jurídico o escenario de aplicación, el límite máximo se amplía hasta 80 PALABRAS MÁXIMO.
-- Cualquier enunciado que supere estos topes (50 palabras general / 80 palabras caso) es inválido.
-- Recuerda: el 50% de las preguntas deben tener enunciados CORTOS de 1 o 2 líneas para memorizar conceptos específicos.
+FASE 3: DISTRIBUCIÓN DE EXTENSIÓN DEL ENUNCIADO (PREDOMINIO DE PREGUNTAS CORTAS Y DIRECTAS)
+- REGLA CLAVE DE EXTENSIÓN: La mayor parte de las preguntas (~75% a 80%) DEBEN SER CORTAS, DIRECTAS Y CONCISAS (entre 8 y 22 palabras, 1 o 2 líneas sin rodeos ni preámbulos). Preguntan directamente por definiciones, causas, efectos, funciones o diferencias conceptuales precisas (ej. '¿Cuál es la función principal del ribosoma?', '¿Qué arteria irriga el nódulo sinusal?', '¿En qué plazo prescribe la acción penal?').
+- EXCEPCIÓN MODERADA (CASOS PRÁCTICOS): Únicamente una minoría (~20% a 25%) deben ser MÁS EXTENSAS (entre 35 y 55 palabras máximo) cuando se requiera describir un caso clínico, supuesto de hecho jurídico o escenario de aplicación práctica.
+- LÍMITES ESTRICTOS DE PALABRAS: Máximo 28 palabras para preguntas directas; máximo 55 palabras para casos prácticos. Queda TERMINANTEMENTE PROHIBIDO redactar párrafos introductorios inflados o innecesarios en preguntas conceptuales.
 
 FORMATO DE SALIDA (JSON ESTRICTO):
 Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
@@ -1483,7 +1494,7 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       "id": 1,
       "chunk_id_origen": "ID del fragmento origen (ej: chk-0-abc)",
       "tipo": "multiple-choice | matching | drag-drop | multi-select | image-labeling | true-false",
-      "longitud_enunciado": "corto | medio_largo",
+      "longitud_enunciado": "corto (75% del lote) | extenso_caso (25% del lote)",
       "concepto_evaluado": "Concepto o tema evaluado",
       "pregunta": "Enunciado de la pregunta (resalta con **...** la parte nuclear o clave de la pregunta, dejando el contexto preliminar sin formato)",
       "opciones": { "A": "Opción A", "B": "Opción B", "C": "Opción C", "D": "Opción D" },
@@ -1557,7 +1568,7 @@ ${sourceRepresentation}
 - PROPORCIÓN Y VARIEDAD BALANCEADA:
   * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D), priorizando preguntas afirmativas de comprensión directa y deducción, con presencia moderada (~15%-20%) de preguntas de afirmación falsa o concepto equivocado.
   * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling").
-- LÍMITES ESTRICTOS DE EXTENSIÓN: Máximo 50 palabras por enunciado estándar; únicamente si es la descripción de un caso práctico, viñeta o supuesto de hecho, el límite máximo sube a 80 palabras.
+- DISTRIBUCIÓN DE EXTENSIÓN (PREDOMINIO DE PREGUNTAS CORTAS): La mayor parte (~75%-80%) de las preguntas DEBEN ser CORTAS y directas (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Solo una minoría (~20%-25%) deben ser más extensas (entre 35 y 55 palabras) cuando se trate de casos prácticos o viñetas clínicas aplicadas. Límite máximo: 28 palabras para preguntas directas y 55 palabras para casos.
 - REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
 - TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
 
@@ -1657,7 +1668,16 @@ Genera el JSON completo respetando la estructura exigida:`;
 
       let fullQuestion = String(p.pregunta || '').trim();
       const contexto = String(p.contexto_o_enunciado || '').trim();
-      if (contexto && !fullQuestion.includes(contexto.slice(0, 20)) && p.longitud_enunciado !== 'corto') {
+      const isCase = Boolean(
+        p.longitud_enunciado === 'extenso_caso' ||
+        p.longitud_enunciado === 'medio_largo' ||
+        p.es_caso ||
+        p.es_caso_o_escenario ||
+        /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${fullQuestion}`)
+      );
+
+      // Solo concatenar contexto si se trata explícitamente de un caso práctico extenso justificado
+      if (contexto && isCase && !fullQuestion.includes(contexto.slice(0, 20))) {
         fullQuestion = `${contexto}\n\n${fullQuestion}`;
       }
 
@@ -1690,7 +1710,6 @@ Genera el JSON completo respetando la estructura exigida:`;
         wordBank = Array.from(bankSet).sort(() => Math.random() - 0.5);
       }
 
-      const isCase = Boolean(p.es_caso || p.es_caso_o_escenario || /\b(caso|supuesto|paciente|tribunal|viñeta)\b/i.test(fullQuestion));
       fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
       const query = String(
@@ -3286,9 +3305,9 @@ PRINCIPIOS SOCRÁTICOS DE REFORMULACIÓN OBLIGATORIOS:
 4. RETROALIMENTACIÓN SOCRÁTICA COMPLETA:
    - Explica por qué la respuesta correcta resuelve el caso.
    - Desarma con claridad y lógica el motivo del error previo para consolidar el aprendizaje activo.
-5. LÍMITE ESTRICTO DE EXTENSIÓN:
-   - Máximo 50 palabras para preguntas estándar.
-   - Máximo 80 palabras si es descripción de un caso o supuesto de hecho.
+5. EXTENSIÓN Y CONCISIÓN:
+   - Prioriza una pregunta corta, directa y clara (entre 8 y 22 palabras, máximo 28 palabras).
+   - Únicamente si planteas un caso clínico o supuesto práctico aplicado, el enunciado puede ser más extenso (máximo 55 palabras).
 
 FORMATO DE SALIDA (JSON ÚNICAMENTE):
 {
@@ -3350,10 +3369,10 @@ Genera la pregunta socrática reformulada en formato JSON:`;
 
   let fullQuestion = String(parsed.pregunta || '').trim();
   const contexto = String(parsed.contexto_o_enunciado || '').trim();
-  if (contexto && !fullQuestion.includes(contexto.slice(0, 20))) {
+  const isCase = /\b(caso|supuesto|paciente|clínic|escenario)\b/i.test(`${contexto} ${fullQuestion}`);
+  if (contexto && isCase && !fullQuestion.includes(contexto.slice(0, 20))) {
     fullQuestion = `${contexto}\n\n${fullQuestion}`;
   }
-  const isCase = /\b(caso|supuesto|paciente|clínic|escenario)\b/i.test(fullQuestion);
   fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
   const query = String(
@@ -3492,11 +3511,10 @@ DIRECTRICES GENERALES DE GENERACIÓN:
    - "multi-select": 4 o 5 opciones con 2 o 3 respuestas a marcar (tanto para seleccionar las correctas como para seleccionar las afirmaciones falsas).
    - "image-labeling": Etiquetar zonas de un diagrama o esquema.
    - "true-false": Afirmación conceptual declarativa directa para evaluar veracidad (afirmación declarativa con opciones Verdadero o Falso, NUNCA redactar como "¿Cuál de las siguientes..." ni con 4 alternativas).
-4. EXTENSIÓN BALANCEADA: El 50% de las preguntas DEBEN tener enunciados CORTOS Y DIRECTOS (1 a 2 líneas concisas) para memorizar conceptos específicos; el otro 50% casos prácticos o de análisis.
-5. LÍMITES ESTRICTOS DE EXTENSIÓN (MÁXIMO 50 O 80 PALABRAS):
-   - Todo enunciado estándar DEBE TENER UN MÁXIMO DE 50 PALABRAS. Evita redundancias o textos inflados.
-   - Si describe un caso práctico, viñeta clínica o supuesto de hecho, el límite máximo se amplía hasta 80 PALABRAS MÁXIMO.
-   - Cualquier enunciado que supere estos límites debe compactarse o recortarse.
+4. DISTRIBUCIÓN DE EXTENSIÓN (PREDOMINIO DE PREGUNTAS CORTAS):
+   - La gran mayoría (~75% a 80%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 a 2 líneas concisas sin preámbulos) para agilidad mental y memorización activa de conceptos específicos.
+   - Una minoría (~20% a 25%) pueden ser MÁS EXTENSAS (entre 35 y 55 palabras) cuando se trate de casos prácticos o problemas aplicados.
+5. LÍMITES ESTRICTOS DE PALABRAS: Máximo 28 palabras para preguntas directas; máximo 55 palabras para casos prácticos. Queda prohibido inflar preguntas con párrafos introductorios innecesarios.
 6. Tema Enfocado: ${topicQuery.trim() ? `TODAS las preguntas deben abordar exclusivamente: "${topicQuery.trim()}".` : 'Aborda los núcleos temáticos más desafiantes del documento.'}
 
 FORMATO DE SALIDA (JSON ÚNICAMENTE):
@@ -3550,9 +3568,8 @@ PARÁMETROS DE GENERACIÓN:
 - Subtema concreto solicitado: ${topicQuery.trim() || 'General del documento'}
 - Nivel de dificultad: Nivel ${level} (${level === 3 ? 'MÁXIMA EXIGENCIA - OPCIONES SIMILARES' : level === 2 ? 'INTERMEDIO' : 'BÁSICO'})
 - Cantidad de preguntas a generar: ${count}
-- Límite de palabras: Máximo 50 palabras para enunciados estándar, o 80 palabras si es descripción de un caso.
+- DISTRIBUCIÓN DE EXTENSIÓN: La mayor parte (~75%-80%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Solo una minoría (~20%-25%) deben ser más extensas (entre 35 y 55 palabras) para casos prácticos. Límites: máximo 28 palabras en preguntas directas y 55 palabras en casos prácticos.
 - TRADUCCIÓN OBLIGATORIA: Si el texto está en inglés u otro idioma, genera las preguntas, opciones y explicaciones 100% en español académico.
-- Recuerda: Alterna los estilos de pregunta y haz que el 50% de los enunciados sean CORTOS (1 o 2 líneas) para memorizar conceptos específicos.
 
 Genera las ${count} preguntas en formato JSON estricto:`;
 
@@ -3647,7 +3664,14 @@ Genera las ${count} preguntas en formato JSON estricto:`;
 
     let fullQuestion = String(p.pregunta || '').trim();
     const contexto = String(p.contexto_o_enunciado || '').trim();
-    if (contexto && !fullQuestion.includes(contexto.slice(0, 20)) && p.longitud_enunciado !== 'corto') {
+    const isCase = Boolean(
+      p.longitud_enunciado === 'extenso_caso' ||
+      p.longitud_enunciado === 'medio_largo' ||
+      /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${fullQuestion}`)
+    );
+
+    // Solo concatenar contexto si se trata explícitamente de un caso práctico
+    if (contexto && isCase && !fullQuestion.includes(contexto.slice(0, 20))) {
       fullQuestion = `${contexto}\n\n${fullQuestion}`;
     }
 
@@ -3678,7 +3702,6 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       wordBank = Array.from(bankSet).sort(() => Math.random() - 0.5);
     }
 
-    const isCase = p.longitud_enunciado === 'medio_largo' || /\b(caso|supuesto|paciente|clínic|escenario)\b/i.test(fullQuestion);
     fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
     const query = String(
