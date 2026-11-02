@@ -612,7 +612,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               type="button"
               onClick={() => setShowMateriaManagerModal(true)}
-              className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-950/30 border border-amber-500/30 hover:border-amber-500/60 transition-all cursor-pointer font-medium"
+              className="active-press text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/30 border border-amber-500/30 hover:border-amber-500/60 glass-specular transition-[transform,border-color,background-color] cursor-pointer font-medium"
               title="Crear, editar y gestionar materias de estudio"
             >
               <FolderEdit className="w-3.5 h-3.5" />
@@ -631,10 +631,10 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     setIsSelectionMode(true);
                   }
                 }}
-                className={`text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer font-medium ${
+                className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-xl border glass-specular transition-[transform,border-color,background-color] cursor-pointer font-medium ${
                   isSelectionMode
                     ? 'bg-violet-600/30 border-violet-500 text-violet-200'
-                    : 'text-slate-400 hover:text-white border-slate-700/60 bg-thea-surface hover:bg-thea-surfaceLight'
+                    : 'text-slate-300 hover:text-white border-white/10 bg-thea-surface hover:bg-thea-surfaceLight'
                 }`}
                 title={isSelectionMode ? 'Salir del modo selección' : 'Seleccionar libros para cambiarlos de materia o eliminarlos'}
               >
@@ -645,10 +645,10 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               type="button"
               onClick={() => onNavigate('analytics')}
-              className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors cursor-pointer font-medium"
+              className="active-press text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors cursor-pointer font-medium"
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              Ver analíticas
+              <span>Ver analíticas</span>
             </button>
           </div>
         </div>
@@ -665,13 +665,18 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               type="button"
               onClick={() => setSelectedMateria('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+              className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 cursor-pointer tabular-nums flex items-center gap-1.5 border transition-[transform,background-color,border-color] ${
                 selectedMateria === 'all'
-                  ? 'bg-violet-600 text-white shadow-sm shadow-violet-950/60'
-                  : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white hover:border-violet-500/40'
+                  ? 'bg-violet-600 text-white border-violet-500 shadow-sm shadow-violet-950/60'
+                  : 'bg-thea-surface/85 border-thea-border text-slate-400 hover:text-white hover:border-violet-500/40'
               }`}
             >
-              Todas ({kits.length})
+              <span>Todas</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                selectedMateria === 'all' ? 'bg-black/25 text-white' : 'bg-black/40 text-slate-300'
+              }`}>
+                {kits.length}
+              </span>
             </button>
 
             {/* Botones de cada Materia existente con color opaco */}
@@ -686,18 +691,18 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   style={{
                     backgroundColor: isSelected ? undefined : mTheme.cardBgHex,
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 cursor-pointer flex items-center gap-1.5 border tabular-nums transition-[transform,background-color,border-color] ${
                     isSelected
                       ? `${mTheme.chipActiveBgClass}`
                       : `${mTheme.chipInactiveClass}`
                   }`}
                 >
                   <span
-                    className="w-2 h-2 rounded-full shrink-0"
+                    className="w-2 h-2 rounded-full shrink-0 shadow-sm"
                     style={{ backgroundColor: mTheme.hex }}
                   />
-                  <span>{materia.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  <span className="tracking-tight">{materia.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                     isSelected ? 'bg-black/25 text-white' : 'bg-black/40 text-slate-300'
                   }`}>
                     {materia.count}
@@ -762,8 +767,8 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Tarjetas de kits con el estilo solicitado (Fondo rico opaco, marca de agua e indicadores) */}
-            {filteredKits.map(kit => {
+            {/* Tarjetas de kits con diseño Dark Glass (Emil Kowalski / Apple Design) */}
+            {filteredKits.map((kit, index) => {
               const isActive = currentKit?.id === kit.id;
               const kStats = bookStatsMap.get(kit.id) || getBookRealStats(kit, userId);
               const catKey = (kit.category || 'General').trim().toLowerCase();
@@ -789,19 +794,20 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   }}
                   style={{
                     backgroundColor: mTheme.cardBgHex,
+                    animationDelay: `${Math.min(index * 35, 350)}ms`,
                   }}
-                  className={`group relative text-left p-5 sm:p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.015] cursor-pointer shadow-lg overflow-hidden flex flex-col justify-between min-h-[185px] ${
+                  className={`animate-stagger-item active-press-card glass-specular group relative text-left p-5 sm:p-6 rounded-3xl border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[190px] hover:translate-y-[-2px] ${
                     isSelectionMode && isKitSelected
                       ? 'ring-2 ring-violet-500 border-violet-400 shadow-2xl scale-[1.01]'
                       : isActive
-                      ? 'ring-2 ring-white/30 shadow-2xl border-white/10'
+                      ? 'ring-2 ring-white/30 shadow-2xl border-white/20'
                       : 'border-white/10 hover:border-white/25'
                   }`}
                 >
-                  {/* Marca de agua ilustrativa interactiva con animación hover pop-up y rotación dinámica */}
+                  {/* Marca de agua ilustrativa interactiva acelerada por GPU */}
                   <div
                     style={{ color: mTheme.hex }}
-                    className="absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-all duration-300 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 opacity-45 group-hover:rotate-0 group-hover:-translate-y-1.5 group-hover:translate-x-0 group-hover:opacity-100"
+                    className="absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-[transform,opacity] duration-250 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 opacity-45 group-hover:rotate-0 group-hover:-translate-y-1.5 group-hover:translate-x-0 group-hover:opacity-100 will-change-transform"
                   >
                     {renderWatermarkIcon(kit.icon, kit.category, kit.title)}
                   </div>
@@ -836,7 +842,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                             </span>
                           )}
                         </div>
-                        <h3 className="font-bold text-white text-base sm:text-lg leading-tight line-clamp-2">
+                        <h3 className="font-bold text-white text-base sm:text-lg leading-tight line-clamp-2 tracking-tight">
                           {kit.title}
                         </h3>
                       </div>
@@ -844,7 +850,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                       {isActive && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/20">
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-white border border-white/25 shadow-sm">
                           Último abierto
                         </span>
                       )}
@@ -858,7 +864,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                               setKitMenuOpenId(isMenuOpen ? null : kit.id);
                             }}
                           title="Opciones de este Study Kit"
-                          className={`p-2 sm:p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-colors cursor-pointer ${
+                          className={`active-press p-2 sm:p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-[transform,background-color] cursor-pointer ${
                             isMenuOpen ? 'bg-white/20 text-white' : ''
                           }`}
                         >
@@ -905,38 +911,40 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     </div>
                   </div>
 
-                  {/* Bottom Area: Estadísticas + Barra cápsula oscura (idéntica a la imagen) */}
+                  {/* Bottom Area: Estadísticas + Barra cápsula oscura con números tabulares */}
                   <div className="mt-5 relative z-10 space-y-2">
                     {/* Estadísticas del kit */}
-                    <div className="flex items-center gap-3 text-xs text-white/85 font-medium flex-wrap">
+                    <div className="flex items-center gap-3 text-xs text-white/85 font-medium flex-wrap tabular-nums">
                       <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
-                        <Brain className="w-3.5 h-3.5 text-white/70" />
-                        {kStats.levelCorrectCount > 0 || kStats.level > 1
-                          ? `Nivel ${kStats.level}: ${kStats.levelCorrectCount}/${kStats.levelTarget} (${smartStudyPct}%)`
-                          : (kStats.questionsAnswered > 0
-                              ? `Nivel 1: 0/${kStats.levelTarget} (0%)`
-                              : `Nivel 1: 0%`)}
+                        <Brain className="w-3.5 h-3.5 text-white/70 shrink-0" />
+                        <span>
+                          {kStats.levelCorrectCount > 0 || kStats.level > 1
+                            ? `Nivel ${kStats.level}: ${kStats.levelCorrectCount}/${kStats.levelTarget} (${smartStudyPct}%)`
+                            : (kStats.questionsAnswered > 0
+                                ? `Nivel 1: 0/${kStats.levelTarget} (0%)`
+                                : `Nivel 1: 0%`)}
+                        </span>
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-white/70" />
-                        {kStats.flashcardsMastered}/{kStats.flashcardsTotal} cards
+                        <Layers className="w-3.5 h-3.5 text-white/70 shrink-0" />
+                        <span>{kStats.flashcardsMastered}/{kStats.flashcardsTotal} cards</span>
                       </span>
                       {kStats.assetsCount > 0 && (
                         <span className="flex items-center gap-1.5">
-                          <ImageIcon className="w-3.5 h-3.5 text-white/70" />
-                          {kStats.assetsCount} img
+                          <ImageIcon className="w-3.5 h-3.5 text-white/70 shrink-0" />
+                          <span>{kStats.assetsCount} img</span>
                         </span>
                       )}
                     </div>
 
-                    {/* Barra cápsula oscura con píldora redondeada (como en la captura) */}
-                    <div className="w-full h-2.5 rounded-full bg-black/45 overflow-hidden p-0.5 border border-black/20">
+                    {/* Barra cápsula oscura con píldora redondeada y profundidad física */}
+                    <div className="w-full h-2.5 rounded-full bg-black/45 overflow-hidden p-0.5 border border-black/20 shadow-inner">
                       <div
                         style={{
                           width: `${progressPercent}%`,
                           backgroundColor: mTheme.hex,
                         }}
-                        className="h-full rounded-full transition-all duration-300 shadow-sm"
+                        className="h-full rounded-full transition-[width] duration-300 ease-out shadow-sm"
                       />
                     </div>
                   </div>
@@ -944,15 +952,15 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               );
             })}
 
-            {/* Create New Kit Card */}
+            {/* Create New Kit Card con feedback táctil elástico */}
             <button
               onClick={() => onNavigate('create')}
-              className="group flex flex-col items-center justify-center p-6 rounded-3xl border-2 border-dashed border-thea-border hover:border-violet-500 bg-thea-surface/40 hover:bg-violet-950/20 transition-all duration-200 min-h-[185px] cursor-pointer"
+              className="active-press-card group flex flex-col items-center justify-center p-6 rounded-3xl border-2 border-dashed border-thea-border/80 hover:border-violet-500/80 bg-thea-surface/30 hover:bg-violet-950/20 glass-specular transition-[transform,border-color,background-color] duration-200 min-h-[190px] cursor-pointer"
             >
-              <div className="w-12 h-12 rounded-2xl bg-violet-600/20 group-hover:bg-violet-600/30 flex items-center justify-center mb-2.5 transition-colors">
-                <Plus className="w-6 h-6 text-violet-400 group-hover:text-violet-300 group-hover:rotate-90 transition-all duration-300" />
+              <div className="w-12 h-12 rounded-2xl bg-violet-600/20 group-hover:bg-violet-600/30 border border-violet-500/30 flex items-center justify-center mb-2.5 transition-[background-color,border-color] duration-200">
+                <Plus className="w-6 h-6 text-violet-400 group-hover:text-violet-300 group-hover:rotate-90 transition-transform duration-300" />
               </div>
-              <span className="text-sm font-semibold text-slate-400 group-hover:text-violet-300 transition-colors">
+              <span className="text-sm font-semibold text-slate-300 group-hover:text-violet-200 transition-colors">
                 Nuevo Study Kit
               </span>
               <span className="text-xs text-slate-500 mt-0.5">
@@ -1857,11 +1865,11 @@ const QuickStat: React.FC<{
   label: string;
   accent: string;
 }> = ({ icon, value, label }) => (
-  <div className="flex items-center gap-3 p-4 rounded-2xl bg-thea-surface border border-thea-border">
-    <div className="shrink-0">{icon}</div>
-    <div>
-      <p className="text-lg font-bold text-white leading-tight">{value}</p>
-      <p className="text-[11px] text-slate-500">{label}</p>
+  <div className="flex items-center gap-3 p-4 rounded-2xl bg-thea-surface/85 backdrop-blur-md border border-white/5 glass-specular transition-[transform,border-color] duration-200 hover:border-white/15 hover:translate-y-[-1px]">
+    <div className="shrink-0 p-2 rounded-xl bg-white/5 border border-white/10">{icon}</div>
+    <div className="min-w-0">
+      <p className="text-lg font-bold text-white leading-tight tabular-nums tracking-tight truncate">{value}</p>
+      <p className="text-[11px] text-slate-400 font-medium tracking-wide">{label}</p>
     </div>
   </div>
 );

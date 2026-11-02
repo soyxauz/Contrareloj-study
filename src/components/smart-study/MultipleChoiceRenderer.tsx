@@ -23,7 +23,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
 
-        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/50 hover:bg-thea-surfaceLight text-slate-200 active:scale-[0.985]';
+        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/50 hover:bg-thea-surfaceLight text-slate-200 glass-specular hover:translate-y-[-1px]';
         let badgeClasses = 'bg-thea-surfaceLight text-violet-200 border border-thea-border/80';
 
         if (isAnswered) {
@@ -44,14 +44,15 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
             key={idx}
             type="button"
             disabled={isAnswered}
+            style={{ animationDelay: `${idx * 40}ms` }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`w-full text-left p-4 sm:p-5 rounded-2xl transition-all duration-150 ease-out flex items-center gap-3.5 sm:gap-4 group cursor-pointer ${cardClasses}`}
+            className={`animate-stagger-item active-press-card w-full text-left p-4 sm:p-5 rounded-2xl transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out flex items-center gap-3.5 sm:gap-4 group cursor-pointer ${cardClasses}`}
           >
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-all duration-150 ${badgeClasses}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 tabular-nums transition-[transform,background-color] duration-150 ${badgeClasses}`}>
               {isAnswered && isCorrect ? (
                 <Check className="w-4 h-4 stroke-[3]" />
               ) : isAnswered && isSelected ? (

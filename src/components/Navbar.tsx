@@ -114,9 +114,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => onSelectMode('create')}
               title="Crear nuevo Study Kit"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`active-press flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold glass-specular transition-[transform,background-color,border-color] ${
                 currentMode === 'create'
-                  ? 'bg-violet-600 text-white shadow-md shadow-violet-900/30'
+                  ? 'bg-violet-600 text-white border-violet-500 shadow-md shadow-violet-900/30'
                   : 'bg-thea-surface border border-thea-border text-violet-300 hover:bg-violet-600/20 hover:border-violet-500/40'
               }`}
             >
@@ -128,9 +128,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => onSelectMode('home')}
               title="Inicio"
-              className={`p-2 rounded-xl border transition-colors ${
+              className={`active-press p-2 rounded-xl border glass-specular transition-[transform,background-color,border-color] ${
                 currentMode === 'home'
-                  ? 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-900/30'
+                  ? 'bg-violet-600 text-white border-violet-500 shadow-md shadow-violet-900/30'
                   : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
               }`}
             >
@@ -146,9 +146,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Streak indicator real */}
             <div
               title={`Racha de estudio: ${realStreak} ${realStreak === 1 ? 'día consecutivo' : 'días consecutivos'}`}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-thea-surface border border-thea-border text-xs text-orange-400 font-semibold shrink-0"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-thea-surface/80 border border-thea-border text-xs text-orange-400 font-semibold shrink-0 tabular-nums glass-specular"
             >
-              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-orange-500 text-orange-500" />
+              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-orange-500 text-orange-500 shrink-0" />
               <span>{realStreak}</span>
             </div>
           </div>
@@ -165,7 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? `Google Drive sincronizado (${driveState.userEmail})`
                   : 'Conectar Google Drive para respaldo en la nube'
               }
-              className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-xl border transition-all text-xs font-semibold shadow-sm cursor-pointer shrink-0 ${
+              className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl border transition-[transform,background-color,border-color] text-xs font-semibold glass-specular cursor-pointer shrink-0 ${
                 driveState.status === 'syncing'
                   ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
                   : driveState.status === 'needs_reauth'
@@ -204,7 +204,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onOpenAISettings}
               title="Configuración de IA (Ollama Cloud / API)"
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-950/40 hover:bg-violet-900/50 border border-violet-500/40 text-violet-300 hover:text-white transition-all text-xs font-semibold shadow-sm cursor-pointer"
+              className="active-press hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-950/40 hover:bg-violet-900/50 border border-violet-500/40 text-violet-300 hover:text-white transition-[transform,background-color,border-color] text-xs font-semibold glass-specular cursor-pointer"
             >
               <Bot className="w-3.5 h-3.5 text-violet-400" />
               <span>IA Engine</span>
@@ -220,7 +220,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center gap-1.5">
                 <div
                   title={`Conectado como @${currentUser.username}`}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-200 text-xs font-semibold"
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-200 text-xs font-semibold glass-specular"
                 >
                   <div className="w-5 h-5 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
                     {currentUser.displayName.charAt(0).toUpperCase()}
@@ -230,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={onLogout}
                   title="Cerrar Sesión"
-                  className="p-1.5 rounded-xl bg-thea-surface hover:bg-rose-950/40 border border-thea-border hover:border-rose-500/40 text-slate-400 hover:text-rose-400 transition-colors"
+                  className="active-press p-1.5 rounded-xl bg-thea-surface hover:bg-rose-950/40 border border-thea-border hover:border-rose-500/40 text-slate-400 hover:text-rose-400 transition-[transform,background-color,border-color]"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -239,10 +239,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onOpenAuth}
                 title="Iniciar Sesión o Crear Cuenta"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600/30 to-indigo-600/30 hover:from-violet-600 hover:to-indigo-600 border border-violet-500/50 text-white transition-all text-xs font-semibold shadow-sm cursor-pointer"
+                className="active-press flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold glass-specular transition-[transform,background-color] shadow-sm cursor-pointer"
               >
-                <UserIcon className="w-3.5 h-3.5 text-violet-300" />
-                <span>Mi Cuenta</span>
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Ingresar</span>
               </button>
             )}
           </div>
@@ -258,7 +258,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 key={mode.id}
                 onClick={() => onSelectMode(mode.id)}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-all whitespace-nowrap text-xs sm:text-sm ${
+                className={`active-press flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-[transform,background-color,color] whitespace-nowrap text-xs sm:text-sm cursor-pointer ${
                   active
                     ? 'bg-violet-600 text-white font-semibold shadow-md shadow-violet-900/30'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-thea-surface'
@@ -268,7 +268,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>{mode.label}</span>
                 {mode.id === 'images' && currentKit?.assets && currentKit.assets.length > 0 && (
                   <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold tabular-nums ${
                       active
                         ? 'bg-white/20 text-white'
                         : 'bg-violet-500/20 text-violet-300 border border-violet-500/30'

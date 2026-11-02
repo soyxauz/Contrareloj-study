@@ -21,7 +21,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
         const isCorrect = idx === safeCorrectIndex;
         const isVerdadero = idx === 0;
 
-        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 hover:scale-[1.02] active:scale-98';
+        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 glass-specular hover:translate-y-[-1px]';
         let iconClasses = isVerdadero ? 'text-emerald-400' : 'text-rose-400';
         let iconBgClasses = isVerdadero ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30';
 
@@ -46,12 +46,13 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
             key={idx}
             type="button"
             disabled={isAnswered}
+            style={{ animationDelay: `${idx * 50}ms` }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`w-full py-8 sm:py-10 px-6 rounded-3xl transition-all duration-150 ease-out flex flex-col items-center justify-center gap-3 cursor-pointer shadow-lg ${cardClasses}`}
+            className={`animate-stagger-item active-press-card w-full py-8 sm:py-10 px-6 rounded-3xl transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out flex flex-col items-center justify-center gap-3 cursor-pointer ${cardClasses}`}
           >
             <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all ${iconBgClasses}`}>
               {isVerdadero ? (

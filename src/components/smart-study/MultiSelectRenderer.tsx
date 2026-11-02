@@ -29,9 +29,9 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           const isSelected = selectedMultiIndices.includes(idx);
           const isCorrect = safeCorrectIndices.includes(idx);
 
-          let optionStyles = 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-200';
+          let optionStyles = 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-200 glass-specular hover:translate-y-[-1px]';
           if (isSelected && !isAnswered) {
-            optionStyles = 'border-violet-500 bg-violet-950/30 text-white ring-1 ring-violet-500';
+            optionStyles = 'border-violet-500 bg-violet-950/30 text-white ring-1 ring-violet-500 glass-specular';
           }
           if (isAnswered) {
             if (isCorrect && isSelected) {
@@ -50,8 +50,9 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
               key={idx}
               type="button"
               disabled={isAnswered}
+              style={{ animationDelay: `${idx * 40}ms` }}
               onClick={() => onToggleIndex(idx)}
-              className={`w-full text-left p-4 rounded-2xl border transition-all duration-150 ease-out flex items-center justify-between cursor-pointer ${optionStyles}`}
+              className={`animate-stagger-item active-press-card w-full text-left p-4 rounded-2xl border transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out flex items-center justify-between cursor-pointer ${optionStyles}`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${
@@ -80,7 +81,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           type="button"
           disabled={selectedMultiIndices.length === 0}
           onClick={onCheckSelection}
-          className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+          className="active-press w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-bold text-sm shadow-md glass-specular transition-[transform,background-color] duration-150 cursor-pointer tabular-nums"
         >
           Comprobar Selección ({selectedMultiIndices.length} seleccionada{selectedMultiIndices.length !== 1 ? 's' : ''})
         </button>
