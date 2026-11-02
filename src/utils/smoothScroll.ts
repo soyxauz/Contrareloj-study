@@ -273,3 +273,13 @@ export function resetUltraLightSmoothScroll(y: number = 0) {
 export function isSmoothScrollActive(): boolean {
   return isRunning;
 }
+
+// Auto-inicialización inmediata al cargar el módulo para capturar el primer scroll en el frame 0 sin latencia
+if (typeof window !== 'undefined') {
+  if ('scrollRestoration' in history) {
+    try {
+      history.scrollRestoration = 'manual';
+    } catch (_) {}
+  }
+  initUltraLightSmoothScroll();
+}

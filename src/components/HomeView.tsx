@@ -419,7 +419,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
   }, [availableMateriasList, kits, userId]);
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 animate-fadeIn">
+    <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6">
 
       {/* ── Header de Espacio de Estudio (Estilo Linear / Raycast Studio) ── */}
       <section className="mb-6">

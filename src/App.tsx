@@ -116,6 +116,7 @@ export const App: React.FC = () => {
   const [driveNeedsReauth, setDriveNeedsReauth] = useState<boolean>(() => googleDriveService.getState().status === 'needs_reauth');
   const isLoggingOutRef = useRef(false);
   const isHydratedRef = useRef(false);
+  const isStartupHydrationRef = useRef(true);
 
   useEffect(() => {
     const unsubscribe = googleDriveService.subscribe((state) => {
@@ -130,13 +131,21 @@ export const App: React.FC = () => {
     return initUltraLightSmoothScroll();
   }, []);
 
-  // Pre-carga en reposo de los componentes modales para apertura instantánea en 0ms
+  // Pre-carga diferida en reposo absoluto (evita robar ciclos de CPU durante el primer scroll de arranque)
   useEffect(() => {
     const timer = setTimeout(() => {
-      import('./components/AISettingsModal');
-      import('./components/AuthModal');
-      import('./components/GoogleDriveModal');
-    }, 1200);
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(() => {
+          import('./components/AISettingsModal');
+          import('./components/AuthModal');
+          import('./components/GoogleDriveModal');
+        });
+      } else {
+        import('./components/AISettingsModal');
+        import('./components/AuthModal');
+        import('./components/GoogleDriveModal');
+      }
+    }, 6000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -222,8 +231,14 @@ export const App: React.FC = () => {
           }
           return prev;
         });
+        setTimeout(() => {
+          isStartupHydrationRef.current = false;
+        }, 1200);
       } else {
         isHydratedRef.current = true;
+        setTimeout(() => {
+          isStartupHydrationRef.current = false;
+        }, 1200);
       }
     });
 
@@ -241,6 +256,9 @@ export const App: React.FC = () => {
           setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits));
         }
       }
+      setTimeout(() => {
+        isStartupHydrationRef.current = false;
+      }, 1200);
     });
 
     return () => {
@@ -300,10 +318,14 @@ export const App: React.FC = () => {
   }, [kits]);
 
   const [currentMode, setCurrentMode] = useState<StudyMode>('home');
+  const prevModeRef = useRef<StudyMode>(currentMode);
 
-  // Reset sereno de scroll al cambiar de pantalla
+  // Reset sereno de scroll únicamente al cambiar de pantalla (nunca en el montaje inicial del arranque)
   useEffect(() => {
-    resetUltraLightSmoothScroll(0);
+    if (prevModeRef.current !== currentMode) {
+      prevModeRef.current = currentMode;
+      resetUltraLightSmoothScroll(0);
+    }
   }, [currentMode]);
 
   // Bloqueo estricto del scroll de la página de fondo mientras haya modales abiertos
@@ -498,10 +520,10 @@ export const App: React.FC = () => {
     localStorage.setItem('thea_developersettings', JSON.stringify(permanentSettings));
   }, []);
 
-  // Sync Study Kits (protegido contra sobreescritura destructiva en arranque)
+  // Sync Study Kits (protegido contra sobreescritura destructiva y bucles de guardado en arranque)
   useEffect(() => {
     if (isLoggingOutRef.current) return;
-    if (!isHydratedRef.current) return;
+    if (!isHydratedRef.current || isStartupHydrationRef.current) return;
     try {
       authService.saveUserKits(currentUser ? currentUser.id : null, kits);
     } catch (e) {
@@ -509,15 +531,16 @@ export const App: React.FC = () => {
     }
   }, [kits, currentUser]);
 
-  // Sincronización automática al inicio desde Google Drive (con renovación silenciosa si es necesario)
+  // Sincronización automática diferida al inicio desde Google Drive (evita bloquear los primeros 3.5s de interacción)
   useEffect(() => {
     if (!currentUser) return;
-    if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
+    if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+
+    const timer = setTimeout(() => {
       googleDriveService.autoSyncOnStartup(currentUser.id).then((pulled) => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const clean = pulled.filter(k => !isCorruptedKit(k));
           if (clean.length > 0) {
-            // Aplicar de inmediato los kits y sus preguntas sin esperar a descargar imágenes pesadas
             setKits(prev => mergeKitsByUpdatedAt(prev, clean));
             setCurrentKit(prev => {
               if (!prev) return clean[0];
@@ -535,7 +558,9 @@ export const App: React.FC = () => {
       }).catch(err => {
         console.warn('[App] Error al sincronizar inicio desde Google Drive:', err);
       });
-    }
+    }, 3500);
+
+    return () => clearTimeout(timer);
   }, [currentUser?.id]);
 
   const startupGracePeriodRef = useRef(Date.now() + 10000); // 10s de gracia inicial para no saturar la red con subidas
