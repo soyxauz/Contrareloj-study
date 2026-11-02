@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useTheme } from '../services/themeService';
 import type { DeveloperSettings } from '../types';
 import { ShieldCheck, Cpu, Code2, X } from 'lucide-react';
 
@@ -16,6 +17,7 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
   onClose,
   onResetKits
 }) => {
+  const { theme } = useTheme();
   if (typeof document === 'undefined') return null;
 
   return createPortal(
@@ -41,7 +43,7 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
         <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-200 mb-6 flex items-start gap-2.5">
           <ShieldCheck className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
           <p>
-            Todas las funciones y herramientas se encuentran habilitadas y disponibles en <strong>Contrareloj Study</strong>.
+            Todas las funciones y herramientas se encuentran habilitadas y disponibles en <strong>{theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study'}</strong>.
           </p>
         </div>
 

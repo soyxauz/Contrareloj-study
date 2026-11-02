@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTheme } from '../services/themeService';
 import type { StudyKit } from '../types';
 import {
   Send,
@@ -32,11 +33,14 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
   onOpenAISettings,
   onNavigateToOral,
 }) => {
+  const { theme } = useTheme();
+  const botName = theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study';
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'chat-init',
       sender: 'thea',
-      text: `¡Hola! Soy Contrareloj Study, tu tutor de estudio personal. Tengo indexados todos los contenidos de "${kit.title}". ¿Qué concepto, mecanismo o duda te gustaría que te explique a fondo?`,
+      text: `¡Hola! Soy ${botName}, tu tutor de estudio personal. Tengo indexados todos los contenidos de "${kit.title}". ¿Qué concepto, mecanismo o duda te gustaría que te explique a fondo?`,
       timestamp: 'Ahora',
     },
   ]);

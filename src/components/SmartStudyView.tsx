@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
-import confetti from 'canvas-confetti';
+import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
 import {
   generateAIPedagogicalQuestions,
   generateSocraticReformulatedQuestion,

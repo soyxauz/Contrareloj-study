@@ -3,6 +3,8 @@ import type { StudyKit, StudyMode, User } from '../types';
 import { calculateRealStreak, getGlobalStatsSnapshot } from '../services/statsService';
 import { authService } from '../services/authService';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
+import { useTheme } from '../services/themeService';
+import { ThemeSwitcher } from './ThemeSwitcher';
 import {
   Flame,
   BookOpen,
@@ -91,21 +93,32 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'analytics', label: 'Analíticas', icon: <BarChart3 className="w-4 h-4" /> },
   ];
 
+  const { theme, setTheme } = useTheme();
+
   return (
-    <header className="sticky top-0 z-50 bg-[#0d0408]/95 border-b border-white/[0.06] shadow-sm">
+    <header className="sticky top-0 z-50 bg-thea-surface/95 border-b border-thea-border/60 shadow-sm backdrop-blur-md">
       {/* Top Brand & Status Bar */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left Side: Logo & Minimal Wordmark */}
-        <div className="flex items-center gap-2 sm:gap-5 min-w-0 shrink-0">
-          <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
-            <div className="w-7 h-7 rounded-lg bg-white/[0.08] border border-white/10 flex items-center justify-center font-semibold text-xs text-white shrink-0 tracking-tight shadow-sm">
-              C
+        {/* Left Side: Logo & Minimal Wordmark + 3-Button Theme Switcher */}
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 tracking-tight shadow-sm transition-colors ${
+              theme === 'kitty'
+                ? 'bg-pink-500 text-white shadow-pink-500/30'
+                : 'bg-white/[0.08] border border-white/10 text-white'
+            }`}>
+              {theme === 'kitty' ? 'K' : 'C'}
             </div>
             <div className="flex items-center whitespace-nowrap">
-              <span className="text-sm sm:text-base font-semibold tracking-tight text-white">Contrareloj</span>
+              <span className="text-sm sm:text-base font-semibold tracking-tight text-white">
+                {theme === 'kitty' ? 'Kitty' : 'Contrareloj'}
+              </span>
               <span className="ml-1 text-xs text-slate-400 font-normal">Study</span>
             </div>
           </div>
+
+          {/* Interruptor de 3 botones (Luna, Sol, Kitty) al lado del nombre */}
+          <ThemeSwitcher currentTheme={theme} onSelectTheme={setTheme} />
         </div>
 
         {/* Right Badges & Controls */}

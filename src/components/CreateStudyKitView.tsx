@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useTheme } from '../services/themeService';
 import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
   ArrowRight,
@@ -149,6 +150,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
   // Results
   const [result, setResult] = useState<ProcessedContent | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const { theme } = useTheme();
 
   // Processing animation
   const [processStep, setProcessStep] = useState('');
@@ -1026,7 +1028,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         }`}
       >
         <BookOpen className="w-5 h-5 text-zinc-950" />
-        Crear Study Kit con Contrareloj Study
+        {theme === 'kitty' ? 'Crear Study Kit con Kitty Study' : 'Crear Study Kit con Contrareloj Study'}
       </button>
 
       {/* Info Footer */}

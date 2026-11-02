@@ -23,6 +23,7 @@ import {
   mergeCustomMaterias,
   type CustomMateria
 } from './materiaService';
+import { getStoredTheme, setStoredTheme } from './themeService';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
 
@@ -1515,6 +1516,9 @@ export const googleDriveService = {
           if (prog.flashcards && typeof prog.flashcards === 'object') {
             authService.saveAllFlashcardProgress(userId, prog.flashcards);
           }
+          if (prog.theme && (prog.theme === 'dark' || prog.theme === 'light' || prog.theme === 'kitty')) {
+            setStoredTheme(prog.theme, false);
+          }
         }
       }
 
@@ -1531,6 +1535,7 @@ export const googleDriveService = {
           sessions: cleanSessions,
           revealedQuestions: cleanRevealed,
           flashcards: cleanFlashcards,
+          theme: getStoredTheme(),
         };
         const userProgressFileName = `thea_progress_${userId}.json`;
         this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, cleanPayload).catch(err => {
@@ -1756,6 +1761,7 @@ export const googleDriveService = {
         sessions: userSessions,
         revealedQuestions: userRevealed,
         flashcards: userFlashcards,
+        theme: getStoredTheme(),
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
       const userMateriasFileName = `thea_materias_${userId}.json`;
@@ -1911,6 +1917,7 @@ export const googleDriveService = {
         sessions: userSessions,
         revealedQuestions: userRevealed,
         flashcards: userFlashcards,
+        theme: getStoredTheme(),
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
 
@@ -2131,6 +2138,7 @@ export const googleDriveService = {
         sessions: userSessions,
         revealedQuestions: userRevealed,
         flashcards: userFlashcards,
+        theme: getStoredTheme(),
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
       await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);
@@ -2200,6 +2208,10 @@ export const googleDriveService = {
         }
         if (cloudProgress.flashcards && typeof cloudProgress.flashcards === 'object') {
           authService.saveAllFlashcardProgress(userId, cloudProgress.flashcards);
+          anyIntegrated = true;
+        }
+        if (cloudProgress.theme && (cloudProgress.theme === 'dark' || cloudProgress.theme === 'light' || cloudProgress.theme === 'kitty')) {
+          setStoredTheme(cloudProgress.theme, false);
           anyIntegrated = true;
         }
       }

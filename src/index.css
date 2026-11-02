@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    /* RGB channels for Tailwind alpha-value support */
+  :root,
+  [data-theme="dark"] {
+    /* RGB channels for Tailwind alpha-value support (Bordeaux Dark) */
     --thea-bg: 13 4 8;
     --thea-surface: 24 8 16;
     --thea-surface-light: 38 12 25;
@@ -31,6 +32,58 @@
     --shadow-glass: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     --shadow-glass-hover: 0 4px 6px rgba(0, 0, 0, 0.4), 0 14px 28px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18);
     --shadow-glass-active: 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 8px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+    color-scheme: dark;
+  }
+
+  /* ── TEMA MODO CLARO (Light Mode: fondo claro limpio y colores vivos) ── */
+  [data-theme="light"] {
+    --thea-bg: 248 249 251;
+    --thea-surface: 255 255 255;
+    --thea-surface-light: 241 245 249;
+    --thea-border: 226 232 240;
+    --thea-accent: 225 29 72;
+    --thea-accent-hover: 190 18 60;
+    --thea-plus-gold: 217 119 6;
+    --thea-plus-rose: 225 29 72;
+    --thea-cyan: 2 132 199;
+
+    --thea-bg-hex: #f8f9fb;
+    --thea-surface-hex: #ffffff;
+    --thea-surface-light-hex: #f1f5f9;
+    --thea-border-hex: #e2e8f0;
+    --thea-accent-hex: #e11d48;
+
+    --shadow-glass: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+    --shadow-glass-hover: 0 4px 8px rgba(0, 0, 0, 0.08), 0 12px 24px -4px rgba(0, 0, 0, 0.08);
+    --shadow-glass-active: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+    color-scheme: light;
+  }
+
+  /* ── TEMA MODO KITTY (Kitty Mode: rosa pastel, blanco y Kitty Study) ── */
+  [data-theme="kitty"] {
+    --thea-bg: 255 240 245; /* #fff0f5 LavenderBlush */
+    --thea-surface: 255 255 255; /* #ffffff Pure White */
+    --thea-surface-light: 255 228 238; /* #ffe4ee Soft Blush */
+    --thea-border: 251 207 232; /* #fbcfe8 Cute Pink Border */
+    --thea-accent: 236 72 153; /* #ec4899 Hello Kitty Pink */
+    --thea-accent-hover: 219 39 119; /* #db2777 */
+    --thea-plus-gold: 245 158 11;
+    --thea-plus-rose: 236 72 153;
+    --thea-cyan: 236 72 153;
+
+    --thea-bg-hex: #fff0f5;
+    --thea-surface-hex: #ffffff;
+    --thea-surface-light-hex: #ffe4ee;
+    --thea-border-hex: #fbcfe8;
+    --thea-accent-hex: #ec4899;
+
+    --shadow-glass: 0 2px 8px -1px rgba(244, 114, 182, 0.22), 0 6px 16px -2px rgba(244, 114, 182, 0.15);
+    --shadow-glass-hover: 0 4px 12px -1px rgba(244, 114, 182, 0.32), 0 12px 28px -4px rgba(244, 114, 182, 0.22);
+    --shadow-glass-active: 0 1px 4px rgba(244, 114, 182, 0.2);
+
+    color-scheme: light;
   }
 }
 
@@ -226,5 +279,256 @@ html {
                     linear-gradient(to bottom, rgba(190, 18, 60, 0.08) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   REGLAS INTEGRALES DE ESTILO PARA MODO CLARO Y MODO KITTY (120 FPS FLUIDO)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Fondos y Superficies Principales ── */
+[data-theme="light"] body {
+  background-color: #f8f9fb;
+  color: #09090b;
+}
+
+[data-theme="kitty"] body {
+  background-color: #fff0f5;
+  color: #09090b;
+}
+
+[data-theme="light"] ::selection {
+  background-color: #fecdd3;
+  color: #881337;
+}
+
+[data-theme="kitty"] ::selection {
+  background-color: #fbcfe8;
+  color: #831843;
+}
+
+/* ── 2. Conversión de Superficies y Tarjetas Oscuras a Blanco Nítido ── */
+[data-theme="light"] .bg-thea-surface,
+[data-theme="light"] .bg-\[\#0e0b16\],
+[data-theme="light"] .bg-\[\#0d0408\],
+[data-theme="light"] .bg-\[\#090314\],
+[data-theme="light"] .bg-\[\#14040b\],
+[data-theme="light"] .bg-\[\#14040c\],
+[data-theme="light"] .bg-\[\#12030a\],
+[data-theme="light"] .bg-\[\#1e0711\],
+[data-theme="light"] .bg-\[\#2c0b19\],
+[data-theme="light"] .bg-\[\#200814\],
+[data-theme="light"] .bg-\[\#0a0712\],
+[data-theme="light"] .bg-\[\#070106\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="kitty"] .bg-thea-surface,
+[data-theme="kitty"] .bg-\[\#0e0b16\],
+[data-theme="kitty"] .bg-\[\#0d0408\],
+[data-theme="kitty"] .bg-\[\#090314\],
+[data-theme="kitty"] .bg-\[\#14040b\],
+[data-theme="kitty"] .bg-\[\#14040c\],
+[data-theme="kitty"] .bg-\[\#12030a\],
+[data-theme="kitty"] .bg-\[\#1e0711\],
+[data-theme="kitty"] .bg-\[\#2c0b19\],
+[data-theme="kitty"] .bg-\[\#200814\],
+[data-theme="kitty"] .bg-\[\#0a0712\],
+[data-theme="kitty"] .bg-\[\#070106\] {
+  background-color: #ffffff !important;
+  border-color: #fbcfe8 !important;
+  box-shadow: 0 2px 8px -1px rgba(244, 114, 182, 0.15), 0 6px 16px -2px rgba(244, 114, 182, 0.1);
+}
+
+[data-theme="light"] .bg-thea-surfaceLight {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="kitty"] .bg-thea-surfaceLight {
+  background-color: #fff5f8 !important;
+  border-color: #fbcfe8 !important;
+}
+
+/* ── 3. Tipografía: Letras Negras que Resaltan sobre Fondo Claro ── */
+[data-theme="light"] h1, [data-theme="light"] h2, [data-theme="light"] h3, [data-theme="light"] h4, [data-theme="light"] h5, [data-theme="light"] h6,
+[data-theme="kitty"] h1, [data-theme="kitty"] h2, [data-theme="kitty"] h3, [data-theme="kitty"] h4, [data-theme="kitty"] h5, [data-theme="kitty"] h6 {
+  color: #09090b !important;
+}
+
+/* Reemplazar text-white por negro profundo excepto en botones con fondo de color */
+[data-theme="light"] .text-white:not(button[class*="bg-"]:not(.bg-transparent):not(.bg-white)):not(.badge-white-text):not(.keep-white),
+[data-theme="kitty"] .text-white:not(button[class*="bg-"]:not(.bg-transparent):not(.bg-white)):not(.badge-white-text):not(.keep-white) {
+  color: #09090b !important;
+}
+
+[data-theme="light"] .text-slate-100,
+[data-theme="light"] .text-slate-200,
+[data-theme="light"] .text-zinc-100,
+[data-theme="light"] .text-zinc-200,
+[data-theme="kitty"] .text-slate-100,
+[data-theme="kitty"] .text-slate-200,
+[data-theme="kitty"] .text-zinc-100,
+[data-theme="kitty"] .text-zinc-200 {
+  color: #18181b !important;
+}
+
+[data-theme="light"] .text-slate-300,
+[data-theme="light"] .text-zinc-300,
+[data-theme="kitty"] .text-slate-300,
+[data-theme="kitty"] .text-zinc-300 {
+  color: #27272a !important;
+}
+
+[data-theme="light"] .text-slate-400,
+[data-theme="light"] .text-zinc-400,
+[data-theme="kitty"] .text-slate-400,
+[data-theme="kitty"] .text-zinc-400 {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .text-slate-500,
+[data-theme="light"] .text-zinc-500,
+[data-theme="kitty"] .text-slate-500,
+[data-theme="kitty"] .text-zinc-500 {
+  color: #64748b !important;
+}
+
+/* ── 4. Translucidez Adaptada (Zero Glare) ── */
+[data-theme="light"] .bg-white\/\[0\.02\],
+[data-theme="light"] .bg-white\/\[0\.025\],
+[data-theme="light"] .bg-white\/\[0\.03\],
+[data-theme="light"] .bg-white\/\[0\.04\],
+[data-theme="light"] .bg-white\/\[0\.05\],
+[data-theme="light"] .bg-white\/\[0\.06\],
+[data-theme="light"] .bg-white\/\[0\.08\],
+[data-theme="light"] .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="kitty"] .bg-white\/\[0\.02\],
+[data-theme="kitty"] .bg-white\/\[0\.025\],
+[data-theme="kitty"] .bg-white\/\[0\.03\],
+[data-theme="kitty"] .bg-white\/\[0\.04\],
+[data-theme="kitty"] .bg-white\/\[0\.05\],
+[data-theme="kitty"] .bg-white\/\[0\.06\],
+[data-theme="kitty"] .bg-white\/\[0\.08\],
+[data-theme="kitty"] .bg-white\/10 {
+  background-color: rgba(244, 114, 182, 0.08) !important;
+}
+
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/\[0\.08\],
+[data-theme="light"] .border-white\/\[0\.06\],
+[data-theme="light"] .border-white\/\[0\.04\] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="kitty"] .border-white\/10,
+[data-theme="kitty"] .border-white\/\[0\.08\],
+[data-theme="kitty"] .border-white\/\[0\.06\],
+[data-theme="kitty"] .border-white\/\[0\.04\] {
+  border-color: rgba(244, 114, 182, 0.28) !important;
+}
+
+/* ── 5. Entradas de Texto, Textareas y Controles ── */
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="kitty"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="kitty"] textarea,
+[data-theme="kitty"] select {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+  border-color: #fbcfe8 !important;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+[data-theme="kitty"] input::placeholder,
+[data-theme="kitty"] textarea::placeholder {
+  color: #f472b6 !important;
+}
+
+/* ── 6. Preservación de Texto Blanco en Botones Sólidos ── */
+[data-theme="light"] button.bg-violet-600,
+[data-theme="light"] button.bg-rose-600,
+[data-theme="light"] button.bg-rose-500,
+[data-theme="light"] button.bg-indigo-600,
+[data-theme="light"] button.bg-emerald-600,
+[data-theme="light"] button.bg-blue-600,
+[data-theme="light"] button.bg-slate-900,
+[data-theme="kitty"] button.bg-violet-600,
+[data-theme="kitty"] button.bg-rose-600,
+[data-theme="kitty"] button.bg-pink-500,
+[data-theme="kitty"] button.bg-pink-600,
+[data-theme="kitty"] button.bg-emerald-600,
+[data-theme="kitty"] button.bg-blue-600,
+[data-theme="kitty"] button.bg-slate-900 {
+  color: #ffffff !important;
+}
+
+[data-theme="light"] button.bg-violet-600 *,
+[data-theme="light"] button.bg-rose-600 *,
+[data-theme="light"] button.bg-rose-500 *,
+[data-theme="light"] button.bg-indigo-600 *,
+[data-theme="kitty"] button.bg-pink-500 *,
+[data-theme="kitty"] button.bg-pink-600 *,
+[data-theme="kitty"] button.bg-violet-600 * {
+  color: #ffffff !important;
+}
+
+/* ── 7. Telón de Fondo de Modales (Backdrop Frosted Glass) ── */
+[data-theme="light"] .bg-black\/85,
+[data-theme="light"] .bg-black\/80,
+[data-theme="light"] .bg-black\/90 {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+[data-theme="kitty"] .bg-black\/85,
+[data-theme="kitty"] .bg-black\/80,
+[data-theme="kitty"] .bg-black\/90 {
+  background-color: rgba(76, 5, 25, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* ── 8. Ajustes Específicos para Modo Kitty ── */
+[data-theme="kitty"] .bg-violet-600 {
+  background-color: #ec4899 !important;
+}
+
+[data-theme="kitty"] .hover\:bg-violet-500:hover {
+  background-color: #db2777 !important;
+}
+
+[data-theme="kitty"] .text-violet-400 {
+  color: #ec4899 !important;
+}
+
+[data-theme="kitty"] .text-violet-300 {
+  color: #f472b6 !important;
+}
+
+[data-theme="kitty"] .border-violet-500\/40,
+[data-theme="kitty"] .border-violet-500\/30,
+[data-theme="kitty"] .border-violet-500\/20 {
+  border-color: #fbcfe8 !important;
+}
+
+[data-theme="kitty"] .bg-violet-950\/20,
+[data-theme="kitty"] .bg-violet-950\/30,
+[data-theme="kitty"] .bg-violet-600\/20 {
+  background-color: #fff0f5 !important;
+}
+
 
 

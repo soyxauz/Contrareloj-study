@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTheme } from '../services/themeService';
 import type { StudyKit, PodcastFormat, PodcastDuration } from '../types';
 import {
   Plus,
@@ -85,6 +86,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   }, [kit.id, kit.podcast?.dialogue?.length]);
 
   const [isPlaying, setIsPlaying] = useState(false);
+  const { theme } = useTheme();
   const [currentLineIndex, setCurrentLineIndex] = useState(initialPosition.lineIndex);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => getPodcastSettings().playbackSpeed || 1);
   const [activeTab, setActiveTab] = useState<'player' | 'transcript'>('player');
@@ -1084,7 +1086,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     const isSofia = speaker === 'sofia';
     const text = isSofia
-      ? '¡Hola! Soy Sofía en Contrareloj Study. ¡Me alegra mucho que estemos repasando juntos hoy!'
+      ? `¡Hola! Soy Sofía en ${theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study'}. ¡Me alegra mucho que estemos repasando juntos hoy!`
       : '¡Y yo soy Mateo! Vamos a profundizar en cada concepto para que apruebes con la máxima nota.';
 
     if (voiceEngine === 'edge') {
@@ -1718,7 +1720,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             </div>
             <h1 className="text-base sm:text-2xl font-bold text-white flex items-center gap-1.5 sm:gap-2 truncate">
               <Headphones className="w-4 h-4 sm:w-6 sm:h-6 text-amber-400 shrink-0" />
-              <span className="truncate">Contrareloj Review Podcast</span>
+              <span className="truncate">{theme === 'kitty' ? 'Kitty Review Podcast' : 'Contrareloj Review Podcast'}</span>
             </h1>
           </div>
 

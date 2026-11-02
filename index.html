@@ -2,6 +2,21 @@
 <html lang="es" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('thea_theme_mode');
+          if (t === 'light' || t === 'kitty' || t === 'dark') {
+            document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.classList.remove('dark', 'light', 'kitty');
+            document.documentElement.classList.add(t);
+          } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />

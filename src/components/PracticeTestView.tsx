@@ -17,7 +17,7 @@ import {
   CheckCheck,
 } from 'lucide-react';
 import { generateSpecializedExamQuestions, evaluateShortAnswer, enforceQuestionLengthLimit } from '../services/aiService';
-import confetti from 'canvas-confetti';
+import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
 
 interface PracticeTestViewProps {
   kit: StudyKit;

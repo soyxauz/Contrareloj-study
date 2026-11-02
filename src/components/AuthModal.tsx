@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTheme } from '../services/themeService';
 import type { User, StudyKit } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
@@ -107,6 +108,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  const { theme } = useTheme();
+  const appName = theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study';
+
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
@@ -127,7 +131,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {mode === 'login' ? <LogIn className="w-6 h-6" /> : <UserPlus className="w-6 h-6" />}
           </div>
           <h2 className="text-xl font-bold text-white tracking-tight">
-            {mode === 'login' ? 'Iniciar Sesión en Contrareloj Study' : 'Crear Cuenta en Contrareloj Study'}
+            {mode === 'login' ? `Iniciar Sesión en ${appName}` : `Crear Cuenta en ${appName}`}
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
             {mode === 'login'

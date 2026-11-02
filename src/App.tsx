@@ -23,6 +23,7 @@ import { HomeView } from './components/HomeView';
 import type { InputTab } from './components/CreateStudyKitView';
 import { restoreCustomMateriasAsync } from './services/materiaService';
 import { initUltraLightSmoothScroll, resetUltraLightSmoothScroll } from './utils/smoothScroll';
+import { useTheme, initTheme } from './services/themeService';
 
 // Carga diferida (Lazy Loading) de vistas secundarias para arranque ultrarrápido
 const SmartStudyView = React.lazy(() => import('./components/SmartStudyView').then(m => ({ default: m.SmartStudyView })));
@@ -319,6 +320,11 @@ export const App: React.FC = () => {
 
   const [currentMode, setCurrentMode] = useState<StudyMode>('home');
   const prevModeRef = useRef<StudyMode>(currentMode);
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    initTheme();
+  }, []);
 
   // Reset sereno de scroll únicamente al cambiar de pantalla (nunca en el montaje inicial del arranque)
   useEffect(() => {
@@ -1219,7 +1225,7 @@ export const App: React.FC = () => {
       {/* Footer (hidden on small screens to prioritize clean mobile viewport) */}
       <footer className="hidden md:block py-6 border-t border-thea-border text-center text-xs text-slate-500">
         <p>
-          Contrareloj Study • Plataforma de Aprendizaje Adaptativo con Inteligencia Pedagógica y RAG
+          {theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study'} • Plataforma de Aprendizaje Adaptativo con Inteligencia Pedagógica y RAG
         </p>
       </footer>
 
