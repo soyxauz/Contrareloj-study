@@ -22,7 +22,6 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
 import type { InputTab } from './components/CreateStudyKitView';
 import { restoreCustomMateriasAsync } from './services/materiaService';
-import Lenis from 'lenis';
 
 // Carga diferida (Lazy Loading) de vistas secundarias para arranque ultrarrápido
 const SmartStudyView = React.lazy(() => import('./components/SmartStudyView').then(m => ({ default: m.SmartStudyView })));
@@ -121,27 +120,6 @@ export const App: React.FC = () => {
       setDriveSyncState(state);
     });
     return unsubscribe;
-  }, []);
-
-  // Desplazamiento suave inercial (Lenis 120 FPS fluido, reactivo y de alta velocidad)
-  useEffect(() => {
-    const lenis = new Lenis({
-      autoRaf: true,
-      lerp: 0.1, // Respuesta inercial instantánea, continua y sedosa
-      wheelMultiplier: 1.15, // Desplazamiento reactivo y ágil por muesca de rueda
-      touchMultiplier: 1.5,
-      smoothWheel: true,
-      syncTouch: false,
-      respectReducedMotion: false, // Forzar activación del scroll smooth en Windows sin bloqueo de accesibilidad del SO
-      infinite: false,
-    });
-
-    (window as unknown as { __lenis?: Lenis }).__lenis = lenis;
-
-    return () => {
-      lenis.destroy();
-      delete (window as unknown as { __lenis?: Lenis }).__lenis;
-    };
   }, []);
 
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
@@ -307,12 +285,7 @@ export const App: React.FC = () => {
 
   // Reset sereno de scroll al cambiar de pantalla
   useEffect(() => {
-    const lenis = (window as unknown as { __lenis?: Lenis }).__lenis;
-    if (lenis) {
-      lenis.scrollTo(0, { immediate: true });
-    } else {
-      window.scrollTo(0, 0);
-    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [currentMode]);
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
   const [showAIModal, setShowAIModal] = useState(false);
@@ -538,16 +511,17 @@ export const App: React.FC = () => {
 
   const startupGracePeriodRef = useRef(Date.now() + 10000); // 10s de gracia inicial para no saturar la red con subidas
 
-  // Respaldo en segundo plano hacia Google Drive con debounce de 1200ms
+  // Respaldo en segundo plano hacia Google Drive con debounce de 7000ms
   useEffect(() => {
     if (isLoggingOutRef.current) return;
     if (!currentUser) return;
     if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+    if (driveSyncState.status === 'needs_reauth' || driveSyncState.status === 'error') return;
     if (!isHydratedRef.current) return;
     if (Date.now() < startupGracePeriodRef.current) return;
 
     googleDriveService.scheduleAutoSync(currentUser.id, kits, 7000);
-  }, [kits, currentUser]);
+  }, [kits, currentUser, driveSyncState.status]);
 
   // Respaldo en segundo plano del progreso de Smart Study y Flashcards hacia Google Drive en tiempo real
   useEffect(() => {

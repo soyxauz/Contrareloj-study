@@ -148,25 +148,15 @@
   animation: cardErrorShake 0.22s ease-in-out forwards;
 }
 
-/* ── Desplazamiento Suave y Equilibrado (Lenis 120 FPS Momentum Scroll) ── */
-html.lenis, html.lenis body {
-  height: auto;
+/* ── Desplazamiento Suave Nativo GPU (120 FPS sin consumo JS) ── */
+html {
+  scroll-behavior: smooth;
 }
 
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-
-.lenis.lenis-stopped {
-  overflow: clip;
-}
-
-.lenis.lenis-scrolling iframe {
-  pointer-events: none;
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 /* Animaciones 3D interactivas para Flashcards */

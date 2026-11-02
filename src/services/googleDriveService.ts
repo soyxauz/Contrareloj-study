@@ -1769,9 +1769,14 @@ export const googleDriveService = {
         errorMessage: null,
       });
     } catch (err: any) {
-      console.error('[GoogleDriveService] Error en pushToDrive:', err);
-      const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
-      if (is401) {
+      console.warn('[GoogleDriveService] Error en pushToDrive:', err?.message || err);
+      const isAuthOrNetwork =
+        err?.message?.includes('401') ||
+        err?.message?.includes('TOKEN_EXPIRED') ||
+        err?.status === 401 ||
+        err?.message?.includes('Failed to fetch') ||
+        err?.name === 'TypeError';
+      if (isAuthOrNetwork) {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
@@ -2060,14 +2065,23 @@ export const googleDriveService = {
       const userProgressFileName = `thea_progress_${userId}.json`;
       await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);
     } catch (e: any) {
-      console.warn('[GoogleDriveService] Error en pushProgressToDrive:', e);
-      const is401 = e?.message?.includes('401') || e?.message?.includes('TOKEN_EXPIRED') || e?.status === 401;
-      if (is401) {
+      console.warn('[GoogleDriveService] Error en pushProgressToDrive:', e?.message || e);
+      const isAuthOrNetwork =
+        e?.message?.includes('401') ||
+        e?.message?.includes('TOKEN_EXPIRED') ||
+        e?.status === 401 ||
+        e?.message?.includes('Failed to fetch') ||
+        e?.name === 'TypeError';
+      if (isAuthOrNetwork) {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
           return this.pushProgressToDrive(userId);
         }
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+        });
       }
     }
   },
