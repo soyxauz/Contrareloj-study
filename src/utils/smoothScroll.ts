@@ -6,9 +6,12 @@
  *    Las muescas discretas de la rueda del ratón entran a un acumulador continuo que se
  *    descarga suavemente de forma exponencial, eliminando los saltos bruscos de aceleración (jerk)
  *    entre muesca y muesca.
- * 2. Cero saltos por recalculo de escala o redondeo de coordenadas sub-píxel.
- * 3. Aislamiento estricto de modales: bloquea al 100% el fondo cuando hay modales o diálogos activos.
- * 4. 0% de uso de CPU cuando no hay movimiento (el bucle RAF se cancela de inmediato).
+ * 2. Cadencia dinámica reactiva:
+ *    Aceleración inercial progresiva en giros rápidos de rueda para recorrer documentos largos
+ *    sin fatiga, con corte instantáneo de inercia opuesta al invertir la dirección.
+ * 3. Soporte nativo para scroll horizontal sin intercepciones no deseadas.
+ * 4. Aislamiento estricto de modales: bloquea al 100% el fondo cuando hay modales o diálogos activos.
+ * 5. 0% de uso de CPU cuando no hay movimiento (el bucle RAF se cancela de inmediato).
  */
 
 let targetY = 0;
@@ -19,11 +22,13 @@ let rafId: number | null = null;
 let isInitialized = false;
 let lastFrameTime = 0;
 let isProgrammaticScroll = false;
+let lastWheelTime = 0;
+let cadenceTicks = 0;
 
 // Constantes físicas calibradas según el estándar de Apple / Emil Kowalski
-const LERP_LAMBDA = 20.0;    // Tasa de convergencia continua (~130ms de respuesta instantánea y sedosa)
-const QUEUE_LAMBDA = 30.0;   // Descarga gradual del impulso de la rueda para eliminar picos de aceleración
-const SCROLL_MULTIPLIER = 1.22; // Multiplicador de avance cómodo y eficiente por muesca
+const LERP_LAMBDA = 24.0;      // Tasa de convergencia continua (~110ms de respuesta instantánea y sedosa)
+const QUEUE_LAMBDA = 48.0;     // Descarga ágil del impulso de la rueda (55% en frame 1) eliminando latencia inicial
+const SCROLL_MULTIPLIER = 1.72; // Multiplicador de avance cómodo y rápido por muesca
 
 /**
  * Obtiene la altura desplazable máxima actual de forma instantánea.
@@ -39,7 +44,7 @@ function getMaxScroll(): number {
 function isInsideFixedOrModal(target: HTMLElement | null): boolean {
   if (!target) return false;
   return Boolean(
-    target.closest('.fixed, [role="dialog"], [aria-modal="true"], [data-modal]')
+    target.closest('.fixed.inset-0, [role="dialog"], [aria-modal="true"], [data-modal]')
   );
 }
 
@@ -105,7 +110,7 @@ function tick(currentTime: number) {
   currentY = Math.max(0, Math.min(currentY, maxScroll));
 
   // 3. Umbral de reposo absoluto
-  if (Math.abs(targetY - currentY) < 0.2 && Math.abs(inputQueue) < 0.2) {
+  if (Math.abs(targetY - currentY) < 0.25 && Math.abs(inputQueue) < 0.25) {
     currentY = targetY;
     inputQueue = 0;
     isProgrammaticScroll = true;
@@ -131,6 +136,10 @@ function tick(currentTime: number) {
 function onWheel(e: WheelEvent) {
   if (e.ctrlKey) return;
 
+  // Permitir desplazamiento horizontal natural sin interferencias
+  if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  if (e.deltaY === 0) return;
+
   const targetEl = e.target as HTMLElement | null;
 
   // Candado estricto para modales (Ajustes de IA, Google Drive, Autenticación, etc.)
@@ -155,7 +164,27 @@ function onWheel(e: WheelEvent) {
   if (e.deltaMode === 1) delta *= 24;
   else if (e.deltaMode === 2) delta *= window.innerHeight;
 
-  delta *= SCROLL_MULTIPLIER;
+  // Corte instantáneo de inercia al invertir la dirección de scroll
+  if ((delta > 0 && (targetY < currentY || inputQueue < -2)) || (delta < 0 && (targetY > currentY || inputQueue > 2))) {
+    inputQueue = 0;
+    targetY = currentY;
+    cadenceTicks = 0;
+  }
+
+  // Cadencia dinámica: si el usuario gira la rueda consecutivamente en ráfagas rápidas (<140ms),
+  // se aplica un multiplicador de aceleración inercial progresivo para recorrer páginas largas sin esfuerzo.
+  const now = performance.now();
+  const timeSinceLast = now - lastWheelTime;
+  lastWheelTime = now;
+
+  if (timeSinceLast < 140) {
+    cadenceTicks = Math.min(cadenceTicks + 1, 5);
+  } else {
+    cadenceTicks = 0;
+  }
+
+  const cadenceBoost = 1 + cadenceTicks * 0.12;
+  delta *= (SCROLL_MULTIPLIER * cadenceBoost);
 
   if (!isRunning) {
     currentY = window.scrollY;
