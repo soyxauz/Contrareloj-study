@@ -722,7 +722,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     borderColor: `${mTheme.hex}30`,
                     animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
-                  className={`animate-stagger-item active-press-card glass-specular group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] hover:translate-y-[-2px] hover:border-white/30 transition-[transform,border-color] ${
+                  className={`animate-stagger-item glass-specular group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-2xl hover:border-white/35 active:scale-[0.985] ${
                     isSelectionMode && isKitSelected
                       ? 'ring-2 ring-white/50 border-white shadow-2xl'
                       : isActive
@@ -732,16 +732,16 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                 >
                   {/* Línea de luz superior con el color distintivo de la materia */}
                   <div
-                    className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
+                    className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity duration-200"
                     style={{
                       background: `linear-gradient(90deg, ${mTheme.hex}cc 0%, ${mTheme.hex}35 60%, transparent 100%)`,
                     }}
                   />
 
-                  {/* Marca de agua sutil y ligera (Composite-only, 120 FPS sin lag) */}
+                  {/* Marca de agua ilustrativa interactiva con animación hover pop-up y rotación dinámica */}
                   <div
                     style={{ color: mTheme.hex }}
-                    className="absolute -bottom-2 -right-2 pointer-events-none select-none z-0 opacity-[0.06] group-hover:opacity-[0.11] transition-opacity duration-300"
+                    className="absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-all duration-300 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 opacity-45 group-hover:rotate-0 group-hover:-translate-y-1.5 group-hover:translate-x-0 group-hover:opacity-100"
                   >
                     {renderWatermarkIcon(kit.icon, kit.category, kit.title)}
                   </div>
@@ -893,9 +893,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             {/* Create New Kit Card con feedback táctil elástico y respiración amplia */}
             <button
               onClick={() => onNavigate('create')}
-              className="active-press-card group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed border-white/15 hover:border-white/30 bg-white/[0.02] hover:bg-white/[0.04] glass-specular transition-[transform,border-color,background-color] duration-200 min-h-[220px] cursor-pointer"
+              className="group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed border-white/15 hover:border-white/35 bg-white/[0.02] hover:bg-white/[0.05] glass-specular transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-2xl active:scale-[0.985] min-h-[220px] cursor-pointer"
             >
-              <div className="w-11 h-11 rounded-2xl bg-white/[0.06] group-hover:bg-white/[0.12] border border-white/10 flex items-center justify-center mb-3 transition-colors duration-200">
+              <div className="w-11 h-11 rounded-2xl bg-white/[0.06] group-hover:bg-white/[0.12] group-hover:scale-110 border border-white/10 flex items-center justify-center mb-3 transition-all duration-200">
                 <Plus className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" />
               </div>
               <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
