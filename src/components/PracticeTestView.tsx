@@ -376,7 +376,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               </span>
               {currentQ.topic && (
                 <>
-                  <span className="text-white/20">·</span>
+                  <span className="w-px h-2.5 bg-white/10 shrink-0" />
                   <span className="text-[11px] text-slate-400">
                     {currentQ.topic}
                   </span>

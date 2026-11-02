@@ -488,30 +488,126 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
           </div>
         </div>
 
-        {/* ── Metadata Ribbon Minimalista (Estilo Linear / Apple Studio) ── */}
-        <div className="flex items-center gap-4 sm:gap-6 py-2 text-xs text-slate-400 overflow-x-auto scrollbar-none tabular-nums border-b border-white/[0.06] pb-3 mb-5">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Flame className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-slate-200">{globalStats.realStreakDays} {globalStats.realStreakDays === 1 ? 'día' : 'días'}</span>
-            <span className="text-[11px] text-slate-500 font-normal">racha</span>
+        {/* ── Micro-Tarjetas de Telemetría Studio (Estilo Apple / Linear Studio) ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          {/* Card 1: Racha */}
+          <div
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            style={{
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+                Racha Activa
+              </span>
+              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
+                <Flame className="w-3.5 h-3.5 text-slate-300" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-baseline">
+                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                  {globalStats.realStreakDays}
+                </span>
+                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                  {globalStats.realStreakDays === 1 ? 'día' : 'días'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+                {globalStats.realStreakDays > 0 ? 'Constancia activa' : 'Comienza hoy'}
+              </p>
+            </div>
           </div>
-          <span className="text-white/20 shrink-0">·</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Brain className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-slate-200">{globalStats.totalQuestions}</span>
-            <span className="text-[11px] text-slate-500 font-normal">preguntas</span>
+
+          {/* Card 2: Preguntas */}
+          <div
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            style={{
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+                Preguntas
+              </span>
+              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
+                <Brain className="w-3.5 h-3.5 text-slate-300" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-baseline">
+                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                  {globalStats.totalQuestions}
+                </span>
+                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                  reactivos
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+                En tu biblioteca
+              </p>
+            </div>
           </div>
-          <span className="text-white/20 shrink-0">·</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Layers className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-slate-200">{globalStats.totalFlashcardsMastered}/{globalStats.totalFlashcards}</span>
-            <span className="text-[11px] text-slate-500 font-normal">flashcards</span>
+
+          {/* Card 3: Flashcards */}
+          <div
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            style={{
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+                Flashcards
+              </span>
+              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
+                <Layers className="w-3.5 h-3.5 text-slate-300" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-baseline">
+                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                  {globalStats.totalFlashcardsMastered}/{globalStats.totalFlashcards}
+                </span>
+                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                  fichas
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+                Memorización activa
+              </p>
+            </div>
           </div>
-          <span className="text-white/20 shrink-0">·</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Trophy className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-slate-200">{kits.length}</span>
-            <span className="text-[11px] text-slate-500 font-normal">kits activos</span>
+
+          {/* Card 4: Study Kits */}
+          <div
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            style={{
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+                Study Kits
+              </span>
+              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
+                <Trophy className="w-3.5 h-3.5 text-slate-300" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-baseline">
+                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                  {kits.length}
+                </span>
+                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                  {kits.length === 1 ? 'kit' : 'kits'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+                Activos en tu espacio
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -710,7 +806,6 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                           </span>
                           {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
                             <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-                              <span className="text-white/20">·</span>
                               <Globe className="w-3 h-3 text-slate-500" />
                               <span>ES (orig. {kit.sourceLanguage})</span>
                             </span>
@@ -1190,7 +1285,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                 <div className="bg-thea-bg/80 border border-thea-border rounded-xl p-2.5 max-h-28 overflow-y-auto space-y-1 scrollbar-none">
                   {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
                     <div key={k.id} className="text-[11px] text-slate-300 flex items-center gap-2 truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                      <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="truncate">{k.title}</span>
                       <span className="text-[10px] text-slate-500 shrink-0 ml-auto">({k.category || 'General'})</span>
                     </div>
@@ -1269,7 +1364,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               <div className="bg-thea-bg/80 border border-thea-border rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1.5 scrollbar-none">
                 {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
                   <div key={k.id} className="text-xs text-slate-300 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                    <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span className="truncate">{k.title}</span>
                   </div>
                 ))}
