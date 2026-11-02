@@ -492,9 +492,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           {/* Card 1: Racha */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -522,9 +522,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 2: Preguntas */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -552,9 +552,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 3: Flashcards */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -582,9 +582,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 4: Study Kits */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/15 transition-[background-color,border-color,transform] duration-200 ease-out active-press shadow-sm shadow-black/20 flex flex-col justify-between"
+            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
