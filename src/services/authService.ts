@@ -460,7 +460,15 @@ export const authService = {
     try {
       const sanitized = sanitizeSmartStudySession(state) || state;
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
-      safeLocalStorageSetItem(key, JSON.stringify(sanitized));
+      
+      // Guardar versión ligera en LocalStorage para no saturar la cuota ni congelar la UI
+      const compactSession = {
+        ...sanitized,
+        history: Array.isArray(sanitized.history) ? sanitized.history.slice(-30) : [],
+      };
+      safeLocalStorageSetItem(key, JSON.stringify(compactSession));
+      
+      // Guardar el 100% del historial íntegro en IndexedDB (sin límite de tamaño)
       saveSessionItem(key, sanitized).catch(() => {});
 
       if (typeof window !== 'undefined') {

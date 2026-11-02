@@ -1,8 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit, StudyMode } from '../types';
+import type { InputTab } from './CreateStudyKitView';
 import {
-  Sparkles,
   Plus,
   Brain,
   BookOpen,
@@ -16,13 +16,10 @@ import {
   Flame,
   Trophy,
   Zap,
-  FileText,
-  Upload,
   Globe,
   Trash2,
   Microscope,
   Binary,
-  Compass,
   Image as ImageIcon,
   Filter,
   Scale,
@@ -55,13 +52,9 @@ import {
   AlertTriangle,
   Edit3,
   Hospital,
-  Lock,
-  Key,
   LogIn,
   Mic,
 } from 'lucide-react';
-import type { InputTab } from './CreateStudyKitView';
-import { isAIWorking } from '../services/aiService';
 import { getGlobalRealStats, getBookRealStats } from '../services/statsService';
 import {
   OPAQUE_DARK_PALETTES,
@@ -71,12 +64,6 @@ import {
   updateCustomMateria,
   deleteCustomMateria,
 } from '../services/materiaService';
-
-const YoutubeIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-  </svg>
-);
 
 /**
  * Ilustración vectorial plana y estilizada de hospital / medicina
@@ -188,19 +175,6 @@ const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.R
   { id: 'tests', label: 'Exámenes', desc: 'Tests cronometrados personalizables', icon: <FileCheck2 className="w-6 h-6" />, gradient: 'from-emerald-600 to-green-700' },
 ];
 
-const INPUT_SOURCES: {
-  tab: InputTab;
-  icon: React.ReactNode;
-  label: string;
-  hoverStyle: string;
-}[] = [
-  { tab: 'topic', icon: <Compass className="w-4 h-4 text-amber-400" />, label: 'Investigar Tema', hoverStyle: 'hover:border-amber-500/80 hover:text-amber-200 hover:bg-amber-950/30' },
-  { tab: 'text', icon: <FileText className="w-4 h-4 text-violet-400" />, label: 'Texto / Notas', hoverStyle: 'hover:border-violet-500/80 hover:text-violet-200 hover:bg-violet-950/30' },
-  { tab: 'youtube', icon: <YoutubeIcon className="w-4 h-4 text-red-500" />, label: 'YouTube', hoverStyle: 'hover:border-red-500/80 hover:text-red-200 hover:bg-red-950/30' },
-  { tab: 'file', icon: <Upload className="w-4 h-4 text-emerald-400" />, label: 'Archivos', hoverStyle: 'hover:border-emerald-500/80 hover:text-emerald-200 hover:bg-emerald-950/30' },
-  { tab: 'link', icon: <Globe className="w-4 h-4 text-sky-400" />, label: 'Enlaces Web', hoverStyle: 'hover:border-sky-500/80 hover:text-sky-200 hover:bg-sky-950/30' },
-];
-
 export const HomeView: React.FC<HomeViewProps> = ({
   kits,
   currentKit,
@@ -209,25 +183,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onDeleteKit,
   onUpdateKit,
   userId = null,
-  onOpenAISettings,
   onOpenAuth,
   onDeleteKitsBatch,
   onChangeCategoryBatch,
   onResetDefaultKits,
 }) => {
-  const [isAIActive, setIsAIActive] = React.useState<boolean>(isAIWorking);
-
-  React.useEffect(() => {
-    const handleSettingsChange = () => {
-      setIsAIActive(isAIWorking());
-    };
-    window.addEventListener('thea_ai_settings_changed', handleSettingsChange);
-    window.addEventListener('storage', handleSettingsChange);
-    return () => {
-      window.removeEventListener('thea_ai_settings_changed', handleSettingsChange);
-      window.removeEventListener('storage', handleSettingsChange);
-    };
-  }, []);
 
   const [selectedMateria, setSelectedMateria] = React.useState<string>('all');
   const [materiaVersion, setMateriaVersion] = React.useState<number>(0);
@@ -420,27 +380,18 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
   const [statsVersion, setStatsVersion] = React.useState(0);
 
-  // Escuchar eventos de actualización y sincronización de progreso en tiempo real
+  // Escuchar eventos reales de guardado y sincronización sin sobrecargar el hilo con focus/blur
   React.useEffect(() => {
     const handleProgressUpdate = () => {
       setStatsVersion(v => v + 1);
     };
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        setStatsVersion(v => v + 1);
-      }
-    };
     window.addEventListener('thea_session_saved', handleProgressUpdate);
     window.addEventListener('thea_flashcard_saved', handleProgressUpdate);
     window.addEventListener('thea_progress_synced', handleProgressUpdate);
-    window.addEventListener('focus', handleProgressUpdate);
-    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       window.removeEventListener('thea_session_saved', handleProgressUpdate);
       window.removeEventListener('thea_flashcard_saved', handleProgressUpdate);
       window.removeEventListener('thea_progress_synced', handleProgressUpdate);
-      window.removeEventListener('focus', handleProgressUpdate);
-      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 
@@ -470,158 +421,45 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 animate-fadeIn">
 
-      {/* ── Hero Section (Estilo Linear / Apple Studio) ─────────────────── */}
-      <section className="relative mb-6 rounded-3xl bg-gradient-to-b from-white/[0.04] via-thea-surface/90 to-thea-surface/70 border border-white/10 p-6 sm:p-8 glass-specular overflow-hidden">
-        {/* Línea de luz superior de alta definición */}
-        <div className="absolute top-0 left-12 right-12 h-[1px] bg-gradient-to-r from-transparent via-violet-400/40 to-transparent pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-3 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300 text-xs font-semibold tracking-wide">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Contrareloj Study &bull; Motor Adaptativo</span>
+      {/* ── Header de Espacio de Estudio (Estilo Linear / Raycast Studio) ── */}
+      <section className="mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+                <BookOpen className="w-6 h-6 text-violet-400 shrink-0" />
+                <span>Tus Study Kits</span>
+              </h1>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/[0.08] text-violet-300 border border-white/10 font-bold tabular-nums">
+                {kits.length}
+              </span>
             </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-[-0.03em] leading-tight">
-              ¿Qué quieres dominar hoy?
-            </h1>
-            <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
-              Transforma apuntes, vídeos de YouTube o PDFs en bancos de preguntas interactivas, flashcards y tutoría personalizada con IA local.
+            <p className="text-xs text-slate-400 mt-1">
+              Accede a tus bancos de preguntas y fichas, o añade nuevo material de estudio.
             </p>
           </div>
 
-          <div className="shrink-0 w-full md:w-auto">
-            {isAIActive ? (
-              <button
-                type="button"
-                onClick={() => onNavigate('create', 'topic')}
-                className="active-press w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-violet-950/50 flex items-center justify-center gap-2.5 cursor-pointer transition-transform"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Crear Study Kit</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => (onOpenAISettings ? onOpenAISettings() : onNavigate('create'))}
-                className="active-press w-full md:w-auto px-6 py-3.5 rounded-2xl bg-thea-surface border border-white/10 text-slate-300 hover:text-white font-semibold text-sm flex items-center justify-center gap-2.5 cursor-pointer transition-transform"
-                title="Configura tu API Key funcional para habilitar la creación de Study Kits"
-              >
-                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Crear Study Kit</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
-                  Requiere API
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
+          {/* Barra de Acciones Globales */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => onNavigate('create', 'topic')}
+              className="active-press px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs flex items-center gap-2 shadow-md shadow-violet-950/40 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuevo Study Kit</span>
+            </button>
 
-        {/* Source chips */}
-        <div className="relative z-10 mt-6 pt-4 border-t border-white/[0.06]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase flex items-center gap-1.5">
-              <span>Fuentes compatibles:</span>
-              {!isAIActive && (
-                <span className="text-[11px] text-amber-400 font-normal lowercase">(en pausa hasta activar API)</span>
-              )}
-            </span>
-            {isAIActive ? (
-              <span className="text-[11px] text-slate-500 hidden sm:inline">
-                Haz clic en una fuente para empezar
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={onOpenAISettings}
-                className="text-[11px] text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer font-medium"
-              >
-                <Key className="w-3 h-3" />
-                <span>Activar API para desbloquear</span>
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
-            {INPUT_SOURCES.map(src => {
-              if (isAIActive) {
-                return (
-                  <button
-                    key={src.label}
-                    type="button"
-                    onClick={() => onNavigate('create', src.tab)}
-                    className="active-press inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-violet-500/40 text-slate-200 text-xs font-medium cursor-pointer transition-[transform,background-color,border-color] shadow-sm shrink-0"
-                    title={`Hacer clic para crear con ${src.label}`}
-                  >
-                    <span className="shrink-0">{src.icon}</span>
-                    <span className="whitespace-nowrap font-medium">{src.label}</span>
-                  </button>
-                );
-              }
-              return (
-                <button
-                  key={src.label}
-                  type="button"
-                  onClick={onOpenAISettings}
-                  className="active-press inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.02] border border-white/[0.06] text-slate-500 text-xs font-medium cursor-pointer shrink-0 grayscale hover:text-slate-300"
-                  title="Configura tu API Key funcional para habilitar esta opción"
-                >
-                  <span className="opacity-50 shrink-0">{src.icon}</span>
-                  <span className="whitespace-nowrap font-medium">{src.label}</span>
-                  <Lock className="w-3 h-3 text-slate-600 group-hover:text-amber-400 shrink-0" />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Quick Stats Reales ─────────────────────────── */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <QuickStat
-          icon={<Flame className="w-5 h-5 text-orange-400 fill-orange-500" />}
-          value={`${globalStats.realStreakDays} ${globalStats.realStreakDays === 1 ? 'día' : 'días'}`}
-          label="Racha activa"
-          accent="orange"
-        />
-        <QuickStat
-          icon={<Brain className="w-5 h-5 text-violet-400" />}
-          value={globalStats.totalQuestions.toString()}
-          label="Preguntas en libros"
-          accent="violet"
-        />
-        <QuickStat
-          icon={<Layers className="w-5 h-5 text-amber-400" />}
-          value={`${globalStats.totalFlashcardsMastered}/${globalStats.totalFlashcards}`}
-          label="Flashcards dominadas"
-          accent="amber"
-        />
-        <QuickStat
-          icon={<Trophy className="w-5 h-5 text-emerald-400" />}
-          value={kits.length.toString()}
-          label="Study Kits"
-          accent="emerald"
-        />
-      </section>
-
-      {/* ── Tus Study Kits ───────────────────────── */}
-      <section className="mb-6">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-violet-400" /> Tus Study Kits
-          </h2>
-          <div className="flex items-center gap-3">
-            {/* Botón Gestión de Materias */}
             <button
               type="button"
               onClick={() => setShowMateriaManagerModal(true)}
-              className="active-press text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/30 border border-amber-500/30 hover:border-amber-500/60 glass-specular transition-[transform,border-color,background-color] cursor-pointer font-medium"
+              className="active-press text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-950/25 border border-amber-500/30 hover:border-amber-500/50 cursor-pointer font-medium"
               title="Crear, editar y gestionar materias de estudio"
             >
               <FolderEdit className="w-3.5 h-3.5" />
-              <span>Gestionar Materias</span>
+              <span>Materias</span>
             </button>
 
-            {/* Botón Seleccionar / Cancelar Selección */}
             {kits.length > 0 && (
               <button
                 type="button"
@@ -633,29 +471,60 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     setIsSelectionMode(true);
                   }
                 }}
-                className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-xl border glass-specular transition-[transform,border-color,background-color] cursor-pointer font-medium ${
+                className={`active-press text-xs flex items-center gap-1.5 px-3 py-2 rounded-xl border cursor-pointer font-medium ${
                   isSelectionMode
                     ? 'bg-violet-600/30 border-violet-500 text-violet-200'
-                    : 'text-slate-300 hover:text-white border-white/10 bg-thea-surface hover:bg-thea-surfaceLight'
+                    : 'text-slate-300 hover:text-white border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
                 }`}
                 title={isSelectionMode ? 'Salir del modo selección' : 'Seleccionar libros para cambiarlos de materia o eliminarlos'}
               >
                 <CheckSquare className="w-3.5 h-3.5 text-violet-400" />
-                <span>{isSelectionMode ? 'Cancelar selección' : 'Seleccionar'}</span>
+                <span>{isSelectionMode ? 'Cancelar' : 'Seleccionar'}</span>
               </button>
             )}
+
             <button
               type="button"
               onClick={() => onNavigate('analytics')}
-              className="active-press text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors cursor-pointer font-medium"
+              className="active-press text-xs text-slate-300 hover:text-white flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer font-medium"
             >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>Ver analíticas</span>
+              <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+              <span>Analíticas</span>
             </button>
           </div>
         </div>
 
-        {/* ── Barra de Filtro de Materias con Colores Oscuros Opacos (solo materias con kits) ── */}
+        {/* ── Cinta Minimalista de Métricas (Zero-Lag Ribbon) ── */}
+        <div className="flex items-center gap-4 sm:gap-6 px-4 py-2 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-xs text-slate-400 overflow-x-auto scrollbar-none tabular-nums">
+          <div className="flex items-center gap-2 shrink-0">
+            <Flame className="w-4 h-4 text-orange-400 fill-orange-500" />
+            <span className="font-semibold text-white">{globalStats.realStreakDays} {globalStats.realStreakDays === 1 ? 'día' : 'días'}</span>
+            <span className="text-[11px] text-slate-500">racha</span>
+          </div>
+          <div className="w-px h-3.5 bg-white/10 shrink-0" />
+          <div className="flex items-center gap-2 shrink-0">
+            <Brain className="w-4 h-4 text-violet-400" />
+            <span className="font-semibold text-white">{globalStats.totalQuestions}</span>
+            <span className="text-[11px] text-slate-500">preguntas</span>
+          </div>
+          <div className="w-px h-3.5 bg-white/10 shrink-0" />
+          <div className="flex items-center gap-2 shrink-0">
+            <Layers className="w-4 h-4 text-amber-400" />
+            <span className="font-semibold text-white">{globalStats.totalFlashcardsMastered}/{globalStats.totalFlashcards}</span>
+            <span className="text-[11px] text-slate-500">flashcards</span>
+          </div>
+          <div className="w-px h-3.5 bg-white/10 shrink-0" />
+          <div className="flex items-center gap-2 shrink-0">
+            <Trophy className="w-4 h-4 text-emerald-400" />
+            <span className="font-semibold text-white">{kits.length}</span>
+            <span className="text-[11px] text-slate-500">kits activos</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Tus Study Kits ───────────────────────── */}
+      <section className="mb-6">
+        {/* ── Barra de Filtro de Materias ── */}
         {availableMateriasList.length > 0 && (
           <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1.5 scrollbar-none">
             <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0 mr-1 font-medium">
@@ -1874,20 +1743,3 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
     </div>
   );
 };
-
-// ── Helper Components ──────────────────────────────────
-
-const QuickStat: React.FC<{
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-  accent: string;
-}> = ({ icon, value, label }) => (
-  <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-[#141022]/80 border border-white/[0.08] hover:border-white/[0.18] glass-specular transition-transform duration-150 hover:translate-y-[-1px]">
-    <div className="shrink-0 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">{icon}</div>
-    <div className="min-w-0">
-      <p className="text-xl font-bold text-white leading-tight tabular-nums tracking-tight truncate">{value}</p>
-      <p className="text-xs text-slate-400 font-medium tracking-wide mt-0.5">{label}</p>
-    </div>
-  </div>
-);

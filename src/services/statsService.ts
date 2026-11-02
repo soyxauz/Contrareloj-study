@@ -130,11 +130,18 @@ function countWordsFast(text: string): number {
   return count;
 }
 
+const bookStatsFastCache = new Map<string, { stats: BookStats; ts: number }>();
+
 /**
  * Calcula las estadísticas reales no inventadas de un libro o Study Kit específico.
  */
 export function getBookRealStats(kit: StudyKit, userId: string | null = null): BookStats {
   const session = authService.getSmartStudySession(userId, kit.id);
+  const cacheKey = `${userId || 'g'}_${kit.id}_${session?.level || 1}_${session?.history?.length || 0}_${kit.updatedAt || 0}`;
+  const hit = bookStatsFastCache.get(cacheKey);
+  if (hit && Date.now() - hit.ts < 4000) {
+    return hit.stats;
+  }
 
   const totalQuestions = kit.questions ? kit.questions.length : 0;
   const history = session?.history && Array.isArray(session.history) ? session.history : [];
@@ -294,7 +301,7 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     studyStatus = 'in-progress';
   }
 
-  return {
+  const resultStats: BookStats = {
     kitId: kit.id,
     title: kit.title,
     category: kit.category,
@@ -325,6 +332,9 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     lastStudiedDate,
     studyStatus
   };
+
+  bookStatsFastCache.set(cacheKey, { stats: resultStats, ts: Date.now() });
+  return resultStats;
 }
 
 /**
