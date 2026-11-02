@@ -306,48 +306,162 @@ html {
 }
 
 /* ── 2. Conversión de Superficies y Tarjetas Oscuras a Blanco Nítido ── */
-[data-theme="light"] .bg-thea-surface,
-[data-theme="light"] .bg-\[\#0e0b16\],
-[data-theme="light"] .bg-\[\#0d0408\],
-[data-theme="light"] .bg-\[\#090314\],
-[data-theme="light"] .bg-\[\#14040b\],
-[data-theme="light"] .bg-\[\#14040c\],
-[data-theme="light"] .bg-\[\#12030a\],
-[data-theme="light"] .bg-\[\#1e0711\],
-[data-theme="light"] .bg-\[\#2c0b19\],
-[data-theme="light"] .bg-\[\#200814\],
-[data-theme="light"] .bg-\[\#0a0712\],
-[data-theme="light"] .bg-\[\#070106\] {
+[data-theme="light"] [class*="bg-[#0e0b16]"],
+[data-theme="light"] [class*="bg-[#0d0408]"],
+[data-theme="light"] [class*="bg-[#090314]"],
+[data-theme="light"] [class*="bg-[#14040b]"],
+[data-theme="light"] [class*="bg-[#14040c]"],
+[data-theme="light"] [class*="bg-[#12030a]"],
+[data-theme="light"] [class*="bg-[#1e0711]"],
+[data-theme="light"] [class*="bg-[#2c0b19]"],
+[data-theme="light"] [class*="bg-[#200814]"],
+[data-theme="light"] [class*="bg-[#200512]"],
+[data-theme="light"] [class*="bg-[#3d0e23]"],
+[data-theme="light"] [class*="bg-[#0a0712]"],
+[data-theme="light"] [class*="bg-[#070106]"],
+[data-theme="light"] [class*="bg-thea-surface"]:not([class*="bg-thea-surfaceLight"]) {
   background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px -2px rgba(0, 0, 0, 0.03) !important;
 }
 
-[data-theme="kitty"] .bg-thea-surface,
-[data-theme="kitty"] .bg-\[\#0e0b16\],
-[data-theme="kitty"] .bg-\[\#0d0408\],
-[data-theme="kitty"] .bg-\[\#090314\],
-[data-theme="kitty"] .bg-\[\#14040b\],
-[data-theme="kitty"] .bg-\[\#14040c\],
-[data-theme="kitty"] .bg-\[\#12030a\],
-[data-theme="kitty"] .bg-\[\#1e0711\],
-[data-theme="kitty"] .bg-\[\#2c0b19\],
-[data-theme="kitty"] .bg-\[\#200814\],
-[data-theme="kitty"] .bg-\[\#0a0712\],
-[data-theme="kitty"] .bg-\[\#070106\] {
+[data-theme="kitty"] [class*="bg-[#0e0b16]"],
+[data-theme="kitty"] [class*="bg-[#0d0408]"],
+[data-theme="kitty"] [class*="bg-[#090314]"],
+[data-theme="kitty"] [class*="bg-[#14040b]"],
+[data-theme="kitty"] [class*="bg-[#14040c]"],
+[data-theme="kitty"] [class*="bg-[#12030a]"],
+[data-theme="kitty"] [class*="bg-[#1e0711]"],
+[data-theme="kitty"] [class*="bg-[#2c0b19]"],
+[data-theme="kitty"] [class*="bg-[#200814]"],
+[data-theme="kitty"] [class*="bg-[#200512]"],
+[data-theme="kitty"] [class*="bg-[#3d0e23]"],
+[data-theme="kitty"] [class*="bg-[#0a0712]"],
+[data-theme="kitty"] [class*="bg-[#070106]"],
+[data-theme="kitty"] [class*="bg-thea-surface"]:not([class*="bg-thea-surfaceLight"]) {
   background-color: #ffffff !important;
   border-color: #fbcfe8 !important;
-  box-shadow: 0 2px 8px -1px rgba(244, 114, 182, 0.15), 0 6px 16px -2px rgba(244, 114, 182, 0.1);
+  box-shadow: 0 2px 8px -1px rgba(244, 114, 182, 0.15), 0 6px 16px -2px rgba(244, 114, 182, 0.1) !important;
 }
 
-[data-theme="light"] .bg-thea-surfaceLight {
-  background-color: #f1f5f9 !important;
+[data-theme="light"] [class*="bg-thea-surfaceLight"] {
+  background-color: #f8fafc !important;
   border-color: #e2e8f0 !important;
 }
 
-[data-theme="kitty"] .bg-thea-surfaceLight {
+[data-theme="kitty"] [class*="bg-thea-surfaceLight"] {
   background-color: #fff5f8 !important;
   border-color: #fbcfe8 !important;
+}
+
+[data-theme="light"] [class*="hover:bg-[#2c0b19]"]:hover,
+[data-theme="light"] [class*="hover:bg-[#1e0711]"]:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="kitty"] [class*="hover:bg-[#2c0b19]"]:hover,
+[data-theme="kitty"] [class*="hover:bg-[#1e0711]"]:hover {
+  background-color: #fff0f5 !important;
+  border-color: #f9a8d4 !important;
+}
+
+[data-theme="light"] [class*="border-[#881337]"],
+[data-theme="light"] [class*="border-[#be123c]"],
+[data-theme="light"] [class*="border-[#4c0519]"],
+[data-theme="light"] [class*="border-[#461428]"] {
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="kitty"] [class*="border-[#881337]"],
+[data-theme="kitty"] [class*="border-[#be123c]"],
+[data-theme="kitty"] [class*="border-[#4c0519]"],
+[data-theme="kitty"] [class*="border-[#461428]"] {
+  border-color: #fbcfe8 !important;
+}
+
+[data-theme="light"] [class*="bg-[#881337]"]:not(button) {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="kitty"] [class*="bg-[#881337]"]:not(button) {
+  background-color: #fce7f3 !important;
+  color: #9d174d !important;
+  border-color: #fbcfe8 !important;
+}
+
+/* Fórmulas matemáticas KaTeX y Encabezados en Guía y Vistas */
+[data-theme="light"] .katex,
+[data-theme="light"] .katex-inline,
+[data-theme="light"] .katex-display-inline,
+[data-theme="light"] .katex-display-wrapper {
+  color: #b45309 !important;
+}
+
+[data-theme="kitty"] .katex,
+[data-theme="kitty"] .katex-inline,
+[data-theme="kitty"] .katex-display-inline,
+[data-theme="kitty"] .katex-display-wrapper {
+  color: #db2777 !important;
+}
+
+[data-theme="light"] .text-amber-200,
+[data-theme="light"] .text-amber-300 {
+  color: #b45309 !important;
+}
+
+[data-theme="kitty"] .text-amber-200,
+[data-theme="kitty"] .text-amber-300 {
+  color: #be185d !important;
+}
+
+[data-theme="light"] .text-violet-300,
+[data-theme="light"] .text-violet-400 {
+  color: #6d28d9 !important;
+}
+
+[data-theme="kitty"] .text-violet-300,
+[data-theme="kitty"] .text-violet-400 {
+  color: #be185d !important;
+}
+
+/* Respuestas acertadas y erróneas con contraste 100% nítido */
+[data-theme="light"] .animate-cardCorrect {
+  background-color: #ecfdf5 !important;
+  border-color: #10b981 !important;
+  color: #065f46 !important;
+}
+[data-theme="light"] .animate-cardCorrect * {
+  color: #065f46 !important;
+}
+
+[data-theme="kitty"] .animate-cardCorrect {
+  background-color: #ecfdf5 !important;
+  border-color: #10b981 !important;
+  color: #065f46 !important;
+}
+[data-theme="kitty"] .animate-cardCorrect * {
+  color: #065f46 !important;
+}
+
+[data-theme="light"] .animate-cardError {
+  background-color: #fff1f2 !important;
+  border-color: #f43f5e !important;
+  color: #9f1239 !important;
+}
+[data-theme="light"] .animate-cardError * {
+  color: #9f1239 !important;
+}
+
+[data-theme="kitty"] .animate-cardError {
+  background-color: #fff1f2 !important;
+  border-color: #f43f5e !important;
+  color: #9f1239 !important;
+}
+[data-theme="kitty"] .animate-cardError * {
+  color: #9f1239 !important;
 }
 
 /* ── 3. Tipografía: Letras Negras que Resaltan sobre Fondo Claro ── */

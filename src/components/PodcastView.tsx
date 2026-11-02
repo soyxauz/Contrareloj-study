@@ -1718,19 +1718,29 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 Recap de audio con síntesis vocal emotiva
               </span>
             </div>
-            <h1 className="text-base sm:text-2xl font-bold text-white flex items-center gap-1.5 sm:gap-2 truncate">
+            <h1 className={`text-base sm:text-2xl font-bold flex items-center gap-1.5 sm:gap-2 truncate ${
+              theme === 'dark' ? 'text-white' : 'text-zinc-950'
+            }`}>
               <Headphones className="w-4 h-4 sm:w-6 sm:h-6 text-amber-400 shrink-0" />
               <span className="truncate">{theme === 'kitty' ? 'Kitty Review Podcast' : 'Contrareloj Review Podcast'}</span>
             </h1>
           </div>
 
           {/* Selector de Pestañas [Reproductor | Transcripción] */}
-          <div className="flex items-center gap-1 bg-thea-surface border border-thea-border rounded-xl p-1 text-xs shrink-0">
+          <div className={`flex items-center gap-1 rounded-xl p-1 text-xs shrink-0 border ${
+            theme === 'light'
+              ? 'bg-slate-100/80 border-slate-200'
+              : theme === 'kitty'
+              ? 'bg-pink-100/60 border-pink-200'
+              : 'bg-thea-surface border-thea-border'
+          }`}>
             <button
               type="button"
               onClick={() => setActiveTab('player')}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-semibold transition-all cursor-pointer text-xs ${
-                activeTab === 'player' ? 'bg-white/10 text-white shadow-sm border border-white/10' : 'text-zinc-400 hover:text-white'
+                activeTab === 'player'
+                  ? (theme === 'light' ? 'bg-white text-zinc-950 shadow-xs border border-slate-200' : theme === 'kitty' ? 'bg-white text-pink-700 shadow-xs border border-pink-200' : 'bg-white/10 text-white shadow-sm border border-white/10')
+                  : (theme === 'light' ? 'text-slate-600 hover:text-zinc-950' : theme === 'kitty' ? 'text-pink-600/80 hover:text-pink-950' : 'text-zinc-400 hover:text-white')
               }`}
             >
               Reproductor
@@ -1739,7 +1749,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               type="button"
               onClick={() => setActiveTab('transcript')}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-semibold transition-all cursor-pointer text-xs ${
-                activeTab === 'transcript' ? 'bg-white/10 text-white shadow-sm border border-white/10' : 'text-zinc-400 hover:text-white'
+                activeTab === 'transcript'
+                  ? (theme === 'light' ? 'bg-white text-zinc-950 shadow-xs border border-slate-200' : theme === 'kitty' ? 'bg-white text-pink-700 shadow-xs border border-pink-200' : 'bg-white/10 text-white shadow-sm border border-white/10')
+                  : (theme === 'light' ? 'text-slate-600 hover:text-zinc-950' : theme === 'kitty' ? 'text-pink-600/80 hover:text-pink-950' : 'text-zinc-400 hover:text-white')
               }`}
             >
               Transcripción
@@ -1812,7 +1824,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       {activeTab === 'player' ? (
         <div className="space-y-4 sm:space-y-6">
           {/* Main Visual Player Card */}
-          <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] relative overflow-hidden text-center">
+          <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-8 relative overflow-hidden text-center border ${
+            theme === 'light'
+              ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
+              : theme === 'kitty'
+              ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
+              : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+          }`}>
             {/* Background Glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 

@@ -10,6 +10,7 @@ import {
 import { ImageZoomModal } from './ImageZoomModal';
 import { getAssetsMap, getAssetById } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
+import { useTheme } from '../services/themeService';
 
 interface ImagesGalleryViewProps {
   kit: StudyKit;
@@ -17,6 +18,7 @@ interface ImagesGalleryViewProps {
 }
 
 export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpdateKit }) => {
+  const { theme } = useTheme();
   const [assets, setAssets] = useState<DocumentAsset[]>(() => kit.assets || []);
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
   const [loadingAssetIds, setLoadingAssetIds] = useState<Set<string>>(new Set());
@@ -261,10 +263,22 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                     loadSingleAsset(asset.id);
                   }
                 }}
-                className="group bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-white/25 hover:shadow-2xl hover:scale-[1.015] active:scale-[0.985] transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col"
+                className={`group border rounded-2xl overflow-hidden transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col hover:scale-[1.015] active:scale-[0.985] ${
+                  theme === 'dark'
+                    ? 'bg-[#0e0b16]/95 border-white/[0.08] hover:border-white/25 hover:shadow-2xl'
+                    : theme === 'kitty'
+                    ? 'bg-white border-pink-200 hover:border-pink-300 shadow-sm shadow-pink-100/50 hover:shadow-md'
+                    : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'
+                }`}
               >
                 {/* Image Box */}
-                <div className="relative aspect-video bg-black/40 overflow-hidden flex items-center justify-center p-2 border-b border-white/[0.06]">
+                <div className={`relative aspect-video overflow-hidden flex items-center justify-center p-2 border-b ${
+                  theme === 'dark'
+                    ? 'bg-black/40 border-white/[0.06]'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50/40 border-pink-100'
+                    : 'bg-slate-50 border-slate-100'
+                }`}>
                   {asset.dataUrl ? (
                     <img
                       src={asset.dataUrl}
@@ -287,7 +301,9 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                           e.stopPropagation();
                           loadSingleAsset(asset.id);
                         }}
-                        className="text-[9px] px-2 py-0.5 rounded bg-white/[0.05] text-zinc-300 hover:bg-white/10 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+                        className={`text-[9px] px-2 py-0.5 rounded transition-all flex items-center gap-1 cursor-pointer ${
+                          theme === 'dark' ? 'bg-white/[0.05] text-zinc-300 hover:bg-white/10 hover:text-white' : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200'
+                        }`}
                       >
                         <RefreshCw className="w-2.5 h-2.5" />
                         <span>Cargar</span>
@@ -305,12 +321,24 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                   )}
 
                   {/* Page/Slide Badge */}
-                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/85 border border-white/10 text-zinc-200 tabular-nums">
+                  <span className={`absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md border tabular-nums ${
+                    theme === 'dark'
+                      ? 'bg-black/85 border-white/10 text-zinc-200'
+                      : theme === 'kitty'
+                      ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
+                      : 'bg-white/95 border-slate-200 text-slate-800 shadow-xs'
+                  }`}>
                     {pageInfo}
                   </span>
 
                   {/* Type Badge */}
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/[0.08] border border-white/15 text-zinc-300 flex items-center gap-1 absolute top-2 right-2">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 absolute top-2 right-2 ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.08] border-white/15 text-zinc-300'
+                      : theme === 'kitty'
+                      ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
+                      : 'bg-white/95 border-slate-200 text-slate-700 shadow-xs'
+                  }`}>
                     {isImage ? <ImageIcon className="w-3 h-3" /> : <TableIcon className="w-3 h-3" />}
                     <span>{isImage ? 'Figura' : 'Tabla'}</span>
                   </span>
@@ -318,10 +346,14 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
 
                 {/* Caption Footer */}
                 <div className="p-3.5 flex-1 flex flex-col justify-between">
-                  <p className="text-xs text-zinc-300 font-medium line-clamp-2 leading-relaxed">
+                  <p className={`text-xs font-medium line-clamp-2 leading-relaxed ${
+                    theme === 'dark' ? 'text-zinc-300' : 'text-zinc-800'
+                  }`}>
                     {asset.caption || `Figura ${index + 1} extraída del material`}
                   </p>
-                  <span className="text-[10px] text-zinc-400 mt-2 font-semibold flex items-center gap-1">
+                  <span className={`text-[10px] mt-2 font-semibold flex items-center gap-1 ${
+                    theme === 'dark' ? 'text-zinc-400' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-500'
+                  }`}>
                     {asset.dataUrl ? (
                       <>
                         <ZoomIn className="w-3 h-3" />

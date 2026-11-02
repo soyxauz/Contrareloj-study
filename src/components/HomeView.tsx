@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit, StudyMode } from '../types';
 import type { InputTab } from './CreateStudyKitView';
+import { useTheme } from '../services/themeService';
 import {
   Plus,
   Brain,
@@ -188,6 +189,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onChangeCategoryBatch,
   onResetDefaultKits,
 }) => {
+  const { theme } = useTheme();
 
   const [selectedMateria, setSelectedMateria] = React.useState<string>('all');
   const [materiaVersion, setMateriaVersion] = React.useState<number>(0);
@@ -489,29 +491,49 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           {/* Card 1: Racha */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
+            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 shadow-sm text-zinc-950'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 shadow-sm text-zinc-950'
+                : 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
+            }`}
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+              boxShadow: theme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.06)' : undefined,
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+              <span className={`text-[11px] font-semibold tracking-wider uppercase truncate ${
+                theme === 'light' ? 'text-slate-500' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-400'
+              }`}>
                 Racha Activa
               </span>
-              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
-                <Flame className="w-3.5 h-3.5 text-slate-300" />
+              <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border ${
+                theme === 'light'
+                  ? 'bg-slate-100 border-slate-200 text-slate-700'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 border-pink-200 text-pink-600'
+                  : 'bg-white/[0.04] border-white/[0.08] text-slate-300'
+              }`}>
+                <Flame className="w-3.5 h-3.5" />
               </div>
             </div>
             <div>
               <div className="flex items-baseline">
-                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                <span className={`text-xl sm:text-2xl font-bold tracking-tight tabular-nums ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   {globalStats.realStreakDays}
                 </span>
-                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                <span className={`text-xs font-medium ml-1.5 ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   {globalStats.realStreakDays === 1 ? 'día' : 'días'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+              <p className={`text-[11px] mt-1 font-normal truncate ${
+                theme === 'kitty' ? 'text-pink-400' : 'text-slate-500'
+              }`}>
                 {globalStats.realStreakDays > 0 ? 'Constancia activa' : 'Comienza hoy'}
               </p>
             </div>
@@ -519,29 +541,49 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 2: Preguntas */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
+            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 shadow-sm text-zinc-950'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 shadow-sm text-zinc-950'
+                : 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
+            }`}
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+              boxShadow: theme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.06)' : undefined,
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+              <span className={`text-[11px] font-semibold tracking-wider uppercase truncate ${
+                theme === 'light' ? 'text-slate-500' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-400'
+              }`}>
                 Preguntas
               </span>
-              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
-                <Brain className="w-3.5 h-3.5 text-slate-300" />
+              <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border ${
+                theme === 'light'
+                  ? 'bg-slate-100 border-slate-200 text-slate-700'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 border-pink-200 text-pink-600'
+                  : 'bg-white/[0.04] border-white/[0.08] text-slate-300'
+              }`}>
+                <Brain className="w-3.5 h-3.5" />
               </div>
             </div>
             <div>
               <div className="flex items-baseline">
-                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                <span className={`text-xl sm:text-2xl font-bold tracking-tight tabular-nums ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   {globalStats.totalQuestions}
                 </span>
-                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                <span className={`text-xs font-medium ml-1.5 ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   reactivos
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+              <p className={`text-[11px] mt-1 font-normal truncate ${
+                theme === 'kitty' ? 'text-pink-400' : 'text-slate-500'
+              }`}>
                 En tu biblioteca
               </p>
             </div>
@@ -549,29 +591,49 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 3: Flashcards */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
+            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 shadow-sm text-zinc-950'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 shadow-sm text-zinc-950'
+                : 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
+            }`}
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+              boxShadow: theme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.06)' : undefined,
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+              <span className={`text-[11px] font-semibold tracking-wider uppercase truncate ${
+                theme === 'light' ? 'text-slate-500' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-400'
+              }`}>
                 Flashcards
               </span>
-              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
-                <Layers className="w-3.5 h-3.5 text-slate-300" />
+              <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border ${
+                theme === 'light'
+                  ? 'bg-slate-100 border-slate-200 text-slate-700'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 border-pink-200 text-pink-600'
+                  : 'bg-white/[0.04] border-white/[0.08] text-slate-300'
+              }`}>
+                <Layers className="w-3.5 h-3.5" />
               </div>
             </div>
             <div>
               <div className="flex items-baseline">
-                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                <span className={`text-xl sm:text-2xl font-bold tracking-tight tabular-nums ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   {globalStats.totalFlashcardsMastered}/{globalStats.totalFlashcards}
                 </span>
-                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                <span className={`text-xs font-medium ml-1.5 ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   fichas
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+              <p className={`text-[11px] mt-1 font-normal truncate ${
+                theme === 'kitty' ? 'text-pink-400' : 'text-slate-500'
+              }`}>
                 Memorización activa
               </p>
             </div>
@@ -579,29 +641,49 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 4: Study Kits */}
           <div
-            className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.07] shadow-sm shadow-black/20 flex flex-col justify-between cursor-default select-none"
+            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 shadow-sm text-zinc-950'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 shadow-sm text-zinc-950'
+                : 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
+            }`}
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+              boxShadow: theme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.06)' : undefined,
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 truncate">
+              <span className={`text-[11px] font-semibold tracking-wider uppercase truncate ${
+                theme === 'light' ? 'text-slate-500' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-400'
+              }`}>
                 Study Kits
               </span>
-              <div className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-slate-300 shrink-0">
-                <Trophy className="w-3.5 h-3.5 text-slate-300" />
+              <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border ${
+                theme === 'light'
+                  ? 'bg-slate-100 border-slate-200 text-slate-700'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 border-pink-200 text-pink-600'
+                  : 'bg-white/[0.04] border-white/[0.08] text-slate-300'
+              }`}>
+                <Trophy className="w-3.5 h-3.5" />
               </div>
             </div>
             <div>
               <div className="flex items-baseline">
-                <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
+                <span className={`text-xl sm:text-2xl font-bold tracking-tight tabular-nums ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   {kits.length}
                 </span>
-                <span className="text-xs text-slate-400 font-medium ml-1.5">
+                <span className={`text-xs font-medium ml-1.5 ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   {kits.length === 1 ? 'kit' : 'kits'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1 font-normal truncate">
+              <p className={`text-[11px] mt-1 font-normal truncate ${
+                theme === 'kitty' ? 'text-pink-400' : 'text-slate-500'
+              }`}>
                 Activos en tu espacio
               </p>
             </div>
@@ -625,15 +707,29 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               onClick={() => setSelectedMateria('all')}
               className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-medium shrink-0 cursor-pointer tabular-nums flex items-center gap-2 border transition-[transform,background-color,border-color] ${
                 selectedMateria === 'all'
-                  ? 'bg-white/[0.12] text-white border-white/25 shadow-sm shadow-black/40'
-                  : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
+                  ? theme === 'dark'
+                    ? 'bg-white/[0.12] text-white border-white/25 shadow-sm shadow-black/40'
+                    : theme === 'kitty'
+                    ? 'bg-pink-500 text-white border-pink-500 shadow-sm shadow-pink-500/25'
+                    : 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
+                  : theme === 'dark'
+                  ? 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
+                  : theme === 'kitty'
+                  ? 'bg-white border-pink-200 text-slate-700 hover:text-pink-900 hover:border-pink-300'
+                  : 'bg-white border-slate-200 text-slate-700 hover:text-zinc-950 hover:border-slate-300'
               }`}
             >
               <span>Todas</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold border ${
                 selectedMateria === 'all'
-                  ? 'bg-white/[0.10] text-white border-white/15'
-                  : 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
+                  ? theme === 'dark'
+                    ? 'bg-white/[0.10] text-white border-white/15'
+                    : 'bg-white/25 text-white border-transparent'
+                  : theme === 'dark'
+                  ? 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 text-pink-700 border-pink-200'
+                  : 'bg-slate-100 text-slate-700 border-slate-200'
               }`}>
                 {kits.length}
               </span>
@@ -649,15 +745,29 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   onClick={() => setSelectedMateria(materia.name)}
                   className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-medium shrink-0 cursor-pointer flex items-center gap-2 border tabular-nums transition-[transform,background-color,border-color] ${
                     isSelected
-                      ? 'bg-white/[0.12] text-white border-white/25 shadow-sm shadow-black/40'
-                      : 'bg-white/[0.03] border-white/[0.08] text-slate-300 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
+                      ? theme === 'dark'
+                        ? 'bg-white/[0.12] text-white border-white/25 shadow-sm shadow-black/40'
+                        : theme === 'kitty'
+                        ? 'bg-pink-500 text-white border-pink-500 shadow-sm shadow-pink-500/25'
+                        : 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
+                      : theme === 'dark'
+                      ? 'bg-white/[0.03] border-white/[0.08] text-slate-300 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
+                      : theme === 'kitty'
+                      ? 'bg-white border-pink-200 text-slate-700 hover:text-pink-900 hover:border-pink-300'
+                      : 'bg-white border-slate-200 text-slate-700 hover:text-zinc-950 hover:border-slate-300'
                   }`}
                 >
                   <span className="tracking-tight">{materia.name}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold border ${
                     isSelected
-                      ? 'bg-white/[0.10] text-white border-white/15'
-                      : 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
+                      ? theme === 'dark'
+                        ? 'bg-white/[0.10] text-white border-white/15'
+                        : 'bg-white/25 text-white border-transparent'
+                      : theme === 'dark'
+                      ? 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
+                      : theme === 'kitty'
+                      ? 'bg-pink-100 text-pink-700 border-pink-200'
+                      : 'bg-slate-100 text-slate-700 border-slate-200'
                   }`}>
                     {materia.count}
                   </span>
@@ -747,8 +857,16 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     }
                   }}
                   style={{
-                    background: `radial-gradient(ellipse 120% 90% at 0% 0%, ${mTheme.hex}22 0%, ${mTheme.cardBgHex} 65%, #0e0b16 100%)`,
-                    borderColor: `${mTheme.hex}30`,
+                    background: theme === 'light'
+                      ? `linear-gradient(135deg, ${mTheme.hex}14 0%, #ffffff 42%, #ffffff 100%)`
+                      : theme === 'kitty'
+                      ? `linear-gradient(135deg, ${mTheme.hex}18 0%, #ffffff 40%, #fff7fa 100%)`
+                      : `radial-gradient(ellipse 120% 90% at 0% 0%, ${mTheme.hex}22 0%, ${mTheme.cardBgHex} 65%, #0e0b16 100%)`,
+                    borderColor: theme === 'light'
+                      ? '#e2e8f0'
+                      : theme === 'kitty'
+                      ? '#fbcfe8'
+                      : `${mTheme.hex}30`,
                     animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
                   className={`animate-stagger-item glass-specular group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-2xl hover:border-white/35 active:scale-[0.985] ${
@@ -808,7 +926,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                             </span>
                           )}
                         </div>
-                        <h3 className="font-bold text-white text-base sm:text-lg leading-snug line-clamp-2 tracking-tight group-hover:text-white transition-colors">
+                        <h3 className={`font-bold text-base sm:text-lg leading-snug line-clamp-2 tracking-tight transition-colors ${
+                          theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                        }`}>
                           {kit.title}
                         </h3>
                       </div>
@@ -816,7 +936,13 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                       {isActive && (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-white border border-white/25 shadow-sm">
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border shadow-sm ${
+                          theme === 'dark'
+                            ? 'bg-white/15 text-white border-white/25'
+                            : theme === 'kitty'
+                            ? 'bg-pink-100 text-pink-700 border-pink-200'
+                            : 'bg-slate-100 text-slate-800 border-slate-200'
+                        }`}>
                           Último abierto
                         </span>
                       )}
@@ -880,7 +1006,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   {/* Bottom Area: Estadísticas + Micro-barra de progreso con respiración amplia */}
                   <div className="mt-7 relative z-10 space-y-3">
                     {/* Estadísticas del kit */}
-                    <div className="flex items-center gap-4 text-xs text-white/90 font-medium flex-wrap tabular-nums">
+                    <div className={`flex items-center gap-4 text-xs font-medium flex-wrap tabular-nums ${
+                      theme === 'dark' ? 'text-white/90' : 'text-zinc-700'
+                    }`}>
                       <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
                         <Brain className="w-3.5 h-3.5 shrink-0" style={{ color: mTheme.hex }} />
                         <span>
@@ -897,14 +1025,14 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       </span>
                       {kStats.assetsCount > 0 && (
                         <span className="flex items-center gap-1.5">
-                          <ImageIcon className="w-3.5 h-3.5 text-white/70 shrink-0" />
+                          <ImageIcon className={`w-3.5 h-3.5 shrink-0 ${theme === 'dark' ? 'text-white/70' : 'text-zinc-500'}`} />
                           <span>{kStats.assetsCount} img</span>
                         </span>
                       )}
                     </div>
 
                     {/* Barra de progreso de precisión con color distintivo de la materia */}
-                    <div className="w-full h-1 rounded-full bg-black/50 overflow-hidden">
+                    <div className={`w-full h-1 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-black/50' : 'bg-slate-200'}`}>
                       <div
                         style={{
                           width: `${progressPercent}%`,
@@ -921,15 +1049,29 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             {/* Create New Kit Card con feedback táctil elástico y respiración amplia */}
             <button
               onClick={() => onNavigate('create')}
-              className="group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed border-white/15 hover:border-white/35 bg-white/[0.02] hover:bg-white/[0.05] glass-specular transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-2xl active:scale-[0.985] min-h-[220px] cursor-pointer"
+              className={`group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-2xl active:scale-[0.985] min-h-[220px] cursor-pointer ${
+                theme === 'dark'
+                  ? 'border-white/15 hover:border-white/35 bg-white/[0.02] hover:bg-white/[0.05] glass-specular'
+                  : theme === 'kitty'
+                  ? 'border-pink-300 hover:border-pink-400 bg-white/80 hover:bg-white shadow-sm'
+                  : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 shadow-sm'
+              }`}
             >
-              <div className="w-11 h-11 rounded-2xl bg-white/[0.06] group-hover:bg-white/[0.12] group-hover:scale-110 border border-white/10 flex items-center justify-center mb-3 transition-all duration-200">
-                <Plus className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" />
+              <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center mb-3 transition-all duration-200 ${
+                theme === 'dark'
+                  ? 'bg-white/[0.06] group-hover:bg-white/[0.12] group-hover:scale-110 border-white/10'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 group-hover:bg-pink-100 group-hover:scale-110 border-pink-200 text-pink-600'
+                  : 'bg-slate-100 group-hover:bg-slate-200 group-hover:scale-110 border-slate-200 text-slate-800'
+              }`}>
+                <Plus className={`w-5 h-5 transition-colors ${theme === 'dark' ? 'text-white/70 group-hover:text-white' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-800'}`} />
               </div>
-              <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
+              <span className={`text-sm font-semibold transition-colors ${
+                theme === 'dark' ? 'text-slate-200 group-hover:text-white' : 'text-zinc-900'
+              }`}>
                 Nuevo Study Kit
               </span>
-              <span className="text-xs text-slate-500 mt-1">
+              <span className={`text-xs mt-1 ${theme === 'kitty' ? 'text-pink-400' : 'text-slate-500'}`}>
                 Texto, YouTube, PDF o enlace
               </span>
             </button>

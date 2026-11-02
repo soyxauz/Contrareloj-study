@@ -105,15 +105,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 tracking-tight shadow-sm transition-colors ${
               theme === 'kitty'
                 ? 'bg-pink-500 text-white shadow-pink-500/30'
+                : theme === 'light'
+                ? 'bg-zinc-950 text-white shadow-sm'
                 : 'bg-white/[0.08] border border-white/10 text-white'
             }`}>
               {theme === 'kitty' ? 'K' : 'C'}
             </div>
             <div className="flex items-center whitespace-nowrap">
-              <span className="text-sm sm:text-base font-semibold tracking-tight text-white">
+              <span className={`text-sm sm:text-base font-semibold tracking-tight ${
+                theme === 'dark' ? 'text-white' : 'text-zinc-950'
+              }`}>
                 {theme === 'kitty' ? 'Kitty' : 'Contrareloj'}
               </span>
-              <span className="ml-1 text-xs text-slate-400 font-normal">Study</span>
+              <span className={`ml-1 text-xs font-normal ${
+                theme === 'kitty' ? 'text-pink-600 font-medium' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+              }`}>Study</span>
             </div>
           </div>
 
@@ -250,7 +256,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => onSelectMode(mode.id)}
                 className={`active-press flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-[transform,background-color,color] whitespace-nowrap text-xs sm:text-sm cursor-pointer ${
                   active
-                    ? 'bg-violet-600 text-white font-semibold shadow-md shadow-violet-900/30'
+                    ? theme === 'kitty'
+                      ? 'bg-pink-500 text-white font-semibold shadow-md shadow-pink-500/30'
+                      : theme === 'light'
+                      ? 'bg-zinc-900 text-white font-semibold shadow-md'
+                      : 'bg-violet-600 text-white font-semibold shadow-md shadow-violet-900/30'
+                    : theme === 'kitty'
+                    ? 'text-pink-900/70 hover:text-pink-950 hover:bg-pink-100/60'
+                    : theme === 'light'
+                    ? 'text-slate-600 hover:text-zinc-950 hover:bg-slate-100'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-thea-surface'
                 }`}
               >
@@ -261,6 +275,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold tabular-nums ${
                       active
                         ? 'bg-white/20 text-white'
+                        : theme === 'kitty'
+                        ? 'bg-pink-100 text-pink-700 border border-pink-200'
+                        : theme === 'light'
+                        ? 'bg-slate-200 text-slate-700 border border-slate-300'
                         : 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
                     }`}
                   >

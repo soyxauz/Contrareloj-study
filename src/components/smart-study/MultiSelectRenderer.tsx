@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check, CheckCircle2, XCircle } from 'lucide-react';
 import { FormattedText } from '../FormattedText';
+import { useTheme } from '../../services/themeService';
 
 export interface MultiSelectRendererProps {
   safeOptions: string[];
@@ -19,29 +20,50 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
   onToggleIndex,
   onCheckSelection,
 }) => {
+  const { theme } = useTheme();
+
   return (
     <div className="space-y-4 mb-8">
-      <p className="text-xs text-slate-400 font-medium">
-        Selecciona una o más respuestas válidas y presiona "Comprobar Selección":
+      <p className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+        Selecciona una o más respuestas válidas y presiona &quot;Comprobar Selección&quot;:
       </p>
       <div className="space-y-3">
         {safeOptions.map((option, idx) => {
           const isSelected = selectedMultiIndices.includes(idx);
           const isCorrect = safeCorrectIndices.includes(idx);
 
-          let optionStyles = 'border-[#881337]/40 bg-[#1e0711]/75 hover:bg-[#2c0b19]/90 hover:border-[#be123c]/60 text-slate-100 shadow-md shadow-[#28030d]/30 hover:-translate-y-0.5';
+          let optionStyles = theme === 'light'
+            ? 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-zinc-950 shadow-sm hover:-translate-y-0.5'
+            : theme === 'kitty'
+            ? 'border-pink-200 bg-white hover:bg-pink-50/60 hover:border-pink-300 text-zinc-950 shadow-sm shadow-pink-100/50 hover:-translate-y-0.5'
+            : 'border-[#881337]/40 bg-[#1e0711]/75 hover:bg-[#2c0b19]/90 hover:border-[#be123c]/60 text-slate-100 shadow-md shadow-[#28030d]/30 hover:-translate-y-0.5';
+
           if (isSelected && !isAnswered) {
-            optionStyles = 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white shadow-lg shadow-[#4c0519]/40 ring-1 ring-[#be123c]/50';
+            optionStyles = theme === 'light'
+              ? 'border-zinc-900 bg-slate-50 text-zinc-950 ring-2 ring-zinc-900 shadow-md'
+              : theme === 'kitty'
+              ? 'border-pink-500 bg-pink-50 text-pink-950 ring-2 ring-pink-500 shadow-md'
+              : 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white shadow-lg shadow-[#4c0519]/40 ring-1 ring-[#be123c]/50';
           }
           if (isAnswered) {
             if (isCorrect && isSelected) {
-              optionStyles = 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-500/30 animate-cardCorrect';
+              optionStyles = theme === 'dark'
+                ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-500/30 animate-cardCorrect'
+                : 'border-emerald-500 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500/30 animate-cardCorrect shadow-sm';
             } else if (!isCorrect && isSelected) {
-              optionStyles = 'border-rose-500/60 bg-rose-500/10 text-rose-200 ring-1 ring-rose-500/30 animate-cardError';
+              optionStyles = theme === 'dark'
+                ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 ring-1 ring-rose-500/30 animate-cardError'
+                : 'border-rose-500 bg-rose-50 text-rose-950 ring-1 ring-rose-500/30 animate-cardError shadow-sm';
             } else if (isCorrect && !isSelected) {
-              optionStyles = 'border-amber-500/50 bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/30';
+              optionStyles = theme === 'dark'
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/30'
+                : 'border-amber-500 bg-amber-50 text-amber-950 ring-1 ring-amber-500/30';
             } else {
-              optionStyles = 'border border-[#4c0519]/30 bg-[#14040b]/40 text-slate-500 opacity-40';
+              optionStyles = theme === 'light'
+                ? 'border-slate-200 bg-slate-100/50 text-slate-400 opacity-40'
+                : theme === 'kitty'
+                ? 'border-pink-100 bg-pink-50/30 text-pink-300 opacity-40'
+                : 'border border-[#4c0519]/30 bg-[#14040b]/40 text-slate-500 opacity-40';
             }
           }
 
@@ -56,7 +78,9 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
             >
               <div className="flex items-center gap-3">
                 <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                  isSelected ? 'bg-white border-white text-zinc-950 font-bold shadow-sm' : 'border-white/20 bg-white/[0.04]'
+                  isSelected
+                    ? (theme === 'dark' ? 'bg-white border-white text-zinc-950 font-bold shadow-sm' : theme === 'kitty' ? 'bg-pink-500 border-pink-500 text-white font-bold' : 'bg-zinc-900 border-zinc-900 text-white font-bold')
+                    : (theme === 'dark' ? 'border-white/20 bg-white/[0.04]' : theme === 'kitty' ? 'border-pink-300 bg-pink-50/50' : 'border-slate-300 bg-slate-100')
                 }`}>
                   {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
@@ -66,10 +90,10 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
               </div>
 
               {isAnswered && isCorrect && isSelected && (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
               )}
               {isAnswered && !isCorrect && isSelected && (
-                <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                <XCircle className="w-5 h-5 text-rose-500 shrink-0" />
               )}
             </button>
           );
@@ -81,7 +105,13 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           type="button"
           disabled={selectedMultiIndices.length === 0}
           onClick={onCheckSelection}
-          className="active-press w-full py-3 rounded-xl bg-white hover:bg-zinc-200 disabled:opacity-40 text-zinc-950 font-bold text-sm shadow-md glass-specular transition-[transform,background-color] duration-150 cursor-pointer tabular-nums"
+          className={`active-press w-full py-3 rounded-xl font-bold text-sm shadow-md transition-[transform,background-color] duration-150 cursor-pointer tabular-nums disabled:opacity-40 ${
+            theme === 'dark'
+              ? 'bg-white hover:bg-zinc-200 text-zinc-950 glass-specular'
+              : theme === 'kitty'
+              ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+              : 'bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm'
+          }`}
         >
           Comprobar Selección ({selectedMultiIndices.length} seleccionada{selectedMultiIndices.length !== 1 ? 's' : ''})
         </button>

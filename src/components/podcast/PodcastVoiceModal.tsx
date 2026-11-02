@@ -17,6 +17,7 @@ import {
 } from '../../services/azureEdgeTtsService';
 import { savePodcastSettings } from '../../services/geminiAudioService';
 import { googleDriveService } from '../../services/googleDriveService';
+import { useTheme } from '../../services/themeService';
 
 export interface PodcastVoiceModalProps {
   show: boolean;
@@ -79,6 +80,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
   onRequestConfirmReplace,
   isGenerating,
 }) => {
+  const { theme } = useTheme();
   if (!show || typeof document === 'undefined') return null;
 
   const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
@@ -607,7 +609,15 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         onClick={() => onSelectFormat(f.id)}
                         className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                           isSelected
-                            ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                            ? theme === 'kitty'
+                              ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                              : theme === 'light'
+                              ? 'border-amber-500 bg-amber-50 text-amber-950 shadow-md ring-1 ring-amber-500/40'
+                              : 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                            : theme === 'kitty'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-600'
+                            : theme === 'light'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
@@ -615,15 +625,21 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
                               <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
-                                isSelected ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-thea-bg text-slate-400 border border-thea-border'
+                                isSelected
+                                  ? (theme === 'kitty' ? 'bg-pink-500 text-white font-bold' : 'bg-amber-400 text-slate-950 font-bold')
+                                  : (theme === 'dark' ? 'bg-thea-bg text-slate-400 border border-thea-border' : 'bg-slate-200 text-slate-600')
                               }`}>
                                 <IconComp className="w-3.5 h-3.5" />
                               </div>
-                              <span className="font-bold text-sm text-white">{f.title}</span>
+                              <span className={`font-bold text-sm ${
+                                theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                              }`}>{f.title}</span>
                             </div>
-                            {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                            {isSelected && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-400'}`} />}
                           </div>
-                          <p className="text-[11px] text-slate-300 leading-relaxed">
+                          <p className={`text-[11px] leading-relaxed ${
+                            theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+                          }`}>
                             {f.description}
                           </p>
                         </div>
@@ -647,19 +663,33 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         onClick={() => onSelectDuration(d.id)}
                         className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                           isSelected
-                            ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                            ? theme === 'kitty'
+                              ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                              : theme === 'light'
+                              ? 'border-violet-500 bg-violet-50 text-violet-950 shadow-md ring-1 ring-violet-500/40'
+                              : 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                            : theme === 'kitty'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-600'
+                            : theme === 'light'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs text-white">{d.title}</span>
+                          <span className={`font-bold text-xs ${
+                            theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                          }`}>{d.title}</span>
                           <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                            isSelected ? 'bg-violet-500/30 text-violet-200' : 'bg-thea-bg text-slate-400'
+                            isSelected
+                              ? (theme === 'kitty' ? 'bg-pink-100 text-pink-700' : 'bg-violet-500/30 text-violet-200')
+                              : (theme === 'dark' ? 'bg-thea-bg text-slate-400' : 'bg-slate-200 text-slate-700')
                           }`}>
                             {d.subtitle}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 leading-snug">
+                        <p className={`text-[10px] leading-snug ${
+                          theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                        }`}>
                           {d.detail}
                         </p>
                       </div>

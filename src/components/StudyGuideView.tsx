@@ -76,6 +76,7 @@ import { FormattedText } from './FormattedText';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { hydrateKitAssets } from '../services/storageService';
 import { StudyGuideScanner } from './StudyGuideScanner';
+import { useTheme } from '../services/themeService';
 
 interface StudyGuideViewProps {
   kit: StudyKit;
@@ -83,6 +84,7 @@ interface StudyGuideViewProps {
 }
 
 export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit }) => {
+  const { theme } = useTheme();
   const [currentKitState, setCurrentKitState] = useState<StudyKit>(kit);
   const [activeTab, setActiveTab] = useState<'guide' | 'gallery'>('guide');
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
@@ -499,12 +501,26 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       </div>
 
       {/* ── Subtabs: Guía Teórica vs Galería Visual ────────────────────────── */}
-      <div className="flex items-center gap-2 mb-8 p-1.5 rounded-2xl bg-white/[0.025] border border-white/[0.08] shadow-sm">
+      <div className={`flex items-center gap-2 mb-8 p-1.5 rounded-2xl border shadow-sm ${
+        theme === 'light'
+          ? 'bg-slate-100/80 border-slate-200'
+          : theme === 'kitty'
+          ? 'bg-pink-100/50 border-pink-200'
+          : 'bg-white/[0.025] border-white/[0.08]'
+      }`}>
         <button
           onClick={() => setActiveTab('guide')}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.985] ${
             activeTab === 'guide'
-              ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+              ? theme === 'light'
+                ? 'bg-white text-zinc-950 border border-slate-200 shadow-xs'
+                : theme === 'kitty'
+                ? 'bg-white text-pink-700 border border-pink-200 shadow-xs'
+                : 'bg-white/10 text-white border border-white/10 shadow-sm'
+              : theme === 'light'
+              ? 'text-slate-600 hover:text-zinc-950 hover:bg-white/50'
+              : theme === 'kitty'
+              ? 'text-pink-600/80 hover:text-pink-900 hover:bg-white/50'
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
           }`}
         >
@@ -516,7 +532,15 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
           onClick={() => setActiveTab('gallery')}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.985] relative ${
             activeTab === 'gallery'
-              ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+              ? theme === 'light'
+                ? 'bg-white text-zinc-950 border border-slate-200 shadow-xs'
+                : theme === 'kitty'
+                ? 'bg-white text-pink-700 border border-pink-200 shadow-xs'
+                : 'bg-white/10 text-white border border-white/10 shadow-sm'
+              : theme === 'light'
+              ? 'text-slate-600 hover:text-zinc-950 hover:bg-white/50'
+              : theme === 'kitty'
+              ? 'text-pink-600/80 hover:text-pink-900 hover:bg-white/50'
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
           }`}
         >
@@ -526,7 +550,13 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
             <span
               className={`text-[11px] px-2 py-0.5 rounded-full font-bold tabular-nums ${
                 activeTab === 'gallery'
-                  ? 'bg-white text-zinc-950 font-black'
+                  ? theme === 'light' || theme === 'kitty'
+                    ? 'bg-zinc-900 text-white font-black'
+                    : 'bg-white text-zinc-950 font-black'
+                  : theme === 'kitty'
+                  ? 'bg-pink-200/70 text-pink-700 border border-pink-300'
+                  : theme === 'light'
+                  ? 'bg-slate-200 text-slate-700 border border-slate-300'
                   : 'bg-white/[0.05] text-zinc-300 border border-white/[0.08]'
               }`}
             >
@@ -548,15 +578,27 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               sampleText={kit.sourceText || kit.description || ''}
             />
           ) : !markdown || markdown.trim().length === 0 ? (
-            <div className="py-10 px-6 sm:px-10 rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] max-w-4xl mx-auto shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] animate-fadeIn space-y-8">
+            <div className={`py-10 px-6 sm:px-10 rounded-3xl max-w-4xl mx-auto border animate-fadeIn space-y-8 ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
+                : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+            }`}>
               <div className="text-center max-w-2xl mx-auto">
-                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">
+                <span className={`text-xs font-bold uppercase tracking-widest block mb-2 ${
+                  theme === 'kitty' ? 'text-pink-600' : 'text-zinc-400'
+                }`}>
                   EXTENSIÓN DE LA GUÍA
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2 tracking-tight">
+                <h2 className={`text-2xl sm:text-3xl font-extrabold mb-2 tracking-tight ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   Configurar Nivel de Extensión de la Guía
                 </h2>
-                <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
+                <p className={`text-xs sm:text-sm leading-relaxed ${
+                  theme === 'dark' ? 'text-zinc-400' : 'text-slate-600'
+                }`}>
                   Sin límites de caracteres. Elige la profundidad pedagógica con la que deseas que la IA recorra y desglose todo el documento:
                 </p>
               </div>
@@ -572,42 +614,74 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                       onClick={() => !isGenerating && setSelectedDepth(opt.id)}
                       className={`relative p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group active:scale-[0.985] ${
                         isSelected
-                          ? 'bg-white/[0.06] border-white/40 shadow-sm'
-                          : 'bg-white/[0.025] border-white/[0.08] hover:border-white/20 hover:bg-white/[0.05]'
+                          ? theme === 'dark'
+                            ? 'bg-white/[0.06] border-white/40 shadow-sm'
+                            : theme === 'kitty'
+                            ? 'bg-pink-50 border-pink-500 shadow-md ring-1 ring-pink-500'
+                            : 'bg-slate-50 border-zinc-900 shadow-md ring-1 ring-zinc-900'
+                          : theme === 'dark'
+                          ? 'bg-white/[0.025] border-white/[0.08] hover:border-white/20 hover:bg-white/[0.05]'
+                          : theme === 'kitty'
+                          ? 'bg-white border-pink-200 hover:border-pink-300 hover:bg-pink-50/50'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-3">
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                            isSelected ? 'bg-white text-zinc-950 font-bold' : 'bg-white/[0.04] text-zinc-300 border border-white/[0.08]'
+                            isSelected
+                              ? (theme === 'dark' ? 'bg-white text-zinc-950 font-bold' : theme === 'kitty' ? 'bg-pink-500 text-white font-bold' : 'bg-zinc-900 text-white font-bold')
+                              : (theme === 'dark' ? 'bg-white/[0.04] text-zinc-300 border border-white/[0.08]' : theme === 'kitty' ? 'bg-pink-50 text-pink-600 border border-pink-200' : 'bg-slate-100 text-slate-700 border border-slate-200')
                           }`}>
                             <Icon className="w-5 h-5" />
                           </div>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums ${
-                            isSelected ? 'bg-white/10 text-white border border-white/20' : 'bg-white/[0.04] text-zinc-400 border border-white/[0.08]'
+                            isSelected
+                              ? (theme === 'dark' ? 'bg-white/10 text-white border border-white/20' : theme === 'kitty' ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-200 text-slate-800 border border-slate-300')
+                              : (theme === 'dark' ? 'bg-white/[0.04] text-zinc-400 border border-white/[0.08]' : theme === 'kitty' ? 'bg-pink-50 text-pink-600 border border-pink-100' : 'bg-slate-100 text-slate-600 border border-slate-200')
                           }`}>
                             {opt.multiplier}
                           </span>
                         </div>
 
-                        <h3 className="font-bold text-base text-white mb-1 flex items-center gap-1.5 flex-wrap">
+                        <h3 className={`font-bold text-base mb-1 flex items-center gap-1.5 flex-wrap ${
+                          theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                        }`}>
                           <span>{opt.name}</span>
                           {opt.id === 'ultra' && (
-                            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-white/[0.08] text-zinc-200 border border-white/15 font-bold">
+                            <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold border ${
+                              theme === 'dark'
+                                ? 'bg-white/[0.08] text-zinc-200 border-white/15'
+                                : theme === 'kitty'
+                                ? 'bg-pink-100 text-pink-700 border-pink-200'
+                                : 'bg-slate-100 text-slate-800 border-slate-200'
+                            }`}>
                               Recomendado
                             </span>
                           )}
                         </h3>
-                        <p className="text-xs text-zinc-400 leading-relaxed mb-4">
+                        <p className={`text-xs leading-relaxed mb-4 ${
+                          theme === 'dark' ? 'text-zinc-400' : 'text-slate-600'
+                        }`}>
                           {opt.desc}
                         </p>
                       </div>
 
-                      <div className="pt-3 border-t border-white/[0.06] space-y-1.5 text-[11px]">
+                      <div className={`pt-3 border-t space-y-1.5 text-[11px] ${
+                        theme === 'dark' ? 'border-white/[0.06]' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
+                      }`}>
                         {opt.features.map((f, i) => (
                           <div key={i} className="flex items-center gap-1.5">
-                            <Check className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-zinc-100' : 'text-zinc-500'}`} />
-                            <span className={isSelected ? 'text-zinc-200' : 'text-zinc-400'}>{f}</span>
+                            <Check className={`w-3.5 h-3.5 shrink-0 ${
+                              isSelected
+                                ? (theme === 'dark' ? 'text-zinc-100' : theme === 'kitty' ? 'text-pink-600' : 'text-zinc-900')
+                                : (theme === 'dark' ? 'text-zinc-500' : 'text-slate-400')
+                            }`} />
+                            <span className={
+                              isSelected
+                                ? (theme === 'dark' ? 'text-zinc-200' : 'text-zinc-900 font-medium')
+                                : (theme === 'dark' ? 'text-zinc-400' : 'text-slate-500')
+                            }>{f}</span>
                           </div>
                         ))}
                       </div>
@@ -620,9 +694,15 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               <div className="flex justify-center pt-2">
                 <button
                   onClick={() => handleGenerateStudyGuide(selectedDepth)}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 font-extrabold text-sm shadow-xl transition-all active:scale-[0.985] cursor-pointer"
+                  className={`w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl font-extrabold text-sm shadow-xl transition-all active:scale-[0.985] cursor-pointer ${
+                    theme === 'dark'
+                      ? 'bg-white hover:bg-zinc-200 text-zinc-950'
+                      : theme === 'kitty'
+                      ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm'
+                  }`}
                 >
-                  <BookOpen className="w-5 h-5 text-zinc-950" />
+                  <BookOpen className="w-5 h-5" />
                   <span>
                     Generar Guía {DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.name} ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.multiplier})
                   </span>
@@ -631,18 +711,34 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-3xl p-6 sm:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <div className={`rounded-3xl p-6 sm:p-10 border ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
+                  : theme === 'kitty'
+                  ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
+                  : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+              }`}>
                 <FormattedText text={stripExecutiveSummaryPreamble(markdown)} />
               </div>
 
               {/* Banner inferior para Rehacer con diferente extensión */}
-              <div className="p-6 sm:p-8 rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5">
+              <div className={`p-6 sm:p-8 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-5 ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
+                  : theme === 'kitty'
+                  ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
+                  : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-xl'
+              }`}>
                 <div className="space-y-1 text-center sm:text-left">
-                  <h4 className="text-sm sm:text-base font-bold text-white flex items-center justify-center sm:justify-start gap-2">
-                    <FileText className="w-4 h-4 text-zinc-400" />
+                  <h4 className={`text-sm sm:text-base font-bold flex items-center justify-center sm:justify-start gap-2 ${
+                    theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                  }`}>
+                    <FileText className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-500' : 'text-zinc-400'}`} />
                     <span>¿Deseas adaptar o cambiar la extensión de esta guía?</span>
                   </h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed max-w-xl">
+                  <p className={`text-xs leading-relaxed max-w-xl ${
+                    theme === 'dark' ? 'text-zinc-400' : 'text-slate-600'
+                  }`}>
                     Puedes rehacer esta guía de estudio en cualquier momento con nivel Esencial (1x), Completa (2x) o Tratado Ultra-Exhaustivo (3x) sin límite de caracteres.
                   </p>
                 </div>
@@ -652,9 +748,15 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                     setShowDepthModal(true);
                   }}
                   disabled={isGenerating}
-                  className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition-all cursor-pointer active:scale-[0.985]"
+                  className={`shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer active:scale-[0.985] ${
+                    theme === 'dark'
+                      ? 'bg-white hover:bg-zinc-200 text-zinc-950'
+                      : theme === 'kitty'
+                      ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                  }`}
                 >
-                  <RotateCcw className="w-4 h-4 text-zinc-950" />
+                  <RotateCcw className="w-4 h-4" />
                   <span>Rehacer con diferente extensión</span>
                 </button>
               </div>

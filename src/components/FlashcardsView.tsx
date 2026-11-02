@@ -1,5 +1,6 @@
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
+import { useTheme } from '../services/themeService';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
@@ -425,6 +426,7 @@ interface FlashcardsViewProps {
 }
 
 export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = null, onUpdateKit }) => {
+  const { theme } = useTheme();
   // Cargar progreso persistido de inmediato (síncrono desde LocalStorage, 0ms de latencia)
   const savedProgress = authService.getFlashcardProgress(userId, kit.id);
 
@@ -1218,19 +1220,37 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             {/* Tarjeta Central: Entidad Misteriosa */}
             <div className="shrink-0 my-1.5">
               {!isCaseSolved ? (
-                <div className="h-24 sm:h-26 rounded-2xl border border-violet-500/40 bg-gradient-to-r from-thea-surface via-thea-surfaceLight to-thea-surface p-3 sm:p-4 flex items-center justify-between shadow-lg relative overflow-hidden">
+                <div className={`h-24 sm:h-26 rounded-2xl p-3 sm:p-4 flex items-center justify-between relative overflow-hidden border ${
+                  theme === 'light'
+                    ? 'border-slate-200 bg-white text-zinc-950 shadow-sm'
+                    : theme === 'kitty'
+                    ? 'border-pink-200 bg-white text-zinc-950 shadow-sm shadow-pink-100/50'
+                    : 'border-violet-500/40 bg-gradient-to-r from-thea-surface via-thea-surfaceLight to-thea-surface shadow-lg text-white'
+                }`}>
                   <div className="flex items-center gap-3 sm:gap-4 z-10">
-                    <div className="w-12 h-12 rounded-2xl bg-violet-600/30 border border-violet-400/40 flex items-center justify-center text-violet-300 shadow-inner">
-                      <HelpCircle className="w-6 h-6 text-amber-400 animate-pulse" />
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-inner ${
+                      theme === 'kitty'
+                        ? 'bg-pink-100 border-pink-200 text-pink-600'
+                        : theme === 'light'
+                        ? 'bg-amber-50 border-amber-200 text-amber-600'
+                        : 'bg-violet-600/30 border-violet-400/40 text-violet-300'
+                    }`}>
+                      <HelpCircle className={`w-6 h-6 animate-pulse ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'}`} />
                     </div>
                     <div>
-                      <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-violet-300 block">
+                      <span className={`text-[10px] sm:text-xs uppercase font-extrabold tracking-wider block ${
+                        theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-600' : 'text-violet-300'
+                      }`}>
                         Entidad Oculta • Deducción en Proceso
                       </span>
-                      <h3 className="text-base sm:text-lg font-black text-white">
+                      <h3 className={`text-base sm:text-lg font-black ${
+                        theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                      }`}>
                         ¿Quién es esta entidad misteriosa?
                       </h3>
-                      <p className="text-[11px] text-slate-300">
+                      <p className={`text-[11px] ${
+                        theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+                      }`}>
                         {wrongOptions.length > 0
                           ? `Has tenido ${wrongOptions.length} intento(s) fallido(s) (-${wrongOptions.length * 10} pts). Puedes arriesgar otra opción o pedir más pistas.`
                           : 'Arriesga una opción candidata o desbloquea pistas progresivas para acotar tu deducción.'}
@@ -1239,8 +1259,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   </div>
 
                   <div className="hidden sm:flex flex-col items-end z-10 shrink-0">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Recompensa actual</span>
-                    <span className="text-lg font-black text-amber-300">
+                    <span className={`text-[10px] uppercase font-bold ${
+                      theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                    }`}>Recompensa actual</span>
+                    <span className={`text-lg font-black ${
+                      theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-amber-600' : 'text-amber-300'
+                    }`}>
                       {currentCase.clues[revealedCluesCount - 1]?.unlockedScore || 100} pts
                     </span>
                     <div className="flex items-center gap-0.5 mt-0.5">
@@ -1250,7 +1274,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                           className={`w-3.5 h-3.5 ${
                             i < (currentCase.clues[revealedCluesCount - 1]?.stars || 1)
                               ? 'fill-amber-400 text-amber-400'
-                              : 'text-slate-600'
+                              : theme === 'dark' ? 'text-slate-600' : 'text-slate-300'
                           }`}
                         />
                       ))}
@@ -1305,22 +1329,40 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   return (
                     <div
                       key={clue.level}
-                      className="h-full min-h-0 rounded-2xl border border-violet-500/40 bg-thea-surface/95 p-2.5 sm:p-3 flex flex-col justify-between shadow-sm animate-fadeIn"
+                      className={`h-full min-h-0 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between shadow-sm animate-fadeIn border ${
+                        theme === 'light'
+                          ? 'border-slate-200 bg-white text-zinc-950'
+                          : theme === 'kitty'
+                          ? 'border-pink-200 bg-white text-zinc-950 shadow-pink-100/30'
+                          : 'border-violet-500/40 bg-thea-surface/95 text-white'
+                      }`}
                     >
-                      <div className="flex items-center justify-between pb-1 border-b border-violet-900/40 shrink-0">
-                        <span className="text-[11px] font-extrabold text-violet-300 flex items-center gap-1.5 uppercase tracking-wide">
-                          {clue.level === 1 && <BookOpen className="w-3.5 h-3.5 text-violet-400" />}
-                          {clue.level === 2 && <Layers className="w-3.5 h-3.5 text-indigo-400" />}
-                          {clue.level === 3 && <Target className="w-3.5 h-3.5 text-amber-400" />}
-                          {clue.level === 4 && <Award className="w-3.5 h-3.5 text-emerald-400" />}
+                      <div className={`flex items-center justify-between pb-1 border-b shrink-0 ${
+                        theme === 'dark' ? 'border-violet-900/40' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
+                      }`}>
+                        <span className={`text-[11px] font-extrabold flex items-center gap-1.5 uppercase tracking-wide ${
+                          theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-700' : 'text-violet-300'
+                        }`}>
+                          {clue.level === 1 && <BookOpen className="w-3.5 h-3.5" />}
+                          {clue.level === 2 && <Layers className="w-3.5 h-3.5" />}
+                          {clue.level === 3 && <Target className="w-3.5 h-3.5" />}
+                          {clue.level === 4 && <Award className="w-3.5 h-3.5" />}
                           {clue.title}
                         </span>
-                        <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
+                          theme === 'kitty'
+                            ? 'text-pink-700 bg-pink-100 border-pink-200'
+                            : theme === 'light'
+                            ? 'text-amber-800 bg-amber-50 border-amber-200'
+                            : 'text-amber-300 bg-amber-950/40 border-amber-500/30'
+                        }`}>
                           {clue.unlockedScore} pts ({clue.stars}★)
                         </span>
                       </div>
                       <div className="flex-1 min-h-0 flex items-center pt-1.5">
-                        <p className="text-xs sm:text-[13px] leading-snug sm:leading-relaxed text-slate-200 line-clamp-4">
+                        <p className={`text-xs sm:text-[13px] leading-snug sm:leading-relaxed line-clamp-4 ${
+                          theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
+                        }`}>
                           <FormattedText text={clue.text} inlineOnly={true} />
                         </p>
                       </div>
@@ -1334,13 +1376,25 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                       key={clue.level}
                       type="button"
                       onClick={handleRevealNextClue}
-                      className="h-full min-h-0 rounded-2xl border-2 border-dashed border-violet-500/50 bg-violet-950/20 hover:bg-violet-900/30 hover:border-violet-400 p-2.5 sm:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all active:scale-[0.98] group"
+                      className={`h-full min-h-0 rounded-2xl border-2 border-dashed p-2.5 sm:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all active:scale-[0.98] group ${
+                        theme === 'light'
+                          ? 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-zinc-950'
+                          : theme === 'kitty'
+                          ? 'border-pink-300 bg-pink-50/50 hover:bg-pink-50 text-zinc-950'
+                          : 'border-violet-500/50 bg-violet-950/20 hover:bg-violet-900/30 hover:border-violet-400 text-white'
+                      }`}
                     >
-                      <Unlock className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform mb-1" />
-                      <span className="text-xs sm:text-sm font-extrabold text-white">
+                      <Unlock className={`w-5 h-5 group-hover:scale-110 transition-transform mb-1 ${
+                        theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'
+                      }`} />
+                      <span className={`text-xs sm:text-sm font-extrabold ${
+                        theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                      }`}>
                         Desbloquear {clue.title}
                       </span>
-                      <span className="text-[10px] text-violet-300 mt-0.5">
+                      <span className={`text-[10px] mt-0.5 ${
+                        theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-violet-300'
+                      }`}>
                         La recompensa pasará a {clue.unlockedScore} pts ({clue.stars}★)
                       </span>
                     </button>
@@ -1367,12 +1421,21 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 const isCorrect = isCaseSolved && option === currentCase.targetTerm;
                 const isChosenWinner = selectedGuessOption === option;
 
-                let btnStyle = 'border-thea-border/80 bg-thea-surface/90 hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 cursor-pointer active:scale-[0.99]';
+                let btnStyle = theme === 'light'
+                  ? 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-zinc-950 cursor-pointer active:scale-[0.99] shadow-xs'
+                  : theme === 'kitty'
+                  ? 'border-pink-200 bg-white hover:border-pink-300 hover:bg-pink-50/60 text-zinc-950 cursor-pointer active:scale-[0.99] shadow-xs'
+                  : 'border-thea-border/80 bg-thea-surface/90 hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 cursor-pointer active:scale-[0.99]';
+
                 if (isWrong) {
-                  btnStyle = 'border-rose-900/60 bg-rose-950/30 text-rose-300/60 line-through opacity-50 cursor-not-allowed';
+                  btnStyle = theme === 'dark'
+                    ? 'border-rose-900/60 bg-rose-950/30 text-rose-300/60 line-through opacity-50 cursor-not-allowed'
+                    : 'border-rose-200 bg-rose-50 text-rose-400 line-through opacity-60 cursor-not-allowed';
                 }
                 if (isCorrect || isChosenWinner) {
-                  btnStyle = 'border-emerald-400 bg-emerald-950/90 text-emerald-200 ring-2 ring-emerald-400 font-extrabold shadow-md';
+                  btnStyle = theme === 'dark'
+                    ? 'border-emerald-400 bg-emerald-950/90 text-emerald-200 ring-2 ring-emerald-400 font-extrabold shadow-md'
+                    : 'border-emerald-500 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-400 font-extrabold shadow-sm';
                 }
 
                 return (
@@ -1383,7 +1446,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     onClick={() => handleSelectGuessOption(option)}
                     className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex items-center justify-center text-center shadow-sm min-h-[50px] sm:min-h-[56px] ${btnStyle}`}
                   >
-                    {isCorrect && <Check className="w-4 h-4 text-emerald-400 mr-1.5 shrink-0" />}
+                    {isCorrect && <Check className="w-4 h-4 text-emerald-500 mr-1.5 shrink-0" />}
                     <span className="text-xs sm:text-sm font-bold line-clamp-2 leading-snug">
                       <FormattedText text={option} inlineOnly={true} />
                     </span>
@@ -1882,27 +1945,39 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <div className="space-y-5">
               {/* Campo 1: Subtema o Enfoque Temático */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+                }`}>
                   Subtema o Enfoque Específico (Opcional)
                 </label>
                 <div className="relative">
-                  <Target className="w-4 h-4 text-violet-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Target className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${
+                    theme === 'kitty' ? 'text-pink-500' : 'text-violet-400'
+                  }`} />
                   <input
                     type="text"
                     value={focusTopic}
                     onChange={e => setFocusTopic(e.target.value)}
                     placeholder="Ej. Mecanismo de acción, fórmulas, casos clínicos o tema particular..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900/80 border border-thea-border text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs sm:text-sm transition-colors ${
+                      theme === 'light'
+                        ? 'bg-white border-slate-200 text-zinc-950 placeholder-slate-400 focus:border-zinc-900'
+                        : theme === 'kitty'
+                        ? 'bg-white border-pink-200 text-zinc-950 placeholder-pink-300 focus:border-pink-500'
+                        : 'bg-slate-900/80 border-thea-border text-white placeholder-slate-500 focus:border-violet-500'
+                    }`}
                   />
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className={`text-[11px] mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                   Si se deja en blanco, la IA extraerá los puntos más relevantes de todo el documento.
                 </p>
               </div>
 
               {/* Campo 2: Proporción de Formato */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+                }`}>
                   Proporción de Formato
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1911,14 +1986,24 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     onClick={() => setFocusRatio('mixed-70-30')}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                       focusRatio === 'mixed-70-30'
-                        ? 'border-violet-500 bg-violet-600/20 text-white ring-1 ring-violet-500'
+                        ? theme === 'kitty'
+                          ? 'border-pink-500 bg-pink-50 text-pink-950 ring-1 ring-pink-500'
+                          : theme === 'light'
+                          ? 'border-violet-500 bg-violet-50 text-violet-950 ring-1 ring-violet-500'
+                          : 'border-violet-500 bg-violet-600/20 text-white ring-1 ring-violet-500'
+                        : theme === 'kitty'
+                        ? 'border-pink-200 bg-pink-50/40 text-slate-600 hover:bg-pink-50'
+                        : theme === 'light'
+                        ? 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                         : 'border-thea-border bg-slate-900/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'
                     }`}
                   >
-                    <span className="text-xs font-extrabold block text-violet-300 mb-1">
+                    <span className={`text-xs font-extrabold block mb-1 ${
+                      theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-violet-700' : 'text-violet-300'
+                    }`}>
                       70% Términos / 30% Preguntas
                     </span>
-                    <span className="text-[11px] leading-tight text-slate-400">
+                    <span className={`text-[11px] leading-tight ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                       Balance didáctico óptimo para memorización.
                     </span>
                   </button>
@@ -1928,14 +2013,24 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     onClick={() => setFocusRatio('only-questions')}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                       focusRatio === 'only-questions'
-                        ? 'border-cyan-500 bg-cyan-600/20 text-white ring-1 ring-cyan-500'
+                        ? theme === 'kitty'
+                          ? 'border-pink-500 bg-pink-50 text-pink-950 ring-1 ring-pink-500'
+                          : theme === 'light'
+                          ? 'border-cyan-600 bg-cyan-50 text-cyan-950 ring-1 ring-cyan-500'
+                          : 'border-cyan-500 bg-cyan-600/20 text-white ring-1 ring-cyan-500'
+                        : theme === 'kitty'
+                        ? 'border-pink-200 bg-pink-50/40 text-slate-600 hover:bg-pink-50'
+                        : theme === 'light'
+                        ? 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                         : 'border-thea-border bg-slate-900/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'
                     }`}
                   >
-                    <span className="text-xs font-extrabold block text-cyan-300 mb-1">
+                    <span className={`text-xs font-extrabold block mb-1 ${
+                      theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-cyan-700' : 'text-cyan-300'
+                    }`}>
                       100% Preguntas Cortas
                     </span>
-                    <span className="text-[11px] leading-tight text-slate-400">
+                    <span className={`text-[11px] leading-tight ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                       Preguntas sumamente directas con respuestas concisas.
                     </span>
                   </button>
@@ -1945,14 +2040,24 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     onClick={() => setFocusRatio('only-concepts')}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                       focusRatio === 'only-concepts'
-                        ? 'border-amber-500 bg-amber-600/20 text-white ring-1 ring-amber-500'
+                        ? theme === 'kitty'
+                          ? 'border-pink-500 bg-pink-50 text-pink-950 ring-1 ring-pink-500'
+                          : theme === 'light'
+                          ? 'border-amber-600 bg-amber-50 text-amber-950 ring-1 ring-amber-500'
+                          : 'border-amber-500 bg-amber-600/20 text-white ring-1 ring-amber-500'
+                        : theme === 'kitty'
+                        ? 'border-pink-200 bg-pink-50/40 text-slate-600 hover:bg-pink-50'
+                        : theme === 'light'
+                        ? 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                         : 'border-thea-border bg-slate-900/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'
                     }`}
                   >
-                    <span className="text-xs font-extrabold block text-amber-300 mb-1">
+                    <span className={`text-xs font-extrabold block mb-1 ${
+                      theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-amber-700' : 'text-amber-300'
+                    }`}>
                       100% Términos Clave
                     </span>
-                    <span className="text-[11px] leading-tight text-slate-400">
+                    <span className={`text-[11px] leading-tight ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                       Concepto o vocablo al frente y definición al reverso.
                     </span>
                   </button>
@@ -1961,7 +2066,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
               {/* Campo 3: Cantidad de tarjetas */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+                }`}>
                   Cantidad de Nuevas Tarjetas
                 </label>
                 <div className="flex items-center gap-2">
@@ -1972,7 +2079,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                       onClick={() => setTargetCount(num)}
                       className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                         targetCount === num
-                          ? 'border-violet-500 bg-violet-600 text-white shadow-md'
+                          ? theme === 'kitty'
+                            ? 'border-pink-500 bg-pink-500 text-white shadow-sm shadow-pink-500/25'
+                            : theme === 'light'
+                            ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                            : 'border-violet-500 bg-violet-600 text-white shadow-md'
+                          : theme === 'kitty'
+                          ? 'border-pink-200 bg-pink-50/40 text-slate-700 hover:bg-pink-50'
+                          : theme === 'light'
+                          ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                           : 'border-thea-border bg-slate-900/50 text-slate-400 hover:text-white'
                       }`}
                     >
@@ -1983,7 +2098,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               </div>
 
               {/* Información sobre la suma a la baraja */}
-              <div className="p-3 rounded-xl bg-violet-950/30 border border-violet-500/20 text-[11px] text-violet-200/90 leading-relaxed">
+              <div className={`p-3 rounded-xl border text-[11px] leading-relaxed ${
+                theme === 'kitty'
+                  ? 'bg-pink-50 border-pink-200 text-pink-900'
+                  : theme === 'light'
+                  ? 'bg-slate-50 border-slate-200 text-slate-700'
+                  : 'bg-violet-950/30 border-violet-500/20 text-violet-200/90'
+              }`}>
                 <strong>Nota:</strong> Las nuevas tarjetas generadas se sumarán directamente a tu baraja actual sin eliminar las existentes ni resetear tu progreso.
               </div>
 
