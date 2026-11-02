@@ -765,20 +765,17 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                         </div>
                       )}
                       <div>
-                        <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <span
-                            className="inline-flex items-center text-[11px] font-semibold tracking-wide uppercase px-2.5 py-0.5 rounded-lg shadow-sm"
-                            style={{
-                              color: mTheme.hex,
-                              backgroundColor: `${mTheme.hex}18`,
-                              border: `1px solid ${mTheme.hex}35`,
-                            }}
+                            className="text-[11px] font-semibold tracking-wider uppercase"
+                            style={{ color: mTheme.hex }}
                           >
-                            <span>{kit.category || 'General'}</span>
+                            {kit.category || 'General'}
                           </span>
                           {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded-md bg-white/5 text-white/70 border border-white/10">
-                              <Globe className="w-2.5 h-2.5 opacity-70" />
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
+                              <span className="text-white/20">·</span>
+                              <Globe className="w-3 h-3 text-slate-500" />
                               <span>ES (orig. {kit.sourceLanguage})</span>
                             </span>
                           )}
