@@ -112,6 +112,7 @@ export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [driveSyncState, setDriveSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
   const isLoggingOutRef = useRef(false);
   const isHydratedRef = useRef(false);
@@ -293,8 +294,19 @@ export const App: React.FC = () => {
   useEffect(() => {
     resetUltraLightSmoothScroll(0);
   }, [currentMode]);
+
+  // Bloqueo estricto del scroll de la página de fondo mientras haya modales abiertos
+  useEffect(() => {
+    if (showAIModal || showAuthModal || showGoogleDriveModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showAIModal, showAuthModal, showGoogleDriveModal]);
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
-  const [showAIModal, setShowAIModal] = useState(false);
 
   // Modales sincronizados con el historial del navegador para permitir volver atrás
   const handleOpenAIModal = () => {
