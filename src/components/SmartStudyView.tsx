@@ -2356,7 +2356,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           ) : (
             <button
               onClick={handleAdvanceToNextLevel}
-              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-slate-950 font-extrabold text-base shadow-xl shadow-amber-900/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold text-base shadow-xl shadow-rose-950/40 transition-all transform hover:-translate-y-0.5 cursor-pointer active:scale-95"
             >
               <span>Avanzar al Nivel {level + 1}</span>
               <ArrowRight className="w-5 h-5" />
@@ -2426,7 +2426,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
             <button
               onClick={handleResetProgress}
-              className="px-8 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold transition-all cursor-pointer shadow-md"
+              className="px-8 py-3 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-bold transition-all cursor-pointer shadow-md shadow-rose-950/30 active:scale-95"
             >
               Reiniciar Progreso de SmartStudy a 0%
             </button>
@@ -3623,47 +3623,72 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     typeof document !== 'undefined' &&
     createPortal(
       <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 animate-fadeIn select-none"
         onClick={(e) => {
           if (e.target === e.currentTarget) setShowResetConfirmModal(false);
         }}
       >
-        <div className="bg-[#200814] border border-violet-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
+        <div className="relative w-full max-w-md bg-[#14040c] border border-rose-500/25 rounded-[28px] p-6 sm:p-7 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.05),inset_0_1px_0_rgba(255,255,255,0.12)] text-center overflow-hidden will-change-transform">
+          {/* Resplandor ambiental de autor en el borde superior */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-20 bg-rose-500/10 blur-2xl pointer-events-none rounded-full" />
+
+          {/* Botón de cierre minimalista */}
           <button
             type="button"
             onClick={() => setShowResetConfirmModal(false)}
-            className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border transition-colors cursor-pointer"
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] transition-colors cursor-pointer active:scale-95 z-10"
             title="Cerrar"
           >
             <X className="w-4 h-4" />
           </button>
 
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto mb-4 text-amber-400 shadow-inner">
-            <RotateCcw className="w-7 h-7" />
+          {/* Emblema refinado de reinicio con anillo de micro-luz */}
+          <div className="relative mx-auto mb-3.5 w-12 h-12 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-rose-500/20 to-amber-500/10 border border-rose-500/30 shadow-[0_0_20px_-2px_rgba(244,63,94,0.3)]" />
+            <div className="relative w-9 h-9 rounded-xl bg-[#200512] border border-white/10 flex items-center justify-center text-rose-300 shadow-inner">
+              <RotateCcw className="w-4.5 h-4.5" />
+            </div>
           </div>
 
-          <h3 className="text-lg sm:text-xl font-bold text-white mb-2 leading-snug">
-            ¿Deseas reiniciar el progreso de SmartStudy de este kit?
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-950/60 border border-rose-500/30 text-[10px] font-bold uppercase tracking-wider text-rose-300 mb-2">
+            Restablecer Avance
+          </span>
+
+          <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-snug mb-3">
+            ¿Deseas reiniciar tu progreso en este kit?
           </h3>
 
-          <p className="text-xs sm:text-sm text-slate-300 bg-thea-surface/80 border border-thea-border/80 rounded-xl p-3.5 mb-6 leading-relaxed">
-            El avance volverá al <strong>Nivel 1 (0%)</strong> y se reiniciará el avance de preguntas activas de este kit. Las respuestas que ya contestaste se conservarán en tu pestaña de Historial para revisión.
-          </p>
+          {/* Tarjeta estructurada de impacto y telemetría */}
+          <div className="rounded-2xl bg-white/[0.025] border border-white/[0.07] p-3.5 sm:p-4 mb-6 text-left space-y-2.5 shadow-inner">
+            <div className="flex items-start gap-2.5 text-xs text-slate-300">
+              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0 shadow-[0_0_6px_rgba(244,63,94,0.9)]" />
+              <p className="leading-relaxed">
+                El avance activo volverá a <span className="font-semibold text-white tabular-nums">Nivel 1 (0%)</span> y se reactivarán las preguntas del kit.
+              </p>
+            </div>
+            <div className="flex items-start gap-2.5 text-xs text-slate-300 pt-2 border-t border-white/[0.04]">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.9)]" />
+              <p className="leading-relaxed">
+                <span className="font-semibold text-emerald-300">Historial protegido:</span> Tus respuestas contestadas se conservarán intactas para tu revisión.
+              </p>
+            </div>
+          </div>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setShowResetConfirmModal(false)}
-              className="flex-1 py-3 px-4 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 font-bold text-xs sm:text-sm transition-all cursor-pointer"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.02] border border-white/10 text-slate-300 hover:text-white font-medium text-xs sm:text-sm transition-transform duration-140 active:scale-[0.98] cursor-pointer"
             >
-              No
+              Cancelar
             </button>
             <button
               type="button"
               onClick={handleResetProgress}
-              className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-900/30 transition-all cursor-pointer"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 via-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-semibold text-xs sm:text-sm shadow-[0_4px_16px_rgba(225,29,72,0.35),inset_0_1px_0_rgba(255,255,255,0.22)] transition-transform duration-140 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
             >
-              Sí, reiniciar de 0
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <span>Sí, reiniciar de 0</span>
             </button>
           </div>
         </div>
