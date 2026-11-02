@@ -66,13 +66,13 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
             const correctRightNum = correctRightIdx >= 0 ? correctRightIdx + 1 : null;
             const isMatchCorrect = matchingChecked && isPaired && matchingPairsMap[pair.term] === pair.definition;
 
-            let borderStyles = 'border-thea-border bg-thea-surfaceLight/40 hover:border-violet-500/60';
-            if (isActive) borderStyles = 'border-violet-400 bg-violet-950/50 ring-2 ring-violet-500 shadow-md';
-            if (isPaired && !matchingChecked) borderStyles = 'border-indigo-500/60 bg-indigo-950/30';
+            let borderStyles = 'border-white/[0.1] bg-white/[0.035] hover:bg-white/[0.07] hover:border-white/20 text-slate-200 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_-4px_rgba(0,0,0,0.4)]';
+            if (isActive) borderStyles = 'border-white/40 bg-white/[0.09] ring-1 ring-white/30 backdrop-blur-xl text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_8px_24px_-4px_rgba(0,0,0,0.5)]';
+            if (isPaired && !matchingChecked) borderStyles = 'border-white/25 bg-white/[0.06] backdrop-blur-xl text-white shadow-sm';
             if (matchingChecked) {
               borderStyles = isMatchCorrect
-                ? 'border-emerald-500 bg-emerald-950/30 animate-cardCorrect'
-                : 'border-rose-500 bg-rose-950/30 animate-cardError';
+                ? 'border-emerald-500/50 bg-emerald-500/[0.12] backdrop-blur-xl text-emerald-100 ring-1 ring-emerald-500/30 shadow-[inset_0_1px_0_rgba(52,211,153,0.3),0_8px_32px_rgba(16,185,129,0.25)] animate-cardCorrect'
+                : 'border-rose-500/50 bg-rose-500/[0.12] backdrop-blur-xl text-rose-100 ring-1 ring-rose-500/30 shadow-[inset_0_1px_0_rgba(251,113,133,0.3),0_8px_32px_rgba(244,63,94,0.25)] animate-cardError';
             }
 
             return (
@@ -142,12 +142,12 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
 
             const isMatchCorrect = matchingChecked && pairedTerm && correctPair?.term === pairedTerm;
 
-            let borderStyles = 'border-thea-border bg-thea-surfaceLight/40 hover:border-violet-500/60';
-            if (pairedTerm && !matchingChecked) borderStyles = 'border-indigo-500/60 bg-indigo-950/30';
+            let borderStyles = 'border-white/[0.1] bg-white/[0.035] hover:bg-white/[0.07] hover:border-white/20 text-slate-200 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_-4px_rgba(0,0,0,0.4)]';
+            if (pairedTerm && !matchingChecked) borderStyles = 'border-white/25 bg-white/[0.06] backdrop-blur-xl text-white shadow-sm';
             if (matchingChecked) {
               borderStyles = isMatchCorrect
-                ? 'border-emerald-500 bg-emerald-950/30 animate-cardCorrect'
-                : 'border-rose-500 bg-rose-950/30 animate-cardError';
+                ? 'border-emerald-500/50 bg-emerald-500/[0.12] backdrop-blur-xl text-emerald-100 ring-1 ring-emerald-500/30 shadow-[inset_0_1px_0_rgba(52,211,153,0.3),0_8px_32px_rgba(16,185,129,0.25)] animate-cardCorrect'
+                : 'border-rose-500/50 bg-rose-500/[0.12] backdrop-blur-xl text-rose-100 ring-1 ring-rose-500/30 shadow-[inset_0_1px_0_rgba(251,113,133,0.3),0_8px_32px_rgba(244,63,94,0.25)] animate-cardError';
             }
 
             return (

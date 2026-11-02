@@ -25,12 +25,12 @@ export const ShortAnswerRenderer: React.FC<ShortAnswerRendererProps> = ({
 
   return (
     <div className="space-y-4 mb-6 sm:mb-8">
-      <div className="p-5 rounded-3xl bg-white/[0.025] border border-white/[0.08] space-y-3.5 shadow-xl glass-specular">
+      <div className="p-5 rounded-3xl bg-white/[0.035] backdrop-blur-xl border border-white/[0.1] space-y-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_12px_36px_-4px_rgba(0,0,0,0.45)] glass-specular">
         <div className="flex items-center justify-between">
           <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
             Escribe tu respuesta analítica / técnica:
           </label>
-          <span className="text-[11px] font-semibold text-slate-400 bg-white/[0.05] px-2.5 py-0.5 rounded-full border border-white/[0.08]">
+          <span className="text-[11px] font-semibold text-slate-400 bg-white/[0.05] backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/[0.1]">
             Respuesta Abierta Corta
           </span>
         </div>
@@ -40,7 +40,7 @@ export const ShortAnswerRenderer: React.FC<ShortAnswerRendererProps> = ({
           value={shortAnswerInput}
           onChange={e => onInputChange(e.target.value)}
           placeholder="Escribe una respuesta fundamentada de 1 a 4 líneas. La IA evaluará la similitud conceptual y los puntos clave con la respuesta modelo..."
-          className="w-full bg-white/[0.02] border border-white/[0.08] focus:border-white/25 rounded-2xl p-4 text-sm text-white placeholder-slate-500 focus:outline-none transition-colors resize-y disabled:opacity-60"
+          className="w-full bg-white/[0.025] backdrop-blur-md border border-white/[0.08] focus:border-white/25 rounded-2xl p-4 text-sm text-white placeholder-slate-500 focus:outline-none transition-colors resize-y disabled:opacity-60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]"
         />
         <div className="flex items-center justify-between text-xs text-slate-400 tabular-nums">
           <span>{wordCount} palabras</span>
@@ -69,7 +69,7 @@ export const ShortAnswerRenderer: React.FC<ShortAnswerRendererProps> = ({
 
       {/* Desglose de Evaluación de IA */}
       {isAnswered && shortAnswerEvalResult && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] text-xs space-y-3 animate-fadeIn">
+        <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.035] backdrop-blur-xl border border-white/[0.1] text-xs space-y-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_-4px_rgba(0,0,0,0.4)] animate-fadeIn">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-slate-300">Similitud Conceptual con el Modelo:</span>
             <span

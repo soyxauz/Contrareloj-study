@@ -419,10 +419,10 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                     <button
                       key={optIdx}
                       onClick={() => setUserAnswers(prev => ({ ...prev, [currentIdx]: optIdx }))}
-                      className={`active-press w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 cursor-pointer ${
+                      className={`active-press w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 cursor-pointer backdrop-blur-xl ${
                         isSelected
-                          ? 'border-white/30 bg-white/[0.08] text-white ring-1 ring-white/20 glass-specular shadow-sm'
-                          : 'border-white/[0.08] bg-white/[0.025] text-slate-300 hover:border-white/20 hover:bg-white/[0.05] glass-specular'
+                          ? 'border-white/35 bg-white/[0.09] text-white ring-1 ring-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_8px_24px_-4px_rgba(0,0,0,0.5)]'
+                          : 'border-white/[0.1] bg-white/[0.035] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_-4px_rgba(0,0,0,0.4)]'
                       }`}
                     >
                       <div

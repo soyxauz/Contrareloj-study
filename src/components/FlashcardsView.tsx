@@ -1685,7 +1685,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group min-h-[380px] sm:min-h-[440px] rounded-3xl`}
             >
               {/* CARA FRONTAL (TÉRMINO O PREGUNTA CONCRETA) */}
-              <div className="card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#140e26] via-[#0d0918] to-[#090314] glass-specular">
+              <div className="card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.12] hover:border-white/30 bg-gradient-to-b from-[#140e26]/90 via-[#0d0918]/90 to-[#090314]/90 backdrop-blur-2xl glass-specular shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_16px_48px_-8px_rgba(0,0,0,0.6)]">
                 <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                   {isQuestionCard ? (
                     <span className="flex items-center gap-1.5 text-[11px] text-cyan-400/90 font-semibold tracking-wider">
@@ -1737,7 +1737,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               </div>
 
               {/* CARA POSTERIOR (DEFINICIÓN O RESPUESTA) */}
-              <div className="card-face card-back rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#16102c] via-[#0e0a1b] to-[#090314] glass-specular">
+              <div className="card-face card-back rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.12] hover:border-white/30 bg-gradient-to-b from-[#16102c]/90 via-[#0e0a1b]/90 to-[#090314]/90 backdrop-blur-2xl glass-specular shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_16px_48px_-8px_rgba(0,0,0,0.6)]">
                 <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                   {isQuestionCard ? (
                     <span className="flex items-center gap-1.5 text-[11px] text-sky-400/90 font-semibold tracking-wider">
