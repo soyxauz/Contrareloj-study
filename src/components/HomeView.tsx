@@ -536,21 +536,23 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               type="button"
               onClick={() => setSelectedMateria('all')}
-              className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 cursor-pointer tabular-nums flex items-center gap-1.5 border transition-[transform,background-color,border-color] ${
+              className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-medium shrink-0 cursor-pointer tabular-nums flex items-center gap-2 border transition-[transform,background-color,border-color] ${
                 selectedMateria === 'all'
-                  ? 'bg-violet-600 text-white border-violet-500 shadow-sm shadow-violet-950/60'
-                  : 'bg-thea-surface/85 border-thea-border text-slate-400 hover:text-white hover:border-violet-500/40'
+                  ? 'bg-white/[0.12] text-white border-white/25 shadow-sm shadow-black/40'
+                  : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
               }`}
             >
               <span>Todas</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                selectedMateria === 'all' ? 'bg-black/25 text-white' : 'bg-black/40 text-slate-300'
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold border ${
+                selectedMateria === 'all'
+                  ? 'bg-white/[0.10] text-white border-white/15'
+                  : 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
               }`}>
                 {kits.length}
               </span>
             </button>
 
-            {/* Botones de cada Materia existente con color opaco */}
+            {/* Chips de Materia con Superficie Unificada Dark Glass (Linear Studio) */}
             {availableMateriasList.map(materia => {
               const mTheme = materiaThemeMap.get(materia.name.toLowerCase()) || getMateriaTheme(materia.name, kits, userId);
               const isSelected = selectedMateria.trim().toLowerCase() === materia.name.trim().toLowerCase();
@@ -559,22 +561,21 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   key={materia.name}
                   type="button"
                   onClick={() => setSelectedMateria(materia.name)}
-                  style={{
-                    backgroundColor: isSelected ? undefined : mTheme.cardBgHex,
-                  }}
-                  className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 cursor-pointer flex items-center gap-1.5 border tabular-nums transition-[transform,background-color,border-color] ${
+                  className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-medium shrink-0 cursor-pointer flex items-center gap-2 border tabular-nums transition-[transform,background-color,border-color] ${
                     isSelected
-                      ? `${mTheme.chipActiveBgClass}`
-                      : `${mTheme.chipInactiveClass}`
+                      ? 'bg-white/[0.12] text-white border-white/25 shadow-sm shadow-black/40'
+                      : 'bg-white/[0.03] border-white/[0.08] text-slate-300 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
                   }`}
                 >
                   <span
-                    className="w-2 h-2 rounded-full shrink-0 shadow-sm"
+                    className="w-1.5 h-1.5 rounded-full shrink-0 shadow-sm"
                     style={{ backgroundColor: mTheme.hex }}
                   />
                   <span className="tracking-tight">{materia.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                    isSelected ? 'bg-black/25 text-white' : 'bg-black/40 text-slate-300'
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold border ${
+                    isSelected
+                      ? 'bg-white/[0.10] text-white border-white/15'
+                      : 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
                   }`}>
                     {materia.count}
                   </span>
@@ -664,7 +665,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     }
                   }}
                   style={{
-                    background: `radial-gradient(ellipse 95% 85% at 0% 0%, ${mTheme.hex}16 0%, rgba(18, 12, 30, 0.96) 65%)`,
+                    background: `radial-gradient(ellipse 85% 70% at 0% 0%, ${mTheme.hex}0d 0%, rgba(15, 12, 24, 0.98) 75%)`,
                     animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
                   className={`animate-stagger-item active-press-card glass-specular group relative text-left p-5 sm:p-6 rounded-3xl border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[195px] hover:translate-y-[-2px] border-white/[0.08] hover:border-white/20 transition-transform ${
@@ -675,18 +676,18 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       : ''
                   }`}
                 >
-                  {/* Línea de luz superior con el color de la materia (Estilo Linear) */}
+                  {/* Línea de luz superior con micro-acento de precisión de 1.5px (Estilo Linear) */}
                   <div
-                    className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
+                    className="absolute top-0 left-0 right-0 h-[1.5px] pointer-events-none"
                     style={{
-                      background: `linear-gradient(90deg, ${mTheme.hex}80 0%, ${mTheme.hex}15 50%, transparent 100%)`,
+                      background: `linear-gradient(90deg, ${mTheme.hex}70 0%, ${mTheme.hex}15 45%, transparent 85%)`,
                     }}
                   />
 
                   {/* Marca de agua sutil y ligera (Composite-only, 120 FPS sin lag) */}
                   <div
                     style={{ color: mTheme.hex }}
-                    className="absolute -bottom-2 -right-2 pointer-events-none select-none z-0 opacity-[0.07] group-hover:opacity-[0.14] transition-opacity duration-200"
+                    className="absolute -bottom-2 -right-2 pointer-events-none select-none z-0 opacity-[0.035] group-hover:opacity-[0.07] transition-opacity duration-300"
                   >
                     {renderWatermarkIcon(kit.icon, kit.category, kit.title)}
                   </div>
@@ -712,15 +713,15 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       <div>
                         <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                           <span
-                            className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full"
+                            className="inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-md"
                             style={{
                               color: mTheme.hex,
-                              backgroundColor: `${mTheme.hex}15`,
-                              border: `1px solid ${mTheme.hex}35`,
+                              backgroundColor: `${mTheme.hex}12`,
+                              border: `1px solid ${mTheme.hex}22`,
                             }}
                           >
-                            <span className="w-1.5 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: mTheme.hex }} />
-                            <span>{kit.category || 'General'}</span>
+                            <span className="w-1 h-1 rounded-full shadow-sm" style={{ backgroundColor: mTheme.hex }} />
+                            <span className="font-semibold text-[10px]">{kit.category || 'General'}</span>
                           </span>
                           {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-white/70 border border-white/10">
@@ -824,14 +825,14 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       )}
                     </div>
 
-                    {/* Barra cápsula oscura con píldora redondeada y profundidad física */}
-                    <div className="w-full h-2 rounded-full bg-black/60 overflow-hidden p-[1px] border border-white/5">
+                    {/* Micro-barra de progreso de precisión (Linear Studio 3px) */}
+                    <div className="w-full h-[3px] rounded-full bg-white/[0.06] overflow-hidden">
                       <div
                         style={{
                           width: `${progressPercent}%`,
                           backgroundColor: mTheme.hex,
                         }}
-                        className="h-full rounded-full transition-[width] duration-300 ease-out shadow-sm"
+                        className="h-full rounded-full transition-[width] duration-300 ease-out"
                       />
                     </div>
                   </div>
@@ -1480,8 +1481,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                 return (
                   <div
                     key={m.name}
-                    style={{ backgroundColor: pal.cardBgHex }}
-                    className={`p-3 rounded-xl border ${pal.cardBorderClass} flex items-center justify-between transition-colors`}
+                    className="p-3 rounded-xl border border-white/[0.08] bg-white/[0.03] flex items-center justify-between transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span
@@ -1633,11 +1633,10 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                       key={m.name}
                       type="button"
                       onClick={() => setSelectedTarget(m.name)}
-                      style={{ backgroundColor: pal.cardBgHex }}
                       className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-violet-400 ring-2 ring-violet-500/50 shadow-md'
-                          : `${pal.cardBorderClass}`
+                          ? 'bg-white/[0.10] border-white/30 ring-1 ring-white/20 shadow-md'
+                          : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
