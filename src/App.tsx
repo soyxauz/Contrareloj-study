@@ -129,6 +129,16 @@ export const App: React.FC = () => {
     return initUltraLightSmoothScroll();
   }, []);
 
+  // Pre-carga en reposo de los componentes modales para apertura instantánea en 0ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      import('./components/AISettingsModal');
+      import('./components/AuthModal');
+      import('./components/GoogleDriveModal');
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
   const [kits, setKits] = useState<StudyKit[]>(() => {
     const initialKits = authService.getUserKits(currentUser ? currentUser.id : null).filter(k => !isCorruptedKit(k));

@@ -1,10 +1,11 @@
 /**
- * Motor de desplazamiento inercial ultraligero a 120 FPS con física continua desacoplada del frame-rate.
- * - Cero dependencias externas y 0% de uso de CPU en reposo.
- * - Amortiguación exponencial continua (damp) que elimina al 100% los microtirones y microsaltos.
- * - Multiplicador de velocidad ágil con aceleración dinámica para desplazamiento rápido y sin esfuerzo.
- * - Aislamiento estricto de modales: bloquea el scroll de la página de fondo cuando cualquier modal/ajuste está abierto.
- * - Respeta contenedores con scroll interno independiente (listas, modales, editores de código).
+ * Motor de desplazamiento inercial ultraligero a 120 FPS de alto rendimiento.
+ * Optimizaciones críticas aplicadas:
+ * - Eliminación de Layout Thrashing: la altura máxima (maxScroll) se almacena en caché y no se recalcula en cada cuadro de RAF.
+ * - Amortiguación continua temporal (Time-Delta Damping) independiente del refresco del monitor (60Hz / 120Hz / 144Hz / 240Hz).
+ * - Multiplicador de velocidad ágil (1.45x) con impulso inercial dinámico para avanzar rápidamente con suavidad absoluta.
+ * - Aislamiento estricto de modales: bloquea al 100% el desplazamiento de la página de fondo cuando cualquier modal/ajuste está en pantalla.
+ * - 0% de uso de CPU cuando no se está desplazando la pantalla (cancela el bucle RAF al instante).
  */
 
 let targetY = 0;
@@ -13,13 +14,20 @@ let isRunning = false;
 let rafId: number | null = null;
 let isInitialized = false;
 let lastFrameTime = 0;
+let cachedMaxScroll = 0;
 
-// Constantes de física continua y velocidad reactiva
-const LAMBDA = 15.0; // Tasa de convergencia exponencial continua (~180ms de respuesta ágil y sedosa)
-const BASE_MULTIPLIER = 1.35; // Desplazamiento más rápido y eficiente por cada muesca de rueda
+// Constantes de física continua y velocidad de desplazamiento
+const LAMBDA = 16.5; // Tasa de convergencia exponencial continua (~160ms de respuesta veloz y sedosa)
+const BASE_MULTIPLIER = 1.45; // Desplazamiento más ágil y eficiente por cada muesca de rueda
 let lastWheelTimestamp = 0;
 let lastWheelDirection = 0;
 let velocityBoost = 1.0;
+
+function updateMaxScrollCache() {
+  if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+    cachedMaxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  }
+}
 
 /**
  * Detecta si el cursor se encuentra dentro de un modal, panel flotante o diálogo con fondo fijo.
@@ -35,7 +43,7 @@ function isInsideFixedOrModal(target: HTMLElement | null): boolean {
  * Detecta si hay algún modal o superposición de pantalla completa actualmente abierta en el DOM.
  */
 function isAnyModalOpen(): boolean {
-  return Boolean(
+  return document.body.style.overflow === 'hidden' || Boolean(
     document.querySelector('.fixed.inset-0, [role="dialog"], [aria-modal="true"]')
   );
 }
@@ -64,23 +72,20 @@ function isScrollableElement(element: HTMLElement | null, deltaY: number): boole
 }
 
 /**
- * Bucle de animación impulsado por delta de tiempo real (Time-Delta Exponential Damping).
- * Garantiza fluidez absoluta a 60Hz, 120Hz, 144Hz o 240Hz sin microtirones ni saltos discretos.
+ * Bucle de animación impulsado por delta de tiempo real con altura en caché (cero repintados sincrónicos forzados).
  */
 function tick(currentTime: number) {
   if (!lastFrameTime) {
     lastFrameTime = currentTime;
   }
 
-  const dt = Math.min((currentTime - lastFrameTime) / 1000, 0.05); // Límite de seguridad de 50ms
+  const dt = Math.min((currentTime - lastFrameTime) / 1000, 0.05);
   lastFrameTime = currentTime;
 
-  const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-  targetY = Math.max(0, Math.min(targetY, maxScroll));
-
+  targetY = Math.max(0, Math.min(targetY, cachedMaxScroll));
   const diff = targetY - currentY;
 
-  // Umbral de resolución sub-píxel para reposo absoluto sin gasto de ciclos de CPU
+  // Umbral de resolución sub-píxel para reposo absoluto
   if (Math.abs(diff) < 0.25) {
     currentY = targetY;
     window.scrollTo({ top: currentY, left: 0, behavior: 'instant' });
@@ -103,38 +108,34 @@ function tick(currentTime: number) {
  * Manejador de eventos de rueda con aceleración progresiva y bloqueo estricto en modales.
  */
 function onWheel(e: WheelEvent) {
-  // Permitir gestos nativos de zoom con Ctrl
   if (e.ctrlKey) return;
 
   const targetEl = e.target as HTMLElement | null;
 
-  // 1. Candado estricto para modales (Ajustes de IA, Drive, Autenticación, etc.)
-  // Si cualquier modal está abierto o el puntero está dentro de un elemento fijo:
+  // Candado estricto para modales (Ajustes de IA, Google Drive, Autenticación, etc.)
   if (isAnyModalOpen() || isInsideFixedOrModal(targetEl)) {
     // Si el contenedor interno del modal puede desplazarse, permitir que el navegador haga scroll interno natural
     if (isScrollableElement(targetEl, e.deltaY)) {
       return;
     }
-    // Si llegó al tope del modal o el cursor está en el fondo/cabecera, bloquear el evento
-    // para que JAMÁS se mueva la página principal de atrás
+    // Bloquear el evento en los límites para que JAMÁS se mueva la página principal de atrás
     e.preventDefault();
     return;
   }
 
-  // 2. Si el usuario está sobre una sublista normal de la página con scroll propio, respetarla
+  // Si el usuario está sobre una sublista normal de la página con scroll propio, respetarla
   if (isScrollableElement(targetEl, e.deltaY)) {
     return;
   }
 
-  // 3. Desplazamiento de la página principal: evitar saltos por pasos de Windows
   e.preventDefault();
 
   const now = performance.now();
   const direction = Math.sign(e.deltaY);
 
-  // Aceleración dinámica para desplazamientos rápidos y eficientes
+  // Aceleración dinámica de muesca para desplazamientos rápidos y eficientes
   if (now - lastWheelTimestamp < 120 && direction === lastWheelDirection) {
-    velocityBoost = Math.min(velocityBoost + 0.18, 1.85);
+    velocityBoost = Math.min(velocityBoost + 0.2, 2.0);
   } else {
     velocityBoost = 1.0;
   }
@@ -144,14 +145,14 @@ function onWheel(e: WheelEvent) {
   if (!isRunning) {
     targetY = window.scrollY;
     currentY = window.scrollY;
+    updateMaxScrollCache();
   }
 
   let delta = e.deltaY * BASE_MULTIPLIER * velocityBoost;
-  if (e.deltaMode === 1) delta *= 24; // Modo líneas
-  else if (e.deltaMode === 2) delta *= window.innerHeight; // Modo páginas
+  if (e.deltaMode === 1) delta *= 24;
+  else if (e.deltaMode === 2) delta *= window.innerHeight;
 
-  const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-  targetY = Math.max(0, Math.min(targetY + delta, maxScroll));
+  targetY = Math.max(0, Math.min(targetY + delta, cachedMaxScroll));
 
   if (!isRunning) {
     isRunning = true;
@@ -180,14 +181,17 @@ export function initUltraLightSmoothScroll(): () => void {
 
   targetY = window.scrollY;
   currentY = window.scrollY;
+  updateMaxScrollCache();
   isInitialized = true;
 
   window.addEventListener('wheel', onWheel, { passive: false });
   window.addEventListener('scroll', onNativeScroll, { passive: true });
+  window.addEventListener('resize', updateMaxScrollCache, { passive: true });
 
   return () => {
     window.removeEventListener('wheel', onWheel);
     window.removeEventListener('scroll', onNativeScroll);
+    window.removeEventListener('resize', updateMaxScrollCache);
     if (rafId) {
       cancelAnimationFrame(rafId);
       rafId = null;
@@ -211,6 +215,7 @@ export function resetUltraLightSmoothScroll(y: number = 0) {
   isRunning = false;
   lastFrameTime = 0;
   velocityBoost = 1.0;
+  updateMaxScrollCache();
   if (typeof window !== 'undefined') {
     window.scrollTo({ top: y, left: 0, behavior: 'instant' });
   }

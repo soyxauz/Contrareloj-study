@@ -81,6 +81,7 @@
 
 .animate-fadeIn {
   animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
 }
 
 /* Transición ultra-fluida y rápida para el banner de feedback (acierto / error) */

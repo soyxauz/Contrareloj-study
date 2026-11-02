@@ -87,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a0712]/80 border-b border-white/[0.06]">
+    <header className="sticky top-0 z-50 bg-[#0d0408]/95 border-b border-white/[0.06] shadow-sm">
       {/* Top Brand & Status Bar */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 sm:gap-4">
         {/* Left Side: Logo & Minimal Wordmark */}
