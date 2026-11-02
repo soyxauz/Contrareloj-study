@@ -46,23 +46,23 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       aria-label="Navegación Móvil Principal"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#120826]/95 backdrop-blur-xl border-t border-thea-border/80 px-2 py-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.45)] safe-area-pb"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0a0712]/95 backdrop-blur-xl border-t border-white/[0.08] px-2 py-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.5)] safe-area-pb"
     >
       <div className="flex items-center justify-around max-w-md mx-auto">
         {/* 1. Inicio */}
         <button
           type="button"
           onClick={() => onSelectMode('home')}
-          className={`flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 transition-all active:scale-90 ${
+          className={`flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 transition-all active:scale-95 ${
             currentMode === 'home'
-              ? 'text-violet-400 font-bold'
+              ? 'text-white font-semibold'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <div className="relative">
             <Home className="w-5 h-5" />
             {currentMode === 'home' && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-violet-400" />
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
             )}
           </div>
           <span className="text-[10px] mt-1 tracking-tight">Inicio</span>
@@ -78,16 +78,16 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               onSelectMode('home');
             }
           }}
-          className={`flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 transition-all active:scale-90 ${
+          className={`flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 transition-all active:scale-95 ${
             isStudyActive
-              ? 'text-violet-400 font-bold'
+              ? 'text-white font-semibold'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <div className="relative">
             <Brain className="w-5 h-5" />
             {isStudyActive && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-violet-400" />
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
             )}
           </div>
           <span className="text-[10px] mt-1 tracking-tight">Estudiar</span>
@@ -98,16 +98,16 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           <button
             type="button"
             onClick={() => onSelectMode('create')}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg transition-transform active:scale-95 cursor-pointer ${
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl transition-transform active:scale-95 cursor-pointer ${
               currentMode === 'create'
-                ? 'bg-gradient-to-tr from-amber-500 to-violet-600 ring-2 ring-violet-400 shadow-violet-900/60 scale-105'
-                : 'bg-gradient-to-tr from-violet-600 via-indigo-600 to-amber-500 shadow-violet-900/50 hover:scale-105'
+                ? 'bg-zinc-100 text-zinc-950 ring-2 ring-white/50 scale-105'
+                : 'bg-white hover:bg-zinc-200 text-zinc-950 hover:scale-105'
             }`}
             title="Crear nuevo Study Kit"
           >
             <Plus className="w-6 h-6 stroke-[2.5]" />
           </button>
-          <span className="text-[9px] mt-1 font-semibold text-violet-300 tracking-tight">
+          <span className="text-[9px] mt-1 font-medium text-slate-300 tracking-tight">
             Crear
           </span>
         </div>
@@ -116,12 +116,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         <button
           type="button"
           onClick={onOpenAISettings}
-          className="flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 text-slate-400 hover:text-slate-200 transition-all active:scale-90"
+          className="flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 text-slate-400 hover:text-slate-200 transition-all active:scale-95"
           title="Motor de Inteligencia Artificial"
         >
           <div className="relative">
-            <Bot className="w-5 h-5 text-violet-400" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <Bot className="w-5 h-5 text-slate-400" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/90 shadow-sm absolute -top-0.5 -right-0.5" />
           </div>
           <span className="text-[10px] mt-1 tracking-tight">IA Engine</span>
         </button>
@@ -136,19 +136,19 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               onOpenAuth();
             }
           }}
-          className="flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 text-slate-400 hover:text-slate-200 transition-all active:scale-90"
+          className="flex flex-col items-center justify-center flex-1 min-h-[46px] py-1 text-slate-400 hover:text-slate-200 transition-all active:scale-95"
           title={currentUser ? 'Cuenta y Google Drive' : 'Iniciar Sesión'}
         >
           <div className="relative">
             {currentUser ? (
-              <div className="w-5 h-5 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+              <div className="w-5 h-5 rounded-lg bg-white/[0.12] border border-white/10 flex items-center justify-center text-[10px] font-semibold text-white shadow-sm">
                 {currentUser.displayName.charAt(0).toUpperCase()}
               </div>
             ) : (
               <UserIcon className="w-5 h-5 text-slate-300" />
             )}
             {isDriveConnected && (
-              <span className="absolute -bottom-0.5 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-thea-bg flex items-center justify-center">
+              <span className="absolute -bottom-0.5 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-[#0a0712] flex items-center justify-center">
                 <Cloud className="w-1.5 h-1.5 text-white" />
               </span>
             )}

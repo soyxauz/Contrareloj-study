@@ -191,29 +191,26 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 animate-fadeIn">
       {/* ── Encabezado Principal y Selector de Modo ─────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-thea-border">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-white/[0.06]">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[11px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-violet-600/30 text-violet-300 border border-violet-500/30">
-              MÉTRICAS VERIFICADAS
-            </span>
-            <span className="text-xs text-slate-400 font-medium">Estadísticas reales basadas en tu actividad y contenido</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-2.5">
-            <BarChart3 className="w-7 h-7 text-violet-400" />
+          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
+            MÉTRICAS VERIFICADAS
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-2.5 tracking-tight">
+            <BarChart3 className="w-7 h-7 text-zinc-400" />
             <span>Estadísticas de Mis Libros</span>
           </h1>
         </div>
 
         {/* Selector de Vista: Detalle por Libro vs Resumen Global */}
-        <div className="flex items-center p-1 rounded-xl bg-thea-surface border border-thea-border shrink-0 self-start md:self-auto shadow-sm">
+        <div className="flex items-center p-1 rounded-xl bg-white/[0.025] border border-white/[0.08] shrink-0 self-start md:self-auto shadow-sm">
           <button
             type="button"
             onClick={() => setViewMode('book')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95 ${
               viewMode === 'book'
-                ? 'bg-violet-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             <BookOpen className="w-4 h-4" />
@@ -222,14 +219,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <button
             type="button"
             onClick={() => setViewMode('global')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95 ${
               viewMode === 'global'
-                ? 'bg-violet-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             <TrendingUp className="w-4 h-4" />
-            <span>Resumen Global ({kits.length})</span>
+            <span className="tabular-nums">Resumen Global ({kits.length})</span>
           </button>
         </div>
       </div>
@@ -240,7 +237,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           {/* Selector Horizontal de Libros */}
           {kits.length > 1 && (
             <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block">
                 Seleccionar Libro / Study Kit:
               </span>
               <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
@@ -255,18 +252,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                         setSelectedKitId(k.id);
                         if (onSelectKit) onSelectKit(k);
                       }}
-                      className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border text-left shrink-0 transition-all cursor-pointer ${
+                      className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border text-left shrink-0 transition-all cursor-pointer active:scale-[0.985] ${
                         isSelected
-                          ? 'bg-gradient-to-r from-violet-600/30 to-indigo-600/20 border-violet-500 shadow-md shadow-violet-950/40 text-white'
-                          : 'bg-thea-surface border-thea-border text-slate-400 hover:border-thea-border/80 hover:text-slate-200'
+                          ? 'bg-white/[0.08] border-white/30 shadow-md text-white'
+                          : 'bg-white/[0.025] border-white/[0.08] text-zinc-400 hover:border-white/20 hover:text-zinc-200'
                       }`}
                     >
                       <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${k.color} flex items-center justify-center text-white shrink-0 shadow-xs text-xs font-bold`}>
                         {k.title.charAt(0).toUpperCase()}
                       </div>
                       <div className="max-w-[200px] truncate">
-                        <span className="text-xs font-bold block truncate text-slate-100">{k.title}</span>
-                        <span className="text-[10px] text-slate-400 block truncate">
+                        <span className="text-xs font-bold block truncate text-zinc-100">{k.title}</span>
+                        <span className="text-[10px] text-zinc-400 block truncate tabular-nums">
                           {k.category} • {kStats.questionsAnswered}/{kStats.totalQuestions} resp.
                         </span>
                       </div>
@@ -278,29 +275,29 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           )}
 
           {/* Tarjeta de Resumen del Libro Activo */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-950/50 via-thea-surface to-indigo-950/40 border border-thea-border p-5 sm:p-6 shadow-xl">
+          <div className="relative overflow-hidden rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${activeKit.color} flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-violet-950/50 shrink-0`}>
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${activeKit.color} flex items-center justify-center text-white text-xl font-bold shadow-lg shrink-0`}>
                   {activeKit.title.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-lg bg-violet-600/40 text-violet-200 border border-violet-500/40">
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-lg bg-white/[0.05] text-zinc-300 border border-white/[0.08]">
                       {activeKit.category}
                     </span>
                     {bookStats.lastStudiedDate ? (
-                      <span className="text-xs text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-violet-400" />
+                      <span className="text-xs text-zinc-400 flex items-center gap-1 tabular-nums">
+                        <Clock className="w-3.5 h-3.5 text-zinc-400" />
                         Último estudio: {bookStats.lastStudiedDate}
                       </span>
                     ) : (
-                      <span className="text-xs text-amber-400/90 font-medium">
+                      <span className="text-xs text-zinc-500 font-medium">
                         Sin sesiones de estudio registradas
                       </span>
                     )}
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white">{activeKit.title}</h2>
+                  <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">{activeKit.title}</h2>
                 </div>
               </div>
 
@@ -308,7 +305,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onNavigateToSmartStudy(activeKit)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs sm:text-sm font-bold transition-all shadow-md shadow-violet-900/40 cursor-pointer shrink-0 self-stretch sm:self-auto justify-center"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs sm:text-sm font-bold transition-all shadow-md cursor-pointer shrink-0 self-stretch sm:self-auto justify-center active:scale-[0.985]"
                 >
                   <Brain className="w-4 h-4" />
                   <span>Estudiar este Libro</span>
@@ -318,28 +315,28 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
 
             {/* Micro-métricas estructurales del libro */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-thea-border/60">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-white/[0.06]">
               <div className="text-left">
-                <span className="text-[11px] text-slate-400 block font-medium">Palabras Analizadas</span>
-                <span className="text-sm sm:text-base font-extrabold text-white">
+                <span className="text-[11px] text-zinc-400 block font-medium">Palabras Analizadas</span>
+                <span className="text-sm sm:text-base font-extrabold text-white tabular-nums">
                   {bookStats.wordCount.toLocaleString()}
                 </span>
               </div>
               <div className="text-left">
-                <span className="text-[11px] text-slate-400 block font-medium">Fragmentos (Chunks RAG)</span>
-                <span className="text-sm sm:text-base font-extrabold text-violet-300">
+                <span className="text-[11px] text-zinc-400 block font-medium">Fragmentos (Chunks RAG)</span>
+                <span className="text-sm sm:text-base font-extrabold text-zinc-200 tabular-nums">
                   {bookStats.chunksCount}
                 </span>
               </div>
               <div className="text-left">
-                <span className="text-[11px] text-slate-400 block font-medium">Imágenes & Figuras</span>
-                <span className="text-sm sm:text-base font-extrabold text-pink-300">
+                <span className="text-[11px] text-zinc-400 block font-medium">Imágenes & Figuras</span>
+                <span className="text-sm sm:text-base font-extrabold text-zinc-200 tabular-nums">
                   {bookStats.assetsCount}
                 </span>
               </div>
               <div className="text-left">
-                <span className="text-[11px] text-slate-400 block font-medium">Flashcards del Libro</span>
-                <span className="text-sm sm:text-base font-extrabold text-amber-300">
+                <span className="text-[11px] text-zinc-400 block font-medium">Flashcards del Libro</span>
+                <span className="text-sm sm:text-base font-extrabold text-zinc-200 tabular-nums">
                   {bookStats.flashcardsMastered} / {bookStats.flashcardsTotal} dominadas
                 </span>
               </div>
@@ -349,16 +346,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           {/* Cuadrícula de KPIs Reales de Aprendizaje */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {/* KPI 1: Preguntas Respondidas */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-thea-surface border border-thea-border shadow-md">
+            <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.025] border border-white/[0.08] shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400 font-semibold">Preguntas Respondidas</span>
+                <span className="text-xs text-zinc-400 font-semibold">Preguntas Respondidas</span>
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-white">
+              <div className="text-2xl sm:text-3xl font-black text-white tabular-nums">
                 {bookStats.questionsAnswered}
-                <span className="text-xs text-slate-500 font-normal ml-1">/ {bookStats.totalQuestions}</span>
+                <span className="text-xs text-zinc-500 font-normal ml-1">/ {bookStats.totalQuestions}</span>
               </div>
-              <div className="mt-2 w-full h-1.5 rounded-full bg-thea-bg overflow-hidden border border-thea-border/40">
+              <div className="mt-2 w-full h-1.5 rounded-full bg-white/[0.05] overflow-hidden border border-white/[0.04]">
                 <div
                   style={{
                     width: `${bookStats.totalQuestions > 0 ? Math.min(100, Math.round((bookStats.questionsAnswered / bookStats.totalQuestions) * 100)) : 0}%`
@@ -366,7 +363,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   className="h-full bg-emerald-500 rounded-full"
                 />
               </div>
-              <span className="text-[11px] text-slate-400 mt-1.5 block">
+              <span className="text-[11px] text-zinc-400 mt-1.5 block tabular-nums">
                 {bookStats.totalQuestions > 0
                   ? `${Math.round((bookStats.questionsAnswered / bookStats.totalQuestions) * 100)}% del banco cubierto`
                   : 'Sin preguntas'}
@@ -374,21 +371,21 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
 
             {/* KPI 2: Precisión Promedio Real */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-thea-surface border border-thea-border shadow-md">
+            <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.025] border border-white/[0.08] shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400 font-semibold">Precisión Real</span>
-                <Award className="w-4 h-4 text-amber-400" />
+                <span className="text-xs text-zinc-400 font-semibold">Precisión Real</span>
+                <Award className="w-4 h-4 text-zinc-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-amber-400">
+              <div className="text-2xl sm:text-3xl font-black text-white tabular-nums">
                 {bookStats.questionsAnswered > 0 ? `${bookStats.accuracy}%` : '—'}
               </div>
-              <div className="mt-2 w-full h-1.5 rounded-full bg-thea-bg overflow-hidden border border-thea-border/40">
+              <div className="mt-2 w-full h-1.5 rounded-full bg-white/[0.05] overflow-hidden border border-white/[0.04]">
                 <div
                   style={{ width: `${bookStats.accuracy}%` }}
-                  className="h-full bg-amber-400 rounded-full"
+                  className="h-full bg-white rounded-full"
                 />
               </div>
-              <span className="text-[11px] text-slate-400 mt-1.5 block">
+              <span className="text-[11px] text-zinc-400 mt-1.5 block tabular-nums">
                 {bookStats.questionsAnswered > 0
                   ? `${bookStats.correctAnswers} aciertos de ${bookStats.questionsAnswered}`
                   : 'Aún no evaluado'}
@@ -396,18 +393,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
 
             {/* KPI 3: Nivel Socrático Alcanzado */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-thea-surface border border-thea-border shadow-md">
+            <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.025] border border-white/[0.08] shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400 font-semibold">Nivel Pedagógico</span>
-                <Brain className="w-4 h-4 text-violet-400" />
+                <span className="text-xs text-zinc-400 font-semibold">Nivel Pedagógico</span>
+                <Brain className="w-4 h-4 text-zinc-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-violet-300">
+              <div className="text-2xl sm:text-3xl font-black text-zinc-100 tabular-nums">
                 Nivel {bookStats.level}
               </div>
-              <span className="text-[11px] text-slate-400 mt-1 block font-medium truncate">
+              <span className="text-[11px] text-zinc-400 mt-1 block font-medium truncate">
                 {bookStats.levelName}
               </span>
-              <span className="text-[10px] text-violet-400 mt-0.5 block">
+              <span className="text-[10px] text-zinc-500 mt-0.5 block">
                 {bookStats.level === 1 && 'Fundamentos y definiciones'}
                 {bookStats.level === 2 && 'Análisis y comparaciones'}
                 {bookStats.level === 3 && 'Casos prácticos de examen'}
@@ -415,66 +412,66 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
 
             {/* KPI 4: Errores Reforzados */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-thea-surface border border-thea-border shadow-md">
+            <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.025] border border-white/[0.08] shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400 font-semibold">Refuerzo Socrático</span>
-                <RotateCcw className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs text-zinc-400 font-semibold">Refuerzo Socrático</span>
+                <RotateCcw className="w-4 h-4 text-zinc-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-cyan-300">
+              <div className="text-2xl sm:text-3xl font-black text-zinc-100 tabular-nums">
                 {bookStats.errorsReinforced}
               </div>
-              <span className="text-[11px] text-slate-400 mt-1 block font-medium">
+              <span className="text-[11px] text-zinc-400 mt-1 block font-medium">
                 Conceptos recuperados
               </span>
-              <span className="text-[10px] text-slate-500 mt-0.5 block">
+              <span className="text-[10px] text-zinc-500 mt-0.5 block">
                 Verificados tras fallos previos
               </span>
             </div>
           </div>
 
           {/* Sub-Navegación del Libro: Temas Reales | Historial de Intentos | Banco de Preguntas */}
-          <div className="flex items-center gap-2 border-b border-thea-border pb-3">
+          <div className="flex items-center gap-2 border-b border-white/[0.06] pb-3">
             <button
               type="button"
               onClick={() => setBookSubTab('topics')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 active:scale-95 ${
                 bookSubTab === 'topics'
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white'
+                  ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                  : 'bg-white/[0.025] border border-white/[0.08] text-zinc-400 hover:text-white'
               }`}
             >
               <Target className="w-3.5 h-3.5" />
-              <span>Desglose por Temas Reales ({bookStats.topicsMastery.length})</span>
+              <span className="tabular-nums">Desglose por Temas Reales ({bookStats.topicsMastery.length})</span>
             </button>
             <button
               type="button"
               onClick={() => setBookSubTab('history')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 active:scale-95 ${
                 bookSubTab === 'history'
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white'
+                  ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                  : 'bg-white/[0.025] border border-white/[0.08] text-zinc-400 hover:text-white'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>Historial de Respuestas ({bookStats.historyCount})</span>
+              <span className="tabular-nums">Historial de Respuestas ({bookStats.historyCount})</span>
             </button>
             <button
               type="button"
               onClick={() => setBookSubTab('questions')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 active:scale-95 ${
                 bookSubTab === 'questions'
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'bg-thea-surface border border-thea-border text-slate-400 hover:text-white'
+                  ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                  : 'bg-white/[0.025] border border-white/[0.08] text-zinc-400 hover:text-white'
               }`}
             >
               <FileCheck2 className="w-3.5 h-3.5" />
-              <span>Banco de Preguntas ({bookStats.totalQuestions})</span>
+              <span className="tabular-nums">Banco de Preguntas ({bookStats.totalQuestions})</span>
             </button>
           </div>
 
           {/* ── SUB-PESTAÑA 1: DESGLOSE POR TEMAS REALES DEL LIBRO ─────────────── */}
           {bookSubTab === 'topics' && (
-            <div className="bg-thea-surface border border-thea-border rounded-3xl p-5 sm:p-7 shadow-xl">
+            <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-3xl p-5 sm:p-7 shadow-xl backdrop-blur-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-5 border-b border-thea-border gap-2">
                 <div>
                   <h3 className="font-bold text-white text-base sm:text-lg flex items-center gap-2">

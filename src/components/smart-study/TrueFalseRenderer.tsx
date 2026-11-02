@@ -21,23 +21,23 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
         const isCorrect = idx === safeCorrectIndex;
         const isVerdadero = idx === 0;
 
-        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 glass-specular hover:translate-y-[-1px]';
+        let cardClasses = 'bg-white/[0.025] hover:bg-white/[0.05] border border-white/[0.08] hover:border-white/20 text-slate-200 glass-specular hover:-translate-y-0.5';
         let iconClasses = isVerdadero ? 'text-emerald-400' : 'text-rose-400';
-        let iconBgClasses = isVerdadero ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30';
+        let iconBgClasses = isVerdadero ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20';
 
         if (isAnswered) {
           if (isCorrect) {
-            cardClasses = 'border-2 border-emerald-400 bg-emerald-950/80 text-white shadow-[0_0_24px_rgba(52,211,153,0.4)] ring-2 ring-emerald-400/50 animate-cardCorrect';
+            cardClasses = 'border border-emerald-500/60 bg-emerald-500/10 text-white shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/30 animate-cardCorrect';
             iconClasses = 'text-emerald-300';
-            iconBgClasses = 'bg-emerald-500/25 border-emerald-400 scale-105';
+            iconBgClasses = 'bg-emerald-500 text-zinc-950 font-bold border-emerald-400 scale-105';
           } else if (isSelected) {
-            cardClasses = 'border-2 border-rose-500 bg-rose-950/60 text-rose-100 shadow-[0_0_22px_rgba(244,63,94,0.35)] ring-2 ring-rose-500/50 animate-cardError';
+            cardClasses = 'border border-rose-500/60 bg-rose-500/10 text-rose-100 shadow-lg shadow-rose-950/30 ring-1 ring-rose-500/30 animate-cardError';
             iconClasses = 'text-rose-300';
-            iconBgClasses = 'bg-rose-500/25 border-rose-400 scale-105';
+            iconBgClasses = 'bg-rose-500 text-white font-bold border-rose-400 scale-105';
           } else {
-            cardClasses = 'border-thea-border/50 bg-thea-surface/40 text-slate-500 opacity-40';
+            cardClasses = 'border border-white/[0.04] bg-white/[0.01] text-slate-500 opacity-40';
             iconClasses = 'text-slate-600';
-            iconBgClasses = 'bg-thea-surfaceLight/30 border-thea-border/30';
+            iconBgClasses = 'bg-white/[0.03] border-white/[0.05]';
           }
         }
 
@@ -46,22 +46,22 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
             key={idx}
             type="button"
             disabled={isAnswered}
-            style={{ animationDelay: `${idx * 50}ms` }}
+            style={{ animationDelay: `${idx * 40}ms` }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`animate-stagger-item active-press-card w-full py-8 sm:py-10 px-6 rounded-3xl transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out flex flex-col items-center justify-center gap-3 cursor-pointer ${cardClasses}`}
+            className={`animate-stagger-item active-press w-full py-8 sm:py-10 px-6 rounded-3xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex flex-col items-center justify-center gap-3 cursor-pointer ${cardClasses}`}
           >
-            <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all ${iconBgClasses}`}>
+            <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all shadow-sm ${iconBgClasses}`}>
               {isVerdadero ? (
                 <Check className={`w-7 h-7 stroke-[2.5] ${iconClasses}`} />
               ) : (
                 <X className={`w-7 h-7 stroke-[2.5] ${iconClasses}`} />
               )}
             </div>
-            <span className="font-bold text-lg sm:text-xl tracking-wide">
+            <span className="font-bold text-lg sm:text-xl tracking-tight text-white">
               {label}
             </span>
           </button>

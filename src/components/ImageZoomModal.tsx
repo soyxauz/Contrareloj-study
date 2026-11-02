@@ -220,27 +220,27 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-5xl h-[92vh] flex flex-col bg-thea-surface border border-thea-border/80 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-5xl h-[92vh] flex flex-col bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl"
       >
         {/* Cabecera del Visor */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-thea-border/80 bg-thea-surfaceLight/70 shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
           <div className="flex items-center gap-3 min-w-0 pr-2">
-            <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-400 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-300 shrink-0">
               <ImageIcon className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base font-bold text-white truncate max-w-xs sm:max-w-md">
+                <h3 className="text-sm sm:text-base font-bold text-white truncate max-w-xs sm:max-w-md tracking-tight">
                   {title}
                 </h3>
                 {currentIndex !== undefined && totalCount && totalCount > 1 && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10 tabular-nums">
                     {currentIndex + 1} / {totalCount}
                   </span>
                 )}
               </div>
               {subtitle && (
-                <p className="text-[11px] sm:text-xs text-slate-400 truncate">
+                <p className="text-[11px] sm:text-xs text-zinc-400 truncate">
                   {subtitle}
                 </p>
               )}
@@ -250,18 +250,18 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
           {/* Barra de herramientas de Zoom y Acciones */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Controles de Zoom */}
-            <div className="flex items-center bg-thea-bg/80 border border-thea-border rounded-xl p-1 gap-1">
+            <div className="flex items-center bg-white/[0.025] border border-white/[0.08] rounded-xl p-1 gap-1">
               <button
                 type="button"
                 onClick={handleZoomOut}
                 disabled={zoomLevel <= 0.5}
                 title="Alejar (-)"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
               >
                 <ZoomOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
-              <span className="text-[11px] font-bold text-violet-300 px-1.5 min-w-[42px] text-center font-mono">
+              <span className="text-[11px] font-bold text-zinc-200 px-1.5 min-w-[42px] text-center font-mono tabular-nums">
                 {zoomPercent}%
               </span>
 
@@ -270,7 +270,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 onClick={handleZoomIn}
                 disabled={zoomLevel >= 3.5}
                 title="Acercar (+)"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
               >
                 <ZoomIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
@@ -279,7 +279,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 type="button"
                 onClick={handleResetZoom}
                 title="Restablecer tamaño (0 o R)"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors active:scale-95 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
@@ -291,7 +291,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 href={imageUrl}
                 download="figura-documento.png"
                 title="Descargar imagen en alta resolución"
-                className="p-2 rounded-xl bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-white hover:bg-violet-600 hover:border-violet-500 transition-colors"
+                className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-zinc-300 hover:text-white hover:bg-white/10 transition-colors active:scale-95"
               >
                 <Download className="w-4 h-4" />
               </a>
@@ -302,7 +302,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               type="button"
               onClick={onClose}
               title="Cerrar visor (Escape)"
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight border border-thea-border/60 transition-colors"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.05] border border-white/[0.08] transition-colors active:scale-95 cursor-pointer"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>

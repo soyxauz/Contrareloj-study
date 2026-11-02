@@ -337,29 +337,26 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-thea-surface border-t sm:border border-thea-border rounded-t-3xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col">
+      <div className="bg-[#0e0b16] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col">
         {/* Mobile Pull Handle */}
-        <div className="w-12 h-1.5 bg-slate-600/70 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
-
-        {/* Decorative Top Accent */}
-        <div className="hidden sm:block absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 via-indigo-500 to-amber-400" />
+        <div className="w-12 h-1.5 bg-zinc-600/70 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between mb-5 pb-3 border-b border-thea-border shrink-0">
+        <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.06] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-400">
+            <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-300">
               <Bot className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white">
+                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                   Motor de Inteligencia Artificial
                 </h2>
-                <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10">
                   {settings.baseUrl?.includes('ollama.com') ? 'Ollama Cloud' : settings.baseUrl?.includes('localhost') ? 'Ollama Local' : 'IA Configurada'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-zinc-400">
                 {settings.baseUrl?.includes('ollama.com')
                   ? 'Servicio oficial de Ollama en la nube con API Key de ollama.com/settings/keys'
                   : 'Configuración de motor de IA para generación inteligente de kits y exámenes'}
@@ -369,7 +366,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
           <button
             onClick={handleClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors"
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-95"
           >
             <X className="w-5 h-5" />
           </button>
@@ -734,13 +731,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         </div>
 
         {/* Modal Actions */}
-        <div className="flex items-center justify-between gap-3 pt-4 mt-3 border-t border-thea-border shrink-0">
+        <div className="flex items-center justify-between gap-3 pt-4 mt-3 border-t border-white/[0.06] shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleTestConnection}
               disabled={isTesting || !isFormValid}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
             >
               {isTesting ? (
                 <>
@@ -758,11 +755,11 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             <button
               type="button"
               onClick={handleResetOllamaCloud}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-95"
               title="Restablecer a valores oficiales de Ollama Cloud (https://ollama.com/v1, gemma4:31b)"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-violet-400" />
-              <span>Restablecer Ollama Cloud</span>
+              <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Restablecer</span>
             </button>
           </div>
 
@@ -770,12 +767,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={!isFormValid}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-violet-900/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs sm:text-sm shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
           >
             {isSaved ? (
               <>
-                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                <span>Guardado Correctamente</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Guardado</span>
               </>
             ) : (
               <span>Guardar y Aplicar</span>

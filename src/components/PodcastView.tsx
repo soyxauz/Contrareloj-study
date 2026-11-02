@@ -1727,8 +1727,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             <button
               type="button"
               onClick={() => setActiveTab('player')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-medium transition-all cursor-pointer text-xs ${
-                activeTab === 'player' ? 'bg-violet-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-semibold transition-all cursor-pointer text-xs ${
+                activeTab === 'player' ? 'bg-white/10 text-white shadow-sm border border-white/10' : 'text-zinc-400 hover:text-white'
               }`}
             >
               Reproductor
@@ -1736,8 +1736,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             <button
               type="button"
               onClick={() => setActiveTab('transcript')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-medium transition-all cursor-pointer text-xs ${
-                activeTab === 'transcript' ? 'bg-violet-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-semibold transition-all cursor-pointer text-xs ${
+                activeTab === 'transcript' ? 'bg-white/10 text-white shadow-sm border border-white/10' : 'text-zinc-400 hover:text-white'
               }`}
             >
               Transcripción
@@ -1746,20 +1746,20 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         </div>
 
         {/* Fila 2: Motor de Voz y Acciones */}
-        <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-thea-border/40 flex items-center justify-between gap-2 flex-wrap">
+        <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2 flex-wrap">
           {/* Selector de Motor de Voz Dinámico (Azure Neural vs Sistema) */}
-          <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-0.5 text-xs gap-0.5">
+          <div className="flex items-center bg-white/[0.025] border border-white/[0.08] rounded-xl p-0.5 text-xs gap-0.5">
             <button
               type="button"
               onClick={() => handleSwitchEngine('edge')}
-              className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
+              className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
                 voiceEngine === 'edge'
-                  ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white/10 border border-white/15 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
               title="Azure Neural: Voces oficiales de Microsoft Azure."
             >
-              <Headphones className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <Headphones className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
               <span>Azure Neural</span>
             </button>
 
@@ -1768,12 +1768,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               onClick={() => handleSwitchEngine('browser')}
               className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
                 voiceEngine === 'browser'
-                  ? 'bg-violet-600/20 border border-violet-500/40 text-violet-300 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white/10 border border-white/15 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
               title="Voz del Sistema: Síntesis local offline del navegador"
             >
-              <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <Volume2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
               <span>Voz Local</span>
             </button>
           </div>
@@ -1785,7 +1785,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 setVoiceModalTab('azure');
                 setShowVoiceModal(true);
               }}
-              className="p-1.5 sm:p-2 rounded-xl bg-thea-surface border border-thea-border text-slate-400 hover:text-amber-300 hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer active:scale-95"
               title="Configuración de Voces, Locutores y Enfoque"
             >
               <Settings2 className="w-4 h-4" />
@@ -1797,10 +1797,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 setVoiceModalTab('new_episode');
                 setShowVoiceModal(true);
               }}
-              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-violet-500/20 hover:from-amber-500/30 hover:to-violet-500/30 border border-amber-500/30 hover:border-amber-400/50 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-zinc-200 hover:text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.985]"
               title="Crear un nuevo episodio con otras configuraciones de formato y duración"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
               <span>Nuevo Episodio</span>
             </button>
           </div>
@@ -1810,18 +1810,18 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       {activeTab === 'player' ? (
         <div className="space-y-4 sm:space-y-6">
           {/* Main Visual Player Card */}
-          <div className="bg-gradient-to-b from-thea-surface to-thea-bg border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl relative overflow-hidden text-center">
+          <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] relative overflow-hidden text-center backdrop-blur-xl">
             {/* Background Glow */}
-            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 
             {/* Episode Title */}
             <div className="relative z-10 mb-3 sm:mb-6">
-              <div className="flex items-center justify-center gap-1.5 mb-1.5 sm:mb-2 flex-wrap">
-                <span className="text-[10px] sm:text-xs font-bold text-violet-400 uppercase tracking-wider">
+              <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] sm:text-xs font-bold text-zinc-400 uppercase tracking-widest">
                   REPASO DE AUDIO DINÁMICO
                 </span>
                 {podcast.format && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/[0.08]">
                     {podcast.format === 'detailed'
                       ? 'Información detallada'
                       : podcast.format === 'brief'
@@ -1832,7 +1832,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   </span>
                 )}
                 {podcast.durationMode && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                  <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/[0.08]">
                     {podcast.durationMode === 'short'
                       ? 'Corto (-2 min)'
                       : podcast.durationMode === 'normal'
@@ -1841,10 +1841,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   </span>
                 )}
               </div>
-              <h2 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-white mb-1 sm:mb-2 leading-snug">
+              <h2 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-white mb-1 sm:mb-2 leading-snug tracking-tight">
                 {podcast.title}
               </h2>
-              <p className="text-[11px] sm:text-xs text-slate-400">
+              <p className="text-[11px] sm:text-xs text-zinc-400 tabular-nums">
                 Duración: {podcast.duration} • Generado a partir de tus materiales
               </p>
             </div>
@@ -1859,18 +1859,18 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
                 return (
                   <div key={idx} className="flex flex-col items-center">
-                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-thea-surfaceLight border-2 flex items-center justify-center font-bold text-base sm:text-xl text-violet-300 shadow-xl transition-all duration-300 relative ${
+                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-white/[0.03] border flex items-center justify-center font-bold text-base sm:text-xl text-zinc-200 shadow-lg transition-all duration-300 relative ${
                       isCurrentHostSpeaking
-                        ? 'border-amber-400 ring-4 ring-amber-400/20 scale-105 shadow-amber-500/20'
-                        : 'border-thea-border opacity-70'
+                        ? 'border-white/40 ring-4 ring-white/10 scale-105 shadow-white/5'
+                        : 'border-white/[0.08] opacity-70'
                     }`}>
                       {host.name.charAt(0)}
                       {isCurrentHostSpeaking && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-zinc-950 animate-pulse" />
                       )}
                     </div>
                     <span className="text-[11px] sm:text-xs font-bold text-white mt-1.5">{host.name}</span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-400">{host.role}</span>
+                    <span className="text-[9px] sm:text-[10px] text-zinc-400">{host.role}</span>
                   </div>
                 );
               })}
@@ -1887,7 +1887,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                       : '15%',
                   }}
                   className={`w-1 sm:w-1.5 rounded-full transition-all duration-300 ${
-                    isPlaying && isAudioActive ? 'bg-gradient-to-t from-violet-500 to-amber-400' : 'bg-thea-border'
+                    isPlaying && isAudioActive ? 'bg-gradient-to-t from-violet-500 to-zinc-100' : 'bg-white/10'
                   }`}
                 />
               ))}
@@ -1895,7 +1895,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
             {/* Alerta visible si la síntesis de voz experimenta un error */}
             {synthesisError && (
-              <div className="mb-3 max-w-2xl mx-auto px-3.5 py-2.5 rounded-xl sm:rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
+              <div className="mb-3 max-w-2xl mx-auto px-3.5 py-2.5 rounded-xl sm:rounded-2xl bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fadeIn">
                 <span className="flex-1 leading-relaxed font-medium text-left">
                   {synthesisError}
                 </span>
@@ -1903,7 +1903,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   <button
                     type="button"
                     onClick={() => setShowVoiceModal(true)}
-                    className="px-3 py-1.5 rounded-xl bg-thea-surfaceLight border border-amber-500/40 text-amber-300 hover:text-white font-semibold transition-all cursor-pointer text-xs"
+                    className="px-3 py-1.5 rounded-xl bg-white/[0.05] border border-white/10 text-zinc-200 hover:text-white font-semibold transition-all cursor-pointer text-xs"
                   >
                     Ajustes
                   </button>
@@ -1913,7 +1913,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                       setSynthesisError(null);
                       handleTogglePlay();
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all cursor-pointer text-xs"
+                    className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold transition-all cursor-pointer text-xs active:scale-95"
                   >
                     Reintentar
                   </button>
@@ -1922,34 +1922,34 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             )}
 
             {/* Current Active Dialogue Bubble */}
-            <div className="bg-thea-surfaceLight/80 backdrop-blur border border-thea-border rounded-xl sm:rounded-2xl p-3.5 sm:p-5 mb-3 sm:mb-6 max-w-2xl mx-auto shadow-inner text-left relative z-10">
+            <div className="bg-white/[0.025] backdrop-blur border border-white/[0.08] rounded-xl sm:rounded-2xl p-3.5 sm:p-5 mb-3 sm:mb-6 max-w-2xl mx-auto shadow-inner text-left relative z-10">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-xs text-amber-300 flex items-center gap-1.5">
-                  <Volume2 className={`w-3.5 h-3.5 ${isAudioActive ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+                <span className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
+                  <Volume2 className={`w-3.5 h-3.5 ${isAudioActive ? 'text-violet-400 animate-pulse' : 'text-zinc-500'}`} />
                   {currentItem.speaker}
                 </span>
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   {voiceEngine === 'edge' ? (
                     isSynthesizing ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center gap-1 animate-pulse">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-zinc-300 flex items-center gap-1 animate-pulse">
                         <Loader2 className="w-3 h-3 animate-spin" />
                         <span className="hidden sm:inline">Sintetizando voz neuronal...</span>
                         <span className="sm:hidden">Sintetizando...</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-600/25 border border-cyan-500/35 text-cyan-300 flex items-center gap-1 font-medium">
-                        <Headphones className="w-3 h-3 text-cyan-400 shrink-0" />
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-zinc-300 flex items-center gap-1 font-medium">
+                        <Headphones className="w-3 h-3 text-zinc-400 shrink-0" />
                         <span className="hidden sm:inline">Azure Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})</span>
                         <span className="sm:hidden">Azure ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name.replace(' Neural', '') || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name.replace(' Neural', '') || 'Álvaro')})</span>
                       </span>
                     )
                   ) : (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1 font-medium">
-                      <Headphones className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-zinc-300 flex items-center gap-1 font-medium">
+                      <Headphones className="w-3 h-3 text-zinc-400 shrink-0" />
                       <span className="truncate max-w-[100px] sm:max-w-none">{speakerAcoustics.voiceName}</span>
                     </span>
                   )}
-                  <span className="text-[10px] sm:text-[11px] text-slate-500 font-mono">
+                  <span className="text-[10px] sm:text-[11px] text-zinc-400 font-mono tabular-nums">
                     {currentItem.time}
                   </span>
                 </div>
@@ -1969,8 +1969,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                         isCurrent
                           ? 'text-white font-bold'
                           : isPast
-                          ? 'text-slate-400 hover:text-white'
-                          : 'text-slate-500 hover:text-white'
+                          ? 'text-zinc-400 hover:text-white'
+                          : 'text-zinc-500 hover:text-white'
                       }`}
                       title={`Saltar a la palabra "${word}"`}
                     >
@@ -1983,28 +1983,28 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
             {/* ── LÍNEA DE TIEMPO INTERACTIVA ULTRA-FLUIDA (SMOOTH SCRUBBER) ── */}
             <div className="max-w-2xl mx-auto mb-3 sm:mb-6 px-1 sm:px-2 relative z-10">
-              <div className="flex items-center justify-between text-[11px] sm:text-xs font-mono text-slate-400 mb-1.5 sm:mb-2.5">
-                <span className="font-semibold text-amber-400 text-xs sm:text-sm">{currentTimeDisplay}</span>
-                <span className="text-slate-300 font-medium text-[11px] sm:text-xs font-sans">
+              <div className="flex items-center justify-between text-[11px] sm:text-xs font-mono text-zinc-400 mb-1.5 sm:mb-2.5 tabular-nums">
+                <span className="font-semibold text-zinc-100 text-xs sm:text-sm">{currentTimeDisplay}</span>
+                <span className="text-zinc-400 font-medium text-[11px] sm:text-xs font-sans">
                   Segmento {currentLineIndex + 1} de {podcast.dialogue.length}
                 </span>
-                <span className="text-slate-400">{podcast.duration}</span>
+                <span className="text-zinc-400">{podcast.duration}</span>
               </div>
 
-              {/* Slider interactivo suave a 60fps con track visual y perla dorada */}
+              {/* Slider interactivo suave a 60fps con track visual y perla */}
               <div className="relative flex items-center group py-2">
                 {/* Pista de fondo con glow sutil */}
-                <div className="w-full h-2 group-hover:h-2.5 bg-slate-800/90 rounded-full overflow-hidden transition-all duration-150 relative">
-                  {/* Pista de relleno suave con gradiente ámbar */}
+                <div className="w-full h-1.5 group-hover:h-2 bg-white/10 rounded-full overflow-hidden transition-all duration-150 relative">
+                  {/* Pista de relleno suave */}
                   <div
-                    className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-300 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.35)]"
+                    className="h-full bg-gradient-to-r from-violet-500 via-indigo-500 to-zinc-200 rounded-full"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
 
                 {/* Thumb perla brillante deslizante */}
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-amber-400 border-2 border-slate-900 shadow-md shadow-amber-500/60 transition-transform group-hover:scale-125 pointer-events-none"
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white border border-zinc-300 shadow-md transition-transform group-hover:scale-125 pointer-events-none"
                   style={{ left: `${progressPercent}%` }}
                 />
 
@@ -2033,7 +2033,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <button
                   type="button"
                   onClick={handleRestart}
-                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer active:scale-95"
                   title="Reiniciar podcast desde el principio"
                 >
                   <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2044,7 +2044,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   type="button"
                   onClick={handleSkipBackward}
                   disabled={currentLineIndex === 0}
-                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-400 hover:text-white disabled:opacity-30 transition-colors cursor-pointer active:scale-95"
                   title="Atrasar al segmento anterior"
                 >
                   <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2055,10 +2055,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   type="button"
                   onClick={() => handleSkipSeconds(-10)}
                   disabled={currentPlaybackSecs <= 0}
-                  className="px-2 py-1.5 sm:px-3 sm:py-2.5 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
+                  className="px-2 py-1.5 sm:px-3 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 hover:text-white disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-semibold text-xs font-mono tabular-nums active:scale-95"
                   title="Retroceder 10 segundos"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400" />
                   <span>-10s</span>
                 </button>
 
@@ -2066,13 +2066,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <button
                   type="button"
                   onClick={handleTogglePlay}
-                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-amber-500 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-violet-900/40 flex items-center justify-center text-white font-bold cursor-pointer shrink-0"
+                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white hover:bg-zinc-200 active:scale-95 transition-transform duration-150 shadow-xl flex items-center justify-center text-zinc-950 font-bold cursor-pointer shrink-0"
                   title={isPlaying ? 'Pausar' : 'Reproducir'}
                 >
                   {isPlaying ? (
-                    <Pause className="w-5 h-5 sm:w-7 sm:h-7 fill-white" />
+                    <Pause className="w-5 h-5 sm:w-7 sm:h-7 fill-zinc-950 text-zinc-950" />
                   ) : (
-                    <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-white ml-0.5" />
+                    <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-zinc-950 text-zinc-950 ml-0.5" />
                   )}
                 </button>
 
@@ -2081,11 +2081,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   type="button"
                   onClick={() => handleSkipSeconds(10)}
                   disabled={currentPlaybackSecs >= totalDurationSecs}
-                  className="px-2 py-1.5 sm:px-3 sm:py-2.5 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-bold text-xs font-mono"
+                  className="px-2 py-1.5 sm:px-3 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 hover:text-white disabled:opacity-30 transition-all cursor-pointer flex items-center gap-1 font-semibold text-xs font-mono tabular-nums active:scale-95"
                   title="Adelantar 10 segundos"
                 >
                   <span>+10s</span>
-                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400" />
                 </button>
 
                 {/* Segmento Siguiente */}
@@ -2093,7 +2093,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   type="button"
                   onClick={handleSkipForward}
                   disabled={currentLineIndex >= podcast.dialogue.length - 1}
-                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                  className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-400 hover:text-white disabled:opacity-30 transition-colors cursor-pointer active:scale-95"
                   title="Adelantar al siguiente segmento"
                 >
                   <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2101,15 +2101,15 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               </div>
 
               {/* Fila 2: Controles Secundarios (Silenciar y Velocidad) */}
-              <div className="flex items-center justify-between sm:justify-center gap-2 sm:gap-4 pt-2 border-t border-thea-border/40">
+              <div className="flex items-center justify-between sm:justify-center gap-2 sm:gap-4 pt-2 border-t border-white/[0.06]">
                 {/* Mute */}
                 <button
                   type="button"
                   onClick={handleToggleMute}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl border transition-colors cursor-pointer text-xs ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl border transition-colors cursor-pointer text-xs active:scale-95 ${
                     isMuted
                       ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                      : 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-white'
+                      : 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
                   }`}
                   title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
                 >
@@ -2122,14 +2122,14 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 </button>
 
                 {/* Speed Controller */}
-                <div className="flex items-center gap-0.5 sm:gap-1 bg-thea-surface border border-thea-border rounded-xl p-0.5 sm:p-1 text-xs">
+                <div className="flex items-center gap-0.5 sm:gap-1 bg-white/[0.025] border border-white/[0.08] rounded-xl p-0.5 sm:p-1 text-xs">
                   {speeds.map(s => (
                     <button
                       key={s}
                       type="button"
                       onClick={() => handleSpeedChange(s)}
-                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1 rounded-lg font-bold transition-colors cursor-pointer text-[10px] sm:text-xs ${
-                        playbackSpeed === s ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1 rounded-lg font-bold transition-all cursor-pointer text-[10px] sm:text-xs tabular-nums active:scale-95 ${
+                        playbackSpeed === s ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-white'
                       }`}
                     >
                       {s}x

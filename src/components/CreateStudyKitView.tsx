@@ -560,14 +560,13 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
     >
       {/* Header */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-950/80 border border-violet-500/30 text-violet-300 text-xs font-semibold mb-4">
-          <Sparkles className="w-3.5 h-3.5 animate-pulse text-amber-400" />
+        <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">
           INVESTIGACIÓN CIENTÍFICA ACTIVA
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+        </span>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
           Crear Study Kit
         </h1>
-        <p className="text-slate-400 text-sm max-w-lg mx-auto">
+        <p className="text-zinc-400 text-sm max-w-lg mx-auto">
           Ingresa un tema para investigar en internet con base científica, o sube tus archivos Word, PowerPoint, PDF, XML, notas o enlaces.
         </p>
       </div>
@@ -604,10 +603,10 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-col items-center justify-center gap-2 p-3 sm:p-3.5 rounded-xl border transition-all shrink-0 min-w-[105px] sm:min-w-0 cursor-pointer ${
+            className={`flex flex-col items-center justify-center gap-2 p-3 sm:p-3.5 rounded-xl border transition-all shrink-0 min-w-[105px] sm:min-w-0 cursor-pointer active:scale-[0.985] ${
               activeTab === tab.id
-                ? 'bg-violet-600/20 border-violet-500 text-violet-300 shadow-lg shadow-violet-900/20'
-                : 'bg-thea-surface border-thea-border text-slate-400 hover:text-slate-200 hover:bg-thea-surfaceLight'
+                ? 'bg-white/10 border-white/20 text-white shadow-sm font-semibold'
+                : 'bg-white/[0.025] border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05]'
             }`}
           >
             {tab.icon}
@@ -617,7 +616,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       </div>
 
       {/* Tab Content */}
-      <div className="bg-thea-surface border border-thea-border rounded-2xl p-6 mb-6">
+      <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl p-6 mb-6 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
         <p className="text-xs text-slate-500 mb-4 flex items-center gap-1.5">
           {currentTab?.icon}
           {currentTab?.description}
@@ -928,15 +927,15 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
 
       {/* Configuración de Extensión de la Guía de Estudio (3 Niveles) */}
-      <div className="bg-thea-surface border border-thea-border rounded-2xl p-6 mb-6 space-y-3.5">
+      <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl p-6 mb-6 space-y-3.5 shadow-xl backdrop-blur-xl">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
+          <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-zinc-400" />
             <span>Nivel de Extensión de la Guía de Estudio</span>
           </h3>
-          <span className="text-[11px] text-slate-400 font-medium">Sin límite de caracteres</span>
+          <span className="text-[11px] text-zinc-400 font-medium">Sin límite de caracteres</span>
         </div>
-        <p className="text-xs text-slate-400 leading-relaxed">
+        <p className="text-xs text-zinc-400 leading-relaxed">
           Elige la profundidad inicial con la que se generará la guía teórica para este kit:
         </p>
 
@@ -966,22 +965,22 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
               <div
                 key={opt.id}
                 onClick={() => setSelectedGuideDepth(opt.id)}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between active:scale-[0.985] ${
                   isSelected
-                    ? 'bg-violet-600/20 border-violet-500 ring-2 ring-violet-500/40 text-white'
-                    : 'bg-thea-bg/60 border-thea-border hover:border-violet-500/40 text-slate-300'
+                    ? 'bg-white/[0.06] border-white/40 shadow-sm text-white'
+                    : 'bg-white/[0.025] border-white/[0.08] hover:border-white/20 text-zinc-400'
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-1.5">
                     <span className="text-xs font-bold text-white">{opt.name}</span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                      opt.id === 'ultra' ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-white/10 text-slate-300'
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full tabular-nums ${
+                      opt.id === 'ultra' ? 'bg-white/10 text-zinc-200 border border-white/15' : 'bg-white/[0.04] text-zinc-400'
                     }`}>
                       {opt.badge}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-snug">{opt.desc}</p>
+                  <p className="text-[11px] text-zinc-400 leading-snug">{opt.desc}</p>
                 </div>
               </div>
             );
@@ -990,10 +989,10 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       </div>
 
       {/* Title & Description (collapsible advanced) */}
-      <div className="bg-thea-surface border border-thea-border rounded-2xl p-6 mb-6 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-          <FileText className="w-4 h-4 text-violet-400" />
-          Detalles del Kit <span className="text-xs text-slate-500 font-normal">(opcional)</span>
+      <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl p-6 mb-6 space-y-4 shadow-xl backdrop-blur-xl">
+        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-zinc-400" />
+          Detalles del Kit <span className="text-xs text-zinc-500 font-normal">(opcional)</span>
         </h3>
         <input
           type="text"
@@ -1003,35 +1002,35 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             setIsTitleManuallyEdited(true);
           }}
           placeholder="Título del Study Kit (la IA decidirá el tema automáticamente si se deja vacío)"
-          className="w-full bg-thea-bg border border-thea-border rounded-xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
         />
         <input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Descripción breve (ej: Capítulo 5 del libro de Biología)"
-          className="w-full bg-thea-bg border border-thea-border rounded-xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
         />
       </div>
 
-        {/* Create Button */}
-        <button
-          onClick={handleCreate}
-          disabled={!canCreate || !isAIActive}
-          className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-3 ${
-            canCreate && isAIActive
-              ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-xl shadow-violet-900/30 cursor-pointer'
-              : 'bg-thea-surface border border-thea-border text-slate-600 cursor-not-allowed shadow-none'
-          }`}
-        >
-          <Sparkles className="w-5 h-5" />
-          Crear Study Kit con Contrareloj Study
-        </button>
+      {/* Create Button */}
+      <button
+        onClick={handleCreate}
+        disabled={!canCreate || !isAIActive}
+        className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-3 active:scale-[0.985] ${
+          canCreate && isAIActive
+            ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-xl cursor-pointer'
+            : 'bg-white/[0.04] border border-white/[0.08] text-zinc-600 cursor-not-allowed shadow-none'
+        }`}
+      >
+        <Sparkles className="w-5 h-5 text-zinc-950" />
+        Crear Study Kit con Contrareloj Study
+      </button>
 
-        {/* Info Footer */}
-        <p className="text-center text-xs text-slate-600 mt-4">
-          Todo se procesa localmente en tu navegador — sin subir nada a servidores externos
-        </p>
+      {/* Info Footer */}
+      <p className="text-center text-xs text-zinc-500 mt-4">
+        Todo se procesa localmente en tu navegador — sin subir nada a servidores externos
+      </p>
       </div>
     </div>
   );

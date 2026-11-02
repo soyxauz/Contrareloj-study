@@ -1685,44 +1685,36 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group min-h-[380px] sm:min-h-[440px] rounded-3xl`}
             >
               {/* CARA FRONTAL (TÉRMINO O PREGUNTA CONCRETA) */}
-              <div className={`card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border-2 ${
-                isQuestionCard
-                  ? 'bg-gradient-to-tr from-[#0a182a] via-[#10243e] to-[#163659] border-cyan-500/50 group-hover:border-cyan-400'
-                  : 'bg-gradient-to-tr from-thea-bg via-thea-surface to-thea-surfaceLight border-thea-border group-hover:border-violet-500/70'
-              }`}>
-                <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+              <div className="card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#140e26] via-[#0d0918] to-[#090314] glass-specular">
+                <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                   {isQuestionCard ? (
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 font-extrabold text-[11px] shadow-sm">
+                    <span className="flex items-center gap-1.5 text-[11px] text-cyan-400/90 font-semibold tracking-wider">
                       <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />
-                      PREGUNTA CONCRETA
+                      Pregunta Concreta
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-950/80 border border-violet-500/50 text-violet-300 font-extrabold text-[11px] shadow-sm">
-                      <BookOpen className="w-3.5 h-3.5 text-violet-400" />
-                      TÉRMINO CLAVE
+                    <span className="flex items-center gap-1.5 text-[11px] text-indigo-400/90 font-semibold tracking-wider">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                      Término Clave
                     </span>
                   )}
                   <div className="flex items-center gap-2">
                     {currentCard?.mastery === 'mastered' && (
-                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/70 text-emerald-300 font-bold text-[10px] shadow-sm">
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold text-[10px] tabular-nums">
                         <Check className="w-3 h-3 text-emerald-400" /> ¡Dominada!
                       </span>
                     )}
                     {currentCard?.mastery === 'known' && (
-                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/70 text-amber-300 font-bold text-[10px] shadow-sm">
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold text-[10px] tabular-nums">
                         <Star className="w-3 h-3 text-amber-400" /> La conozco
                       </span>
                     )}
                     {currentCard?.mastery === 'to-learn' && (
-                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/70 text-rose-300 font-bold text-[10px] shadow-sm">
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 font-semibold text-[10px] tabular-nums">
                         <RotateCcw className="w-3 h-3 text-rose-400" /> Aún no la sé
                       </span>
                     )}
-                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
-                      isQuestionCard
-                        ? 'bg-cyan-900/40 border-cyan-500/30 text-cyan-300'
-                        : 'bg-violet-900/40 border-violet-500/30 text-violet-300'
-                    }`}>
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-400 tabular-nums">
                       Frente
                     </span>
                   </div>
@@ -1734,11 +1726,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   </div>
                 </div>
 
-                <div className={`flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors ${
-                  isQuestionCard
-                    ? 'text-cyan-300/80 group-hover:text-cyan-200'
-                    : 'text-slate-400 group-hover:text-amber-300'
-                }`}>
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-400 group-hover:text-slate-200 transition-colors">
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>
                     {isQuestionCard
@@ -1749,42 +1737,34 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               </div>
 
               {/* CARA POSTERIOR (DEFINICIÓN O RESPUESTA) */}
-              <div className={`card-face card-back rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border-2 ${
-                isQuestionCard
-                  ? 'bg-gradient-to-tr from-[#0a1f33] via-[#0f2c47] to-[#15426b] border-sky-500/60 group-hover:border-sky-400'
-                  : 'bg-gradient-to-tr from-[#121933] via-[#152347] to-[#1e3366] border-indigo-500/60 group-hover:border-indigo-400'
-              }`}>
-                <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+              <div className="card-face card-back rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#16102c] via-[#0e0a1b] to-[#090314] glass-specular">
+                <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                   {isQuestionCard ? (
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-500/50 text-sky-300 font-extrabold text-[11px] shadow-sm">
-                      RESPUESTA CONCISA
+                    <span className="flex items-center gap-1.5 text-[11px] text-sky-400/90 font-semibold tracking-wider">
+                      Respuesta Concisa
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-500/50 text-indigo-300 font-extrabold text-[11px] shadow-sm">
-                      DEFINICIÓN & CONCEPTO
+                    <span className="flex items-center gap-1.5 text-[11px] text-indigo-400/90 font-semibold tracking-wider">
+                      Definición & Concepto
                     </span>
                   )}
                   <div className="flex items-center gap-2">
                     {currentCard?.mastery === 'mastered' && (
-                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/70 text-emerald-300 font-bold text-[10px] shadow-sm">
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold text-[10px] tabular-nums">
                         <Check className="w-3 h-3 text-emerald-400" /> ¡Dominada!
                       </span>
                     )}
                     {currentCard?.mastery === 'known' && (
-                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/70 text-amber-300 font-bold text-[10px] shadow-sm">
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold text-[10px] tabular-nums">
                         <Star className="w-3 h-3 text-amber-400" /> La conozco
                       </span>
                     )}
                     {currentCard?.mastery === 'to-learn' && (
-                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/70 text-rose-300 font-bold text-[10px] shadow-sm">
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 font-semibold text-[10px] tabular-nums">
                         <RotateCcw className="w-3 h-3 text-rose-400" /> Aún no la sé
                       </span>
                     )}
-                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${
-                      isQuestionCard
-                        ? 'bg-sky-900/40 border-sky-500/30 text-sky-300'
-                        : 'bg-indigo-900/40 border-indigo-500/30 text-indigo-300'
-                    }`}>
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-400 tabular-nums">
                       Reverso
                     </span>
                   </div>
@@ -1796,11 +1776,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   </div>
                 </div>
 
-                <div className={`flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors ${
-                  isQuestionCard
-                    ? 'text-sky-300/80 group-hover:text-cyan-200'
-                    : 'text-slate-400 group-hover:text-amber-300'
-                }`}>
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-400 group-hover:text-slate-200 transition-colors">
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>
                     {isQuestionCard
@@ -1817,7 +1793,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <button
               type="button"
               onClick={handlePrevCard}
-              className="p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-white transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 text-xs font-bold active:scale-95"
+              className="active-press p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5 text-xs font-semibold"
               title="Tarjeta anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1829,10 +1805,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('to-learn')}
-                className={`flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm active:scale-95 ${
+                className={`active-press flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm ${
                   currentCard?.mastery === 'to-learn'
-                    ? 'bg-rose-900/90 border-2 border-rose-400 text-rose-100 font-extrabold shadow-lg shadow-rose-950/60 ring-2 ring-rose-500/50 scale-[1.02]'
-                    : 'bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-200 font-bold shadow-md hover:scale-[1.02]'
+                    ? 'bg-rose-500/20 border border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950/30'
+                    : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
                 }`}
               >
                 Aún no la sé
@@ -1840,10 +1816,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('known')}
-                className={`flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm active:scale-95 ${
+                className={`active-press flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm ${
                   currentCard?.mastery === 'known'
-                    ? 'bg-amber-900/90 border-2 border-amber-400 text-amber-100 font-extrabold shadow-lg shadow-amber-950/60 ring-2 ring-amber-500/50 scale-[1.02]'
-                    : 'bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-amber-200 font-bold shadow-md hover:scale-[1.02]'
+                    ? 'bg-amber-500/20 border border-amber-500/50 text-amber-200 font-bold shadow-md shadow-amber-950/30'
+                    : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
                 }`}
               >
                 La conozco
@@ -1851,10 +1827,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('mastered')}
-                className={`flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm active:scale-95 ${
+                className={`active-press flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm ${
                   currentCard?.mastery === 'mastered'
-                    ? 'bg-emerald-900/90 border-2 border-emerald-400 text-emerald-100 font-extrabold shadow-lg shadow-emerald-950/60 ring-2 ring-emerald-500/50 scale-[1.02]'
-                    : 'bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-200 font-bold shadow-md hover:scale-[1.02]'
+                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-200 font-bold shadow-md shadow-emerald-950/30'
+                    : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
                 }`}
               >
                 ¡Dominada!
@@ -1864,7 +1840,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <button
               type="button"
               onClick={handleNextCard}
-              className="p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-slate-300 hover:text-white transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 text-xs font-bold active:scale-95"
+              className="active-press p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5 text-xs font-semibold"
               title="Siguiente tarjeta"
             >
               <span className="hidden sm:inline">Siguiente</span>

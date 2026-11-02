@@ -2459,36 +2459,36 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       {activeTab === 'history' ? (
         <div className="space-y-6 animate-fadeIn">
           {/* Header de Historial con botón de retorno a la práctica */}
-          <div className="flex items-center justify-between pb-4 border-b border-[#261c47] flex-wrap gap-3">
+          <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] flex-wrap gap-3">
             <button
               onClick={() => setActiveTab('practice')}
-              className="px-5 py-2.5 rounded-full bg-[#d5c7ee] hover:bg-[#e4d8fb] text-[#1b113b] font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+              className="active-press px-4 sm:px-5 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md hover:bg-zinc-200"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Volver a la Pregunta</span>
             </button>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              <History className="w-4 h-4 text-violet-400" />
+              <History className="w-4 h-4 text-slate-400" />
               <span>Historial de Preguntas</span>
             </h3>
           </div>
           {/* Métricas del Historial */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30">
-              <span className="text-xs text-emerald-400 block mb-1 font-medium">Aciertos</span>
-              <span className="text-2xl font-black text-emerald-400">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
+            <div className="p-4 rounded-2xl bg-white/[0.025] border border-white/[0.08]">
+              <span className="text-xs text-slate-400 block mb-1 font-medium">Aciertos</span>
+              <span className="text-2xl font-bold text-white tabular-nums">
                 {history.filter(h => h.isCorrect).length}
               </span>
             </div>
-            <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/30">
-              <span className="text-xs text-rose-400 block mb-1 font-medium">Fallos / A Reforzar</span>
-              <span className="text-2xl font-black text-rose-400">
+            <div className="p-4 rounded-2xl bg-white/[0.025] border border-white/[0.08]">
+              <span className="text-xs text-slate-400 block mb-1 font-medium">Fallos / A Reforzar</span>
+              <span className="text-2xl font-bold text-white tabular-nums">
                 {history.filter(h => !h.isCorrect).length}
               </span>
             </div>
-            <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/30">
-              <span className="text-xs text-amber-400 block mb-1 font-medium">Tasa de Acierto</span>
-              <span className="text-2xl font-black text-amber-400">
+            <div className="p-4 rounded-2xl bg-white/[0.025] border border-white/[0.08]">
+              <span className="text-xs text-slate-400 block mb-1 font-medium">Tasa de Acierto</span>
+              <span className="text-2xl font-bold text-white tabular-nums">
                 {history.length > 0
                   ? Math.round((history.filter(h => h.isCorrect).length / history.length) * 100)
                   : 0}%
@@ -2497,7 +2497,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
 
           {/* Filtros de Historial */}
-          <div className="p-4 rounded-2xl bg-thea-surface border border-thea-border flex items-center justify-between flex-wrap gap-3">
+          <div className="p-4 rounded-2xl bg-white/[0.025] border border-white/[0.08] flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5 mr-1">
                 <Filter className="w-3.5 h-3.5" />
@@ -2505,10 +2505,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </span>
               <button
                 onClick={() => setHistoryFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all border tabular-nums ${
                   historyFilter === 'all'
-                    ? 'bg-violet-600 text-white shadow-sm'
-                    : 'bg-thea-surfaceLight text-slate-400 hover:text-white'
+                    ? 'bg-white/[0.12] text-white border-white/25 shadow-sm'
+                    : 'bg-white/[0.03] text-slate-400 border-white/[0.08] hover:text-white hover:bg-white/[0.06]'
                 }`}
               >
                 Todas
@@ -2736,12 +2736,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           {/* ── TOP BAR: PROGRESS PILL + 3 SPARKLE STARS + SETTINGS ─── */}
           <div className="flex items-center justify-between gap-3 sm:gap-6">
             {/* Pill Progress Bar: Nivel {level}: {pct}% */}
-            <div className="flex-1 max-w-xl h-7 sm:h-8 rounded-full bg-[#20183d] border border-[#2d2156] p-1 flex items-center relative overflow-hidden">
+            <div className="flex-1 max-w-xl h-7 sm:h-8 rounded-full bg-white/[0.04] border border-white/[0.08] p-1 flex items-center relative overflow-hidden shadow-inner">
               <div
-                className="h-full rounded-full bg-[#700065] transition-all duration-500 shadow-sm"
+                className="h-full rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 transition-all duration-300 ease-out shadow-sm"
                 style={{ width: `${Math.max(6, Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100)))}%` }}
               />
-              <span className="absolute left-4 text-xs font-bold text-white tracking-wide select-none drop-shadow-sm">
+              <span className="absolute left-4 text-xs font-semibold text-white tracking-wide select-none drop-shadow-sm tabular-nums">
                 Nivel {level}: {Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100))}%
               </span>
             </div>
@@ -2758,15 +2758,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 type="button"
                 onClick={() => setShowConfigDrawer(true)}
                 title="Calibrar Dificultad y Enfoque Temático"
-                className="p-1 text-slate-300 hover:text-white transition-all transform hover:rotate-45 cursor-pointer ml-1"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer ml-1 active-press"
               >
-                <Settings className="w-5 h-5 sm:w-6 sm:h-6 text-slate-200" />
+                <Settings className="w-5 h-5 text-slate-300" />
               </button>
             </div>
           </div>
 
           {/* Divider Line */}
-          <div className="w-full h-px bg-[#261c47] my-6 sm:my-8" />
+          <div className="w-full h-px bg-white/[0.06] my-6 sm:my-8" />
 
           {/* Notificación de Nivel Completado / Subida de Nivel */}
           {levelUpBanner && (
@@ -3082,13 +3082,14 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           );
         })()}
 
-        {/* ── ACTION ROW: HISTORIAL DE PREGUNTAS + THUMBS UP / DOWN (ESTILO THEA) ────── */}
+        {/* ── ACTION ROW: HISTORIAL DE PREGUNTAS + THUMBS UP / DOWN (ESTILO LINEAR / RAYCAST) ────── */}
         <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className="px-4 sm:px-5 py-2 rounded-full bg-[#d5c7ee] hover:bg-[#e4d8fb] text-[#1b113b] font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-2 active:scale-95 min-h-[40px]"
+            className="active-press px-4 sm:px-5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 text-slate-300 hover:text-white font-medium text-xs sm:text-sm transition-colors shadow-sm flex items-center gap-2 min-h-[40px] cursor-pointer"
           >
+            <History className="w-4 h-4 text-slate-400" />
             <span>Historial de preguntas</span>
           </button>
 
@@ -3097,41 +3098,41 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               type="button"
               onClick={() => setFeedbackGiven(feedbackGiven === 'up' ? null : 'up')}
               title="Pregunta clara y de alta calidad"
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-105 active:scale-95 ${
+              className={`active-press w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
                 feedbackGiven === 'up'
-                  ? 'bg-[#22c55e] text-white ring-2 ring-emerald-300'
-                  : 'bg-[#22c55e] hover:bg-[#16a34a] text-white'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
               }`}
             >
-              <ThumbsUp className="w-4 h-4 fill-current" />
+              <ThumbsUp className="w-4 h-4" />
             </button>
             <button
               type="button"
               onClick={() => setFeedbackGiven(feedbackGiven === 'down' ? null : 'down')}
               title="Reportar pregunta o redacción confusa"
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md transform hover:scale-105 active:scale-95 ${
+              className={`active-press w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
                 feedbackGiven === 'down'
-                  ? 'bg-[#ef4444] text-white ring-2 ring-rose-300'
-                  : 'bg-[#ef4444] hover:bg-[#dc2626] text-white'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
               }`}
             >
-              <ThumbsDown className="w-4 h-4 fill-current" />
+              <ThumbsDown className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* ── CENTERED "SIGUIENTE PREGUNTA" / "SALTAR PREGUNTA" BUTTON (ESTILO THEA) ── */}
+        {/* ── CENTERED "SIGUIENTE PREGUNTA" / "SALTAR PREGUNTA" BUTTON (ESTILO LINEAR STUDIO) ── */}
         <div className="flex justify-center mb-6 sm:mb-8">
           <button
             type="button"
             onClick={handleNext}
             disabled={isAdvancing}
-            className={`w-full sm:w-auto justify-center px-8 py-2.5 rounded-full font-bold text-sm sm:text-base shadow-md transition-all transform hover:scale-[1.02] active:scale-95 flex items-center gap-2 cursor-pointer min-h-[44px] ${
+            className={`active-press w-full sm:w-auto justify-center px-8 py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-all flex items-center gap-2.5 cursor-pointer min-h-[46px] ${
               isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
             } ${
               currentLevelCorrect >= levelTarget
-                ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-violet-300 hover:from-amber-300 hover:to-violet-200 text-slate-950 font-extrabold shadow-amber-500/25 ring-2 ring-amber-400/50'
-                : 'bg-[#bba7ea] hover:bg-[#cbbaef] text-[#1b113b]'
+                ? 'bg-gradient-to-r from-amber-400 to-amber-300 text-zinc-950 shadow-amber-500/20 font-extrabold hover:from-amber-300 hover:to-amber-200'
+                : 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-black/40'
             }`}
           >
             <span>
@@ -3139,9 +3140,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 ? (level < 3 ? `Avanzar al Nivel ${level + 1}` : 'Finalizar Kit (Dominio Total)')
                 : (isAnswered ? 'Siguiente pregunta' : 'Saltar pregunta')}
             </span>
-            {currentLevelCorrect >= levelTarget && (
-              <ArrowRight className="w-5 h-5 stroke-[2.5]" />
-            )}
+            <ArrowRight className="w-4 h-4 stroke-[2.5]" />
           </button>
         </div>
 
@@ -3149,7 +3148,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         {isAnswered && (
           <div
             ref={explanationRef}
-            className="mt-6 pt-5 border-t border-[#261c47]/70 animate-fadeIn"
+            className="mt-6 pt-5 border-t border-white/[0.08] animate-fadeIn"
           >
             {/* Barra de utilidades secundaria sutil (escuchar audio / ver fuente RAG) */}
             <div className="flex items-center justify-end gap-2 mb-3">

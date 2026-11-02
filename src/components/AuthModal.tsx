@@ -108,30 +108,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-md bg-thea-surface border-t sm:border border-thea-border rounded-t-3xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-y-auto">
+      <div className="w-full max-w-md bg-[#0e0b16] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-y-auto">
         {/* Mobile Pull Handle */}
-        <div className="w-12 h-1.5 bg-slate-600/70 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
-        {/* Glow accent */}
-        <div className="absolute -top-20 -right-20 w-48 h-48 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="w-12 h-1.5 bg-zinc-600/70 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
 
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight border border-transparent hover:border-thea-border transition-all"
+          className="absolute top-5 right-5 p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer active:scale-95"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white mb-3 shadow-lg shadow-violet-900/30">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-200 mb-3 shadow-sm">
             {mode === 'login' ? <LogIn className="w-6 h-6" /> : <UserPlus className="w-6 h-6" />}
           </div>
-          <h2 className="text-xl font-bold text-white">
+          <h2 className="text-xl font-bold text-white tracking-tight">
             {mode === 'login' ? 'Iniciar Sesión en Contrareloj Study' : 'Crear Cuenta en Contrareloj Study'}
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-1">
             {mode === 'login'
               ? 'Accede a tus kits, memoria de estudio y progreso guardado'
               : 'Guarda todos tus Study Kits con memoria exacta de tu avance'}
@@ -143,7 +140,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           type="button"
           onClick={handleGoogleLogin}
           disabled={isGoogleLoading || isLoading}
-          className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 hover:border-white/30 text-white font-semibold text-xs shadow-md transition-all flex items-center justify-center gap-2.5 mb-4 cursor-pointer disabled:opacity-50"
+          className="w-full py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/15 text-white font-semibold text-xs shadow-sm transition-all flex items-center justify-center gap-2.5 mb-4 cursor-pointer disabled:opacity-40 active:scale-95"
         >
           {isGoogleLoading ? (
             <span>Conectando con Google...</span>
@@ -180,17 +177,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Tab switcher */}
-        <div className="flex rounded-xl bg-thea-surfaceLight p-1 mb-6 border border-thea-border">
+        <div className="flex rounded-xl bg-white/[0.025] p-1 mb-6 border border-white/[0.08]">
           <button
             type="button"
             onClick={() => {
               setMode('login');
               setError(null);
             }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all active:scale-95 cursor-pointer ${
               mode === 'login'
-                ? 'bg-violet-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             Iniciar Sesión
@@ -201,10 +198,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setMode('register');
               setError(null);
             }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all active:scale-95 cursor-pointer ${
               mode === 'register'
-                ? 'bg-violet-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             Crear Cuenta
@@ -289,7 +286,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-sm shadow-lg shadow-violet-900/30 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer"
+            className="active-press w-full py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50"
           >
             {isLoading ? (
               <span>Procesando...</span>

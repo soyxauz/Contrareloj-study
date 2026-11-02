@@ -105,27 +105,27 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-600/10 via-thea-bg to-thea-bg blur-2xl pointer-events-none" />
 
       {/* Contenedor Flotante Elevado */}
-      <div className="flex-1 flex flex-col bg-thea-surface/90 backdrop-blur-2xl border border-thea-border/80 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] overflow-hidden relative">
+      <div className="flex-1 flex flex-col bg-[#0e0b16]/90 backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden relative">
         {/* Cabecera Flotante */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-thea-border/60 bg-thea-surfaceLight/40 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-teal-600 flex items-center justify-center text-white shadow-md shadow-cyan-900/30">
-              <Bot className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-200 shadow-sm">
+              <Bot className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-bold text-sm sm:text-base text-white">
+                <h1 className="font-bold text-sm sm:text-base text-white tracking-tight">
                   Chat Tutor IA
                 </h1>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyan-600/20 text-cyan-300 border border-cyan-500/30">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10">
                   Consultas Escritas
                 </span>
-                <span className="text-[10px] text-slate-400">
+                <span className="text-[10px] text-zinc-500">
                   Ollama Local / IA
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 truncate max-w-[240px] sm:max-w-md">
-                Material activo: <strong className="text-slate-300">{kit.title}</strong>
+              <p className="text-[11px] text-zinc-400 truncate max-w-[240px] sm:max-w-md">
+                Material activo: <strong className="text-zinc-300">{kit.title}</strong>
               </p>
             </div>
           </div>
@@ -136,10 +136,10 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
               <button
                 type="button"
                 onClick={onNavigateToOral}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-500/40 bg-violet-600/20 hover:bg-violet-600/30 text-violet-200 text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-95"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/15 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-95"
                 title="Cambiar al módulo de lección oral y práctica por voz"
               >
-                <Mic className="w-3.5 h-3.5 text-violet-400" />
+                <Mic className="w-3.5 h-3.5 text-zinc-300" />
                 <span>Practicar en Lección Oral</span>
               </button>
             )}
@@ -148,7 +148,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
             <button
               type="button"
               onClick={clearConversation}
-              className="p-2 rounded-xl border border-thea-border text-slate-400 hover:text-rose-400 hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+              className="p-2 rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer active:scale-95"
               title="Reiniciar chat"
             >
               <Trash2 className="w-4 h-4" />
@@ -159,7 +159,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
               <button
                 type="button"
                 onClick={onOpenAISettings}
-                className="p-2 rounded-xl border border-thea-border text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+                className="p-2 rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer active:scale-95"
                 title="Configuración de IA"
               >
                 <Settings2 className="w-4 h-4" />
@@ -180,8 +180,8 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
               <div
                 className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
                   msg.sender === 'thea'
-                    ? 'bg-gradient-to-tr from-cyan-600 to-teal-600 text-white shadow-md'
-                    : 'bg-indigo-700 text-white shadow-md'
+                    ? 'bg-white/[0.05] border border-white/10 text-zinc-200'
+                    : 'bg-white text-zinc-950 font-bold'
                 }`}
               >
                 {msg.sender === 'thea' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
@@ -190,15 +190,15 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
               <div
                 className={`rounded-2xl p-4 shadow-sm text-xs sm:text-sm leading-relaxed ${
                   msg.sender === 'user'
-                    ? 'bg-gradient-to-tr from-violet-600 to-indigo-600 text-white rounded-tr-none'
-                    : 'bg-thea-surfaceLight/80 border border-thea-border/70 text-slate-200 rounded-tl-none shadow-md backdrop-blur-sm'
+                    ? 'bg-violet-900/30 border border-violet-500/25 text-zinc-100 rounded-tr-none'
+                    : 'bg-white/[0.03] border border-white/[0.08] text-zinc-200 rounded-tl-none shadow-md backdrop-blur-sm'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4 mb-1.5 text-[10px] opacity-70">
                   <span className="font-semibold uppercase tracking-wider">
                     {msg.sender === 'thea' ? 'Tutor Thea' : 'Tú'}
                   </span>
-                  <span>{msg.timestamp}</span>
+                  <span className="font-mono tabular-nums">{msg.timestamp}</span>
                 </div>
 
                 <FormattedText text={msg.text} />
@@ -208,14 +208,14 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
 
           {isTyping && (
             <div className="flex gap-3 max-w-[80%] animate-fadeIn">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-600 flex items-center justify-center text-white shrink-0 shadow-md">
+              <div className="w-8 h-8 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center text-zinc-200 shrink-0">
                 <Bot className="w-4 h-4" />
               </div>
-              <div className="bg-thea-surfaceLight/80 border border-thea-border/70 rounded-2xl rounded-tl-none p-3.5 flex items-center gap-2 shadow-sm">
-                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" />
-                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.2s]" />
-                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.4s]" />
-                <span className="text-xs text-slate-400 ml-1">Redactando explicación...</span>
+              <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl rounded-tl-none p-3.5 flex items-center gap-2 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-zinc-400 animate-bounce" />
+                <div className="w-2 h-2 rounded-full bg-zinc-400 animate-bounce [animation-delay:0.2s]" />
+                <div className="w-2 h-2 rounded-full bg-zinc-400 animate-bounce [animation-delay:0.4s]" />
+                <span className="text-xs text-zinc-400 ml-1">Redactando explicación...</span>
               </div>
             </div>
           )}
@@ -224,14 +224,14 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
         </div>
 
         {/* Sugerencias Rápidas de Estudio */}
-        <div className="px-4 py-2 border-t border-thea-border/40 bg-thea-surfaceLight/20 flex gap-2 overflow-x-auto scrollbar-none shrink-0">
+        <div className="px-4 py-2 border-t border-white/[0.06] bg-white/[0.015] flex gap-2 overflow-x-auto scrollbar-none shrink-0">
           {quickPrompts.map((item, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => handleSend(item.text)}
               disabled={isTyping}
-              className="text-xs bg-thea-surfaceLight/70 hover:bg-thea-surfaceLight border border-thea-border/70 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 disabled:opacity-40"
+              className="text-xs bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.08] text-zinc-300 hover:text-white px-3 py-1.5 rounded-xl whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 disabled:opacity-40 active:scale-[0.985]"
             >
               {item.icon}
               <span>{item.text}</span>
@@ -245,19 +245,19 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
             e.preventDefault();
             handleSend(input);
           }}
-          className="flex items-center gap-2 p-3 bg-thea-surfaceLight/50 border-t border-thea-border/70 shrink-0"
+          className="flex items-center gap-2 p-3 bg-white/[0.02] border-t border-white/[0.06] shrink-0"
         >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Escribe tu consulta o pide una explicación detallada sobre el material..."
-            className="flex-1 bg-thea-bg/90 border border-thea-border rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="flex-1 bg-[#090314]/90 border border-white/[0.08] rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
           />
           <button
             type="submit"
             disabled={!input.trim() || isTyping}
-            className="p-2.5 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold transition-all disabled:opacity-40 cursor-pointer shadow-md shadow-cyan-900/20 active:scale-95"
+            className="p-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold transition-all disabled:opacity-40 cursor-pointer shadow-md active:scale-95"
             title="Enviar mensaje"
           >
             <Send className="w-4 h-4" />

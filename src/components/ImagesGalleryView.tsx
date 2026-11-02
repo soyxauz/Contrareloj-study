@@ -229,17 +229,17 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
 
       {/* Empty State */}
       {assets.length === 0 ? (
-        <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl bg-thea-surface border border-thea-border text-center space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-thea-surfaceLight border border-thea-border flex items-center justify-center text-slate-500">
+        <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] text-center space-y-4 shadow-xl backdrop-blur-xl">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500">
             <ImageIcon className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-white">No hay imágenes en este kit</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <h3 className="text-base font-bold text-white tracking-tight">No hay imágenes en este kit</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
               Las figuras, diagramas y tablas se extraen automáticamente de archivos PDF, Word (DOCX) y presentaciones PowerPoint (PPTX) que contienen recursos visuales.
             </p>
           </div>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-zinc-500">
             Si subes un archivo con esquemas o gráficos, aparecerán organizados y listos para consulta aquí.
           </p>
         </div>
@@ -261,10 +261,10 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                     loadSingleAsset(asset.id);
                   }
                 }}
-                className="group bg-thea-surface border border-thea-border rounded-2xl overflow-hidden hover:border-violet-500/50 hover:shadow-xl hover:shadow-violet-950/20 transition-all cursor-pointer flex flex-col"
+                className="group bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-white/25 hover:shadow-2xl hover:scale-[1.015] active:scale-[0.985] transition-all duration-200 cursor-pointer flex flex-col backdrop-blur-xl"
               >
                 {/* Image Box */}
-                <div className="relative aspect-video bg-black/40 overflow-hidden flex items-center justify-center p-2 border-b border-thea-border/40">
+                <div className="relative aspect-video bg-black/40 overflow-hidden flex items-center justify-center p-2 border-b border-white/[0.06]">
                   {asset.dataUrl ? (
                     <img
                       src={asset.dataUrl}
@@ -273,12 +273,12 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                       loading="lazy"
                     />
                   ) : isAssetLoading ? (
-                    <div className="flex flex-col items-center justify-center gap-2 p-4 text-violet-400 animate-pulse">
-                      <Loader2 className="w-6 h-6 animate-spin text-violet-400" />
-                      <span className="text-[10px] font-medium text-slate-300">Cargando desde Drive...</span>
+                    <div className="flex flex-col items-center justify-center gap-2 p-4 text-zinc-300 animate-pulse">
+                      <Loader2 className="w-6 h-6 animate-spin text-zinc-300" />
+                      <span className="text-[10px] font-medium text-zinc-400">Cargando desde Drive...</span>
                     </div>
                   ) : (
-                    <div className="text-slate-500 flex flex-col items-center gap-1.5 p-2 text-center">
+                    <div className="text-zinc-500 flex flex-col items-center gap-1.5 p-2 text-center">
                       <ImageIcon className="w-7 h-7 opacity-40" />
                       <span className="text-[10px]">Sin previsualización</span>
                       <button
@@ -287,7 +287,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                           e.stopPropagation();
                           loadSingleAsset(asset.id);
                         }}
-                        className="text-[9px] px-2 py-0.5 rounded bg-violet-600/30 text-violet-300 hover:bg-violet-600 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+                        className="text-[9px] px-2 py-0.5 rounded bg-white/[0.05] text-zinc-300 hover:bg-white/10 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
                       >
                         <RefreshCw className="w-2.5 h-2.5" />
                         <span>Cargar</span>
@@ -298,19 +298,19 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                   {/* Hover Overlay with Zoom Icon */}
                   {asset.dataUrl && (
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="w-9 h-9 rounded-full bg-violet-600/90 text-white flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                      <div className="w-9 h-9 rounded-full bg-white text-zinc-950 flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
                         <ZoomIn className="w-4 h-4" />
                       </div>
                     </div>
                   )}
 
                   {/* Page/Slide Badge */}
-                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-slate-200">
+                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-zinc-200 tabular-nums">
                     {pageInfo}
                   </span>
 
                   {/* Type Badge */}
-                  <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-violet-950/80 border border-violet-500/40 text-violet-300 flex items-center gap-1">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/[0.08] border border-white/15 text-zinc-300 flex items-center gap-1 absolute top-2 right-2">
                     {isImage ? <ImageIcon className="w-3 h-3" /> : <TableIcon className="w-3 h-3" />}
                     <span>{isImage ? 'Figura' : 'Tabla'}</span>
                   </span>
@@ -318,10 +318,10 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
 
                 {/* Caption Footer */}
                 <div className="p-3.5 flex-1 flex flex-col justify-between">
-                  <p className="text-xs text-slate-300 font-medium line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-zinc-300 font-medium line-clamp-2 leading-relaxed">
                     {asset.caption || `Figura ${index + 1} extraída del material`}
                   </p>
-                  <span className="text-[10px] text-violet-400 mt-2 font-semibold flex items-center gap-1">
+                  <span className="text-[10px] text-zinc-400 mt-2 font-semibold flex items-center gap-1">
                     {asset.dataUrl ? (
                       <>
                         <ZoomIn className="w-3 h-3" />

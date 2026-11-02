@@ -18,24 +18,24 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
   onSelectOption,
 }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 mb-6 sm:mb-8">
       {safeOptions.map((option, idx) => {
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
 
-        let cardClasses = 'bg-thea-surface/90 border border-thea-border hover:border-violet-500/50 hover:bg-thea-surfaceLight text-slate-200 glass-specular hover:translate-y-[-1px]';
-        let badgeClasses = 'bg-thea-surfaceLight text-violet-200 border border-thea-border/80';
+        let cardClasses = 'bg-white/[0.025] hover:bg-white/[0.05] border border-white/[0.08] hover:border-white/20 text-slate-200 glass-specular hover:-translate-y-0.5';
+        let badgeClasses = 'bg-white/[0.05] text-slate-300 border border-white/[0.1]';
 
         if (isAnswered) {
           if (isCorrect) {
-            cardClasses = 'border-2 border-emerald-500 bg-emerald-950/80 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] ring-1 ring-emerald-500/40 animate-cardCorrect';
-            badgeClasses = 'bg-emerald-500 text-white scale-105';
+            cardClasses = 'border border-emerald-500/60 bg-emerald-500/10 text-white shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/30 animate-cardCorrect';
+            badgeClasses = 'bg-emerald-500 text-zinc-950 font-bold border border-emerald-400';
           } else if (isSelected) {
-            cardClasses = 'border-2 border-rose-500 bg-rose-950/60 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] ring-1 ring-rose-500/40 animate-cardError';
-            badgeClasses = 'bg-rose-500 text-white scale-105';
+            cardClasses = 'border border-rose-500/60 bg-rose-500/10 text-white shadow-lg shadow-rose-950/30 ring-1 ring-rose-500/30 animate-cardError';
+            badgeClasses = 'bg-rose-500 text-white font-bold border border-rose-400';
           } else {
-            cardClasses = 'border border-thea-border bg-thea-surface/90 text-slate-400 opacity-60';
-            badgeClasses = 'bg-thea-surfaceLight text-violet-300/60';
+            cardClasses = 'border border-white/[0.05] bg-white/[0.01] text-slate-500 opacity-40';
+            badgeClasses = 'bg-white/[0.03] text-slate-600 border border-white/[0.05]';
           }
         }
 
@@ -44,15 +44,15 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
             key={idx}
             type="button"
             disabled={isAnswered}
-            style={{ animationDelay: `${idx * 40}ms` }}
+            style={{ animationDelay: `${idx * 30}ms` }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`animate-stagger-item active-press-card w-full text-left p-4 sm:p-5 rounded-2xl transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out flex items-center gap-3.5 sm:gap-4 group cursor-pointer ${cardClasses}`}
+            className={`animate-stagger-item active-press w-full text-left p-4 sm:p-5 rounded-2xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center gap-3.5 sm:gap-4 group cursor-pointer ${cardClasses}`}
           >
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 tabular-nums transition-[transform,background-color] duration-150 ${badgeClasses}`}>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 tabular-nums transition-[transform,background-color,border-color] duration-150 shadow-sm ${badgeClasses}`}>
               {isAnswered && isCorrect ? (
                 <Check className="w-4 h-4 stroke-[3]" />
               ) : isAnswered && isSelected ? (
@@ -61,7 +61,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
                 <span>{idx + 1}</span>
               )}
             </div>
-            <span className="font-medium text-sm sm:text-base leading-snug flex-1">
+            <span className="font-medium text-sm sm:text-base leading-snug flex-1 text-slate-200 group-hover:text-white transition-colors">
               <FormattedText text={option} inlineOnly={true} />
             </span>
           </button>

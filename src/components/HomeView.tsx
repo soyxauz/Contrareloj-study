@@ -488,94 +488,30 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
           </div>
         </div>
 
-        {/* ── Micro-Tarjetas de Telemetría Studio (Linear Studio Style) ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {/* Card 1: Racha */}
-          <div className="p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.07] hover:border-white/15 transition-colors duration-200 relative overflow-hidden group">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">
-                Racha Activa
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <Flame className="w-3.5 h-3.5 fill-amber-500/30" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold tracking-tight text-white tabular-nums">
-                {globalStats.realStreakDays}
-              </span>
-              <span className="text-xs text-slate-400 font-medium">
-                {globalStats.realStreakDays === 1 ? 'día' : 'días'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              {globalStats.realStreakDays > 0 ? 'Constancia diaria activa' : 'Comienza una sesión hoy'}
-            </p>
+        {/* ── Metadata Ribbon Minimalista (Estilo Linear / Apple Studio) ── */}
+        <div className="flex items-center gap-4 sm:gap-6 py-2 text-xs text-slate-400 overflow-x-auto scrollbar-none tabular-nums border-b border-white/[0.06] pb-3 mb-5">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Flame className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-semibold text-slate-200">{globalStats.realStreakDays} {globalStats.realStreakDays === 1 ? 'día' : 'días'}</span>
+            <span className="text-[11px] text-slate-500 font-normal">racha</span>
           </div>
-
-          {/* Card 2: Preguntas */}
-          <div className="p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.07] hover:border-white/15 transition-colors duration-200 relative overflow-hidden group">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">
-                Preguntas
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                <Brain className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold tracking-tight text-white tabular-nums">
-                {globalStats.totalQuestions}
-              </span>
-              <span className="text-xs text-slate-400 font-medium">en libros</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Banco activo de reactivos
-            </p>
+          <span className="text-white/20 shrink-0">·</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Brain className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-semibold text-slate-200">{globalStats.totalQuestions}</span>
+            <span className="text-[11px] text-slate-500 font-normal">preguntas</span>
           </div>
-
-          {/* Card 3: Flashcards */}
-          <div className="p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.07] hover:border-white/15 transition-colors duration-200 relative overflow-hidden group">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">
-                Flashcards
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400">
-                <Layers className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold tracking-tight text-white tabular-nums">
-                {globalStats.totalFlashcardsMastered}
-              </span>
-              <span className="text-xs text-slate-400 font-medium">
-                / {globalStats.totalFlashcards}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Fichas dominadas con Spaced Repetition
-            </p>
+          <span className="text-white/20 shrink-0">·</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-semibold text-slate-200">{globalStats.totalFlashcardsMastered}/{globalStats.totalFlashcards}</span>
+            <span className="text-[11px] text-slate-500 font-normal">flashcards</span>
           </div>
-
-          {/* Card 4: Study Kits Activos */}
-          <div className="p-4 rounded-2xl bg-white/[0.025] hover:bg-white/[0.04] border border-white/[0.07] hover:border-white/15 transition-colors duration-200 relative overflow-hidden group">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">
-                Biblioteca
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                <Trophy className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold tracking-tight text-white tabular-nums">
-                {kits.length}
-              </span>
-              <span className="text-xs text-slate-400 font-medium">kits activos</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Temas y materias disponibles
-            </p>
+          <span className="text-white/20 shrink-0">·</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Trophy className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-semibold text-slate-200">{kits.length}</span>
+            <span className="text-[11px] text-slate-500 font-normal">kits activos</span>
           </div>
         </div>
       </section>
@@ -1471,7 +1407,6 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
           ) : (
             <div className="space-y-2.5">
               {activeMaterias.map(m => {
-                const pal = OPAQUE_DARK_PALETTES[m.colorId] || OPAQUE_DARK_PALETTES.slate;
                 const isEditing = editingMateriaName === m.name;
 
                 if (isEditing) {
@@ -1533,15 +1468,10 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                     className="p-3 rounded-xl border border-white/[0.08] bg-white/[0.03] flex items-center justify-between transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span
-                        className="w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: pal.hex }}
-                        title={pal.name}
-                      />
                       <span className="text-xs sm:text-sm font-semibold text-white truncate">
                         {m.name}
                       </span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${pal.badgeBgClass} ${pal.badgeTextClass} border ${pal.badgeBorderClass}`}>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-white/[0.05] text-slate-400 border border-white/[0.08] tabular-nums">
                         {m.count} {m.count === 1 ? 'kit' : 'kits'}
                       </span>
                     </div>
@@ -1675,7 +1605,6 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
               </label>
               <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
                 {availableMaterias.map(m => {
-                  const pal = getMateriaTheme(m.name, kits, userId);
                   const isSelected = selectedTarget.toLowerCase() === m.name.toLowerCase();
                   return (
                     <button
@@ -1689,14 +1618,10 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span
-                          className="w-3 h-3 rounded-full shrink-0"
-                          style={{ backgroundColor: pal.hex }}
-                        />
                         <span className="text-xs sm:text-sm font-semibold text-white">
                           {m.name}
                         </span>
-                        <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${pal.badgeBgClass} ${pal.badgeTextClass} border ${pal.badgeBorderClass}`}>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-white/[0.05] text-slate-400 border border-white/[0.08] tabular-nums">
                           {m.count} {m.count === 1 ? 'kit' : 'kits'}
                         </span>
                       </div>
@@ -1781,7 +1706,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isCreatingNew && !newMateriaInput.trim()}
-            className="px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white transition-colors cursor-pointer flex items-center gap-1.5"
+            className="active-press px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white hover:bg-zinc-200 text-zinc-950 disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1.5 shadow-md"
           >
             <Check className="w-4 h-4" />
             <span>Guardar Cambios</span>

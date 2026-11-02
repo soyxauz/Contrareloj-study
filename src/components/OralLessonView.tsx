@@ -909,14 +909,14 @@ Reglas obligatorias estrictas:
           )}
 
           {/* Interruptor de Modo: Examen Oral vs Conversación */}
-          <div className="flex items-center p-0.5 rounded-xl bg-thea-surface/90 border border-thea-border/80 shadow-inner">
+          <div className="flex items-center p-0.5 rounded-xl bg-white/[0.025] border border-white/[0.08] shadow-inner">
             <button
               type="button"
               onClick={() => handleModeChange('exam')}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 mode === 'exam'
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white/10 text-white font-bold border border-white/10 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               Examen Oral
@@ -926,8 +926,8 @@ Reglas obligatorias estrictas:
               onClick={() => handleModeChange('conversation')}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 mode === 'conversation'
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white/10 text-white font-bold border border-white/10 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               Conversación
@@ -935,7 +935,7 @@ Reglas obligatorias estrictas:
           </div>
 
           <div className="hidden lg:block">
-            <span className="text-xs text-slate-400 truncate max-w-[180px] inline-block align-middle font-medium">
+            <span className="text-xs text-zinc-400 truncate max-w-[180px] inline-block align-middle font-medium">
               {kit.title}
             </span>
           </div>
@@ -950,10 +950,10 @@ Reglas obligatorias estrictas:
               if (voiceOn) stopSpeaking();
               setVoiceOn((v) => !v);
             }}
-            className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+            className={`p-1.5 rounded-xl border transition-all cursor-pointer active:scale-95 ${
               voiceOn
-                ? 'border-violet-500/50 text-violet-300 bg-violet-600/20'
-                : 'border-thea-border text-slate-400 hover:text-white'
+                ? 'border-white/20 text-white bg-white/10 shadow-sm'
+                : 'border-white/[0.08] text-zinc-400 hover:text-white bg-white/[0.025]'
             }`}
             title={voiceOn ? 'Respuesta hablada activa' : 'Activar respuesta hablada'}
           >
@@ -964,7 +964,7 @@ Reglas obligatorias estrictas:
           <button
             type="button"
             onClick={clearConversation}
-            className="p-1.5 rounded-xl border border-thea-border text-slate-400 hover:text-rose-400 hover:bg-thea-surface transition-colors cursor-pointer"
+            className="p-1.5 rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer active:scale-95"
             title={mode === 'exam' ? 'Reiniciar examen oral' : 'Reiniciar conversación'}
           >
             <RotateCcw className="w-4 h-4" />
@@ -1010,8 +1010,8 @@ Reglas obligatorias estrictas:
       <main className="flex-1 flex flex-col items-center justify-center text-center px-4 relative my-auto">
         {/* Subtítulo dinámico / Pregunta actual de Thea */}
         <div className="w-full max-w-xl mx-auto mb-8 sm:mb-12 transition-all duration-300">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-600/15 border border-violet-500/30 text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-3">
-            <Bot className="w-3.5 h-3.5 text-violet-400" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 text-[11px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
+            <Bot className="w-3.5 h-3.5 text-zinc-300" />
             <span>
               {isInterrupted
                 ? 'Pausado: escuchando tu interrupción...'
@@ -1031,10 +1031,10 @@ Reglas obligatorias estrictas:
             </span>
           </div>
 
-          <div className="text-base sm:text-xl text-slate-100 font-medium leading-relaxed drop-shadow-sm min-h-[3rem] flex items-center justify-center">
+          <div className="text-base sm:text-xl text-zinc-100 font-medium leading-relaxed drop-shadow-sm min-h-[3rem] flex items-center justify-center">
             {isTyping ? (
-              <div className="flex items-center gap-2 text-violet-300 text-sm animate-pulse">
-                <Sparkles className="w-4 h-4 animate-spin text-cyan-400" />
+              <div className="flex items-center gap-2 text-zinc-300 text-sm animate-pulse">
+                <Sparkles className="w-4 h-4 animate-spin text-zinc-200" />
                 <span>
                   {mode === 'exam'
                     ? 'Thea está formulando tu siguiente pregunta...'
@@ -1044,7 +1044,7 @@ Reglas obligatorias estrictas:
             ) : latestTheaMsg ? (
               <FormattedText text={latestTheaMsg.text} />
             ) : (
-              <span>
+              <span className="text-zinc-400">
                 {mode === 'exam'
                   ? 'Pulsa el micrófono para iniciar tu lección oral.'
                   : 'Pulsa el micrófono para comenzar la conversación.'}
@@ -1055,31 +1055,24 @@ Reglas obligatorias estrictas:
 
         {/* ── HERO CONTROLLER: MICRÓFONO CENTRAL MINIMALISTA Y ATRACTIVO ── */}
         <div className="relative flex items-center justify-center my-4">
-          {/* Anillos de ondas sonoras cuando está escuchando, interrumpiendo o hablando */}
+          {/* Anillos sutiles cuando está escuchando o hablando */}
           {isInterrupted && (
-            <>
-              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-amber-500/20 animate-ping pointer-events-none duration-1000" />
-              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-amber-500/40 animate-pulse pointer-events-none" />
-            </>
+            <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-amber-500/10 animate-ping pointer-events-none duration-1000" />
           )}
 
           {listening && (
             <>
-              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-rose-500/15 animate-ping pointer-events-none duration-1000" />
-              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-rose-500/30 animate-pulse pointer-events-none" />
-              <span className="absolute w-60 h-60 sm:w-72 sm:h-72 rounded-full border border-rose-500/15 pointer-events-none" />
+              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-rose-500/10 animate-ping pointer-events-none duration-1000" />
+              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-rose-500/20 animate-pulse pointer-events-none" />
             </>
           )}
 
           {speaking && !isInterrupted && (
-            <>
-              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-violet-500/20 animate-pulse pointer-events-none duration-700" />
-              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-violet-500/35 animate-ping pointer-events-none duration-1000" />
-            </>
+            <span className="absolute w-48 h-48 sm:w-60 sm:h-60 rounded-full border border-violet-500/25 animate-pulse pointer-events-none duration-700" />
           )}
 
           {isTyping && (
-            <span className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full border-2 border-cyan-400/40 border-t-cyan-400 animate-spin pointer-events-none" />
+            <span className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full border-2 border-white/20 border-t-white animate-spin pointer-events-none" />
           )}
 
           {/* Botón Central Heroico */}
@@ -1096,18 +1089,18 @@ Reglas obligatorias estrictas:
             }}
             disabled={!canListen || isTyping || transcribing}
             style={(listening || isInterrupted) && useWhisper ? { transform: `scale(${1 + micLevel * 0.12})` } : undefined}
-            className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_15px_50px_rgba(0,0,0,0.6)] ${
+            className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_16px_50px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.15)] ${
               isInterrupted
-                ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-slate-950 ring-8 ring-amber-400/40 scale-105 shadow-[0_0_80px_rgba(245,158,11,0.5)]'
+                ? 'bg-gradient-to-b from-[#241315] via-[#1a0c0e] to-[#0f0607] text-amber-200 ring-4 ring-amber-500/30 scale-105 shadow-[0_0_50px_rgba(245,158,11,0.3)]'
                 : listening
-                ? 'bg-gradient-to-tr from-rose-600 via-red-600 to-rose-700 text-white ring-8 ring-rose-500/30 scale-105 shadow-[0_0_80px_rgba(244,63,94,0.45)]'
+                ? 'bg-gradient-to-b from-[#260e15] via-[#1c080e] to-[#120408] text-white ring-4 ring-rose-500/30 scale-105 shadow-[0_0_50px_rgba(244,63,94,0.3)]'
                 : speaking
-                ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-slate-950 ring-8 ring-amber-500/30 shadow-[0_0_80px_rgba(245,158,11,0.4)] active:scale-95'
+                ? 'bg-gradient-to-b from-[#1b142e] via-[#110c22] to-[#0b0718] text-zinc-100 ring-4 ring-violet-500/30 shadow-[0_0_50px_rgba(139,92,246,0.3)] active:scale-95'
                 : transcribing
-                ? 'bg-gradient-to-tr from-cyan-700 via-indigo-700 to-violet-800 text-white ring-8 ring-cyan-500/20 shadow-[0_0_60px_rgba(6,182,212,0.3)]'
+                ? 'bg-gradient-to-b from-[#141b2c] via-[#0d1220] to-[#070b15] text-white ring-4 ring-white/10'
                 : isTyping
-                ? 'bg-gradient-to-tr from-violet-700 via-indigo-700 to-cyan-800 text-white ring-8 ring-cyan-500/20 shadow-[0_0_60px_rgba(6,182,212,0.3)]'
-                : 'bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-800 hover:from-violet-500 hover:via-indigo-500 hover:to-purple-700 text-white ring-8 ring-violet-500/20 hover:ring-violet-500/40 active:scale-95 shadow-[0_0_70px_rgba(139,92,246,0.35)]'
+                ? 'bg-gradient-to-b from-[#181129] via-[#0f0a1d] to-[#0a0515] text-white ring-4 ring-white/10'
+                : 'bg-gradient-to-b from-[#181129] via-[#0f0a1d] to-[#0a0515] hover:from-[#201736] border border-white/20 text-white ring-4 ring-white/[0.05] hover:ring-white/[0.12] active:scale-95'
             } disabled:opacity-40 disabled:cursor-not-allowed`}
             title={
               transcribing
@@ -1127,36 +1120,36 @@ Reglas obligatorias estrictas:
           >
             {isInterrupted ? (
               <>
-                <Mic className="w-8 h-8 sm:w-10 sm:h-10 text-slate-950 animate-bounce" />
-                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest text-slate-950">
+                <Mic className="w-8 h-8 sm:w-10 sm:h-10 text-amber-300 animate-bounce" />
+                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-amber-300">
                   Oyéndote
                 </span>
               </>
             ) : listening ? (
               <>
                 <Square className="w-8 h-8 sm:w-10 sm:h-10 fill-white text-white" />
-                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
+                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-white">
                   Detener
                 </span>
               </>
             ) : speaking ? (
               <>
-                <VolumeX className="w-8 h-8 sm:w-10 sm:h-10" />
-                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
+                <VolumeX className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-white">
                   Callar
                 </span>
               </>
             ) : transcribing ? (
               <>
-                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-cyan-300" />
-                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest text-cyan-300">
+                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
+                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-zinc-300">
                   Transcribiendo
                 </span>
               </>
             ) : isTyping ? (
               <>
-                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin" />
-                <span className="text-[10px] sm:text-xs font-black mt-2 uppercase tracking-widest">
+                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
+                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-zinc-300">
                   Pensando
                 </span>
               </>

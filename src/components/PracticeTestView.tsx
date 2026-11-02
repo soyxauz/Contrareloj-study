@@ -204,45 +204,45 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
 
           {/* Formato de Preguntas */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
               Formato de Preguntas:
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
                 type="button"
                 onClick={() => setFormatPreference('all')}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                className={`active-press p-3.5 rounded-2xl border text-left transition-all ${
                   formatPreference === 'all'
-                    ? 'bg-violet-600 border-violet-500 text-white shadow-md shadow-violet-900/30'
-                    : 'bg-thea-surfaceLight border-thea-border text-slate-300 hover:border-violet-400'
+                    ? 'bg-white/[0.12] border-white/25 text-white shadow-sm ring-1 ring-white/15'
+                    : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
                 }`}
               >
                 <div className="text-xs font-bold mb-0.5">Formato Mixto</div>
-                <div className="text-[11px] opacity-80">Opción Múltiple + Abiertas Cortas</div>
+                <div className="text-[11px] opacity-70">Opción Múltiple + Abiertas Cortas</div>
               </button>
               <button
                 type="button"
                 onClick={() => setFormatPreference('multiple-choice')}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                className={`active-press p-3.5 rounded-2xl border text-left transition-all ${
                   formatPreference === 'multiple-choice'
-                    ? 'bg-violet-600 border-violet-500 text-white shadow-md shadow-violet-900/30'
-                    : 'bg-thea-surfaceLight border-thea-border text-slate-300 hover:border-violet-400'
+                    ? 'bg-white/[0.12] border-white/25 text-white shadow-sm ring-1 ring-white/15'
+                    : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
                 }`}
               >
                 <div className="text-xs font-bold mb-0.5">Solo Opción Múltiple</div>
-                <div className="text-[11px] opacity-80">4 alternativas con discriminación fina</div>
+                <div className="text-[11px] opacity-70">4 alternativas con discriminación fina</div>
               </button>
               <button
                 type="button"
                 onClick={() => setFormatPreference('short-answer')}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                className={`active-press p-3.5 rounded-2xl border text-left transition-all ${
                   formatPreference === 'short-answer'
-                    ? 'bg-violet-600 border-violet-500 text-white shadow-md shadow-violet-900/30'
-                    : 'bg-thea-surfaceLight border-thea-border text-slate-300 hover:border-violet-400'
+                    ? 'bg-white/[0.12] border-white/25 text-white shadow-sm ring-1 ring-white/15'
+                    : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
                 }`}
               >
                 <div className="text-xs font-bold mb-0.5">Respuestas Abiertas Cortas</div>
-                <div className="text-[11px] opacity-80">Evaluación conceptual con IA</div>
+                <div className="text-[11px] opacity-70">Evaluación conceptual con IA</div>
               </button>
             </div>
           </div>
@@ -250,7 +250,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
           {/* Número de Preguntas */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                 Número de Preguntas:
               </label>
             </div>
@@ -260,10 +260,10 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                   key={count}
                   type="button"
                   onClick={() => setQuestionCount(count)}
-                  className={`py-3 rounded-2xl border text-sm font-bold transition-all ${
+                  className={`active-press py-3 rounded-2xl border text-sm font-semibold transition-all tabular-nums ${
                     questionCount === count
-                      ? 'bg-violet-600 border-violet-500 text-white shadow-md shadow-violet-900/30'
-                      : 'bg-thea-surfaceLight border-thea-border text-slate-300 hover:border-violet-400'
+                      ? 'bg-white text-zinc-950 font-bold border-white shadow-md'
+                      : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
                   }`}
                 >
                   {count}
@@ -273,10 +273,10 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
           </div>
 
           {/* Instrucciones Personalizadas */}
-          <div className="p-5 rounded-2xl bg-thea-surfaceLight border border-thea-border">
+          <div className="p-5 rounded-2xl bg-white/[0.025] border border-white/[0.08]">
             <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-violet-400" />
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                 Instrucciones Pedagógicas de Examen:
               </label>
             </div>
@@ -287,13 +287,13 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               type="text"
               value={customInstructions}
               onChange={e => setCustomInstructions(e.target.value)}
-              className="w-full bg-thea-bg border border-thea-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full bg-white/[0.02] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-white/25"
             />
           </div>
 
           {/* Límite de Tiempo */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
               Límite de Tiempo:
             </label>
             <div className="grid grid-cols-4 gap-2.5">
@@ -302,10 +302,10 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                   key={min}
                   type="button"
                   onClick={() => setTimeLimitMinutes(min)}
-                  className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                  className={`active-press py-2.5 rounded-xl border text-xs font-semibold transition-all tabular-nums ${
                     timeLimitMinutes === min
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-thea-surfaceLight border-thea-border text-slate-300 hover:border-indigo-400'
+                      ? 'bg-white/[0.12] border-white/25 text-white shadow-sm ring-1 ring-white/15'
+                      : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
                   }`}
                 >
                   {min} minutos
@@ -319,16 +319,16 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
             <button
               onClick={handleStartTest}
               disabled={isGeneratingTest}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-amber-500 hover:scale-[1.01] transition-all text-white font-extrabold text-base shadow-xl shadow-violet-900/40 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              className="active-press w-full py-4 rounded-2xl bg-white hover:bg-zinc-200 transition-all text-zinc-950 font-bold text-base shadow-xl shadow-black/40 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {isGeneratingTest ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin text-amber-300" />
+                  <Loader2 className="w-5 h-5 animate-spin text-zinc-950" />
                   <span>Diseñando Examen Académico con IA...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-5 h-5 text-amber-300" />
+                  <Sparkles className="w-5 h-5 text-amber-500" />
                   <span>Comenzar Examen ({questionCount} preguntas)</span>
                 </>
               )}
@@ -341,17 +341,17 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
       {testState === 'taking' && currentQ && (
         <div className="space-y-6">
           {/* Barra superior con cronómetro y progreso */}
-          <div className="bg-thea-surface border border-thea-border rounded-2xl p-4 flex items-center justify-between shadow-lg">
+          <div className="bg-white/[0.025] border border-white/[0.08] rounded-2xl p-4 flex items-center justify-between shadow-lg tabular-nums">
             <div className="flex items-center gap-4">
-              <span className="text-sm font-bold text-white">
+              <span className="text-sm font-semibold text-white">
                 Pregunta {currentIdx + 1} de {activeTestQuestions.length}
               </span>
               <button
                 onClick={() => setFlagged(prev => ({ ...prev, [currentIdx]: !prev[currentIdx] }))}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                className={`active-press flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
                   flagged[currentIdx]
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                    : 'bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-white'
+                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                    : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white'
                 }`}
               >
                 <Flag className="w-3.5 h-3.5" />
@@ -359,8 +359,8 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               </button>
             </div>
 
-            <div className="flex items-center gap-2 text-sm font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl">
-              <Clock className="w-4 h-4 animate-pulse" />
+            <div className="flex items-center gap-2 text-sm font-semibold tabular-nums text-white bg-white/[0.04] border border-white/[0.08] px-3.5 py-1.5 rounded-xl shadow-sm">
+              <Clock className="w-4 h-4 text-amber-400" />
               <span>
                 {Math.floor(secondsRemaining / 60)}:
                 {(secondsRemaining % 60).toString().padStart(2, '0')}
@@ -369,15 +369,18 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
           </div>
 
           {/* Tarjeta de la Pregunta */}
-          <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 shadow-xl">
+          <div className="bg-white/[0.025] border border-white/[0.08] rounded-3xl p-6 sm:p-8 shadow-2xl glass-specular">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-violet-950/60 border border-violet-500/30 text-violet-300">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">
                 {currentQ.type === 'short-answer' ? 'Pregunta Abierta Corta' : 'Opción Múltiple'}
               </span>
               {currentQ.topic && (
-                <span className="text-[11px] text-slate-400">
-                  {currentQ.topic}
-                </span>
+                <>
+                  <span className="text-white/20">·</span>
+                  <span className="text-[11px] text-slate-400">
+                    {currentQ.topic}
+                  </span>
+                </>
               )}
             </div>
 
@@ -391,8 +394,8 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
             {/* Renderizado condicional según el tipo de pregunta */}
             {currentQ.type === 'short-answer' ? (
               <div className="space-y-4 mb-8">
-                <div className="p-4 rounded-2xl bg-thea-surfaceLight/50 border border-thea-border">
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08]">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
                     Tu Respuesta Técnica / Explicación:
                   </label>
                   <textarea
@@ -400,9 +403,9 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                     value={String(userAnswers[currentIdx] || '')}
                     onChange={e => setUserAnswers(prev => ({ ...prev, [currentIdx]: e.target.value }))}
                     placeholder="Escribe tu respuesta de forma precisa (2 a 4 oraciones). La IA evaluará la similitud conceptual con el modelo..."
-                    className="w-full bg-thea-bg border border-thea-border rounded-xl p-3.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all resize-y"
+                    className="w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-3.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-white/25 transition-colors resize-y"
                   />
-                  <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400">
+                  <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400 tabular-nums">
                     <span>Sé conciso e incluye términos clave relevantes.</span>
                     <span>{String(userAnswers[currentIdx] || '').trim().split(/\s+/).filter(Boolean).length} palabras</span>
                   </div>
@@ -410,37 +413,40 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               </div>
             ) : (
               <div className="space-y-3 mb-8">
-                {(currentQ.options || []).map((option, optIdx) => (
-                  <button
-                    key={optIdx}
-                    onClick={() => setUserAnswers(prev => ({ ...prev, [currentIdx]: optIdx }))}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 cursor-pointer ${
-                      userAnswers[currentIdx] === optIdx
-                        ? 'border-violet-500 bg-violet-950/40 text-white ring-2 ring-violet-500/30'
-                        : 'border-thea-border bg-thea-surfaceLight/60 text-slate-300 hover:border-violet-500/40'
-                    }`}
-                  >
-                    <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${
-                        userAnswers[currentIdx] === optIdx
-                          ? 'bg-violet-600 text-white'
-                          : 'bg-thea-surface border border-thea-border text-slate-400'
+                {(currentQ.options || []).map((option, optIdx) => {
+                  const isSelected = userAnswers[currentIdx] === optIdx;
+                  return (
+                    <button
+                      key={optIdx}
+                      onClick={() => setUserAnswers(prev => ({ ...prev, [currentIdx]: optIdx }))}
+                      className={`active-press w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 cursor-pointer ${
+                        isSelected
+                          ? 'border-white/30 bg-white/[0.08] text-white ring-1 ring-white/20 glass-specular shadow-sm'
+                          : 'border-white/[0.08] bg-white/[0.025] text-slate-300 hover:border-white/20 hover:bg-white/[0.05] glass-specular'
                       }`}
                     >
-                      {String.fromCharCode(65 + optIdx)}
-                    </div>
-                    <span className="font-medium text-sm sm:text-base">{option}</span>
-                  </button>
-                ))}
+                      <div
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 tabular-nums transition-colors shadow-sm ${
+                          isSelected
+                            ? 'bg-white text-zinc-950 border border-white'
+                            : 'bg-white/[0.04] border border-white/[0.1] text-slate-300'
+                        }`}
+                      >
+                        {String.fromCharCode(65 + optIdx)}
+                      </div>
+                      <span className="font-medium text-sm sm:text-base leading-snug">{option}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 
             {/* Controles de Navegación */}
-            <div className="flex items-center justify-between pt-4 border-t border-thea-border">
+            <div className="flex items-center justify-between pt-4 border-t border-white/[0.08]">
               <button
                 disabled={currentIdx === 0}
                 onClick={() => setCurrentIdx(prev => prev - 1)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                className="active-press flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Anterior</span>
@@ -449,7 +455,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               {currentIdx < activeTestQuestions.length - 1 ? (
                 <button
                   onClick={() => setCurrentIdx(prev => prev + 1)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold shadow-md shadow-violet-900/30 cursor-pointer"
+                  className="active-press flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold shadow-md shadow-black/40 cursor-pointer"
                 >
                   <span>Siguiente</span>
                   <ArrowRight className="w-4 h-4" />
@@ -458,11 +464,11 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                 <button
                   onClick={handleFinishTest}
                   disabled={isEvaluatingAnswers}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-900/40 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="active-press px-6 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-md shadow-black/40 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isEvaluatingAnswers ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                      <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
                       <span>Evaluando con IA...</span>
                     </>
                   ) : (
@@ -474,24 +480,24 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
           </div>
 
           {/* Navegador rápido de preguntas */}
-          <div className="flex flex-wrap gap-2 justify-center p-4 bg-thea-surface rounded-2xl border border-thea-border">
+          <div className="flex flex-wrap gap-2 justify-center p-4 bg-white/[0.025] rounded-2xl border border-white/[0.08] tabular-nums">
             {activeTestQuestions.map((_, idx) => {
               const isAnswered = userAnswers[idx] !== undefined && String(userAnswers[idx]).trim() !== '';
               return (
                 <button
                   key={idx}
                   onClick={() => setCurrentIdx(idx)}
-                  className={`w-8 h-8 rounded-xl font-bold text-xs transition-all relative cursor-pointer ${
-                    currentIdx === idx ? 'ring-2 ring-white scale-110 z-10' : ''
-                  } ${
-                    isAnswered
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-thea-surfaceLight border border-thea-border text-slate-400'
+                  className={`active-press w-8 h-8 rounded-xl font-bold text-xs transition-all relative cursor-pointer ${
+                    currentIdx === idx
+                      ? 'ring-2 ring-white/60 bg-white text-zinc-950 scale-105 shadow-md'
+                      : isAnswered
+                      ? 'bg-white/[0.12] text-white border border-white/20'
+                      : 'bg-white/[0.03] border border-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.06]'
                   }`}
                 >
                   {idx + 1}
                   {flagged[idx] && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full ring-1 ring-thea-bg" />
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full ring-1 ring-black" />
                   )}
                 </button>
               );
