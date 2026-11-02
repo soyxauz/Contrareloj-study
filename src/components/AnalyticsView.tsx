@@ -275,7 +275,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           )}
 
           {/* Tarjeta de Resumen del Libro Activo */}
-          <div className="relative overflow-hidden rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+          <div className="relative overflow-hidden rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${activeKit.color} flex items-center justify-center text-white text-xl font-bold shadow-lg shrink-0`}>
@@ -471,7 +471,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
           {/* ── SUB-PESTAÑA 1: DESGLOSE POR TEMAS REALES DEL LIBRO ─────────────── */}
           {bookSubTab === 'topics' && (
-            <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-3xl p-5 sm:p-7 shadow-xl backdrop-blur-xl">
+            <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-3xl p-5 sm:p-7 shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-5 border-b border-thea-border gap-2">
                 <div>
                   <h3 className="font-bold text-white text-base sm:text-lg flex items-center gap-2">
@@ -867,7 +867,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                             <div className="filter blur-sm select-none opacity-30 pointer-events-none transition-all duration-300 text-sm">
                               <QuestionPrompt text={q.question} topic={q.topic} inlineOnly={true} />
                             </div>
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                               <button
                                 type="button"
                                 onClick={() => setQuestionToUnlock(q)}
@@ -1058,7 +1058,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         typeof document !== 'undefined' &&
         createPortal(
           <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 animate-fadeIn"
             onClick={(e) => {
               if (e.target === e.currentTarget) setQuestionToUnlock(null);
             }}

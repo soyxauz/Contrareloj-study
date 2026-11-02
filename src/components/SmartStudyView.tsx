@@ -3195,7 +3195,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   {showSourceModal && modalChunk && typeof document !== 'undefined' &&
     createPortal(
       <div
-        className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+        className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/85 animate-fadeIn"
         onClick={(e) => {
           if (e.target === e.currentTarget) setShowSourceModal(false);
         }}
@@ -3325,7 +3325,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       {/* Backdrop */}
       <div
         onClick={() => !isGeneratingTargeted && setShowConfigDrawer(false)}
-        className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-black/80 transition-opacity"
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">

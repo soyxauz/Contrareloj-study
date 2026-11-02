@@ -53,12 +53,12 @@ interface CreateStudyKitViewProps {
 }
 
 const SUGGESTED_TOPICS = [
-  'Resistencia bacteriana a antibióticos',
+  'Resistencia bacteriana a antibiÃ³ticos',
   'Contratos mercantiles y responsabilidad civil',
-  'Mecánica cuántica y superposición',
-  'Ciclo de Krebs y fosforilación oxidativa',
+  'MecÃ¡nica cuÃ¡ntica y superposiciÃ³n',
+  'Ciclo de Krebs y fosforilaciÃ³n oxidativa',
   'Estructura del proceso penal acusatorio',
-  'Algoritmos de búsqueda y complejidad Big-O',
+  'Algoritmos de bÃºsqueda y complejidad Big-O',
   'Neurotransmisores y sinapsis neuronal',
 ];
 
@@ -70,9 +70,9 @@ const DEFAULT_FOCUS_AREAS = [
 ];
 
 const TABS: { id: InputTab; label: string; icon: React.ReactNode; description: string }[] = [
-  { id: 'topic', label: 'Crear por Tema', icon: <Compass className="w-5 h-5 text-amber-400" />, description: 'Investigación con evidencia científica generada desde cero con IA' },
+  { id: 'topic', label: 'Crear por Tema', icon: <Compass className="w-5 h-5 text-amber-400" />, description: 'InvestigaciÃ³n con evidencia cientÃ­fica generada desde cero con IA' },
   { id: 'text', label: 'Texto / Notas', icon: <FileText className="w-5 h-5" />, description: 'Pega tus apuntes, notas o cualquier texto' },
-  { id: 'file', label: 'Archivos (Hasta 3)', icon: <Upload className="w-5 h-5" />, description: 'Word, PowerPoint, Excel, OpenDocument, EPUB, PDF, HTML, Imágenes, TXT o CSV' },
+  { id: 'file', label: 'Archivos (Hasta 3)', icon: <Upload className="w-5 h-5" />, description: 'Word, PowerPoint, Excel, OpenDocument, EPUB, PDF, HTML, ImÃ¡genes, TXT o CSV' },
   { id: 'link', label: 'Enlace Web', icon: <Globe className="w-5 h-5" />, description: 'Lector web inteligente sin anuncios ni restricciones CORS' },
   { id: 'youtube', label: 'YouTube', icon: <YoutubeIcon className="w-5 h-5 text-red-500" />, description: 'Extrae contenido de un video de YouTube' },
 ];
@@ -171,7 +171,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       if (onOpenAISettings) {
         onOpenAISettings();
       }
-      setErrorMessage('Debes configurar una clave de API personal (Ollama Cloud, Groq, Gemini, DeepSeek o local) y verificar la conexión para generar nuevos kits de estudio.');
+      setErrorMessage('Debes configurar una clave de API personal (Ollama Cloud, Groq, Gemini, DeepSeek o local) y verificar la conexiÃ³n para generar nuevos kits de estudio.');
       setPhase('error');
       return;
     }
@@ -187,12 +187,12 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       // Step 1: Extract / Research content based on tab
       if (activeTab === 'topic') {
         if (!topicQuery.trim()) throw new Error('Ingresa el tema que deseas investigar para generar el Study Kit.');
-        setProcessStep('Buscando literatura y evidencia científica abierta...');
+        setProcessStep('Buscando literatura y evidencia cientÃ­fica abierta...');
         const researched = await researchTopicAndGenerateKit(topicQuery, topicFocus);
         rawText = researched.text;
         if (!autoTitle) autoTitle = researched.title;
         if (!description) {
-          setDescription(`Dossier de estudio basado en evidencia científica sobre "${autoTitle}".`);
+          setDescription(`Dossier de estudio basado en evidencia cientÃ­fica sobre "${autoTitle}".`);
         }
       } else if (activeTab === 'text') {
         setProcessStep('Procesando apuntes y notas...');
@@ -201,7 +201,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         rawText = textInput;
         if (!autoTitle) autoTitle = textInput.split('\n')[0].slice(0, 60) || 'Mi Material de Estudio';
       } else if (activeTab === 'youtube') {
-        setProcessStep('Extrayendo transcripción del video...');
+        setProcessStep('Extrayendo transcripciÃ³n del video...');
         await delay(300);
         if (!youtubeURL.trim()) throw new Error('Pega la URL del video de YouTube.');
         const yt = await extractFromYouTube(youtubeURL);
@@ -230,7 +230,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           })
         );
 
-        // Deduplicar imágenes solo si coinciden exactamente en longitud y muestras de contenido
+        // Deduplicar imÃ¡genes solo si coinciden exactamente en longitud y muestras de contenido
         const seenSignatures = new Set<string>();
         assetsToUse = allAssets.filter(a => {
           if (!a.dataUrl) return true;
@@ -244,19 +244,19 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         if (!autoTitle && uploadedMaterials[0]) {
           autoTitle = uploadedMaterials.length === 1
             ? uploadedMaterials[0].title
-            : `${uploadedMaterials[0].title} y ${uploadedMaterials.length - 1} más`;
+            : `${uploadedMaterials[0].title} y ${uploadedMaterials.length - 1} mÃ¡s`;
         }
       } else if (activeTab === 'link') {
-        setProcessStep('Rastreando y leyendo página web con Jina AI...');
+        setProcessStep('Rastreando y leyendo pÃ¡gina web con Jina AI...');
         await delay(300);
-        if (!linkURL.trim()) throw new Error('Pega la URL de la página web.');
+        if (!linkURL.trim()) throw new Error('Pega la URL de la pÃ¡gina web.');
         const urlData = await extractFromURL(linkURL);
         rawText = urlData.text;
         if (!autoTitle) autoTitle = urlData.title;
       }
 
       // Step 2: Generate questions
-      setProcessStep('Analizando núcleos pedagógicos y formulando preguntas con sentido...');
+      setProcessStep('Analizando nÃºcleos pedagÃ³gicos y formulando preguntas con sentido...');
       await delay(500);
 
       // Process questions with AI Pedagogical Engine, Multimodal RAG and AI Classification
@@ -292,10 +292,10 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       }
 
       setResult(processed);
-      // Navegación directa e inmediata a Smart Study sin mostrar pantalla intermedia de éxito
+      // NavegaciÃ³n directa e inmediata a Smart Study sin mostrar pantalla intermedia de Ã©xito
       onKitCreated(processed.kit);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Ocurrió un error inesperado al procesar el contenido.';
+      const msg = err instanceof Error ? err.message : 'OcurriÃ³ un error inesperado al procesar el contenido.';
       setErrorMessage(msg);
       setPhase('error');
     }
@@ -307,14 +307,14 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
     const currentCount = uploadedMaterials.length;
     if (currentCount >= 3) {
-      setFileExtractError('Ya has alcanzado el límite máximo de 3 archivos para este Study Kit. Elimina alguno si deseas reemplazarlo.');
+      setFileExtractError('Ya has alcanzado el lÃ­mite mÃ¡ximo de 3 archivos para este Study Kit. Elimina alguno si deseas reemplazarlo.');
       return;
     }
 
     const availableSlots = 3 - currentCount;
     const filesToProcess = filesArray.slice(0, availableSlots);
     if (filesArray.length > availableSlots) {
-      setFileExtractError(`Solo se procesaron los primeros ${availableSlots} archivo(s) para no exceder el límite máximo de 3 archivos por kit.`);
+      setFileExtractError(`Solo se procesaron los primeros ${availableSlots} archivo(s) para no exceder el lÃ­mite mÃ¡ximo de 3 archivos por kit.`);
     } else {
       setFileExtractError('');
     }
@@ -395,7 +395,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
     (activeTab === 'file' && uploadedMaterials.length > 0 && !isExtractingFile) ||
     (activeTab === 'link' && linkURL.trim().length > 10);
 
-  // ── PROCESSING VIEW ──────────────────────────────────
+  // â”€â”€ PROCESSING VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (phase === 'processing') {
     return (
       <div className="max-w-2xl mx-auto px-6 py-20 flex flex-col items-center justify-center gap-6 animate-fadeIn">
@@ -419,13 +419,13 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         </div>
 
         <p className="text-slate-500 text-xs mt-8">
-          Contrareloj Study analiza fuentes científicas y genera evaluaciones con sentido lógico y pedagógico
+          Contrareloj Study analiza fuentes cientÃ­ficas y genera evaluaciones con sentido lÃ³gico y pedagÃ³gico
         </p>
       </div>
     );
   }
 
-  // ── SUCCESS VIEW ──────────────────────────────────
+  // â”€â”€ SUCCESS VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (phase === 'success' && result) {
     return (
       <div className="max-w-2xl mx-auto px-6 py-12 animate-fadeIn">
@@ -434,9 +434,9 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-xl shadow-emerald-900/30">
             <CheckCircle2 className="w-10 h-10 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-white">¡Study Kit Creado!</h2>
+          <h2 className="text-2xl font-bold text-white">Â¡Study Kit Creado!</h2>
           <p className="text-slate-400">
-            &quot;{result.kit.title}&quot; está listo para estudiar
+            &quot;{result.kit.title}&quot; estÃ¡ listo para estudiar
           </p>
         </div>
 
@@ -444,8 +444,8 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           <StatCard icon={<Brain className="w-5 h-5 text-violet-400" />} value={result.stats.questionsGenerated} label="Preguntas" />
           <StatCard icon={<Layers className="w-5 h-5 text-amber-400" />} value={result.stats.flashcardsGenerated > 0 ? result.stats.flashcardsGenerated : 'Bajo demanda'} label="Flashcards" />
-          <StatCard icon={<BookOpen className="w-5 h-5 text-emerald-400" />} value={result.stats.keyTermsExtracted} label="Términos Clave" />
-          <StatCard icon={<Headphones className="w-5 h-5 text-rose-400" />} value={result.kit.podcast ? result.kit.podcast.dialogue.length : 'Bajo demanda'} label="Diálogos Podcast" />
+          <StatCard icon={<BookOpen className="w-5 h-5 text-emerald-400" />} value={result.stats.keyTermsExtracted} label="TÃ©rminos Clave" />
+          <StatCard icon={<Headphones className="w-5 h-5 text-rose-400" />} value={result.kit.podcast ? result.kit.podcast.dialogue.length : 'Bajo demanda'} label="DiÃ¡logos Podcast" />
         </div>
 
         {/* Kit Details */}
@@ -466,7 +466,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-white text-base sm:text-lg">{result.kit.title}</h3>
-              <p className="text-xs text-slate-400">Tema central decidido automáticamente en base al contenido</p>
+              <p className="text-xs text-slate-400">Tema central decidido automÃ¡ticamente en base al contenido</p>
             </div>
           </div>
         </div>
@@ -476,10 +476,10 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           <h4 className="text-sm font-semibold text-slate-300 mb-3">Contenido generado incluido:</h4>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <FeatureItem icon={<Brain className="w-4 h-4 text-violet-400" />} text="Smart Study con preguntas adaptativas" />
-            <FeatureItem icon={<BookOpen className="w-4 h-4 text-emerald-400" />} text="Guía de estudio completa en Markdown" />
+            <FeatureItem icon={<BookOpen className="w-4 h-4 text-emerald-400" />} text="GuÃ­a de estudio completa en Markdown" />
             <FeatureItem icon={<Headphones className="w-4 h-4 text-rose-400" />} text="Podcast de repaso con 2 hosts" />
-            <FeatureItem icon={<MessageSquareText className="w-4 h-4 text-amber-400" />} text="Tutor IA para resolución de dudas" />
-            <FeatureItem icon={<FileCheck2 className="w-4 h-4 text-sky-400" />} text="Exámenes de práctica configurables" />
+            <FeatureItem icon={<MessageSquareText className="w-4 h-4 text-amber-400" />} text="Tutor IA para resoluciÃ³n de dudas" />
+            <FeatureItem icon={<FileCheck2 className="w-4 h-4 text-sky-400" />} text="ExÃ¡menes de prÃ¡ctica configurables" />
             <FeatureItem icon={<Layers className="w-4 h-4 text-fuchsia-400" />} text="Flashcards con tracking de dominio" />
           </div>
         </div>
@@ -504,7 +504,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
     );
   }
 
-  // ── ERROR VIEW ──────────────────────────────────
+  // â”€â”€ ERROR VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (phase === 'error') {
     return (
       <div className="max-w-2xl mx-auto px-6 py-16 flex flex-col items-center justify-center gap-6 animate-fadeIn">
@@ -512,12 +512,12 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           <AlertCircle className="w-10 h-10 text-white" />
         </div>
         <div className="text-center space-y-3">
-          <h2 className="text-xl font-bold text-white">Error de Conexión con el Motor de IA</h2>
+          <h2 className="text-xl font-bold text-white">Error de ConexiÃ³n con el Motor de IA</h2>
           <div className="text-left bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-xs font-mono text-red-200 max-w-lg mx-auto whitespace-pre-line leading-relaxed">
             {errorMessage}
           </div>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Las evaluaciones de Contrareloj Study son generadas de forma exclusivamente coherente por IA, sin utilizar preguntas mecánicas ni distractores sintéticos al azar.
+            Las evaluaciones de Contrareloj Study son generadas de forma exclusivamente coherente por IA, sin utilizar preguntas mecÃ¡nicas ni distractores sintÃ©ticos al azar.
           </p>
           <div className="p-3 bg-violet-950/30 border border-violet-500/30 rounded-xl text-xs text-violet-200 max-w-md mx-auto">
             Puedes reintentar con el motor del servidor o pulsar en <strong>&quot;Configurar IA&quot;</strong> si deseas utilizar tu propia clave de API personal (Google Gemini, Groq, OpenAI, DeepSeek u Ollama local).
@@ -553,7 +553,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
     );
   }
 
-  // ── INPUT VIEW (main) ──────────────────────────────────
+  // â”€â”€ INPUT VIEW (main) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div
       className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fadeIn"
@@ -563,13 +563,13 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       {/* Header */}
       <div className="text-center mb-8">
         <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">
-          INVESTIGACIÓN CIENTÍFICA ACTIVA
+          INVESTIGACIÃ“N CIENTÃFICA ACTIVA
         </span>
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
           Crear Study Kit
         </h1>
         <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-          Ingresa un tema para investigar en internet con base científica, o sube tus archivos Word, PowerPoint, PDF, XML, notas o enlaces.
+          Ingresa un tema para investigar en internet con base cientÃ­fica, o sube tus archivos Word, PowerPoint, PDF, XML, notas o enlaces.
         </p>
       </div>
 
@@ -583,7 +583,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             Generador en Pausa (Opciones en Gris)
           </h2>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-4 leading-relaxed">
-            Todas las opciones están deshabilitadas hasta que ingreses tu API Key personal y se verifique automáticamente con éxito (200 OK). Una vez verificada, ¡volverá todo el color!
+            Todas las opciones estÃ¡n deshabilitadas hasta que ingreses tu API Key personal y se verifique automÃ¡ticamente con Ã©xito (200 OK). Una vez verificada, Â¡volverÃ¡ todo el color!
           </p>
           {onOpenAISettings && (
             <button
@@ -618,7 +618,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       </div>
 
       {/* Tab Content */}
-      <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl p-6 mb-6 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+      <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl p-6 mb-6 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
         <p className="text-xs text-slate-500 mb-4 flex items-center gap-1.5">
           {currentTab?.icon}
           {currentTab?.description}
@@ -633,7 +633,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                 type="text"
                 value={topicQuery}
                 onChange={(e) => setTopicQuery(e.target.value)}
-                placeholder="Escribe el tema a investigar (ej. Resistencia bacteriana a antibióticos, Contratos civiles...)"
+                placeholder="Escribe el tema a investigar (ej. Resistencia bacteriana a antibiÃ³ticos, Contratos civiles...)"
                 className="w-full bg-thea-bg border border-thea-border rounded-xl py-3.5 pl-12 pr-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               {topicQuery && (
@@ -649,7 +649,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             {/* Focus Area Selection */}
             <div>
               <label className="text-xs font-semibold text-slate-400 block mb-2">
-                Área de Enfoque Académico:
+                Ãrea de Enfoque AcadÃ©mico:
               </label>
               <div className="flex flex-wrap gap-2">
                 {focusAreas.map(area => (
@@ -681,14 +681,14 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                     type="button"
                     onClick={() => {
                       setTopicQuery(sug);
-                      if (sug.includes('antibióticos') || sug.includes('Krebs') || sug.includes('neuronal')) {
-                        setTopicFocus('Ciencias Médicas');
+                      if (sug.includes('antibiÃ³ticos') || sug.includes('Krebs') || sug.includes('neuronal')) {
+                        setTopicFocus('Ciencias MÃ©dicas');
                       } else if (sug.includes('contratos') || sug.includes('penal')) {
                         setTopicFocus('Derecho');
-                      } else if (sug.includes('cuántica')) {
-                        setTopicFocus('Ciencias Básicas');
+                      } else if (sug.includes('cuÃ¡ntica')) {
+                        setTopicFocus('Ciencias BÃ¡sicas');
                       } else if (sug.includes('Algoritmos')) {
-                        setTopicFocus('Ingeniería / Tecnología');
+                        setTopicFocus('IngenierÃ­a / TecnologÃ­a');
                       }
                     }}
                     className="px-2.5 py-1 rounded-md bg-thea-bg border border-thea-border/80 text-[11px] text-slate-400 hover:text-white hover:border-violet-500 transition-colors text-left"
@@ -703,8 +703,8 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3.5 flex items-start gap-2.5">
               <Compass className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-200/90 leading-relaxed">
-                <strong className="text-amber-300 font-semibold">Investigación Basada en Evidencia:</strong> Contrareloj Study consulta
-                artículos y fuentes de conocimiento abierto verificadas, analiza los mecanismos reales del tema y sintetiza preguntas con sentido lógico y retroalimentación pedagógica.
+                <strong className="text-amber-300 font-semibold">InvestigaciÃ³n Basada en Evidencia:</strong> Contrareloj Study consulta
+                artÃ­culos y fuentes de conocimiento abierto verificadas, analiza los mecanismos reales del tema y sintetiza preguntas con sentido lÃ³gico y retroalimentaciÃ³n pedagÃ³gica.
               </p>
             </div>
           </div>
@@ -715,7 +715,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           <textarea
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Pega aquí tus apuntes, notas de clase, texto del libro, resumen, o cualquier contenido de estudio...&#10;&#10;Tip: Cuanto más contenido proporciones, más preguntas y flashcards se generarán. Mínimo recomendado: 200 caracteres."
+            placeholder="Pega aquÃ­ tus apuntes, notas de clase, texto del libro, resumen, o cualquier contenido de estudio...&#10;&#10;Tip: Cuanto mÃ¡s contenido proporciones, mÃ¡s preguntas y flashcards se generarÃ¡n. MÃ­nimo recomendado: 200 caracteres."
             className="w-full h-64 bg-thea-bg border border-thea-border rounded-xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y font-mono"
           />
         )}
@@ -736,8 +736,8 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             <div className="bg-thea-bg/50 rounded-xl p-4 border border-thea-border/50 flex items-start gap-2.5">
               <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-500">
-                <strong className="text-slate-400">Consejo:</strong> Si la transcripción automática no está disponible,
-                copia las notas o subtítulos del video y pégalos en la pestaña &quot;Texto / Notas&quot;.
+                <strong className="text-slate-400">Consejo:</strong> Si la transcripciÃ³n automÃ¡tica no estÃ¡ disponible,
+                copia las notas o subtÃ­tulos del video y pÃ©galos en la pestaÃ±a &quot;Texto / Notas&quot;.
               </p>
             </div>
           </div>
@@ -749,10 +749,10 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Upload className="w-4 h-4 text-violet-400" />
-                Materiales de estudio ({uploadedMaterials.length} de 3 máx.)
+                Materiales de estudio ({uploadedMaterials.length} de 3 mÃ¡x.)
               </span>
               <span className="text-[11px] text-slate-400">
-                Puedes combinar de 1 a 3 archivos (PDF, Imágenes, Word, PPTX, TXT)
+                Puedes combinar de 1 a 3 archivos (PDF, ImÃ¡genes, Word, PPTX, TXT)
               </span>
             </div>
 
@@ -772,11 +772,11 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                         <p className="text-sm font-bold text-white truncate">{mat.file.name}</p>
                         <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5 flex-wrap">
                           <span>{(mat.size / 1024).toFixed(1)} KB</span>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span className="text-emerald-400 font-medium">{mat.text.length.toLocaleString()} caracteres</span>
                           {mat.assets.length > 0 && (
                             <>
-                              <span>•</span>
+                              <span>â€¢</span>
                               <span className="text-violet-300 flex items-center gap-1">
                                 <ImageIcon className="w-3 h-3 text-violet-400" />
                                 {mat.assets.length} visual{mat.assets.length !== 1 ? 'es' : ''}
@@ -806,10 +806,10 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                 </div>
                 <p className="text-sm font-semibold text-white">
-                  Límite de 3 archivos alcanzado (3 de 3)
+                  LÃ­mite de 3 archivos alcanzado (3 de 3)
                 </p>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  Cada archivo ha sido analizado separando texto e imágenes. Para añadir o reemplazar un archivo, elimina alguno de la lista superior.
+                  Cada archivo ha sido analizado separando texto e imÃ¡genes. Para aÃ±adir o reemplazar un archivo, elimina alguno de la lista superior.
                 </p>
               </div>
             ) : (
@@ -821,7 +821,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                   <div className="text-center space-y-2">
                     <Loader2 className="w-8 h-8 text-violet-400 animate-spin mx-auto" />
                     <p className="text-sm font-semibold text-violet-300 animate-pulse">
-                      Extrayendo y separando texto e imágenes de los archivos...
+                      Extrayendo y separando texto e imÃ¡genes de los archivos...
                     </p>
                   </div>
                 ) : (
@@ -830,11 +830,11 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                     <div>
                       <p className="text-sm font-semibold text-slate-300 group-hover:text-white transition-colors">
                         {uploadedMaterials.length === 0
-                          ? 'Haz clic o arrastra tus archivos aquí (1 a 3 archivos)'
-                          : `+ Añadir otro archivo (${uploadedMaterials.length} de 3 cargados)`}
+                          ? 'Haz clic o arrastra tus archivos aquÃ­ (1 a 3 archivos)'
+                          : `+ AÃ±adir otro archivo (${uploadedMaterials.length} de 3 cargados)`}
                       </p>
                       <p className="text-xs text-slate-500 mt-1">
-                        PDF, Word (.docx, .doc), PowerPoint (.pptx, .ppt), Excel (.xlsx), OpenDocument (.odt, .odp), EPUB, HTML, Imágenes, TXT, Markdown, CSV
+                        PDF, Word (.docx, .doc), PowerPoint (.pptx, .ppt), Excel (.xlsx), OpenDocument (.odt, .odp), EPUB, HTML, ImÃ¡genes, TXT, Markdown, CSV
                       </p>
                     </div>
                   </div>
@@ -847,7 +847,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
               <div className="bg-red-950/30 border border-red-500/40 rounded-xl p-4 text-xs text-red-200 whitespace-pre-line space-y-2">
                 <div className="flex items-center gap-2 font-bold text-red-400">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>Atención con este archivo</span>
+                  <span>AtenciÃ³n con este archivo</span>
                 </div>
                 <p>{fileExtractError}</p>
               </div>
@@ -865,7 +865,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                     <span>
                       {corpusStats.totalAssets} activos visuales combinados
                     </span>
-                    <span>•</span>
+                    <span>â€¢</span>
                     <span>
                       ~{corpusStats.estimatedQuestions} preguntas estimadas
                     </span>
@@ -906,8 +906,8 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             <div className="bg-thea-bg/50 rounded-xl p-4 border border-thea-border/50 flex items-start gap-2.5">
               <Globe className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-500">
-                <strong className="text-slate-400">Lector Web Potenciado con Jina AI:</strong> Funciona con Wikipedia, artículos científicos,
-                blogs y páginas web públicas. Elimina menús, barras laterales y publicidad automáticamente.
+                <strong className="text-slate-400">Lector Web Potenciado con Jina AI:</strong> Funciona con Wikipedia, artÃ­culos cientÃ­ficos,
+                blogs y pÃ¡ginas web pÃºblicas. Elimina menÃºs, barras laterales y publicidad automÃ¡ticamente.
               </p>
             </div>
           </div>
@@ -918,7 +918,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           <div className="mt-2 flex items-center justify-between text-xs">
             <span className={textInput.length > 200 ? 'text-emerald-400' : 'text-amber-400'}>
               {textInput.length.toLocaleString()} caracteres
-              {textInput.length < 200 && ' (mínimo recomendado: 200)'}
+              {textInput.length < 200 && ' (mÃ­nimo recomendado: 200)'}
             </span>
             <span className="text-slate-500">
               ~{Math.max(1, Math.floor(textInput.length / 500))} preguntas estimadas
@@ -929,7 +929,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
 
       {/* Configuración de Extensión de la Guía de Estudio (3 Niveles) */}
-      <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl p-6 mb-6 space-y-3.5 shadow-xl backdrop-blur-xl">
+      <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl p-6 mb-6 space-y-3.5 shadow-xl">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
             <Sliders className="w-4 h-4 text-zinc-400" />
@@ -938,7 +938,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
           <span className="text-[11px] text-zinc-400 font-medium">Sin límite de caracteres</span>
         </div>
         <p className="text-xs text-zinc-400 leading-relaxed">
-          Elige la profundidad inicial con la que se generará la guía teórica para este kit:
+          Elige la profundidad inicial con la que se generarÃ¡ la guÃ­a teÃ³rica para este kit:
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -947,19 +947,19 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
               id: 'essential' as const,
               name: 'Esencial (1x)',
               badge: 'Concisa',
-              desc: 'Núcleos y definiciones clave para repaso rápido.'
+              desc: 'NÃºcleos y definiciones clave para repaso rÃ¡pido.'
             },
             {
               id: 'complete' as const,
               name: 'Completa (2x)',
               badge: '2x Profundidad',
-              desc: 'Desarrollo sistemático por secciones y tablas.'
+              desc: 'Desarrollo sistemÃ¡tico por secciones y tablas.'
             },
             {
               id: 'ultra' as const,
               name: 'Ultra-Exhaustiva (3x)',
               badge: 'Recomendada',
-              desc: 'Tratado académico sin límites que cubre todo el documento.'
+              desc: 'Tratado acadÃ©mico sin lÃ­mites que cubre todo el documento.'
             }
           ].map(opt => {
             const isSelected = selectedGuideDepth === opt.id;
@@ -991,7 +991,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       </div>
 
       {/* Title & Description (collapsible advanced) */}
-      <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl p-6 mb-6 space-y-4 shadow-xl backdrop-blur-xl">
+      <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl p-6 mb-6 space-y-4 shadow-xl">
         <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
           <FileText className="w-4 h-4 text-zinc-400" />
           Detalles del Kit <span className="text-xs text-zinc-500 font-normal">(opcional)</span>
@@ -1003,14 +1003,14 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             setTitle(e.target.value);
             setIsTitleManuallyEdited(true);
           }}
-          placeholder="Título del Study Kit (la IA decidirá el tema automáticamente si se deja vacío)"
+          placeholder="TÃ­tulo del Study Kit (la IA decidirÃ¡ el tema automÃ¡ticamente si se deja vacÃ­o)"
           className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
         />
         <input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descripción breve (ej: Capítulo 5 del libro de Biología)"
+          placeholder="DescripciÃ³n breve (ej: CapÃ­tulo 5 del libro de BiologÃ­a)"
           className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
         />
       </div>
@@ -1031,14 +1031,14 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
       {/* Info Footer */}
       <p className="text-center text-xs text-zinc-500 mt-4">
-        Todo se procesa localmente en tu navegador — sin subir nada a servidores externos
+        Todo se procesa localmente en tu navegador â€” sin subir nada a servidores externos
       </p>
       </div>
     </div>
   );
 };
 
-// ── Helper Components ──────────────────────────────────
+// â”€â”€ Helper Components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const StatCard: React.FC<{ icon: React.ReactNode; value: number | string; label: string }> = ({ icon, value, label }) => (
   <div className="bg-thea-surface border border-thea-border rounded-xl p-4 flex flex-col items-center gap-2">

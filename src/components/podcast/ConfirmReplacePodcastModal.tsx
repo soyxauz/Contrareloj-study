@@ -19,7 +19,7 @@ export const ConfirmReplacePodcastModal: React.FC<ConfirmReplacePodcastModalProp
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
       <div className="bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative mb-14 sm:mb-0">
         <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center justify-center mx-auto">
           <AlertTriangle className="w-6 h-6 text-rose-400" />

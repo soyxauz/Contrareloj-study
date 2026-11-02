@@ -104,7 +104,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-600/10 via-thea-bg to-thea-bg blur-2xl pointer-events-none" />
 
       {/* Contenedor Flotante Elevado */}
-      <div className="flex-1 flex flex-col bg-[#0e0b16]/90 backdrop-blur-2xl border border-white/[0.08] rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden relative">
+      <div className="flex-1 flex flex-col bg-[#0e0b16]/95 border border-white/[0.08] rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden relative">
         {/* Cabecera Flotante */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
           <div className="flex items-center gap-3">
@@ -168,7 +168,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
         </div>
 
         {/* Área de mensajes del chat */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 scroll-smooth">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -190,7 +190,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
                 className={`rounded-2xl p-4 shadow-sm text-xs sm:text-sm leading-relaxed ${
                   msg.sender === 'user'
                     ? 'bg-violet-900/30 border border-violet-500/25 text-zinc-100 rounded-tr-none'
-                    : 'bg-white/[0.03] border border-white/[0.08] text-zinc-200 rounded-tl-none shadow-md backdrop-blur-sm'
+                    : 'bg-white/[0.03] border border-white/[0.08] text-zinc-200 rounded-tl-none shadow-md'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4 mb-1.5 text-[10px] opacity-70">

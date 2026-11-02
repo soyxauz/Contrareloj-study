@@ -15,7 +15,7 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
   onResetKits
 }) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
       <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
         <button
           onClick={onClose}

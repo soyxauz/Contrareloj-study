@@ -215,12 +215,12 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md select-none animate-fadeIn"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 select-none animate-fadeIn"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-5xl h-[92vh] flex flex-col bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl"
+        className="relative w-full max-w-5xl h-[92vh] flex flex-col bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden"
       >
         {/* Cabecera del Visor */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
@@ -378,7 +378,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
           </div>
 
           {/* Indicador de ayuda al usuario */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[10px] text-slate-300">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3 py-1 rounded-full bg-black/80 border border-white/10 text-[10px] text-slate-300">
             {zoomLevel > 1
               ? 'Rueda del ratón para zoom focalizado | Arrastra para mover | Clic para ciclar'
               : 'Gira la rueda del ratón o haz clic en la imagen para ampliar'}

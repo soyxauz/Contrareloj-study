@@ -229,7 +229,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
 
       {/* Empty State */}
       {assets.length === 0 ? (
-        <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] text-center space-y-4 shadow-xl backdrop-blur-xl">
+        <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] text-center space-y-4 shadow-xl">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500">
             <ImageIcon className="w-8 h-8" />
           </div>
@@ -261,7 +261,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                     loadSingleAsset(asset.id);
                   }
                 }}
-                className="group bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-white/25 hover:shadow-2xl hover:scale-[1.015] active:scale-[0.985] transition-all duration-200 cursor-pointer flex flex-col backdrop-blur-xl"
+                className="group bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-white/25 hover:shadow-2xl hover:scale-[1.015] active:scale-[0.985] transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col cv-auto"
               >
                 {/* Image Box */}
                 <div className="relative aspect-video bg-black/40 overflow-hidden flex items-center justify-center p-2 border-b border-white/[0.06]">
@@ -305,7 +305,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                   )}
 
                   {/* Page/Slide Badge */}
-                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-zinc-200 tabular-nums">
+                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/85 border border-white/10 text-zinc-200 tabular-nums">
                     {pageInfo}
                   </span>
 

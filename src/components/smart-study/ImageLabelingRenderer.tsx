@@ -114,7 +114,7 @@ export const ImageLabelingRenderer: React.FC<ImageLabelingRendererProps> = ({
                   onRemoveImageLabel(hotspot.id);
                 }
               }}
-              className={`absolute z-20 px-3 py-1.5 rounded-xl border backdrop-blur-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md max-w-[200px] truncate ${pinStyles}`}
+              className={`absolute z-20 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md max-w-[200px] truncate ${pinStyles}`}
               title={placed ? 'Clic para retirar cuadro' : (activeLabelChip ? `Colocar "${activeLabelChip}" aquí` : 'Toca una ficha de abajo para colocarla aquí')}
             >
               <span className="w-4 h-4 rounded-full bg-black/40 text-[10px] flex items-center justify-center shrink-0">

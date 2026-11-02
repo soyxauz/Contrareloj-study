@@ -1286,7 +1286,7 @@ Reglas obligatorias estrictas:
 
       {/* ── MODAL LATERAL DE HISTORIAL DE PREGUNTAS (ON-DEMAND) ── */}
       {showHistoryModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-end animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/85 flex justify-end animate-fadeIn">
           <div className="w-full max-w-md bg-thea-surface border-l border-thea-border h-full flex flex-col shadow-2xl p-4 sm:p-6 overflow-hidden">
             <div className="flex items-center justify-between pb-4 border-b border-thea-border/60">
               <div className="flex items-center gap-2">

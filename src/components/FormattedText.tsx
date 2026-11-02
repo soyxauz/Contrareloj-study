@@ -287,7 +287,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
         blocks.push(
           <div
             key={`table-block-${i}`}
-            className="my-5 overflow-hidden rounded-2xl border border-thea-border/80 bg-slate-950/60 shadow-xl backdrop-blur-xs"
+            className="my-5 overflow-hidden rounded-2xl border border-thea-border/80 bg-slate-950/85 shadow-xl"
           >
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs sm:text-sm">

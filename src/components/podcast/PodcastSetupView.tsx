@@ -58,7 +58,7 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
         </p>
       </div>
 
-      <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] space-y-5 sm:space-y-6 backdrop-blur-xl">
+      <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] space-y-5 sm:space-y-6">
         {/* SECCIÓN 1: FORMATO */}
         <div>
           <div className="mb-3">

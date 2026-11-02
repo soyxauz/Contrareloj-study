@@ -17,7 +17,7 @@ let lastFrameTime = 0;
 let cachedMaxScroll = 0;
 
 // Constantes de física continua y velocidad de desplazamiento
-const LAMBDA = 16.5; // Tasa de convergencia exponencial continua (~160ms de respuesta veloz y sedosa)
+const LAMBDA = 19.5; // Tasa de convergencia exponencial continua (~140ms de respuesta veloz, sedosa y sin lag)
 const BASE_MULTIPLIER = 1.45; // Desplazamiento más ágil y eficiente por cada muesca de rueda
 let lastWheelTimestamp = 0;
 let lastWheelDirection = 0;
@@ -43,32 +43,35 @@ function isInsideFixedOrModal(target: HTMLElement | null): boolean {
  * Detecta si hay algún modal o superposición de pantalla completa actualmente abierta en el DOM.
  */
 function isAnyModalOpen(): boolean {
-  return document.body.style.overflow === 'hidden' || Boolean(
+  if (document.body.style.overflow === 'hidden') return true;
+  return Boolean(
     document.querySelector('.fixed.inset-0, [role="dialog"], [aria-modal="true"]')
   );
 }
 
 /**
  * Verifica si un elemento hijo tiene recorrido pendiente para desplazarse internamente.
+ * Optimizado a O(1): comprueba scrollHeight > clientHeight antes de llamar a getComputedStyle.
  */
-function isScrollableElement(element: HTMLElement | null, deltaY: number): boolean {
-  if (!element || element === document.body || element === document.documentElement) {
+function isScrollableElement(element: HTMLElement | null, deltaY: number, depth = 0): boolean {
+  if (!element || element === document.body || element === document.documentElement || depth > 8) {
     return false;
   }
 
-  const style = window.getComputedStyle(element);
-  const overflowY = style.overflowY;
-  const isScrollable = overflowY === 'auto' || overflowY === 'scroll';
-
-  if (isScrollable && element.scrollHeight > element.clientHeight) {
-    const isAtTop = element.scrollTop <= 0 && deltaY < 0;
-    const isAtBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 1 && deltaY > 0;
-    if (!isAtTop && !isAtBottom) {
-      return true;
+  // Comprobación ultrarrápida O(1): si no hay desbordamiento físico vertical, saltar getComputedStyle
+  if (element.scrollHeight > element.clientHeight + 1) {
+    const style = window.getComputedStyle(element);
+    const overflowY = style.overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll') {
+      const isAtTop = element.scrollTop <= 0 && deltaY < 0;
+      const isAtBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 1 && deltaY > 0;
+      if (!isAtTop && !isAtBottom) {
+        return true;
+      }
     }
   }
 
-  return isScrollableElement(element.parentElement, deltaY);
+  return isScrollableElement(element.parentElement, deltaY, depth + 1);
 }
 
 /**

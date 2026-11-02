@@ -105,7 +105,7 @@ export const StudyGuideScanner: React.FC<StudyGuideScannerProps> = ({
   };
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] p-6 sm:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden backdrop-blur-2xl animate-fadeIn space-y-8">
+    <div className="relative w-full max-w-4xl mx-auto rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] p-6 sm:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden animate-fadeIn space-y-8">
       {/* Resplandor superior sutil */}
       <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-48 bg-violet-600/10 blur-3xl pointer-events-none" />
 

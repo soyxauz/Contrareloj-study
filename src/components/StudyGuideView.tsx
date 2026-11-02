@@ -547,7 +547,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               sampleText={kit.sourceText || kit.description || ''}
             />
           ) : !markdown || markdown.trim().length === 0 ? (
-            <div className="py-10 px-6 sm:px-10 rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] max-w-4xl mx-auto shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] animate-fadeIn space-y-8 backdrop-blur-xl">
+            <div className="py-10 px-6 sm:px-10 rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] max-w-4xl mx-auto shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] animate-fadeIn space-y-8">
               <div className="text-center max-w-2xl mx-auto">
                 <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">
                   EXTENSIÓN DE LA GUÍA
@@ -630,12 +630,12 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-3xl p-6 sm:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+              <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-3xl p-6 sm:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <FormattedText text={stripExecutiveSummaryPreamble(markdown)} />
               </div>
 
               {/* Banner inferior para Rehacer con diferente extensión */}
-              <div className="p-6 sm:p-8 rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5 backdrop-blur-xl">
+              <div className="p-6 sm:p-8 rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5">
                 <div className="space-y-1 text-center sm:text-left">
                   <h4 className="text-sm sm:text-base font-bold text-white flex items-center justify-center sm:justify-start gap-2">
                     <FileText className="w-4 h-4 text-zinc-400" />
@@ -777,7 +777,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
       {/* ── ZOOM MODAL FOR SELECTED ASSET ─────────────────────────────────── */}
       {selectedAsset && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
           <div className="bg-thea-surface border border-thea-border rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl relative">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between gap-3 bg-thea-surfaceLight/80">
@@ -845,7 +845,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
       {/* Smart Edit Modal */}
       {showSmartEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
           <div className="bg-[#0e0b16] border border-white/10 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-100 font-bold">
@@ -912,7 +912,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
       {/* ── MODAL: CAMBIAR EXTENSIÓN / REGENERAR GUÍA ── */}
       {showDepthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
           <div className="bg-[#0e0b16] border border-white/10 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl relative">
             <div className="flex items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-3">

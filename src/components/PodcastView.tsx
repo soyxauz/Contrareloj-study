@@ -1810,7 +1810,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       {activeTab === 'player' ? (
         <div className="space-y-4 sm:space-y-6">
           {/* Main Visual Player Card */}
-          <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] relative overflow-hidden text-center backdrop-blur-xl">
+          <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] relative overflow-hidden text-center">
             {/* Background Glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -1922,7 +1922,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             )}
 
             {/* Current Active Dialogue Bubble */}
-            <div className="bg-white/[0.025] backdrop-blur border border-white/[0.08] rounded-xl sm:rounded-2xl p-3.5 sm:p-5 mb-3 sm:mb-6 max-w-2xl mx-auto shadow-inner text-left relative z-10">
+            <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl sm:rounded-2xl p-3.5 sm:p-5 mb-3 sm:mb-6 max-w-2xl mx-auto shadow-inner text-left relative z-10">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
                   <Volume2 className={`w-3.5 h-3.5 ${isAudioActive ? 'text-violet-400 animate-pulse' : 'text-zinc-500'}`} />

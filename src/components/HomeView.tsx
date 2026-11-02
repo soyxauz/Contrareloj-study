@@ -973,7 +973,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn"
           onClick={() => setSelectedActionForKit(null)}
         >
           <div
@@ -1123,7 +1123,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
       {/* ── Barra Flotante de Acciones en Lote (Portal) ── */}
       {isSelectionMode && createPortal(
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl bg-thea-surface/95 backdrop-blur-md border border-thea-border rounded-2xl shadow-2xl p-3 sm:p-4 flex items-center justify-between gap-3 animate-slideUp">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl bg-thea-surface border border-thea-border rounded-2xl shadow-2xl p-3 sm:p-4 flex items-center justify-between gap-3 animate-slideUp">
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="w-8 h-8 rounded-xl bg-violet-600/25 border border-violet-500/40 flex items-center justify-center text-violet-300 font-bold text-xs shrink-0">
               {selectedKitIds.size}
@@ -1196,7 +1196,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
           onClick={() => setShowBatchMateriaModal(false)}
         >
           <div
@@ -1323,7 +1323,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
           onClick={() => setShowBatchDeleteModal(false)}
         >
           <div
@@ -1463,7 +1463,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
       onClick={onClose}
     >
       <div
@@ -1654,7 +1654,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
       onClick={onClose}
     >
       <div
