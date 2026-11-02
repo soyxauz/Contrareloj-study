@@ -22,6 +22,7 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
 import type { InputTab } from './components/CreateStudyKitView';
 import { restoreCustomMateriasAsync } from './services/materiaService';
+import { initUltraLightSmoothScroll, resetUltraLightSmoothScroll } from './utils/smoothScroll';
 
 // Carga diferida (Lazy Loading) de vistas secundarias para arranque ultrarrápido
 const SmartStudyView = React.lazy(() => import('./components/SmartStudyView').then(m => ({ default: m.SmartStudyView })));
@@ -120,6 +121,11 @@ export const App: React.FC = () => {
       setDriveSyncState(state);
     });
     return unsubscribe;
+  }, []);
+
+  // Motor de scroll inercial suave ultraligero (0 dependencias, 0% CPU en reposo)
+  useEffect(() => {
+    return initUltraLightSmoothScroll();
   }, []);
 
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
@@ -285,7 +291,7 @@ export const App: React.FC = () => {
 
   // Reset sereno de scroll al cambiar de pantalla
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    resetUltraLightSmoothScroll(0);
   }, [currentMode]);
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
   const [showAIModal, setShowAIModal] = useState(false);

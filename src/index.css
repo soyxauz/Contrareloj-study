@@ -148,15 +148,9 @@
   animation: cardErrorShake 0.22s ease-in-out forwards;
 }
 
-/* ── Desplazamiento Suave Nativo GPU (120 FPS sin consumo JS) ── */
+/* ── Desplazamiento Suave Inercial Ultraligero (120 FPS sin librerías externas) ── */
 html {
-  scroll-behavior: smooth;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
+  scroll-behavior: auto;
 }
 
 /* Animaciones 3D interactivas para Flashcards */
