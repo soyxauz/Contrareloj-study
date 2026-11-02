@@ -428,9 +428,6 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
               Tus Study Kits
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-white/[0.06] text-slate-300 border border-white/[0.12] text-xs font-semibold tabular-nums shadow-sm">
-              {kits.length}
-            </span>
           </div>
 
           {/* Barra de Acciones Globales Unificada */}
