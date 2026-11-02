@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 
 export interface ConfirmReplacePodcastModalProps {
@@ -16,11 +17,11 @@ export const ConfirmReplacePodcastModal: React.FC<ConfirmReplacePodcastModalProp
   onClose,
   onConfirm,
 }) => {
-  if (!show) return null;
+  if (!show || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
-      <div className="bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative mb-14 sm:mb-0">
+      <div className="bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative">
         <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center justify-center mx-auto">
           <AlertTriangle className="w-6 h-6 text-rose-400" />
         </div>
@@ -54,6 +55,7 @@ export const ConfirmReplacePodcastModal: React.FC<ConfirmReplacePodcastModalProp
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

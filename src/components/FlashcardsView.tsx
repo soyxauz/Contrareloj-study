@@ -1,6 +1,7 @@
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
 import {
   Layers,
@@ -66,9 +67,9 @@ const isQuestionOrSentence = (text: string): boolean => {
   if (!text) return true;
   const t = text.trim();
   // Signos de interrogacion o exclamacion
-  if (/[?Â¿!Â¡]/.test(t)) return true;
+  if (/[?¿!¡]/.test(t)) return true;
   // Palabras interrogativas o imperativas tipicas de preguntas
-  if (/^(Â¿|quÃ©|que|cuÃ¡l|cual|cuÃ¡les|cuales|cÃ³mo|como|por quÃ©|porque|cuÃ¡ndo|cuando|dÃ³nde|donde|quiÃ©n|quien|defina|describa|explique|mencione|indique|seÃ±ale|calcule|en quÃ©|en que|a quÃ©|a que)\b/i.test(t)) {
+  if (/^(¿|qué|que|cuál|cual|cuáles|cuales|cómo|como|por qué|porque|cuándo|cuando|dónde|donde|quién|quien|defina|describa|explique|mencione|indique|señale|calcule|en qué|en que|a qué|a que)\b/i.test(t)) {
     return true;
   }
   // Puntuacion terminal de enunciado o formula larga
@@ -85,11 +86,11 @@ const cleanToShortConcept = (rawText: string): string => {
   let cleaned = rawText.trim();
 
   // Eliminar signos de pregunta/exclamacion
-  cleaned = cleaned.replace(/[Â¿?Â¡!]/g, '').trim();
+  cleaned = cleaned.replace(/[¿?¡!]/g, '').trim();
 
   // Eliminar frases de inicio de pregunta
   cleaned = cleaned.replace(
-    /^(quÃ© es|que es|cuÃ¡l es|cual es|cuÃ¡les son|cuales son|en quÃ© consiste|en que consiste|cÃ³mo se define|como se define|a quÃ© se refiere|a que se refiere|defina|definiciÃ³n de|definicion de|describa|explique|mencione|indique|seÃ±ale|concepto de)\s+(el|la|los|las|un|una|unos|unas)?\s*/i,
+    /^(qué es|que es|cuál es|cual es|cuáles son|cuales son|en qué consiste|en que consiste|cómo se define|como se define|a qué se refiere|a que se refiere|defina|definición de|definicion de|describa|explique|mencione|indique|señale|concepto de)\s+(el|la|los|las|un|una|unos|unas)?\s*/i,
     ''
   ).trim();
 
@@ -100,7 +101,7 @@ const cleanToShortConcept = (rawText: string): string => {
   cleaned = cleaned.replace(/[:.]+$/, '').trim();
 
   // Si tiene comillas, extraer lo que esta dentro de las comillas
-  const quoted = cleaned.match(/["'Â«Â»]([^"'Â«Â»]+)["'Â«Â»]/);
+  const quoted = cleaned.match(/["'«»]([^"'«»]+)["'«»]/);
   if (quoted && quoted[1].trim().length > 2) {
     cleaned = quoted[1].trim();
   }
@@ -123,13 +124,13 @@ const cleanToShortConcept = (rawText: string): string => {
 const isGarbageOrPlaceholderOption = (text: string): boolean => {
   if (!text) return true;
   const t = text.trim().toLowerCase();
-  // Placeholders directos tipo OpciÃ³n A, B, C, D o Choice
-  if (/^(opci[oÃ³]n|alternativa|respuesta|inciso|item|choice)\b/i.test(t)) return true;
-  if (/^(opci[oÃ³]n|alternativa|respuesta)\s+[a-d0-9]/i.test(t)) return true;
+  // Placeholders directos tipo Opción A, B, C, D o Choice
+  if (/^(opci[oó]n|alternativa|respuesta|inciso|item|choice)\b/i.test(t)) return true;
+  if (/^(opci[oó]n|alternativa|respuesta)\s+[a-d0-9]/i.test(t)) return true;
   if (/^(verdadero|falso|true|false|todas las anteriores|ninguna de las anteriores|ambas|n\/a)$/i.test(t)) return true;
-  // Frases o comodines artificiales vacÃ­os
-  if (/^(principio de|mecanismo principal|factor estructural|criterio diagn[oÃ³]stico|patr[oÃ³]n funcional|elemento central|concepto clave|entidad clave)/i.test(t)) return true;
-  if (/^(pregunta \d+|caso \d+|ejemplo \d+|tema \d+|definici[oÃ³]n \d+)/i.test(t)) return true;
+  // Frases o comodines artificiales vacíos
+  if (/^(principio de|mecanismo principal|factor estructural|criterio diagn[oó]stico|patr[oó]n funcional|elemento central|concepto clave|entidad clave)/i.test(t)) return true;
+  if (/^(pregunta \d+|caso \d+|ejemplo \d+|tema \d+|definici[oó]n \d+)/i.test(t)) return true;
   if (t.length < 3 || t.length > 45) return true;
   return false;
 };
@@ -174,7 +175,7 @@ const buildGuessWhoCases = (
     }
   });
 
-  // 2. Recolectar de los temas (topics), parejas de match y opciones vÃ¡lidas de las preguntas
+  // 2. Recolectar de los temas (topics), parejas de match y opciones válidas de las preguntas
   if (kit.questions && Array.isArray(kit.questions)) {
     kit.questions.forEach(q => {
       if (q.topic) registerConcept(q.topic);
@@ -197,7 +198,7 @@ const buildGuessWhoCases = (
     });
   }
 
-  // 3. Recolectar del texto fuente y fragmentos (chunks) tÃ©rminos tÃ©cnicos destacados
+  // 3. Recolectar del texto fuente y fragmentos (chunks) términos técnicos destacados
   const sourceToScan = (kit.sourceText || '') + ' ' + (kit.chunks?.map(c => c.text).join(' ') || '');
   if (sourceToScan.trim()) {
     const boldMatches = sourceToScan.match(/\*\*([^*]{3,40})\*\*/g);
@@ -208,33 +209,33 @@ const buildGuessWhoCases = (
       });
     }
 
-    const capMatches = sourceToScan.match(/\b[A-ZÃÃ‰ÃÃ“Ãš][a-zÃ¡Ã©Ã­Ã³ÃºÃ±]{3,}(?:\s+(?:de|del|en|la|el|y|o)\s+|\s+)[A-ZÃÃ‰ÃÃ“Ãš][a-zÃ¡Ã©Ã­Ã³ÃºÃ±]{3,}\b/g);
+    const capMatches = sourceToScan.match(/\b[A-ZÁÉÍÓÚ][a-záéíóúñ]{3,}(?:\s+(?:de|del|en|la|el|y|o)\s+|\s+)[A-ZÁÉÍÓÚ][a-záéíóúñ]{3,}\b/g);
     if (capMatches) {
       capMatches.slice(0, 40).forEach(cm => registerConcept(cm));
     }
   }
 
-  // 4. Si el kit tiene muy pocos conceptos, alimentar con terminologÃ­a real segÃºn la disciplina
+  // 4. Si el kit tiene muy pocos conceptos, alimentar con terminología real según la disciplina
   const categoryStr = (kit.category || kit.title || '').toLowerCase();
   let domainFallbacks: string[] = [];
   if (/neuro|cerebr|encef|medul|nervi/i.test(categoryStr)) {
     domainFallbacks = [
-      'Tracto espinotalÃ¡mico', 'Corteza motora primaria', 'Cerebelo', 'Tronco encefÃ¡lico',
-      'FascÃ­culo grÃ¡cil', 'VÃ­a piramidal', 'Neurona motora inferior', 'Sinapsis quÃ­mica',
-      'LÃ³bulo frontal', 'NÃºcleo caudado', 'MÃ©dula espinal', 'Reflejo osteotendinoso'
+      'Tracto espinotalámico', 'Corteza motora primaria', 'Cerebelo', 'Tronco encefálico',
+      'Fascículo grácil', 'Vía piramidal', 'Neurona motora inferior', 'Sinapsis química',
+      'Lóbulo frontal', 'Núcleo caudado', 'Médula espinal', 'Reflejo osteotendinoso'
     ];
   } else if (/medic|salud|farmac|fisiolog|patolog|clinic/i.test(categoryStr)) {
     domainFallbacks = [
-      'Receptor celular', 'Canal iÃ³nico', 'Neurotransmisor', 'Membrana plasmÃ¡tica',
-      'FosforilaciÃ³n oxidativa', 'Bomba de sodio-potasio', 'Enzima catalÃ­tica', 'Homeostasis'
+      'Receptor celular', 'Canal iónico', 'Neurotransmisor', 'Membrana plasmática',
+      'Fosforilación oxidativa', 'Bomba de sodio-potasio', 'Enzima catalítica', 'Homeostasis'
     ];
   } else if (/derech|jurid|legal|ley|penal|constituc/i.test(categoryStr)) {
     domainFallbacks = [
-      'Debido proceso', 'PresunciÃ³n de inocencia', 'JurisdicciÃ³n ordinaria', 'Cosa juzgada',
-      'Principio de legalidad', 'Responsabilidad civil', 'Sujeto procesal', 'Recurso de apelaciÃ³n'
+      'Debido proceso', 'Presunción de inocencia', 'Jurisdicción ordinaria', 'Cosa juzgada',
+      'Principio de legalidad', 'Responsabilidad civil', 'Sujeto procesal', 'Recurso de apelación'
     ];
   } else {
-    const words = sourceToScan.replace(/[^a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃ±ÃÃ‰ÃÃ“ÃšÃ‘\s]/g, ' ').split(/\s+/).filter(w => w.length > 5);
+    const words = sourceToScan.replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g, ' ').split(/\s+/).filter(w => w.length > 5);
     const uniqueWords = Array.from(new Set(words)).slice(0, 10).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
     domainFallbacks = uniqueWords.filter(w => !isGarbageOrPlaceholderOption(w));
   }
@@ -268,40 +269,40 @@ const buildGuessWhoCases = (
       (q.explanation && q.explanation.toLowerCase().includes(targetConcept.toLowerCase()))
     );
 
-    // Separar la definiciÃ³n en oraciones
+    // Separar la definición en oraciones
     const defSentences = rawDef
       .split(/(?<=[.?!;])\s+/)
       .map(s => s.trim())
       .filter(s => s.length > 6);
 
-    // â”€â”€ PISTA 1: Contexto, ClasificaciÃ³n y LocalizaciÃ³n (100 pts, 3â˜…) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // EspecÃ­fica y Ãºnica para cada tarjeta (PROHIBIDO plantilla genÃ©rica)
+    // ── PISTA 1: Contexto, Clasificación y Localización (100 pts, 3★) ──────────
+    // Específica y única para cada tarjeta (PROHIBIDO plantilla genérica)
     let clue1Text = '';
     const firstSentence = defSentences[0] || rawDef;
 
     if (firstSentence) {
       const openingClauseMatch = firstSentence.match(/^([^,;:]+(?:que|cuyo|cuya|responsable de|encargad[oa] de|donde|situad[oa] en|ubicad[oa] en)[^,;:]+)/i);
       const openingNature = openingClauseMatch ? openingClauseMatch[1].trim() : firstSentence;
-      clue1Text = `CategorÃ­a y localizaciÃ³n general: ${maskTermInText(openingNature, targetConcept)}.`;
+      clue1Text = `Categoría y localización general: ${maskTermInText(openingNature, targetConcept)}.`;
     } else {
-      clue1Text = `CategorÃ­a y Ã¡mbito funcional: Elemento estructural clave evaluado en ${kit.category || kit.title}.`;
+      clue1Text = `Categoría y ámbito funcional: Elemento estructural clave evaluado en ${kit.category || kit.title}.`;
     }
 
-    // â”€â”€ PISTA 2: Mecanismo de AcciÃ³n o Proceso Funcional (75 pts, 2â˜…) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── PISTA 2: Mecanismo de Acción o Proceso Funcional (75 pts, 2★) ──────────
     let clue2Text = '';
     const functionSentence = defSentences.find((s, sIdx) =>
-      sIdx > 0 && /funciÃ³n|mecanismo|opera|actÃºa|encargad|conduce|regula|controla|transporta|estimula|inhibe|sintetiza|genera|participa|transmite|ejecuta|conecta|desciende|asciende/i.test(s)
+      sIdx > 0 && /función|mecanismo|opera|actúa|encargad|conduce|regula|controla|transporta|estimula|inhibe|sintetiza|genera|participa|transmite|ejecuta|conecta|desciende|asciende/i.test(s)
     );
 
     if (functionSentence) {
-      clue2Text = `Mecanismo de acciÃ³n o rol funcional: ${maskTermInText(functionSentence, targetConcept)}`;
+      clue2Text = `Mecanismo de acción o rol funcional: ${maskTermInText(functionSentence, targetConcept)}`;
     } else if (defSentences.length >= 2) {
       clue2Text = `Mecanismo y principio operativo: ${maskTermInText(defSentences[1], targetConcept)}`;
     } else {
       const chunkSentences = relatedChunk.split(/(?<=[.?!;])\s+/).filter(s => s.length > 10);
       const chunkFunc = chunkSentences.find(s =>
         s.toLowerCase().includes(targetConcept.toLowerCase()) &&
-        /funciÃ³n|mecanismo|actÃºa|permite|produce|regula|desciende|inerva|conecta/i.test(s)
+        /función|mecanismo|actúa|permite|produce|regula|desciende|inerva|conecta/i.test(s)
       );
       if (chunkFunc) {
         clue2Text = `Mecanismo operativo: ${maskTermInText(chunkFunc, targetConcept)}`;
@@ -314,24 +315,24 @@ const buildGuessWhoCases = (
       }
     }
 
-    // â”€â”€ PISTA 3: Signo PatognomÃ³nico, Hallazgo Distintivo o Criterio Clave (50 pts, 1â˜…) â”€
+    // ── PISTA 3: Signo Patognomónico, Hallazgo Distintivo o Criterio Clave (50 pts, 1★) ─
     let clue3Text = '';
     if (relatedQ?.explanation) {
       const expSentences = relatedQ.explanation.split(/(?<=[.?!;])\s+/).filter(s => s.length > 8);
       const hallmarkSentence = expSentences.find(s =>
-        /signo|patognomÃ³nico|distintivo|caracterÃ­stic|lesiÃ³n|clÃ­nic|decusaciÃ³n|hallazgo|especÃ­fic|reflejo|diferencial|criterio|prueba|babinski|sÃ­ndrome/i.test(s)
+        /signo|patognomónico|distintivo|característic|lesión|clínic|decusación|hallazgo|específic|reflejo|diferencial|criterio|prueba|babinski|síndrome/i.test(s)
       );
       if (hallmarkSentence) {
-        clue3Text = `Signo patognomÃ³nico o rasgo distintivo: ${maskTermInText(hallmarkSentence, targetConcept)}`;
+        clue3Text = `Signo patognomónico o rasgo distintivo: ${maskTermInText(hallmarkSentence, targetConcept)}`;
       }
     }
 
     if (!clue3Text) {
       const distinctSentence = defSentences.find((s, sIdx) =>
-        sIdx > 1 || /signo|patognomÃ³nico|distintiv|caracterÃ­stic|lesiÃ³n|decusaciÃ³n|hallazgo|criterio|especÃ­fic|tÃ­pic|causa/i.test(s)
+        sIdx > 1 || /signo|patognomónico|distintiv|característic|lesión|decusación|hallazgo|criterio|específic|típic|causa/i.test(s)
       );
       if (distinctSentence && distinctSentence !== defSentences[0]) {
-        clue3Text = `Rasgo distintivo caracterÃ­stico: ${maskTermInText(distinctSentence, targetConcept)}`;
+        clue3Text = `Rasgo distintivo característico: ${maskTermInText(distinctSentence, targetConcept)}`;
       } else if (defSentences.length >= 3) {
         clue3Text = `Criterio o rasgo clave: ${maskTermInText(defSentences[2], targetConcept)}`;
       } else {
@@ -341,7 +342,7 @@ const buildGuessWhoCases = (
       }
     }
 
-    // â”€â”€ PISTA 4: Dato Definitorio Revelador (25 pts, 1â˜…) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── PISTA 4: Dato Definitorio Revelador (25 pts, 1★) ──────────────────────
     const clue4Text = `Dato definitorio concluyente: ${maskedDef}`;
 
     const clues: GuessWhoClue[] = [
@@ -363,7 +364,7 @@ const buildGuessWhoCases = (
       },
       {
         level: 3,
-        title: 'Pista 3: Signo PatognomÃ³nico',
+        title: 'Pista 3: Signo Patognomónico',
         badge: 'Rasgo Clave',
         text: clue3Text,
         unlockedScore: 50,
@@ -371,15 +372,15 @@ const buildGuessWhoCases = (
       },
       {
         level: 4,
-        title: 'Pista 4: DefiniciÃ³n Reveladora',
-        badge: 'DefiniciÃ³n',
+        title: 'Pista 4: Definición Reveladora',
+        badge: 'Definición',
         text: clue4Text,
         unlockedScore: 25,
         stars: 1,
       },
     ];
 
-    // â”€â”€ OPCIONES CANDIDATAS Y DISTRACTORES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── OPCIONES CANDIDATAS Y DISTRACTORES ─────────────────────────────────────
     const targetKey = targetConcept.toLowerCase();
     const availableDistractors = shortConceptsBank
       .filter(concept =>
@@ -424,7 +425,7 @@ interface FlashcardsViewProps {
 }
 
 export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = null, onUpdateKit }) => {
-  // Cargar progreso persistido de inmediato (sÃ­ncrono desde LocalStorage, 0ms de latencia)
+  // Cargar progreso persistido de inmediato (síncrono desde LocalStorage, 0ms de latencia)
   const savedProgress = authService.getFlashcardProgress(userId, kit.id);
 
   const getCardMastery = (card: Flashcard, map?: Record<string, 'to-learn' | 'known' | 'mastered'> | null): 'to-learn' | 'known' | 'mastered' => {
@@ -509,11 +510,11 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   }, []);
 
-  // Restaurar asÃ­ncronamente desde IndexedDB si LocalStorage fue purgado o tiene versiÃ³n anterior
+  // Restaurar asíncronamente desde IndexedDB si LocalStorage fue purgado o tiene versión anterior
   useEffect(() => {
     authService.restoreFlashcardProgressAsync(userId, kit.id).then(idbProgress => {
       if (!idbProgress || !idbProgress.masteryMap) return;
-      // Lo que ya estÃ© en RAM en tiempo real siempre tiene prioridad sobre la instantÃ¡nea asÃ­ncrona de IndexedDB
+      // Lo que ya esté en RAM en tiempo real siempre tiene prioridad sobre la instantánea asíncrona de IndexedDB
       masteryMapRef.current = { ...idbProgress.masteryMap, ...masteryMapRef.current };
 
       setCards(prevCards => {
@@ -557,7 +558,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   }, [kit.id, userId]);
 
-  // Al salir de la pantalla de flashcards, refrescar o cerrar pestaÃ±a, sincronizar inmediatamente cambios pendientes en kit y Drive
+  // Al salir de la pantalla de flashcards, refrescar o cerrar pestaña, sincronizar inmediatamente cambios pendientes en kit y Drive
   useEffect(() => {
     const handleBeforeUnload = () => {
       flushKitUpdate();
@@ -581,7 +582,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   const [statusNotification, setStatusNotification] = useState<string | null>(null);
   const [textSize, setTextSize] = useState<'medium' | 'large' | 'huge'>('large');
 
-  // Estados para calibraciÃ³n de enfoque (Tuerca)
+  // Estados para calibración de enfoque (Tuerca)
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [focusTopic, setFocusTopic] = useState('');
   const [focusRatio, setFocusRatio] = useState<'mixed-70-30' | 'only-questions' | 'only-concepts'>('mixed-70-30');
@@ -645,7 +646,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   };
 
-  // BotÃ³n: Aumentar cantidad de flashcards (+10 nuevas)
+  // Botón: Aumentar cantidad de flashcards (+10 nuevas)
   const handleAddMoreFlashcards = async () => {
     setIsAddingMore(true);
     try {
@@ -680,21 +681,21 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
         if (onUpdateKit) {
           onUpdateKit({ ...kit, flashcards: nextCards, archivedFlashcards: archivedCards });
         }
-        showNotification(`Â¡Ã‰xito! Se aÃ±adieron ${additional.length} flashcards adicionales al kit.`);
+        showNotification(`¡Éxito! Se añadieron ${additional.length} flashcards adicionales al kit.`);
       }
     } catch (e) {
       console.error(e);
-      showNotification('Error al generar mÃ¡s flashcards.');
+      showNotification('Error al generar más flashcards.');
     } finally {
       setIsAddingMore(false);
     }
   };
 
-  // BotÃ³n: Cambiar las flashcards memorizadas por unas nuevas
+  // Botón: Cambiar las flashcards memorizadas por unas nuevas
   const handleSwapMasteredFlashcards = async () => {
     const mastered = cards.filter(c => c.mastery === 'mastered');
     if (mastered.length === 0) {
-      showNotification('AÃºn no tienes flashcards marcadas como "Â¡Dominada!". Marca al menos una para renovarla.');
+      showNotification('Aún no tienes flashcards marcadas como "¡Dominada!". Marca al menos una para renovarla.');
       return;
     }
 
@@ -754,7 +755,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   };
 
-  // Generar lote calibrado segÃºn el enfoque de la tuerca
+  // Generar lote calibrado según el enfoque de la tuerca
   const handleGenerateCalibratedFlashcards = async () => {
     setIsGeneratingTargeted(true);
     try {
@@ -773,7 +774,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       );
 
       if (freshBatch.length > 0) {
-        // Regla: AÃ±adir SIEMPRE a la baraja existente sin borrar las anteriores
+        // Regla: Añadir SIEMPRE a la baraja existente sin borrar las anteriores
         const nextCards = [...cards, ...freshBatch];
         setCards(nextCards);
 
@@ -802,7 +803,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
           });
         }
         setShowConfigModal(false);
-        showNotification(`Â¡Ã‰xito! Se aÃ±adieron ${freshBatch.length} flashcards calibradas a la baraja.`);
+        showNotification(`¡Éxito! Se añadieron ${freshBatch.length} flashcards calibradas a la baraja.`);
       } else {
         showNotification('No se pudieron generar nuevas flashcards para ese criterio.');
       }
@@ -818,7 +819,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   const currentCard = cards[safeCurrentIdx % (cards.length || 1)];
   const isQuestionCard =
     currentCard?.type === 'question' ||
-    Boolean(currentCard?.term && /^\s*Â¿|\?\s*$/.test(currentCard.term));
+    Boolean(currentCard?.term && /^\s*¿|\?\s*$/.test(currentCard.term));
 
   const handleUpdateMastery = (mastery: 'to-learn' | 'known' | 'mastered') => {
     const currentCards = cardsRef.current;
@@ -835,7 +836,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     const nextIdx = (targetIdx + 1) % len;
     const updated = currentCards.map((c, i) => (i === targetIdx ? { ...c, mastery } : c));
 
-    // 1. ActualizaciÃ³n visual instantÃ¡nea sin bloqueo de hilo
+    // 1. Actualización visual instantánea sin bloqueo de hilo
     cardsRef.current = updated;
     currentIdxRef.current = nextIdx;
     setCards(updated);
@@ -916,7 +917,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     });
   };
 
-  // RetroalimentaciÃ³n auditiva sintetizada con Web Audio API (cero dependencias externas)
+  // Retroalimentación auditiva sintetizada con Web Audio API (cero dependencias externas)
   const playAudioFeedback = (type: 'correct' | 'wrong' | 'victory') => {
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -994,7 +995,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     setIsGameFinished(false);
     setCasesHistory([]);
 
-    // Enriquecimiento en segundo plano con IA si estÃ¡ habilitada
+    // Enriquecimiento en segundo plano con IA si está habilitada
     try {
       const targetCards = initialCases.map(c => ({
         id: c.id,
@@ -1021,7 +1022,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
         });
       }
     } catch {
-      // Si la IA no estÃ¡ disponible, los casos locales ya estÃ¡n perfectamente calibrados
+      // Si la IA no está disponible, los casos locales ya están perfectamente calibrados
     }
   };
 
@@ -1039,21 +1040,21 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     playAudioFeedback('correct');
   };
 
-  // Seleccionar una opciÃ³n candidata
+  // Seleccionar una opción candidata
   const handleSelectGuessOption = (option: string) => {
     if (isCaseSolved || wrongOptions.includes(option)) return;
     const currentCase = guessWhoCases[currentCaseIdx];
     if (!currentCase) return;
 
     if (option === currentCase.targetTerm) {
-      // DeducciÃ³n correcta
+      // Deducción correcta
       const baseScores = [100, 75, 50, 25];
       const baseStars = [3, 2, 1, 1];
       const clueIdx = Math.max(0, Math.min(3, revealedCluesCount - 1));
       const baseScore = baseScores[clueIdx];
       const stars = baseStars[clueIdx];
 
-      // PenalizaciÃ³n de 10 pts por cada intento fallido previo en este caso
+      // Penalización de 10 pts por cada intento fallido previo en este caso
       const penalty = wrongOptions.length * 10;
       const finalScore = Math.max(10, baseScore - penalty);
 
@@ -1077,7 +1078,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
       playAudioFeedback('correct');
     } else {
-      // DeducciÃ³n errÃ³nea: penalizaciÃ³n visual y sonora, deshabilita la opciÃ³n
+      // Deducción errónea: penalización visual y sonora, deshabilita la opción
       setWrongOptions(prev => [...prev, option]);
       playAudioFeedback('wrong');
     }
@@ -1099,7 +1100,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     }
   };
 
-  // Clases tipogrÃ¡ficas responsivas y ampliadas segÃºn el selector de tamaÃ±o
+  // Clases tipográficas responsivas y ampliadas según el selector de tamaño
   const termTypographyClasses = {
     medium: 'text-2xl sm:text-4xl md:text-5xl font-black leading-tight',
     large: 'text-3xl sm:text-5xl md:text-6xl font-black leading-tight tracking-tight drop-shadow-sm',
@@ -1117,7 +1118,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
     return (
       <div className="max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 h-[calc(100vh-4.5rem)] max-h-[860px] flex flex-col justify-between select-none overflow-hidden animate-fadeIn relative">
-        {/* Cabecera del Juego: BotÃ³n Salir, TÃ­tulo, Contador de Casos, Marcador y Reiniciar */}
+        {/* Cabecera del Juego: Botón Salir, Título, Contador de Casos, Marcador y Reiniciar */}
         <div className="flex items-center justify-between gap-2 sm:gap-4 shrink-0 pb-2 border-b border-thea-border/80">
           <div className="flex items-center gap-2 sm:gap-3">
             <button
@@ -1132,7 +1133,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-1.5">
                 <HelpCircle className="w-5 h-5 text-amber-400" />
-                <span>Adivina QuiÃ©n â€¢ Pistas Progresivas</span>
+                <span>Adivina Quién • Pistas Progresivas</span>
               </h2>
             </div>
           </div>
@@ -1146,7 +1147,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               </div>
             )}
 
-            {/* PuntuaciÃ³n Acumulada */}
+            {/* Puntuación Acumulada */}
             <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-extrabold shadow-sm">
               <Award className="w-3.5 h-3.5 text-amber-400" />
               <span>{totalScore} pts</span>
@@ -1177,7 +1178,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <Layers className="w-7 h-7" />
             </div>
             <h3 className="text-base font-bold text-white">No hay tarjetas disponibles</h3>
-            <p className="text-xs text-slate-400 max-w-sm">Genera tarjetas primero en el Modo Flashcards para poder jugar a Adivina QuiÃ©n con pistas progresivas.</p>
+            <p className="text-xs text-slate-400 max-w-sm">Genera tarjetas primero en el Modo Flashcards para poder jugar a Adivina Quién con pistas progresivas.</p>
             <button
               type="button"
               onClick={() => setGameMode('study')}
@@ -1224,15 +1225,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     </div>
                     <div>
                       <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-violet-300 block">
-                        Entidad Oculta â€¢ DeducciÃ³n en Proceso
+                        Entidad Oculta • Deducción en Proceso
                       </span>
                       <h3 className="text-base sm:text-lg font-black text-white">
-                        Â¿QuiÃ©n es esta entidad misteriosa?
+                        ¿Quién es esta entidad misteriosa?
                       </h3>
                       <p className="text-[11px] text-slate-300">
                         {wrongOptions.length > 0
-                          ? `Has tenido ${wrongOptions.length} intento(s) fallido(s) (-${wrongOptions.length * 10} pts). Puedes arriesgar otra opciÃ³n o pedir mÃ¡s pistas.`
-                          : 'Arriesga una opciÃ³n candidata o desbloquea pistas progresivas para acotar tu deducciÃ³n.'}
+                          ? `Has tenido ${wrongOptions.length} intento(s) fallido(s) (-${wrongOptions.length * 10} pts). Puedes arriesgar otra opción o pedir más pistas.`
+                          : 'Arriesga una opción candidata o desbloquea pistas progresivas para acotar tu deducción.'}
                       </p>
                     </div>
                   </div>
@@ -1264,7 +1265,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     </div>
                     <div>
                       <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-emerald-300 block">
-                        Â¡DeducciÃ³n Acertada!
+                        ¡Deducción Acertada!
                       </span>
                       <h3 className="text-lg sm:text-xl md:text-2xl font-black text-white drop-shadow">
                         <FormattedText text={currentCase.targetTerm} inlineOnly={true} />
@@ -1294,7 +1295,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               )}
             </div>
 
-            {/* Tablero Central: CuadrÃ­cula 2x2 de Pistas Progresivas */}
+            {/* Tablero Central: Cuadrícula 2x2 de Pistas Progresivas */}
             <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 my-1.5">
               {currentCase.clues.map((clue) => {
                 const isUnlocked = clue.level <= revealedCluesCount;
@@ -1315,7 +1316,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                           {clue.title}
                         </span>
                         <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
-                          {clue.unlockedScore} pts ({clue.stars}â˜…)
+                          {clue.unlockedScore} pts ({clue.stars}★)
                         </span>
                       </div>
                       <div className="flex-1 min-h-0 flex items-center pt-1.5">
@@ -1340,7 +1341,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                         Desbloquear {clue.title}
                       </span>
                       <span className="text-[10px] text-violet-300 mt-0.5">
-                        La recompensa pasarÃ¡ a {clue.unlockedScore} pts ({clue.stars}â˜…)
+                        La recompensa pasará a {clue.unlockedScore} pts ({clue.stars}★)
                       </span>
                     </button>
                   );
@@ -1391,7 +1392,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               })}
             </div>
 
-            {/* Barra Inferior: BotÃ³n de Siguiente Caso o GuÃ­a */}
+            {/* Barra Inferior: Botón de Siguiente Caso o Guía */}
             <div className="shrink-0 pt-1.5 border-t border-thea-border/60 flex items-center justify-between text-[11px] text-slate-400 px-1">
               {isCaseSolved ? (
                 <button
@@ -1409,7 +1410,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               ) : (
                 <div className="w-full flex items-center justify-between">
                   <span className="truncate mr-2">
-                    Toca una opciÃ³n para adivinar. Si fallas se tacharÃ¡ (-10 pts) y podrÃ¡s seguir deduciendo.
+                    Toca una opción para adivinar. Si fallas se tachará (-10 pts) y podrás seguir deduciendo.
                   </span>
                   <span className="shrink-0 font-bold text-slate-400">
                     Fallos en caso: <span className={wrongOptions.length > 0 ? 'text-rose-400' : 'text-slate-400'}>{wrongOptions.length}</span>
@@ -1428,13 +1429,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 <Trophy className="w-8 h-8 animate-iconPop" />
               </div>
               <h3 className="text-xl sm:text-2xl font-black text-white mb-1">
-                Â¡Partida de DeducciÃ³n Completada!
+                ¡Partida de Deducción Completada!
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 mb-5">
                 Has resuelto los {guessWhoCases.length} casos de estudio con razonamiento progresivo.
               </p>
 
-              {/* Grid de MÃ©tricas */}
+              {/* Grid de Métricas */}
               <div className="grid grid-cols-2 gap-2.5 mb-5">
                 <div className="p-3 rounded-2xl bg-violet-950/40 border border-violet-500/30">
                   <span className="text-[10px] uppercase font-bold text-violet-300 block mb-0.5">
@@ -1465,7 +1466,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     <div className="truncate mr-2">
                       <span className="font-bold text-slate-200">#{i + 1} {item.term}</span>
                       <span className="text-[10px] text-slate-400 block">
-                        Pistas: {item.cluesUsed} â€¢ Errores: {item.mistakes}
+                        Pistas: {item.cluesUsed} • Errores: {item.mistakes}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -1480,7 +1481,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 ))}
               </div>
 
-              {/* Botones de AcciÃ³n */}
+              {/* Botones de Acción */}
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <button
                   type="button"
@@ -1512,21 +1513,21 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600/30 text-violet-300 border border-violet-500/30">
-              REPETICIÃ“N ESPACIADA
+              REPETICIÓN ESPACIADA
             </span>
             <span className="text-xs text-slate-400 font-medium">
               {cards.length} tarjetas activas
-              {archivedCards.length > 0 && ` â€¢ ${archivedCards.length} dominadas archivadas`}
+              {archivedCards.length > 0 && ` • ${archivedCards.length} dominadas archivadas`}
             </span>
           </div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Layers className="w-6 h-6 text-violet-400" />
-            <span>Flashcards & Adivina QuiÃ©n</span>
+            <span>Flashcards & Adivina Quién</span>
           </h1>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Selector de TamaÃ±o de Letra */}
+          {/* Selector de Tamaño de Letra */}
           <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-1 text-xs">
             <span className="px-2 text-slate-400 flex items-center gap-1 font-semibold text-[11px]">
               <Type className="w-3.5 h-3.5 text-amber-400" />
@@ -1538,7 +1539,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                 textSize === 'medium' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
-              title="TamaÃ±o Mediano"
+              title="Tamaño Mediano"
             >
               M
             </button>
@@ -1548,7 +1549,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                 textSize === 'large' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
-              title="TamaÃ±o Grande (Predeterminado)"
+              title="Tamaño Grande (Predeterminado)"
             >
               G
             </button>
@@ -1558,18 +1559,18 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                 textSize === 'huge' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
-              title="TamaÃ±o Extra Grande"
+              title="Tamaño Extra Grande"
             >
               XG
             </button>
           </div>
 
-          {/* BotÃ³n de CalibraciÃ³n / Tuerca de Enfoque */}
+          {/* Botón de Calibración / Tuerca de Enfoque */}
           <button
             type="button"
             onClick={() => setShowConfigModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border hover:border-violet-500/60 text-xs font-bold text-slate-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 group"
-            title="Calibrar enfoque y proporciÃ³n de las flashcards"
+            title="Calibrar enfoque y proporción de las flashcards"
           >
             <Settings className="w-4 h-4 text-violet-400 group-hover:rotate-45 transition-transform" />
             <span className="hidden sm:inline">Enfoque</span>
@@ -1584,12 +1585,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/40 text-xs font-bold text-violet-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
           >
             <HelpCircle className="w-4 h-4 text-amber-400" />
-            <span>Adivina QuiÃ©n</span>
+            <span>Adivina Quién</span>
           </button>
         </div>
       </div>
 
-      {/* NotificaciÃ³n de estado */}
+      {/* Notificación de estado */}
       {statusNotification && (
         <div className="mb-6 p-4 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs sm:text-sm flex items-center gap-3 animate-fadeIn shadow-lg">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -1604,7 +1605,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Fichas de Estudio Pendientes</h2>
           <p className="text-sm text-slate-300 mb-8 leading-relaxed">
-            Este Study Kit fue creado de forma rÃ¡pida centrada en preguntas. Puedes generar ahora sus tarjetas de memoria interactivas con repeticiÃ³n espaciada utilizando la IA.
+            Este Study Kit fue creado de forma rápida centrada en preguntas. Puedes generar ahora sus tarjetas de memoria interactivas con repetición espaciada utilizando la IA.
           </p>
           <button
             type="button"
@@ -1678,13 +1679,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </div>
           </div>
 
-          {/* â”€â”€ INTERACTIVE 3D PERSPECTIVE FLIP CARD â”€â”€ */}
+          {/* ── INTERACTIVE 3D PERSPECTIVE FLIP CARD ── */}
           <div className="perspective-card w-full min-h-[380px] sm:min-h-[440px]">
             <div
               onClick={() => setIsFlipped(!isFlipped)}
               className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group min-h-[380px] sm:min-h-[440px] rounded-3xl`}
             >
-              {/* CARA FRONTAL (TÃ‰RMINO O PREGUNTA CONCRETA) */}
+              {/* CARA FRONTAL (TÉRMINO O PREGUNTA CONCRETA) */}
               <div className="card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#140e26] via-[#0d0918] to-[#090314] glass-specular">
                 <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                   {isQuestionCard ? (
@@ -1695,13 +1696,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   ) : (
                     <span className="flex items-center gap-1.5 text-[11px] text-indigo-400/90 font-semibold tracking-wider">
                       <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                      TÃ©rmino Clave
+                      Término Clave
                     </span>
                   )}
                   <div className="flex items-center gap-2">
                     {currentCard?.mastery === 'mastered' && (
                       <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold text-[10px] tabular-nums">
-                        <Check className="w-3 h-3 text-emerald-400" /> Â¡Dominada!
+                        <Check className="w-3 h-3 text-emerald-400" /> ¡Dominada!
                       </span>
                     )}
                     {currentCard?.mastery === 'known' && (
@@ -1711,7 +1712,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     )}
                     {currentCard?.mastery === 'to-learn' && (
                       <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 font-semibold text-[10px] tabular-nums">
-                        <RotateCcw className="w-3 h-3 text-rose-400" /> AÃºn no la sÃ©
+                        <RotateCcw className="w-3 h-3 text-rose-400" /> Aún no la sé
                       </span>
                     )}
                     <span className="text-[11px] px-2.5 py-0.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-400 tabular-nums">
@@ -1731,12 +1732,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   <span>
                     {isQuestionCard
                       ? 'Haz clic para voltear y ver la respuesta'
-                      : 'Haz clic para voltear y ver la definiciÃ³n'}
+                      : 'Haz clic para voltear y ver la definición'}
                   </span>
                 </div>
               </div>
 
-              {/* CARA POSTERIOR (DEFINICIÃ“N O RESPUESTA) */}
+              {/* CARA POSTERIOR (DEFINICIÓN O RESPUESTA) */}
               <div className="card-face card-back rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#16102c] via-[#0e0a1b] to-[#090314] glass-specular">
                 <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                   {isQuestionCard ? (
@@ -1745,13 +1746,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5 text-[11px] text-indigo-400/90 font-semibold tracking-wider">
-                      DefiniciÃ³n & Concepto
+                      Definición & Concepto
                     </span>
                   )}
                   <div className="flex items-center gap-2">
                     {currentCard?.mastery === 'mastered' && (
                       <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold text-[10px] tabular-nums">
-                        <Check className="w-3 h-3 text-emerald-400" /> Â¡Dominada!
+                        <Check className="w-3 h-3 text-emerald-400" /> ¡Dominada!
                       </span>
                     )}
                     {currentCard?.mastery === 'known' && (
@@ -1761,7 +1762,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     )}
                     {currentCard?.mastery === 'to-learn' && (
                       <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 font-semibold text-[10px] tabular-nums">
-                        <RotateCcw className="w-3 h-3 text-rose-400" /> AÃºn no la sÃ©
+                        <RotateCcw className="w-3 h-3 text-rose-400" /> Aún no la sé
                       </span>
                     )}
                     <span className="text-[11px] px-2.5 py-0.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-400 tabular-nums">
@@ -1781,14 +1782,14 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   <span>
                     {isQuestionCard
                       ? 'Haz clic para volver a ver la pregunta'
-                      : 'Haz clic para volver a ver el tÃ©rmino'}
+                      : 'Haz clic para volver a ver el término'}
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* NavegaciÃ³n y EvaluaciÃ³n de Dominio */}
+          {/* Navegación y Evaluación de Dominio */}
           <div className="flex items-center justify-between gap-3 pt-2 flex-wrap">
             <button
               type="button"
@@ -1800,7 +1801,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <span className="hidden sm:inline">Anterior</span>
             </button>
 
-            {/* Botones de EvaluaciÃ³n */}
+            {/* Botones de Evaluación */}
             <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center max-w-md">
               <button
                 type="button"
@@ -1811,7 +1812,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
                 }`}
               >
-                AÃºn no la sÃ©
+                Aún no la sé
               </button>
               <button
                 type="button"
@@ -1833,7 +1834,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
                 }`}
               >
-                Â¡Dominada!
+                ¡Dominada!
               </button>
             </div>
 
@@ -1850,8 +1851,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
         </div>
       ) : null}
 
-      {/* Modal de CalibraciÃ³n de Enfoque de Flashcards (Tuerca) */}
-      {showConfigModal && (
+      {/* Modal de Calibración de Enfoque de Flashcards (Tuerca) */}
+      {showConfigModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
           <div className="bg-thea-surface border border-thea-border rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative overflow-hidden">
             {/* Cabecera del Modal */}
@@ -1863,7 +1864,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 <div>
                   <h3 className="text-lg font-bold text-white">Calibrar Enfoque de Flashcards</h3>
                   <p className="text-xs text-slate-400">
-                    Ajusta el tema especÃ­fico y la proporciÃ³n de tÃ©rminos vs preguntas
+                    Ajusta el tema específico y la proporción de términos vs preguntas
                   </p>
                 </div>
               </div>
@@ -1879,10 +1880,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
             {/* Formulario */}
             <div className="space-y-5">
-              {/* Campo 1: Subtema o Enfoque TemÃ¡tico */}
+              {/* Campo 1: Subtema o Enfoque Temático */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Subtema o Enfoque EspecÃ­fico (Opcional)
+                  Subtema o Enfoque Específico (Opcional)
                 </label>
                 <div className="relative">
                   <Target className="w-4 h-4 text-violet-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1890,19 +1891,19 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     type="text"
                     value={focusTopic}
                     onChange={e => setFocusTopic(e.target.value)}
-                    placeholder="Ej. Mecanismo de acciÃ³n, fÃ³rmulas, casos clÃ­nicos o tema particular..."
+                    placeholder="Ej. Mecanismo de acción, fórmulas, casos clínicos o tema particular..."
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900/80 border border-thea-border text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
                   />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Si se deja en blanco, la IA extraerÃ¡ los puntos mÃ¡s relevantes de todo el documento.
+                  Si se deja en blanco, la IA extraerá los puntos más relevantes de todo el documento.
                 </p>
               </div>
 
-              {/* Campo 2: ProporciÃ³n de Formato */}
+              {/* Campo 2: Proporción de Formato */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
-                  ProporciÃ³n de Formato
+                  Proporción de Formato
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
@@ -1915,10 +1916,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     }`}
                   >
                     <span className="text-xs font-extrabold block text-violet-300 mb-1">
-                      70% TÃ©rminos / 30% Preguntas
+                      70% Términos / 30% Preguntas
                     </span>
                     <span className="text-[11px] leading-tight text-slate-400">
-                      Balance didÃ¡ctico Ã³ptimo para memorizaciÃ³n.
+                      Balance didáctico óptimo para memorización.
                     </span>
                   </button>
 
@@ -1949,10 +1950,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     }`}
                   >
                     <span className="text-xs font-extrabold block text-amber-300 mb-1">
-                      100% TÃ©rminos Clave
+                      100% Términos Clave
                     </span>
                     <span className="text-[11px] leading-tight text-slate-400">
-                      Concepto o vocablo al frente y definiciÃ³n al reverso.
+                      Concepto o vocablo al frente y definición al reverso.
                     </span>
                   </button>
                 </div>
@@ -1981,12 +1982,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 </div>
               </div>
 
-              {/* InformaciÃ³n sobre la suma a la baraja */}
+              {/* Información sobre la suma a la baraja */}
               <div className="p-3 rounded-xl bg-violet-950/30 border border-violet-500/20 text-[11px] text-violet-200/90 leading-relaxed">
-                <strong>Nota:</strong> Las nuevas tarjetas generadas se sumarÃ¡n directamente a tu baraja actual sin eliminar las existentes ni resetear tu progreso.
+                <strong>Nota:</strong> Las nuevas tarjetas generadas se sumarán directamente a tu baraja actual sin eliminar las existentes ni resetear tu progreso.
               </div>
 
-              {/* Botones de AcciÃ³n */}
+              {/* Botones de Acción */}
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-thea-border">
                 <button
                   type="button"
@@ -2010,14 +2011,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Generar y AÃ±adir a la Baraja</span>
+                      <span>Generar y Añadir a la Baraja</span>
                     </>
                   )}
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -3320,7 +3320,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   )}
 
   {/* ── LATERAL SLIDE-OVER DRAWER: CALIBRACIÓN PEDAGÓGICA Y DIFICULTAD ──────── */}
-  {showConfigDrawer && (
+  {showConfigDrawer && typeof document !== 'undefined' && createPortal(
     <div className="fixed inset-0 z-50 overflow-hidden animate-fadeIn">
       {/* Backdrop */}
       <div
@@ -3615,7 +3615,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )}
 
   {/* ── MODAL DE CONFIRMACIÓN PARA REINICIAR PROGRESO DESDE LOS ROMBOS ── */}

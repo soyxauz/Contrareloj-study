@@ -966,7 +966,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
       </section>
 
       {/* ── Modal de Selección de Kit para Acción Rápida ── */}
-      {selectedActionForKit && (
+      {selectedActionForKit && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
@@ -1082,7 +1082,8 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Modal de Gestión de Materias (Portal) ── */}
@@ -1456,7 +1457,9 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1605,7 +1608,8 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1647,7 +1651,9 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1805,6 +1811,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

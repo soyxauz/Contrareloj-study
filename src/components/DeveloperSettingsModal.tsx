@@ -1,3 +1,5 @@
+import React from 'react';
+import { createPortal } from 'react-dom';
 import type { DeveloperSettings } from '../types';
 import { ShieldCheck, Cpu, Code2, X } from 'lucide-react';
 
@@ -14,7 +16,9 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
   onClose,
   onResetKits
 }) => {
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
       <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
         <button
@@ -118,6 +122,7 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Cloud,
   RefreshCw,
@@ -124,11 +125,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 animate-fadeIn">
-      <div className="w-full max-w-lg bg-[#0e0b16] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col will-change-transform">
-        {/* Mobile Pull Handle */}
-        <div className="w-12 h-1.5 bg-slate-600/70 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+  if (!isOpen || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
+      <div className="w-full max-w-lg bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col will-change-transform">
 
         {/* Close Button */}
         <button
@@ -284,6 +285,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
 
       </div>
     </div>
-  </div>
+  </div>,
+  document.body
   );
 };

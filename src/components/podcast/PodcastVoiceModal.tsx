@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import type { PodcastFormat, PodcastDuration } from '../../types';
 import {
   Sparkles,
@@ -78,14 +79,14 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
   onRequestConfirmReplace,
   isGenerating,
 }) => {
-  if (!show) return null;
+  if (!show || typeof document === 'undefined') return null;
 
   const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
   const candidateVoices = esVoices.length > 0 ? esVoices : voices;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
-      <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl relative text-left mb-14 sm:mb-0">
+      <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl relative text-left">
         {/* Encabezado del Modal */}
         <div className="flex items-center justify-between pb-4 border-b border-thea-border mb-4">
           <div className="flex items-center gap-2.5">
@@ -765,6 +766,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

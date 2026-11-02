@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
     Wand2,
@@ -776,7 +777,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       )}
 
       {/* ── ZOOM MODAL FOR SELECTED ASSET ─────────────────────────────────── */}
-      {selectedAsset && (
+      {selectedAsset && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
           <div className="bg-thea-surface border border-thea-border rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl relative">
             {/* Modal Header */}
@@ -840,11 +841,12 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Smart Edit Modal */}
-      {showSmartEditModal && (
+      {showSmartEditModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
           <div className="bg-[#0e0b16] border border-white/10 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
             <div className="flex items-center gap-3 mb-4">
@@ -907,11 +909,12 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL: CAMBIAR EXTENSIÓN / REGENERAR GUÍA ── */}
-      {showDepthModal && (
+      {showDepthModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
           <div className="bg-[#0e0b16] border border-white/10 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl relative">
             <div className="flex items-center justify-between gap-3 mb-4">
@@ -981,7 +984,8 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
