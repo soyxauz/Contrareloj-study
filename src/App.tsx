@@ -123,31 +123,22 @@ export const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  // Desplazamiento suave inercial (Lenis 120 FPS sin impacto en el frame budget)
+  // Desplazamiento suave inercial (Lenis 120 FPS fluido, reactivo y de alta velocidad)
   useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReduced) return;
-
     const lenis = new Lenis({
-      duration: 1.25, // Deslizamiento pausado, elegante y no rápido
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // Curva exponencial suave de autor
+      autoRaf: true,
+      lerp: 0.1, // Respuesta inercial instantánea, continua y sedosa
+      wheelMultiplier: 1.15, // Desplazamiento reactivo y ágil por muesca de rueda
+      touchMultiplier: 1.5,
       smoothWheel: true,
-      wheelMultiplier: 0.9, // Suaviza la fuerza por tick de rueda física
-      touchMultiplier: 1.2,
+      syncTouch: false,
+      respectReducedMotion: false, // Forzar activación del scroll smooth en Windows sin bloqueo de accesibilidad del SO
       infinite: false,
     });
-
-    let rafId: number;
-    function raf(time: number) {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    }
-    rafId = requestAnimationFrame(raf);
 
     (window as unknown as { __lenis?: Lenis }).__lenis = lenis;
 
     return () => {
-      cancelAnimationFrame(rafId);
       lenis.destroy();
       delete (window as unknown as { __lenis?: Lenis }).__lenis;
     };
