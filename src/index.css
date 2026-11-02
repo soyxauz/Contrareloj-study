@@ -58,16 +58,6 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 20px -2px rgba(0, 0, 0, 0.5);
 }
 
-/* Aceleración de scroll Chromium para listas y tarjetas largas (0 overhead fuera de pantalla) */
-.cv-auto {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 320px;
-}
-.cv-auto-sm {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 120px;
-}
-
 /* Stagger entrance cascade rápido y sin jank */
 @keyframes staggerFadeIn {
   from {

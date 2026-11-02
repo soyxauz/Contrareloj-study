@@ -261,7 +261,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                     loadSingleAsset(asset.id);
                   }
                 }}
-                className="group bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-white/25 hover:shadow-2xl hover:scale-[1.015] active:scale-[0.985] transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col cv-auto"
+                className="group bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-white/25 hover:shadow-2xl hover:scale-[1.015] active:scale-[0.985] transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col"
               >
                 {/* Image Box */}
                 <div className="relative aspect-video bg-black/40 overflow-hidden flex items-center justify-center p-2 border-b border-white/[0.06]">
