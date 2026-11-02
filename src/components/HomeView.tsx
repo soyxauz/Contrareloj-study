@@ -470,62 +470,64 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 animate-fadeIn">
 
-      {/* ── Hero Section ─────────────────────────── */}
-      <section className="relative mb-6 overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-violet-950/80 via-thea-surface to-indigo-950/60 border border-thea-border p-5 sm:p-7">
-        <div className="absolute -top-20 -right-20 w-60 h-60 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* ── Hero Section (Estilo Linear / Apple Studio) ─────────────────── */}
+      <section className="relative mb-6 rounded-3xl bg-gradient-to-b from-white/[0.04] via-thea-surface/90 to-thea-surface/70 border border-white/10 p-6 sm:p-8 glass-specular overflow-hidden">
+        {/* Línea de luz superior de alta definición */}
+        <div className="absolute top-0 left-12 right-12 h-[1px] bg-gradient-to-r from-transparent via-violet-400/40 to-transparent pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-              Contrareloj Study
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="space-y-3 max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300 text-xs font-semibold tracking-wide">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Contrareloj Study &bull; Motor Adaptativo</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
-              ¡Hola! ¿Qué quieres<br />
-              estudiar hoy?
+            <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-[-0.03em] leading-tight">
+              ¿Qué quieres dominar hoy?
             </h1>
-            <p className="text-slate-400 text-xs sm:text-sm max-w-md">
-              Sube cualquier material y Contrareloj Study genera automáticamente preguntas, flashcards,
-              guía de estudio y podcast de repaso — todo con IA y RAG local.
+            <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+              Transforma apuntes, vídeos de YouTube o PDFs en bancos de preguntas interactivas, flashcards y tutoría personalizada con IA local.
             </p>
           </div>
 
-          {isAIActive ? (
-            <button
-              onClick={() => onNavigate('create', 'topic')}
-              className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-violet-900/40 group shrink-0 cursor-pointer min-h-[48px]"
-            >
-              <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-              <span>Crear Study Kit</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => (onOpenAISettings ? onOpenAISettings() : onNavigate('create'))}
-              className="w-full sm:w-auto justify-center flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-thea-surfaceLight/80 hover:bg-thea-surfaceLight border border-thea-border text-slate-400 hover:text-slate-200 font-semibold text-sm sm:text-base transition-all group shrink-0 cursor-pointer min-h-[48px] shadow-none"
-              title="Configura tu API Key funcional para habilitar la creación de Study Kits"
-            >
-              <Lock className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-              <span>Crear Study Kit</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
-                Requiere API
-              </span>
-            </button>
-          )}
+          <div className="shrink-0 w-full md:w-auto">
+            {isAIActive ? (
+              <button
+                type="button"
+                onClick={() => onNavigate('create', 'topic')}
+                className="active-press w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-violet-950/50 flex items-center justify-center gap-2.5 cursor-pointer transition-transform"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Crear Study Kit</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => (onOpenAISettings ? onOpenAISettings() : onNavigate('create'))}
+                className="active-press w-full md:w-auto px-6 py-3.5 rounded-2xl bg-thea-surface border border-white/10 text-slate-300 hover:text-white font-semibold text-sm flex items-center justify-center gap-2.5 cursor-pointer transition-transform"
+                title="Configura tu API Key funcional para habilitar la creación de Study Kits"
+              >
+                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Crear Study Kit</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                  Requiere API
+                </span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Source chips */}
-        <div className="relative z-10 mt-5 pt-3 border-t border-thea-border/40">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-400 font-semibold tracking-wide uppercase flex items-center gap-1.5">
-              <span>Acepta:</span>
+        <div className="relative z-10 mt-6 pt-4 border-t border-white/[0.06]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase flex items-center gap-1.5">
+              <span>Fuentes compatibles:</span>
               {!isAIActive && (
                 <span className="text-[11px] text-amber-400 font-normal lowercase">(en pausa hasta activar API)</span>
               )}
             </span>
             {isAIActive ? (
               <span className="text-[11px] text-slate-500 hidden sm:inline">
-                Desliza o haz clic para empezar
+                Haz clic en una fuente para empezar
               </span>
             ) : (
               <button
@@ -539,7 +541,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             )}
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none touch-pan-x">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
             {INPUT_SOURCES.map(src => {
               if (isAIActive) {
                 return (
@@ -547,10 +549,10 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     key={src.label}
                     type="button"
                     onClick={() => onNavigate('create', src.tab)}
-                    className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-thea-bg/90 border border-thea-border/80 text-slate-200 text-xs font-medium cursor-pointer transition-all shadow-sm active:scale-95 group shrink-0 ${src.hoverStyle}`}
+                    className="active-press inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-violet-500/40 text-slate-200 text-xs font-medium cursor-pointer transition-[transform,background-color,border-color] shadow-sm shrink-0"
                     title={`Hacer clic para crear con ${src.label}`}
                   >
-                    <span className="transition-transform group-hover:scale-110 shrink-0">{src.icon}</span>
+                    <span className="shrink-0">{src.icon}</span>
                     <span className="whitespace-nowrap font-medium">{src.label}</span>
                   </button>
                 );
@@ -560,7 +562,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   key={src.label}
                   type="button"
                   onClick={onOpenAISettings}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-thea-surface/60 border border-thea-border/80 text-slate-500 text-xs font-medium cursor-pointer transition-all active:scale-95 group shrink-0 grayscale hover:text-slate-300 hover:border-thea-border"
+                  className="active-press inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.02] border border-white/[0.06] text-slate-500 text-xs font-medium cursor-pointer shrink-0 grayscale hover:text-slate-300"
                   title="Configura tu API Key funcional para habilitar esta opción"
                 >
                   <span className="opacity-50 shrink-0">{src.icon}</span>
@@ -793,21 +795,29 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     }
                   }}
                   style={{
-                    backgroundColor: mTheme.cardBgHex,
-                    animationDelay: `${Math.min(index * 35, 350)}ms`,
+                    background: `radial-gradient(ellipse 95% 85% at 0% 0%, ${mTheme.hex}16 0%, rgba(18, 12, 30, 0.96) 65%)`,
+                    animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
-                  className={`animate-stagger-item active-press-card glass-specular group relative text-left p-5 sm:p-6 rounded-3xl border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[190px] hover:translate-y-[-2px] ${
+                  className={`animate-stagger-item active-press-card glass-specular group relative text-left p-5 sm:p-6 rounded-3xl border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[195px] hover:translate-y-[-2px] border-white/[0.08] hover:border-white/20 transition-transform ${
                     isSelectionMode && isKitSelected
-                      ? 'ring-2 ring-violet-500 border-violet-400 shadow-2xl scale-[1.01]'
+                      ? 'ring-2 ring-violet-500 border-violet-400 shadow-2xl'
                       : isActive
-                      ? 'ring-2 ring-white/30 shadow-2xl border-white/20'
-                      : 'border-white/10 hover:border-white/25'
+                      ? 'ring-1 ring-white/30 border-white/25 shadow-2xl'
+                      : ''
                   }`}
                 >
-                  {/* Marca de agua ilustrativa interactiva acelerada por GPU */}
+                  {/* Línea de luz superior con el color de la materia (Estilo Linear) */}
+                  <div
+                    className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
+                    style={{
+                      background: `linear-gradient(90deg, ${mTheme.hex}80 0%, ${mTheme.hex}15 50%, transparent 100%)`,
+                    }}
+                  />
+
+                  {/* Marca de agua sutil y ligera (Composite-only, 120 FPS sin lag) */}
                   <div
                     style={{ color: mTheme.hex }}
-                    className="absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-[transform,opacity] duration-250 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 opacity-45 group-hover:rotate-0 group-hover:-translate-y-1.5 group-hover:translate-x-0 group-hover:opacity-100 will-change-transform"
+                    className="absolute -bottom-2 -right-2 pointer-events-none select-none z-0 opacity-[0.07] group-hover:opacity-[0.14] transition-opacity duration-200"
                   >
                     {renderWatermarkIcon(kit.icon, kit.category, kit.title)}
                   </div>
@@ -831,18 +841,26 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                         </div>
                       )}
                       <div>
-                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                          <span className="inline-block text-[10px] font-bold tracking-wider text-white/60 uppercase">
-                            {kit.category || 'General'}
+                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                          <span
+                            className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full"
+                            style={{
+                              color: mTheme.hex,
+                              backgroundColor: `${mTheme.hex}15`,
+                              border: `1px solid ${mTheme.hex}35`,
+                            }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: mTheme.hex }} />
+                            <span>{kit.category || 'General'}</span>
                           </span>
                           {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/15">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-white/70 border border-white/10">
                               <Globe className="w-2.5 h-2.5 opacity-70" />
                               <span>ES (orig. {kit.sourceLanguage})</span>
                             </span>
                           )}
                         </div>
-                        <h3 className="font-bold text-white text-base sm:text-lg leading-tight line-clamp-2 tracking-tight">
+                        <h3 className="font-bold text-white text-base sm:text-lg leading-snug line-clamp-2 tracking-tight group-hover:text-violet-200 transition-colors">
                           {kit.title}
                         </h3>
                       </div>
@@ -938,7 +956,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     </div>
 
                     {/* Barra cápsula oscura con píldora redondeada y profundidad física */}
-                    <div className="w-full h-2.5 rounded-full bg-black/45 overflow-hidden p-0.5 border border-black/20 shadow-inner">
+                    <div className="w-full h-2 rounded-full bg-black/60 overflow-hidden p-[1px] border border-white/5">
                       <div
                         style={{
                           width: `${progressPercent}%`,
@@ -1865,11 +1883,11 @@ const QuickStat: React.FC<{
   label: string;
   accent: string;
 }> = ({ icon, value, label }) => (
-  <div className="flex items-center gap-3 p-4 rounded-2xl bg-thea-surface/85 backdrop-blur-md border border-white/5 glass-specular transition-[transform,border-color] duration-200 hover:border-white/15 hover:translate-y-[-1px]">
-    <div className="shrink-0 p-2 rounded-xl bg-white/5 border border-white/10">{icon}</div>
+  <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-[#141022]/80 border border-white/[0.08] hover:border-white/[0.18] glass-specular transition-transform duration-150 hover:translate-y-[-1px]">
+    <div className="shrink-0 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">{icon}</div>
     <div className="min-w-0">
-      <p className="text-lg font-bold text-white leading-tight tabular-nums tracking-tight truncate">{value}</p>
-      <p className="text-[11px] text-slate-400 font-medium tracking-wide">{label}</p>
+      <p className="text-xl font-bold text-white leading-tight tabular-nums tracking-tight truncate">{value}</p>
+      <p className="text-xs text-slate-400 font-medium tracking-wide mt-0.5">{label}</p>
     </div>
   </div>
 );
