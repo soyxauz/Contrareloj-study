@@ -632,8 +632,8 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Tarjetas de kits con diseño Dark Glass (Emil Kowalski / Apple Design) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+            {/* Tarjetas de kits con fondo tintado distintivo y espaciado amplio Studio Space */}
             {filteredKits.map((kit, index) => {
               const isActive = currentKit?.id === kit.id;
               const kStats = bookStatsMap.get(kit.id) || getBookRealStats(kit, userId);
@@ -659,29 +659,30 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     }
                   }}
                   style={{
-                    background: `radial-gradient(ellipse 85% 70% at 0% 0%, ${mTheme.hex}0d 0%, rgba(15, 12, 24, 0.98) 75%)`,
+                    background: `radial-gradient(ellipse 120% 90% at 0% 0%, ${mTheme.hex}22 0%, ${mTheme.cardBgHex} 65%, #0e0b16 100%)`,
+                    borderColor: `${mTheme.hex}30`,
                     animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
-                  className={`animate-stagger-item active-press-card glass-specular group relative text-left p-5 sm:p-6 rounded-3xl border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[195px] hover:translate-y-[-2px] border-white/[0.08] hover:border-white/20 transition-transform ${
+                  className={`animate-stagger-item active-press-card glass-specular group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] hover:translate-y-[-2px] hover:border-white/30 transition-[transform,border-color] ${
                     isSelectionMode && isKitSelected
-                      ? 'ring-2 ring-violet-500 border-violet-400 shadow-2xl'
+                      ? 'ring-2 ring-white/50 border-white shadow-2xl'
                       : isActive
-                      ? 'ring-1 ring-white/30 border-white/25 shadow-2xl'
+                      ? 'ring-1 ring-white/30 border-white/40 shadow-2xl'
                       : ''
                   }`}
                 >
-                  {/* Línea de luz superior con micro-acento de precisión de 1.5px (Estilo Linear) */}
+                  {/* Línea de luz superior con el color distintivo de la materia */}
                   <div
-                    className="absolute top-0 left-0 right-0 h-[1.5px] pointer-events-none"
+                    className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
                     style={{
-                      background: `linear-gradient(90deg, ${mTheme.hex}70 0%, ${mTheme.hex}15 45%, transparent 85%)`,
+                      background: `linear-gradient(90deg, ${mTheme.hex}cc 0%, ${mTheme.hex}35 60%, transparent 100%)`,
                     }}
                   />
 
                   {/* Marca de agua sutil y ligera (Composite-only, 120 FPS sin lag) */}
                   <div
                     style={{ color: mTheme.hex }}
-                    className="absolute -bottom-2 -right-2 pointer-events-none select-none z-0 opacity-[0.035] group-hover:opacity-[0.07] transition-opacity duration-300"
+                    className="absolute -bottom-2 -right-2 pointer-events-none select-none z-0 opacity-[0.06] group-hover:opacity-[0.11] transition-opacity duration-300"
                   >
                     {renderWatermarkIcon(kit.icon, kit.category, kit.title)}
                   </div>
@@ -697,7 +698,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                           }}
                           className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 mt-0.5 ${
                             isKitSelected
-                              ? 'bg-violet-600 border-violet-400 text-white shadow-md'
+                              ? 'bg-white text-zinc-950 border-white shadow-md'
                               : 'bg-black/50 border-white/30 text-transparent hover:border-white/70'
                           }`}
                         >
@@ -705,26 +706,26 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                         </div>
                       )}
                       <div>
-                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                        <div className="flex items-center gap-2 mb-2.5 flex-wrap">
                           <span
-                            className="inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-md"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-2.5 py-0.5 rounded-lg shadow-sm"
                             style={{
                               color: mTheme.hex,
-                              backgroundColor: `${mTheme.hex}12`,
-                              border: `1px solid ${mTheme.hex}22`,
+                              backgroundColor: `${mTheme.hex}18`,
+                              border: `1px solid ${mTheme.hex}35`,
                             }}
                           >
-                            <span className="w-1 h-1 rounded-full shadow-sm" style={{ backgroundColor: mTheme.hex }} />
-                            <span className="font-semibold text-[10px]">{kit.category || 'General'}</span>
+                            <span className="w-1.5 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: mTheme.hex }} />
+                            <span>{kit.category || 'General'}</span>
                           </span>
                           {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-white/70 border border-white/10">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded-md bg-white/5 text-white/70 border border-white/10">
                               <Globe className="w-2.5 h-2.5 opacity-70" />
                               <span>ES (orig. {kit.sourceLanguage})</span>
                             </span>
                           )}
                         </div>
-                        <h3 className="font-bold text-white text-base sm:text-lg leading-snug line-clamp-2 tracking-tight group-hover:text-violet-200 transition-colors">
+                        <h3 className="font-bold text-white text-base sm:text-lg leading-snug line-clamp-2 tracking-tight group-hover:text-white transition-colors">
                           {kit.title}
                         </h3>
                       </div>
@@ -793,12 +794,12 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     </div>
                   </div>
 
-                  {/* Bottom Area: Estadísticas + Barra cápsula oscura con números tabulares */}
-                  <div className="mt-5 relative z-10 space-y-2">
+                  {/* Bottom Area: Estadísticas + Micro-barra de progreso con respiración amplia */}
+                  <div className="mt-7 relative z-10 space-y-3">
                     {/* Estadísticas del kit */}
-                    <div className="flex items-center gap-3 text-xs text-white/85 font-medium flex-wrap tabular-nums">
+                    <div className="flex items-center gap-4 text-xs text-white/90 font-medium flex-wrap tabular-nums">
                       <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
-                        <Brain className="w-3.5 h-3.5 text-white/70 shrink-0" />
+                        <Brain className="w-3.5 h-3.5 shrink-0" style={{ color: mTheme.hex }} />
                         <span>
                           {kStats.levelCorrectCount > 0 || kStats.level > 1
                             ? `Nivel ${kStats.level}: ${kStats.levelCorrectCount}/${kStats.levelTarget} (${smartStudyPct}%)`
@@ -808,7 +809,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                         </span>
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-white/70 shrink-0" />
+                        <Layers className="w-3.5 h-3.5 shrink-0" style={{ color: mTheme.hex }} />
                         <span>{kStats.flashcardsMastered}/{kStats.flashcardsTotal} cards</span>
                       </span>
                       {kStats.assetsCount > 0 && (
@@ -819,14 +820,14 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       )}
                     </div>
 
-                    {/* Micro-barra de progreso de precisión (Linear Studio 3px) */}
-                    <div className="w-full h-[3px] rounded-full bg-white/[0.06] overflow-hidden">
+                    {/* Barra de progreso de precisión con color distintivo de la materia */}
+                    <div className="w-full h-1 rounded-full bg-black/50 overflow-hidden">
                       <div
                         style={{
                           width: `${progressPercent}%`,
                           backgroundColor: mTheme.hex,
                         }}
-                        className="h-full rounded-full transition-[width] duration-300 ease-out"
+                        className="h-full rounded-full transition-[width] duration-300 ease-out shadow-sm"
                       />
                     </div>
                   </div>
@@ -834,18 +835,18 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               );
             })}
 
-            {/* Create New Kit Card con feedback táctil elástico */}
+            {/* Create New Kit Card con feedback táctil elástico y respiración amplia */}
             <button
               onClick={() => onNavigate('create')}
-              className="active-press-card group flex flex-col items-center justify-center p-6 rounded-3xl border-2 border-dashed border-thea-border/80 hover:border-violet-500/80 bg-thea-surface/30 hover:bg-violet-950/20 glass-specular transition-[transform,border-color,background-color] duration-200 min-h-[190px] cursor-pointer"
+              className="active-press-card group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed border-white/15 hover:border-white/30 bg-white/[0.02] hover:bg-white/[0.04] glass-specular transition-[transform,border-color,background-color] duration-200 min-h-[220px] cursor-pointer"
             >
-              <div className="w-12 h-12 rounded-2xl bg-violet-600/20 group-hover:bg-violet-600/30 border border-violet-500/30 flex items-center justify-center mb-2.5 transition-[background-color,border-color] duration-200">
-                <Plus className="w-6 h-6 text-violet-400 group-hover:text-violet-300 group-hover:rotate-90 transition-transform duration-300" />
+              <div className="w-11 h-11 rounded-2xl bg-white/[0.06] group-hover:bg-white/[0.12] border border-white/10 flex items-center justify-center mb-3 transition-colors duration-200">
+                <Plus className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" />
               </div>
-              <span className="text-sm font-semibold text-slate-300 group-hover:text-violet-200 transition-colors">
+              <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
                 Nuevo Study Kit
               </span>
-              <span className="text-xs text-slate-500 mt-0.5">
+              <span className="text-xs text-slate-500 mt-1">
                 Texto, YouTube, PDF o enlace
               </span>
             </button>
