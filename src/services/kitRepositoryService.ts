@@ -117,10 +117,12 @@ export const kitRepositoryService = {
                 color: item.color || 'from-blue-500 to-indigo-600',
                 questions: [],
                 flashcards: [],
+                questionsCount: item.questionsCount || 0,
+                flashcardsCount: item.flashcardsCount || 0,
                 studyGuideMarkdown: '',
                 podcast: null,
                 updatedAt: item.updatedAt || 0,
-              }));
+              } as any));
               const hydrated = hydrateFlashcardsMastery(userId, partialKits);
               inMemoryKitsCache.set(key, hydrated);
               return hydrated;

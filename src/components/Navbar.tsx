@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import type { StudyKit, StudyMode, User } from '../types';
-import { calculateRealStreak } from '../services/statsService';
+import { calculateRealStreak, getGlobalStatsSnapshot } from '../services/statsService';
 import { authService } from '../services/authService';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
 import {
@@ -72,7 +72,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const realStreak = useMemo(() => {
     const sessions = kits.map(k => authService.getSmartStudySession(currentUser?.id || null, k.id));
-    return calculateRealStreak(sessions);
+    const streak = calculateRealStreak(sessions);
+    if (streak === 0 && kits.length === 0) {
+      const snap = getGlobalStatsSnapshot(currentUser?.id || null);
+      if (snap && snap.realStreakDays > 0) return snap.realStreakDays;
+    }
+    return streak;
   }, [kits, currentUser, navStatsVersion]);
   const modes: { id: StudyMode; label: string; icon: React.ReactNode }[] = [
     { id: 'smart-study', label: 'Smart Study', icon: <Brain className="w-4 h-4" /> },

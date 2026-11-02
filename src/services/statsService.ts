@@ -143,7 +143,9 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     return hit.stats;
   }
 
-  const totalQuestions = kit.questions ? kit.questions.length : 0;
+  const totalQuestions = (kit.questions && kit.questions.length > 0)
+    ? kit.questions.length
+    : (typeof (kit as any).questionsCount === 'number' ? (kit as any).questionsCount : 0);
   const history = session?.history && Array.isArray(session.history) ? session.history : [];
   const questionsAnswered = session?.questionsAnsweredTotal || history.length;
 
@@ -171,23 +173,32 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     ? kit.flashcards
     : (flashcardProgress?.cards || []);
 
-  const flashcardsTotal = activeFlashcards.length;
+  const flashcardsTotal = activeFlashcards.length > 0
+    ? activeFlashcards.length
+    : (typeof (kit as any).flashcardsCount === 'number' ? (kit as any).flashcardsCount : 0);
   let flashcardsMastered = 0;
   let flashcardsKnown = 0;
   let flashcardsToLearn = 0;
 
-  activeFlashcards.forEach(f => {
-    const termClean = f.term ? f.term.trim() : '';
-    const m = (f.id && flashcardMap[f.id]) ||
-              (f.term && flashcardMap[f.term]) ||
-              (termClean && flashcardMap[termClean]) ||
-              (termClean && flashcardMap[termClean.toLowerCase()]) ||
-              f.mastery ||
-              'to-learn';
-    if (m === 'mastered') flashcardsMastered++;
-    else if (m === 'known') flashcardsKnown++;
-    else flashcardsToLearn++;
-  });
+  if (activeFlashcards.length > 0) {
+    activeFlashcards.forEach(f => {
+      const termClean = f.term ? f.term.trim() : '';
+      const m = (f.id && flashcardMap[f.id]) ||
+                (f.term && flashcardMap[f.term]) ||
+                (termClean && flashcardMap[termClean]) ||
+                (termClean && flashcardMap[termClean.toLowerCase()]) ||
+                f.mastery ||
+                'to-learn';
+      if (m === 'mastered') flashcardsMastered++;
+      else if (m === 'known') flashcardsKnown++;
+      else flashcardsToLearn++;
+    });
+  } else if (flashcardMap && typeof flashcardMap === 'object') {
+    const values = Object.values(flashcardMap);
+    flashcardsMastered = values.filter(v => v === 'mastered').length;
+    flashcardsKnown = values.filter(v => v === 'known').length;
+    flashcardsToLearn = values.filter(v => v === 'to-learn').length;
+  }
 
   const chunksCount = kit.chunks ? kit.chunks.length : 0;
   const assetsCount = kit.assets ? kit.assets.length : 0;
@@ -337,6 +348,84 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
   return resultStats;
 }
 
+const SNAPSHOT_KEY_PREFIX = 'thea_global_stats_snap_';
+
+export interface GlobalStatsSnapshot {
+  totalBooks: number;
+  totalQuestions: number;
+  totalAnswered: number;
+  totalCorrect: number;
+  overallAccuracy: number;
+  totalFlashcards: number;
+  totalFlashcardsMastered: number;
+  totalAssets: number;
+  totalWords: number;
+  totalErrorsReinforced: number;
+  realStreakDays: number;
+  activeBooksCount: number;
+  updatedAt: number;
+}
+
+/**
+ * Guarda un resumen ultra compacto (< 200 bytes) en LocalStorage y Cookie para persistencia instantánea.
+ */
+export function saveGlobalStatsSnapshot(stats: GlobalStats, userId: string | null = null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = `${SNAPSHOT_KEY_PREFIX}${userId || 'guest'}`;
+    const snap: GlobalStatsSnapshot = {
+      totalBooks: stats.totalBooks,
+      totalQuestions: stats.totalQuestions,
+      totalAnswered: stats.totalAnswered,
+      totalCorrect: stats.totalCorrect,
+      overallAccuracy: stats.overallAccuracy,
+      totalFlashcards: stats.totalFlashcards,
+      totalFlashcardsMastered: stats.totalFlashcardsMastered,
+      totalAssets: stats.totalAssets,
+      totalWords: stats.totalWords,
+      totalErrorsReinforced: stats.totalErrorsReinforced,
+      realStreakDays: stats.realStreakDays,
+      activeBooksCount: stats.activeBooksCount,
+      updatedAt: Date.now(),
+    };
+    const serialized = JSON.stringify(snap);
+    localStorage.setItem(key, serialized);
+    // Respaldo en cookie de larga duración para garantizar persistencia síncrona
+    document.cookie = `${key}=${encodeURIComponent(serialized)}; path=/; max-age=31536000; SameSite=Lax`;
+  } catch {}
+}
+
+/**
+ * Recupera el resumen persistente instantáneo desde LocalStorage o Cookie.
+ */
+export function getGlobalStatsSnapshot(userId: string | null = null): GlobalStatsSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  const key = `${SNAPSHOT_KEY_PREFIX}${userId || 'guest'}`;
+  try {
+    // 1. LocalStorage
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed.totalQuestions === 'number') {
+        return parsed;
+      }
+    }
+  } catch {}
+
+  try {
+    // 2. Cookie fallback
+    const match = document.cookie.match(new RegExp(`(?:^|; )${key}=([^;]*)`));
+    if (match && match[1]) {
+      const parsed = JSON.parse(decodeURIComponent(match[1]));
+      if (parsed && typeof parsed.totalQuestions === 'number') {
+        return parsed;
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
 /**
  * Calcula las estadísticas globales de toda la biblioteca de libros del usuario.
  */
@@ -345,25 +434,47 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
   const sessions = kits.map(k => authService.getSmartStudySession(userId, k.id));
 
   const totalBooks = kits.length;
-  const totalQuestions = booksSummary.reduce((acc, b) => acc + b.totalQuestions, 0);
-  const totalAnswered = booksSummary.reduce((acc, b) => acc + b.questionsAnswered, 0);
-  const totalCorrect = booksSummary.reduce((acc, b) => acc + b.correctAnswers, 0);
+  let totalQuestions = booksSummary.reduce((acc, b) => acc + b.totalQuestions, 0);
+  let totalAnswered = booksSummary.reduce((acc, b) => acc + b.questionsAnswered, 0);
+  let totalCorrect = booksSummary.reduce((acc, b) => acc + b.correctAnswers, 0);
+
+  let totalFlashcards = booksSummary.reduce((acc, b) => acc + b.flashcardsTotal, 0);
+  let totalFlashcardsMastered = booksSummary.reduce((acc, b) => acc + b.flashcardsMastered, 0);
+  let totalAssets = booksSummary.reduce((acc, b) => acc + b.assetsCount, 0);
+  let totalWords = booksSummary.reduce((acc, b) => acc + b.wordCount, 0);
+  let totalErrorsReinforced = booksSummary.reduce((acc, b) => acc + b.errorsReinforced, 0);
+
+  let realStreakDays = calculateRealStreak(sessions);
+  let activeBooksCount = booksSummary.filter(b => b.questionsAnswered > 0).length;
+
+  // Si los kits aún se están hidratando desde IndexedDB o red, pero existe un snapshot local guardado:
+  const cachedSnap = getGlobalStatsSnapshot(userId);
+  if (cachedSnap) {
+    if (totalQuestions === 0 && cachedSnap.totalQuestions > 0) {
+      totalQuestions = cachedSnap.totalQuestions;
+    }
+    if (totalFlashcards === 0 && cachedSnap.totalFlashcards > 0) {
+      totalFlashcards = cachedSnap.totalFlashcards;
+      totalFlashcardsMastered = cachedSnap.totalFlashcardsMastered;
+    }
+    if (realStreakDays === 0 && cachedSnap.realStreakDays > 0) {
+      realStreakDays = cachedSnap.realStreakDays;
+    }
+    if (totalAnswered === 0 && cachedSnap.totalAnswered > 0) {
+      totalAnswered = cachedSnap.totalAnswered;
+      totalCorrect = cachedSnap.totalCorrect;
+    }
+    if (activeBooksCount === 0 && cachedSnap.activeBooksCount > 0) {
+      activeBooksCount = cachedSnap.activeBooksCount;
+    }
+  }
 
   const overallAccuracy = totalAnswered > 0
     ? Math.round((totalCorrect / totalAnswered) * 1000) / 10
-    : 0;
+    : (cachedSnap?.overallAccuracy || 0);
 
-  const totalFlashcards = booksSummary.reduce((acc, b) => acc + b.flashcardsTotal, 0);
-  const totalFlashcardsMastered = booksSummary.reduce((acc, b) => acc + b.flashcardsMastered, 0);
-  const totalAssets = booksSummary.reduce((acc, b) => acc + b.assetsCount, 0);
-  const totalWords = booksSummary.reduce((acc, b) => acc + b.wordCount, 0);
-  const totalErrorsReinforced = booksSummary.reduce((acc, b) => acc + b.errorsReinforced, 0);
-
-  const realStreakDays = calculateRealStreak(sessions);
-  const activeBooksCount = booksSummary.filter(b => b.questionsAnswered > 0).length;
-
-  return {
-    totalBooks,
+  const result: GlobalStats = {
+    totalBooks: Math.max(totalBooks, cachedSnap?.totalBooks || 0),
     totalQuestions,
     totalAnswered,
     totalCorrect,
@@ -377,4 +488,11 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
     activeBooksCount,
     booksSummary
   };
+
+  // Si tenemos estadísticas calculadas con reactivos o tarjetas válidas, refrescar el snapshot ultraligero
+  if (booksSummary.some(b => b.totalQuestions > 0 || b.flashcardsTotal > 0)) {
+    saveGlobalStatsSnapshot(result, userId);
+  }
+
+  return result;
 }

@@ -589,6 +589,17 @@ export const googleDriveService = {
    * Sincronización automática optimizada para el arranque de la aplicación o inicio de sesión.
    */
   async autoSyncOnStartup(userId: string): Promise<StudyKit[] | null> {
+    const lastSyncKey = `thea_last_drive_sync_${userId}`;
+    const lastSync = typeof localStorage !== 'undefined' ? Number(localStorage.getItem(lastSyncKey) || '0') : 0;
+    const now = Date.now();
+    const hasLocalKits = authService.getUserKits(userId).length > 0;
+
+    // Si los kits locales ya existen en la PC y se sincronizó hace menos de 5 minutos, no gastar recursos
+    if (hasLocalKits && now - lastSync < 5 * 60 * 1000) {
+      updateState({ status: 'idle', errorMessage: null });
+      return null;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
@@ -1600,6 +1611,10 @@ export const googleDriveService = {
         filesSyncedCount: rootFiles.length,
         errorMessage: null,
       });
+
+      try {
+        localStorage.setItem(`thea_last_drive_sync_${userId}`, Date.now().toString());
+      } catch {}
 
       // 8. Descarga de activos visuales en segundo plano sin bloquear el retorno ni la UI
       this.syncAssetsInBackground(token, rootFolderId).catch((err) => {
