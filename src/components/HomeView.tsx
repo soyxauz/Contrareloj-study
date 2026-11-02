@@ -612,7 +612,6 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
             {/* Chips de Materia con Superficie Unificada Dark Glass (Linear Studio) */}
             {availableMateriasList.map(materia => {
-              const mTheme = materiaThemeMap.get(materia.name.toLowerCase()) || getMateriaTheme(materia.name, kits, userId);
               const isSelected = selectedMateria.trim().toLowerCase() === materia.name.trim().toLowerCase();
               return (
                 <button
@@ -625,10 +624,6 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       : 'bg-white/[0.03] border-white/[0.08] text-slate-300 hover:text-white hover:border-white/20 hover:bg-white/[0.06]'
                   }`}
                 >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0 shadow-sm"
-                    style={{ backgroundColor: mTheme.hex }}
-                  />
                   <span className="tracking-tight">{materia.name}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold border ${
                     isSelected
@@ -772,14 +767,13 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       <div>
                         <div className="flex items-center gap-2 mb-2.5 flex-wrap">
                           <span
-                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-2.5 py-0.5 rounded-lg shadow-sm"
+                            className="inline-flex items-center text-[11px] font-semibold tracking-wide uppercase px-2.5 py-0.5 rounded-lg shadow-sm"
                             style={{
                               color: mTheme.hex,
                               backgroundColor: `${mTheme.hex}18`,
                               border: `1px solid ${mTheme.hex}35`,
                             }}
                           >
-                            <span className="w-1.5 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: mTheme.hex }} />
                             <span>{kit.category || 'General'}</span>
                           </span>
                           {kit.sourceLanguage && kit.sourceLanguage !== 'Español' && (
@@ -1229,7 +1223,6 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                             : `${mTheme.chipInactiveClass} hover:border-white/30`
                         }`}
                       >
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: mTheme.hex }} />
                         <span>{materia.name}</span>
                         <span className="text-[10px] opacity-70">({materia.count})</span>
                       </button>
