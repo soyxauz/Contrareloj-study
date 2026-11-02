@@ -264,3 +264,12 @@ export function resetUltraLightSmoothScroll(y: number = 0) {
     isProgrammaticScroll = false;
   }
 }
+
+/**
+ * Indica si el motor de desplazamiento inercial se encuentra actualmente activo en un frame de animación.
+ * Permite a las tareas en segundo plano (como sincronización con Google Drive) pausar operaciones pesadas
+ * para no degradar los 120 FPS de fluidez de la interfaz.
+ */
+export function isSmoothScrollActive(): boolean {
+  return isRunning;
+}

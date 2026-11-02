@@ -2,6 +2,8 @@ import type { StudyKit, DocumentAsset, User, PodcastSettings } from '../types';
 import { authService } from './authService';
 import {
   getAllStoredAssets,
+  getAllStoredAssetKeys,
+  getAssetById,
   saveAssetsToIndexedDB,
   stripHeavyAssetsForLocalStorage,
   saveSessionItem,
@@ -12,6 +14,7 @@ import {
   getDeletedKitIds,
   registerDriveAssetDownloader
 } from './storageService';
+import { isSmoothScrollActive } from '../utils/smoothScroll';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
 import {
@@ -240,6 +243,27 @@ function startProactiveTokenRefresher(): void {
 
 if (typeof window !== 'undefined') {
   startProactiveTokenRefresher();
+}
+
+let isPushToDriveInFlight = false;
+let pendingPushToDriveKits: StudyKit[] | null = null;
+let pendingPushToDriveUserId: string | null = null;
+
+let isPushProgressInFlight = false;
+let pendingProgressPushUserId: string | null = null;
+
+/**
+ * Si el usuario está realizando scroll inercial suave a 120 FPS o interactuando,
+ * cede el hilo de ejecución para que la sincronización en segundo plano JAMÁS robe frames.
+ */
+async function yieldIfScrolling(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (isSmoothScrollActive()) {
+    await new Promise(r => setTimeout(r, 150));
+    if (isSmoothScrollActive()) {
+      await new Promise(r => setTimeout(r, 150));
+    }
+  }
 }
 
 /**
@@ -985,7 +1009,7 @@ export const googleDriveService = {
    */
   async uploadOrUpdateJson(token: string, folderId: string, fileName: string, jsonData: any): Promise<string> {
     const existing = await this.findFileInFolder(token, folderId, fileName);
-    const jsonStr = JSON.stringify(jsonData, null, 2);
+    const jsonStr = JSON.stringify(jsonData);
 
     if (existing) {
       // Actualizar archivo existente
@@ -1658,6 +1682,13 @@ export const googleDriveService = {
       return;
     }
 
+    // 3. Mutex de subida concurrente: si ya hay una sincronización en progreso, encolar los últimos kits y salir sin saturar
+    if (isPushToDriveInFlight) {
+      pendingPushToDriveKits = kits;
+      pendingPushToDriveUserId = userId;
+      return;
+    }
+
     const deletedIds = getDeletedKitIds();
     const cleanKits: StudyKit[] = kits
       .filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id))
@@ -1683,9 +1714,11 @@ export const googleDriveService = {
       return;
     }
 
+    isPushToDriveInFlight = true;
     updateState({ status: 'syncing', errorMessage: null });
 
     try {
+      await yieldIfScrolling();
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
 
       // 1. Guardar base de usuarios, kits y progreso en paralelo con fusion acumulativa completa
@@ -1739,29 +1772,31 @@ export const googleDriveService = {
 
       authService.markKitsSyncedWithDrive(userId, driveMergedKits.map(k => k.id));
 
-      // 2. Subir activos visuales a subcarpeta 'assets/' concurrentemente en lotes de 6
+      // 2. Comprobación O(1) de memoria para activos visuales:
+      // En lugar de cargar todos los megabytes de imágenes a la RAM, comprobar primero solo las claves en IndexedDB
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
       const existingDriveAssets = await this.listFilesInFolder(token, assetsFolderId);
       const driveAssetNames = new Set(existingDriveAssets.map(f => f.name));
 
-      const allLocalAssets = await getAllStoredAssets();
-      const assetsToUpload = allLocalAssets.filter(asset => {
-        if (!asset.id || !asset.dataUrl) return false;
-        const isPng = asset.dataUrl.includes('image/png');
-        const expectedName = `${asset.id}.${isPng ? 'png' : 'jpg'}`;
-        return !driveAssetNames.has(expectedName);
+      const allLocalAssetKeys = await getAllStoredAssetKeys();
+      const missingKeys = allLocalAssetKeys.filter(key => {
+        return !driveAssetNames.has(`${key}.png`) && !driveAssetNames.has(`${key}.jpg`);
       });
 
       let uploadedCount = 0;
-      const BATCH_SIZE = 6;
-      for (let i = 0; i < assetsToUpload.length; i += BATCH_SIZE) {
-        const batch = assetsToUpload.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(
-          batch.map(asset => this.uploadAssetDirectly(token, assetsFolderId, asset))
-        );
-        uploadedCount += results.filter(Boolean).length;
-        if (i + BATCH_SIZE < assetsToUpload.length) {
-          await new Promise(r => setTimeout(r, 80));
+      if (missingKeys.length > 0) {
+        const BATCH_SIZE = 4;
+        for (let i = 0; i < missingKeys.length; i += BATCH_SIZE) {
+          await yieldIfScrolling();
+          const batchKeys = missingKeys.slice(i, i + BATCH_SIZE);
+          const loadedAssets = (await Promise.all(batchKeys.map(k => getAssetById(k)))).filter((a): a is DocumentAsset => Boolean(a && a.dataUrl));
+          const results = await Promise.all(
+            loadedAssets.map(asset => this.uploadAssetDirectly(token, assetsFolderId, asset))
+          );
+          uploadedCount += results.filter(Boolean).length;
+          if (i + BATCH_SIZE < missingKeys.length) {
+            await new Promise(r => setTimeout(r, 100));
+          }
         }
       }
 
@@ -1795,6 +1830,7 @@ export const googleDriveService = {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
+          isPushToDriveInFlight = false;
           return this.pushToDrive(userId, kits);
         }
         updateState({
@@ -1803,6 +1839,17 @@ export const googleDriveService = {
         });
       } else {
         updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+      }
+    } finally {
+      isPushToDriveInFlight = false;
+      if (pendingPushToDriveUserId && pendingPushToDriveKits) {
+        const nextKits = pendingPushToDriveKits;
+        const nextUser = pendingPushToDriveUserId;
+        pendingPushToDriveKits = null;
+        pendingPushToDriveUserId = null;
+        setTimeout(() => {
+          this.pushToDrive(nextUser, nextKits).catch(() => {});
+        }, 1500);
       }
     }
   },
@@ -2054,7 +2101,12 @@ export const googleDriveService = {
    */
   async pushProgressToDrive(userId: string): Promise<void> {
     if (!userId || userId === 'guest') {
-      console.warn('[GoogleDriveService] Intento de sincronizar progreso en la nube sin sesión activa bloqueado.');
+      return;
+    }
+
+    // Mutex estricto: evita colisiones simultáneas en Google Drive para el mismo archivo (error 503 / 429)
+    if (isPushProgressInFlight) {
+      pendingProgressPushUserId = userId;
       return;
     }
 
@@ -2064,7 +2116,10 @@ export const googleDriveService = {
     }
     if (!token) return;
 
+    isPushProgressInFlight = true;
+
     try {
+      await yieldIfScrolling();
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
@@ -2091,12 +2146,22 @@ export const googleDriveService = {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
+          isPushProgressInFlight = false;
           return this.pushProgressToDrive(userId);
         }
         updateState({
           status: 'needs_reauth',
           errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
         });
+      }
+    } finally {
+      isPushProgressInFlight = false;
+      if (pendingProgressPushUserId) {
+        const nextUser = pendingProgressPushUserId;
+        pendingProgressPushUserId = null;
+        setTimeout(() => {
+          this.pushProgressToDrive(nextUser).catch(() => {});
+        }, 1500);
       }
     }
   },

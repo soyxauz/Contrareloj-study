@@ -265,6 +265,36 @@ export async function getAllStoredAssets(): Promise<DocumentAsset[]> {
 }
 
 /**
+ * Recupera únicamente los identificadores (claves) de los activos almacenados en IndexedDB.
+ * Es ultra rápido (O(1) memoria) y evita cargar los megabytes de imágenes base64 a la RAM.
+ */
+export async function getAllStoredAssetKeys(): Promise<string[]> {
+  const db = await getDatabase();
+  if (!db) {
+    return Array.from(assetMemoryCache.keys());
+  }
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(ASSET_STORE, 'readonly');
+      const store = tx.objectStore(ASSET_STORE);
+      const req = store.getAllKeys();
+
+      req.onsuccess = () => {
+        const keys = ((req.result || []) as (string | number)[]).map(String);
+        resolve(keys);
+      };
+
+      req.onerror = () => {
+        resolve(Array.from(assetMemoryCache.keys()));
+      };
+    } catch {
+      resolve(Array.from(assetMemoryCache.keys()));
+    }
+  });
+}
+
+/**
  * Recupera un activo por su identificador único utilizando un LRU cache ultraligero (máx 10 elementos).
  */
 export async function getAssetById(id: string): Promise<DocumentAsset | null> {

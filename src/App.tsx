@@ -15,7 +15,7 @@ import {
 } from './services/storageService';
 import { revokeAllAzureAudioUrls } from './services/azureEdgeTtsService';
 import { revokeAllPodcastAudioUrls, savePodcastSettings } from './services/geminiAudioService';
-import { googleDriveService, type DriveSyncState } from './services/googleDriveService';
+import { googleDriveService } from './services/googleDriveService';
 import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -113,13 +113,14 @@ export const App: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
-  const [driveSyncState, setDriveSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
+  const [driveNeedsReauth, setDriveNeedsReauth] = useState<boolean>(() => googleDriveService.getState().status === 'needs_reauth');
   const isLoggingOutRef = useRef(false);
   const isHydratedRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = googleDriveService.subscribe((state) => {
-      setDriveSyncState(state);
+      const needs = state.status === 'needs_reauth';
+      setDriveNeedsReauth(prev => prev !== needs ? needs : prev);
     });
     return unsubscribe;
   }, []);
@@ -539,17 +540,18 @@ export const App: React.FC = () => {
 
   const startupGracePeriodRef = useRef(Date.now() + 10000); // 10s de gracia inicial para no saturar la red con subidas
 
-  // Respaldo en segundo plano hacia Google Drive con debounce de 7000ms
+  // Respaldo en segundo plano hacia Google Drive con debounce de 8000ms
   useEffect(() => {
     if (isLoggingOutRef.current) return;
     if (!currentUser) return;
     if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
-    if (driveSyncState.status === 'needs_reauth' || driveSyncState.status === 'error') return;
+    const currentSyncStatus = googleDriveService.getState().status;
+    if (currentSyncStatus === 'needs_reauth' || currentSyncStatus === 'error') return;
     if (!isHydratedRef.current) return;
     if (Date.now() < startupGracePeriodRef.current) return;
 
-    googleDriveService.scheduleAutoSync(currentUser.id, kits, 7000);
-  }, [kits, currentUser, driveSyncState.status]);
+    googleDriveService.scheduleAutoSync(currentUser.id, kits, 8000);
+  }, [kits, currentUser]);
 
   // Respaldo en segundo plano del progreso de Smart Study y Flashcards hacia Google Drive en tiempo real
   useEffect(() => {
@@ -578,7 +580,7 @@ export const App: React.FC = () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         flushPush();
-      }, 500);
+      }, 3500);
     };
 
     // Al regresar a la pestaña o cambiar de ventana (ej. tras estudiar en otra PC), comprobar y fusionar novedades
@@ -1001,7 +1003,7 @@ export const App: React.FC = () => {
 
 
       {/* Reconnect Google Drive Discrete Banner */}
-      {currentUser && driveSyncState.status === 'needs_reauth' && (
+      {currentUser && driveNeedsReauth && (
 
         <div className="bg-amber-950/80 border-b border-amber-500/40 px-4 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3 animate-fadeIn">
           <div className="flex items-center gap-2">
