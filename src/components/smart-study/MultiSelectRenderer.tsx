@@ -29,19 +29,19 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           const isSelected = selectedMultiIndices.includes(idx);
           const isCorrect = safeCorrectIndices.includes(idx);
 
-          let optionStyles = 'border-white/[0.1] bg-white/[0.035] hover:bg-white/[0.07] hover:border-white/20 text-slate-200 glass-specular backdrop-blur-xl hover:-translate-y-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_-4px_rgba(0,0,0,0.4)]';
+          let optionStyles = 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/20 text-slate-200 glass-specular hover:-translate-y-0.5';
           if (isSelected && !isAnswered) {
-            optionStyles = 'border-white/35 bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_8px_24px_-4px_rgba(0,0,0,0.5)] ring-1 ring-white/25 glass-specular backdrop-blur-xl';
+            optionStyles = 'border-white/30 bg-white/[0.08] text-white shadow-sm ring-1 ring-white/20 glass-specular';
           }
           if (isAnswered) {
             if (isCorrect && isSelected) {
-              optionStyles = 'border-emerald-500/50 bg-emerald-500/[0.12] backdrop-blur-xl text-emerald-200 ring-1 ring-emerald-500/30 shadow-[inset_0_1px_0_rgba(52,211,153,0.3),0_8px_32px_rgba(16,185,129,0.25)] animate-cardCorrect';
+              optionStyles = 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-500/30 animate-cardCorrect';
             } else if (!isCorrect && isSelected) {
-              optionStyles = 'border-rose-500/50 bg-rose-500/[0.12] backdrop-blur-xl text-rose-200 ring-1 ring-rose-500/30 shadow-[inset_0_1px_0_rgba(251,113,133,0.3),0_8px_32px_rgba(244,63,94,0.25)] animate-cardError';
+              optionStyles = 'border-rose-500/60 bg-rose-500/10 text-rose-200 ring-1 ring-rose-500/30 animate-cardError';
             } else if (isCorrect && !isSelected) {
-              optionStyles = 'border-amber-500/40 bg-amber-500/[0.10] backdrop-blur-xl text-amber-200 ring-1 ring-amber-500/30 shadow-[inset_0_1px_0_rgba(251,191,36,0.3),0_8px_24px_rgba(245,158,11,0.2)]';
+              optionStyles = 'border-amber-500/50 bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/30';
             } else {
-              optionStyles = 'border-white/[0.04] bg-white/[0.01] backdrop-blur-sm text-slate-500 opacity-40 shadow-none';
+              optionStyles = 'border-white/[0.04] bg-white/[0.01] text-slate-500 opacity-40';
             }
           }
 

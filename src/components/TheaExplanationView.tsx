@@ -175,7 +175,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
       <div className="explanation-body flex-1 min-w-0 max-w-2xl">
         <div className="top-level-explanation space-y-3.5">
           {/* Barra de Búsqueda Interactiva Externa (Google / Wikipedia) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.1] text-xs text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-300">
             <div className="flex items-center gap-2 truncate max-w-xs sm:max-w-md">
               <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span className="text-[10px] uppercase tracking-wider font-mono text-slate-400 shrink-0">Búsqueda:</span>
@@ -231,7 +231,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
         >
           <div
             onClick={handleImageClick}
-            className="group relative w-full rounded-2xl overflow-hidden bg-white/[0.04] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_12px_36px_-4px_rgba(0,0,0,0.5)] cursor-pointer border border-white/[0.1] hover:border-white/25 transition-all flex items-center justify-center min-h-[160px] max-h-[260px] p-2 active-press"
+            className="group relative w-full rounded-2xl overflow-hidden bg-white/[0.03] shadow-xl cursor-pointer border border-white/[0.08] hover:border-white/20 transition-all flex items-center justify-center min-h-[160px] max-h-[260px] p-2 active-press"
             title="Clic para ampliar diagrama en alta definición"
           >
             <img

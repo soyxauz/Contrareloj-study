@@ -3008,10 +3008,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           const parsedFeedback = parseExplanationDetails(rawFeedback);
 
           return (
-            <div className={`p-4 sm:p-5 rounded-2xl mb-6 flex items-start justify-between gap-4 border shadow-xl backdrop-blur-xl animate-feedbackPop ${
+            <div className={`p-4 sm:p-5 rounded-2xl mb-6 flex items-start justify-between gap-4 border shadow-lg animate-feedbackPop ${
               isCurrentCorrect
-                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200 ring-1 ring-emerald-500/30 shadow-[inset_0_1px_0_rgba(52,211,153,0.2),0_12px_36px_rgba(16,185,129,0.15)]'
-                : 'bg-rose-950/40 border-rose-500/40 text-rose-200 ring-1 ring-rose-500/30 shadow-[inset_0_1px_0_rgba(251,113,133,0.2),0_12px_36px_rgba(244,63,94,0.15)]'
+                ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200 ring-1 ring-emerald-500/40'
+                : 'bg-rose-950/70 border-rose-500/60 text-rose-200 ring-1 ring-rose-500/40'
             }`}>
               <div className="flex items-start gap-3.5 flex-1 min-w-0">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold mt-0.5 ${

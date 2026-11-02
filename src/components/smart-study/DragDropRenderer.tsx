@@ -35,7 +35,7 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
       </p>
 
       {/* Template sentence with interactive slots */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-white/[0.035] backdrop-blur-xl border border-white/[0.1] text-base sm:text-lg leading-loose text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_32px_-4px_rgba(0,0,0,0.4)]">
+      <div className="p-5 sm:p-6 rounded-2xl bg-thea-surfaceLight/70 border border-thea-border text-base sm:text-lg leading-loose text-slate-100 shadow-inner">
         {effectiveTemplateSentence.split(/(\{\d+\})/).map((part, pIdx) => {
           const match = part.match(/\{(\d+)\}/);
           if (match) {
@@ -43,10 +43,10 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
             const placed = placedChips[slotIdx];
             const isCorrectSlot = dragDropChecked && placed?.trim().toLowerCase() === effectiveBlanksCorrect?.[slotIdx]?.trim().toLowerCase();
 
-            let slotBorder = 'border-dashed border-white/20 bg-white/[0.04] backdrop-blur-md text-slate-300';
-            if (placed) slotBorder = 'border-solid border-white/40 bg-white/[0.09] backdrop-blur-xl text-white font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]';
+            let slotBorder = 'border-dashed border-violet-400/80 bg-violet-950/30 text-violet-300';
+            if (placed) slotBorder = 'border-solid border-violet-500 bg-violet-600/30 text-white font-bold';
             if (dragDropChecked) {
-              slotBorder = isCorrectSlot ? 'border-emerald-500/50 bg-emerald-500/[0.12] backdrop-blur-xl text-emerald-200 shadow-[inset_0_1px_0_rgba(52,211,153,0.3)] animate-cardCorrect' : 'border-rose-500/50 bg-rose-500/[0.12] backdrop-blur-xl text-rose-200 shadow-[inset_0_1px_0_rgba(251,113,133,0.3)] animate-cardError';
+              slotBorder = isCorrectSlot ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200 animate-cardCorrect' : 'border-rose-500 bg-rose-950/40 text-rose-200 animate-cardError';
             }
 
             return (
@@ -73,7 +73,7 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
 
       {/* Word Bank */}
       <div>
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">
+        <span className="text-xs font-bold text-violet-300 uppercase tracking-wider block mb-2.5">
           Banco de Fichas ({effectiveWordBank.length}):
         </span>
         <div className="flex flex-wrap gap-2.5">
@@ -88,10 +88,10 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
                 onDragStart={() => onSetDraggedChip(chip)}
                 onDragEnd={() => onSetDraggedChip(null)}
                 onClick={() => onPlaceChip(chip)}
-                className={`active-press px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all cursor-pointer ${
                   isUsed
-                    ? 'opacity-30 border-white/[0.04] bg-white/[0.01] text-slate-600 line-through'
-                    : 'border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] backdrop-blur-md text-slate-200 hover:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
+                    ? 'opacity-30 border-thea-border bg-thea-surfaceLight text-slate-600 line-through'
+                    : 'border-thea-border bg-thea-surfaceLight text-slate-200 hover:border-violet-500 hover:text-white hover:bg-violet-950/40 active:scale-95'
                 }`}
               >
                 {chip}
@@ -106,7 +106,7 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
           type="button"
           disabled={placedChips.some(c => c === null) || placedChips.length < effectiveBlanksCorrect.length}
           onClick={onCheckDragDrop}
-          className="active-press w-full py-3.5 rounded-2xl bg-white hover:bg-zinc-200 disabled:opacity-40 text-zinc-950 font-bold text-sm shadow-lg transition-colors cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-all cursor-pointer"
         >
           Comprobar Respuestas
         </button>
