@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { StudyKit } from '../types';
 import {
+  Settings,
+  Loader2,
   Send,
   Bot,
   Mic,
@@ -10,8 +12,7 @@ import {
   Square,
   AlertTriangle,
   RotateCcw,
-  Sparkles,
-  History,
+    History,
   X,
   ArrowLeft,
 } from 'lucide-react';
@@ -991,7 +992,7 @@ Reglas obligatorias estrictas:
                 onClick={onOpenAISettings}
                 className="px-3 py-1.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 text-amber-100 font-medium text-[11px] transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <Settings className="w-3.5 h-3.5 text-slate-300" />
                 <span>Abrir Motor IA</span>
               </button>
             )}
@@ -1034,7 +1035,7 @@ Reglas obligatorias estrictas:
           <div className="text-base sm:text-xl text-zinc-100 font-medium leading-relaxed drop-shadow-sm min-h-[3rem] flex items-center justify-center">
             {isTyping ? (
               <div className="flex items-center gap-2 text-zinc-300 text-sm animate-pulse">
-                <Sparkles className="w-4 h-4 animate-spin text-zinc-200" />
+                <Loader2 className="w-4 h-4 animate-spin text-zinc-200" />
                 <span>
                   {mode === 'exam'
                     ? 'Thea está formulando tu siguiente pregunta...'
@@ -1141,14 +1142,14 @@ Reglas obligatorias estrictas:
               </>
             ) : transcribing ? (
               <>
-                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
+                <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
                 <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-zinc-300">
                   Transcribiendo
                 </span>
               </>
             ) : isTyping ? (
               <>
-                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
+                <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
                 <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-zinc-300">
                   Pensando
                 </span>

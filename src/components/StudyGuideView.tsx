@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
-  Sparkles,
-  Wand2,
+    Wand2,
   Volume2,
   VolumeX,
   Copy,
@@ -68,7 +67,7 @@ export const DEPTH_OPTIONS: Array<{
       'Grandes cuadros matriciales y diferenciales',
       'Casos clínicos/prácticos y preguntas trampa'
     ],
-    icon: Sparkles,
+    icon: BookOpen,
   },
 ];
 import { generateAIStudyGuide, stripExecutiveSummaryPreamble } from '../services/aiService';
@@ -622,7 +621,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                   onClick={() => handleGenerateStudyGuide(selectedDepth)}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 font-extrabold text-sm shadow-xl transition-all active:scale-[0.985] cursor-pointer"
                 >
-                  <Sparkles className="w-5 h-5 text-zinc-950" />
+                  <BookOpen className="w-5 h-5 text-zinc-950" />
                   <span>
                     Generar Guía {DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.name} ({DEPTH_OPTIONS.find(o => o.id === selectedDepth)?.multiplier})
                   </span>
@@ -639,7 +638,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               <div className="p-6 sm:p-8 rounded-3xl bg-[#0e0b16]/90 border border-white/[0.08] shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5 backdrop-blur-xl">
                 <div className="space-y-1 text-center sm:text-left">
                   <h4 className="text-sm sm:text-base font-bold text-white flex items-center justify-center sm:justify-start gap-2">
-                    <Sparkles className="w-4 h-4 text-zinc-400" />
+                    <FileText className="w-4 h-4 text-zinc-400" />
                     <span>¿Deseas adaptar o cambiar la extensión de esta guía?</span>
                   </h4>
                   <p className="text-xs text-zinc-400 leading-relaxed max-w-xl">
@@ -850,7 +849,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
           <div className="bg-[#0e0b16] border border-white/10 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-100 font-bold">
-                <Sparkles className="w-5 h-5 text-zinc-200" />
+                <Wand2 className="w-5 h-5 text-zinc-200" />
               </div>
               <div>
                 <h3 className="font-bold text-lg text-white tracking-tight">Smart Edit con IA</h3>
@@ -903,7 +902,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 onClick={handleApplyCustomPrompt}
                 className="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-40 cursor-pointer active:scale-95 transition-all"
               >
-                {isApplying ? <Sparkles className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                {isApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                 <span>{isApplying ? 'Aplicando cambios...' : 'Aplicar Instrucción'}</span>
               </button>
             </div>
@@ -918,7 +917,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
             <div className="flex items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-100 font-bold">
-                  <Sparkles className="w-5 h-5 text-zinc-200" />
+                  <Wand2 className="w-5 h-5 text-zinc-200" />
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-white tracking-tight">Rehacer Guía con Diferente Extensión</h3>

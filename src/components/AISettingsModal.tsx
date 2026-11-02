@@ -37,7 +37,7 @@ import {
   RefreshCw,
   Cpu,
   ExternalLink,
-  Sparkles,
+  Settings,
 } from 'lucide-react';
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
@@ -397,7 +397,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           {/* Asignacion Fija de Motores por Area */}
           <div className="p-3.5 rounded-2xl bg-violet-950/40 border border-violet-500/30 text-xs text-slate-300 flex flex-col gap-1.5 shadow-sm">
             <div className="flex items-center gap-1.5 font-bold text-violet-300">
-              <Sparkles className="w-4 h-4 text-violet-400 shrink-0" />
+              <Settings className="w-4 h-4 text-slate-300 shrink-0" />
               <span>Asignacion fija y obligatoria de motores:</span>
             </div>
             <p className="text-[11px] text-slate-300 leading-relaxed">

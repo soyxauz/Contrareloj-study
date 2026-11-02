@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   XCircle,
   ArrowRight,
-  Sparkles,
+  Plus,
+  Play,
+  TrendingUp,
   Volume2,
   Lightbulb,
   ShieldCheck,
@@ -69,31 +71,32 @@ import {
 } from './smart-study';
 import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 
-// ── 4-Pointed Sparkle Star for Level Indicators (Nivel 1, 2, 3) ────────────
-const SparkleStar: React.FC<{ active: boolean; levelNum: number; onClick?: () => void }> = ({
-  active,
-  levelNum,
-  onClick,
+// ── Indicador Minimalista de Nivel de Dominio (Apple / Linear Studio) ──
+const LevelIndicator: React.FC<{ currentLevel: number; onResetClick?: () => void }> = ({
+  currentLevel,
+  onResetClick,
 }) => (
   <button
     type="button"
-    onClick={onClick}
-    title={`Nivel ${levelNum}: ${levelNum === 1 ? 'Fundamentos' : levelNum === 2 ? 'Aplicación' : 'Dominio'} • Clic para reiniciar progreso`}
-    className={`p-0.5 transition-all transform hover:scale-115 cursor-pointer ${
-      active
-        ? 'text-[#c0a6df] drop-shadow-[0_0_8px_rgba(192,166,223,0.5)]'
-        : 'text-[#35255c] hover:text-[#523d85]'
-    }`}
+    onClick={onResetClick}
+    title={`Nivel ${currentLevel}: ${currentLevel === 1 ? 'Fundamentos' : currentLevel === 2 ? 'Aplicación' : 'Dominio'} (clic para reiniciar progreso)`}
+    className="active-press flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/20 hover:bg-white/[0.06] transition-colors cursor-pointer select-none text-xs tabular-nums"
   >
-    <svg
-      className="w-5 h-5 sm:w-6 sm:h-6"
-      viewBox="0 0 24 24"
-      fill={active ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth={active ? '1' : '1.5'}
-    >
-      <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" />
-    </svg>
+    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+      Nivel {currentLevel}
+    </span>
+    <div className="flex items-center gap-1">
+      {[1, 2, 3].map(lvl => (
+        <span
+          key={lvl}
+          className={`w-3.5 h-1.5 rounded-full transition-colors ${
+            currentLevel >= lvl
+              ? 'bg-rose-500 shadow-sm shadow-rose-950/40'
+              : 'bg-white/[0.12]'
+          }`}
+        />
+      ))}
+    </div>
   </button>
 );
 
@@ -2748,11 +2751,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
             {/* Right: 3 Sparkle Stars + Settings Gear */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <div className="flex items-center gap-1 sm:gap-1.5">
-                <SparkleStar active={level >= 1} levelNum={1} onClick={() => setShowResetConfirmModal(true)} />
-                <SparkleStar active={level >= 2} levelNum={2} onClick={() => setShowResetConfirmModal(true)} />
-                <SparkleStar active={level >= 3} levelNum={3} onClick={() => setShowResetConfirmModal(true)} />
-              </div>
+              <LevelIndicator currentLevel={level} onResetClick={() => setShowResetConfirmModal(true)} />
 
               <button
                 type="button"
@@ -2772,7 +2771,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           {levelUpBanner && (
             <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-violet-900/90 to-purple-900/90 border border-violet-500/50 text-xs sm:text-sm text-violet-100 flex items-center justify-between shadow-xl animate-fadeIn">
               <div className="flex items-center gap-2.5">
-                <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                <TrendingUp className="w-4 h-4 text-rose-300 shrink-0" />
                 <span className="font-extrabold">{levelUpBanner}</span>
               </div>
               <button
@@ -3550,8 +3549,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      <span>+10 IA ({levelLabels[level].title})</span>
+                      <Plus className="w-4 h-4" />
+                      <span>+10 Preguntas ({levelLabels[level].title})</span>
                     </>
                   )}
                 </button>
@@ -3608,7 +3607,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <Play className="w-4 h-4 fill-current" />
                   <span>Generar y Evaluar Ahora</span>
                 </>
               )}

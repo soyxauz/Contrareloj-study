@@ -4,7 +4,8 @@ import { QuestionPrompt } from './QuestionPrompt';
 import {
   FileCheck2,
   Clock,
-  Sparkles,
+  FileText,
+  Play,
   CheckCircle2,
   XCircle,
   Flag,
@@ -275,7 +276,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
           {/* Instrucciones Personalizadas */}
           <div className="p-5 rounded-2xl bg-white/[0.025] border border-white/[0.08]">
             <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
+              <FileText className="w-4 h-4 text-slate-400" />
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                 Instrucciones Pedagógicas de Examen:
               </label>
@@ -328,7 +329,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-5 h-5 text-amber-500" />
+                  <Play className="w-4 h-4 fill-current text-zinc-950" />
                   <span>Comenzar Examen ({questionCount} preguntas)</span>
                 </>
               )}

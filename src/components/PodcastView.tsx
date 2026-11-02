@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { StudyKit, PodcastFormat, PodcastDuration } from '../types';
 import {
+  Plus,
   Play,
   Pause,
   RotateCcw,
   Headphones,
-  Sparkles,
-  Loader2,
+    Loader2,
   Volume2,
   VolumeX,
   SkipBack,
@@ -1800,7 +1800,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-zinc-200 hover:text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.985]"
               title="Crear un nuevo episodio con otras configuraciones de formato y duración"
             >
-              <Sparkles className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
+              <Plus className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
               <span>Nuevo Episodio</span>
             </button>
           </div>

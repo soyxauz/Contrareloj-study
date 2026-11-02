@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
 import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
+  ArrowRight,
   FileText,
   Upload,
   Globe,
-  Sparkles,
+  Tag,
+  Sliders,
   Loader2,
   CheckCircle2,
   BookOpen,
@@ -404,7 +406,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             </div>
           </div>
           <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center shadow-lg animate-pulse">
-            <Sparkles className="w-4 h-4 text-slate-950" />
+            <BookOpen className="w-4 h-4 text-slate-950" />
           </div>
         </div>
 
@@ -450,7 +452,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         <div className="bg-thea-surface border border-thea-border rounded-2xl p-6 mb-8 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-violet-950/70 border border-violet-500/40 text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <Tag className="w-3.5 h-3.5 text-slate-400" />
               Materia Clasificada por IA: {result.kit.category}
             </span>
             <span className="text-xs text-slate-400">
@@ -488,7 +490,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             onClick={handleUseKit}
             className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-base transition-all shadow-lg shadow-violet-900/30 flex items-center justify-center gap-2"
           >
-            <Sparkles className="w-5 h-5" />
+            <ArrowRight className="w-5 h-5" />
             Empezar a Estudiar
           </button>
           <button
@@ -930,7 +932,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
       <div className="bg-[#0e0b16]/90 border border-white/[0.08] rounded-2xl p-6 mb-6 space-y-3.5 shadow-xl backdrop-blur-xl">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-zinc-400" />
+            <Sliders className="w-4 h-4 text-zinc-400" />
             <span>Nivel de Extensión de la Guía de Estudio</span>
           </h3>
           <span className="text-[11px] text-zinc-400 font-medium">Sin límite de caracteres</span>
@@ -1023,7 +1025,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             : 'bg-white/[0.04] border border-white/[0.08] text-zinc-600 cursor-not-allowed shadow-none'
         }`}
       >
-        <Sparkles className="w-5 h-5 text-zinc-950" />
+        <BookOpen className="w-5 h-5 text-zinc-950" />
         Crear Study Kit con Contrareloj Study
       </button>
 

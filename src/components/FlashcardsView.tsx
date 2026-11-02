@@ -4,8 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
 import {
   Layers,
-  Sparkles,
-  Loader2,
+    Loader2,
   Type,
   PlusCircle,
   RefreshCw,
@@ -26,6 +25,7 @@ import {
   Star,
   Award,
   Check,
+  Brain,
 } from 'lucide-react';
 import {
   generateAIFlashcards,
@@ -1311,7 +1311,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                           {clue.level === 1 && <BookOpen className="w-3.5 h-3.5 text-violet-400" />}
                           {clue.level === 2 && <Layers className="w-3.5 h-3.5 text-indigo-400" />}
                           {clue.level === 3 && <Target className="w-3.5 h-3.5 text-amber-400" />}
-                          {clue.level === 4 && <Sparkles className="w-3.5 h-3.5 text-emerald-400" />}
+                          {clue.level === 4 && <Award className="w-3.5 h-3.5 text-emerald-400" />}
                           {clue.title}
                         </span>
                         <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
@@ -1600,7 +1600,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       {cards.length === 0 ? (
         <div className="text-center py-16 px-6 rounded-3xl bg-thea-surface border border-thea-border max-w-xl mx-auto shadow-xl animate-fadeIn">
           <div className="w-16 h-16 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center mx-auto mb-5 text-violet-400">
-            <Sparkles className="w-8 h-8" />
+            <Brain className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Fichas de Estudio Pendientes</h2>
           <p className="text-sm text-slate-300 mb-8 leading-relaxed">
@@ -1619,7 +1619,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               </>
             ) : (
               <>
-                <Sparkles className="w-5 h-5" />
+                <BookOpen className="w-5 h-5" />
                 <span>Generar Flashcards con IA</span>
               </>
             )}
@@ -2009,7 +2009,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4" />
+                      <CheckCircle2 className="w-4 h-4" />
                       <span>Generar y Añadir a la Baraja</span>
                     </>
                   )}

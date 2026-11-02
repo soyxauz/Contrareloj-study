@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { StudyKit } from '../types';
 import {
   Send,
-  Sparkles,
-  Bot,
+    Bot,
   User,
   Trash2,
   Mic,
@@ -48,7 +47,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
 
   const quickPrompts = [
     { text: 'Explícame los conceptos clave de este tema', icon: <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> },
-    { text: 'Dame una regla mnemotécnica para recordar este material', icon: <Sparkles className="w-3.5 h-3.5 text-violet-400" /> },
+    { text: 'Dame una regla mnemotécnica para recordar este material', icon: <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> },
     { text: '¿Cuál es la causa o mecanismo fundamental?', icon: <HelpCircle className="w-3.5 h-3.5 text-sky-400" /> },
     { text: 'Hazme una pregunta sorpresa de nivel examen', icon: <FileQuestion className="w-3.5 h-3.5 text-emerald-400" /> },
   ];
