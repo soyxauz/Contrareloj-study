@@ -22,6 +22,7 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
 import type { InputTab } from './components/CreateStudyKitView';
 import { restoreCustomMateriasAsync } from './services/materiaService';
+import Lenis from 'lenis';
 
 // Carga diferida (Lazy Loading) de vistas secundarias para arranque ultrarrápido
 const SmartStudyView = React.lazy(() => import('./components/SmartStudyView').then(m => ({ default: m.SmartStudyView })));
@@ -120,6 +121,36 @@ export const App: React.FC = () => {
       setDriveSyncState(state);
     });
     return unsubscribe;
+  }, []);
+
+  // Desplazamiento suave inercial (Lenis 120 FPS sin impacto en el frame budget)
+  useEffect(() => {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) return;
+
+    const lenis = new Lenis({
+      duration: 1.25, // Deslizamiento pausado, elegante y no rápido
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // Curva exponencial suave de autor
+      smoothWheel: true,
+      wheelMultiplier: 0.9, // Suaviza la fuerza por tick de rueda física
+      touchMultiplier: 1.2,
+      infinite: false,
+    });
+
+    let rafId: number;
+    function raf(time: number) {
+      lenis.raf(time);
+      rafId = requestAnimationFrame(raf);
+    }
+    rafId = requestAnimationFrame(raf);
+
+    (window as unknown as { __lenis?: Lenis }).__lenis = lenis;
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      lenis.destroy();
+      delete (window as unknown as { __lenis?: Lenis }).__lenis;
+    };
   }, []);
 
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
@@ -282,6 +313,16 @@ export const App: React.FC = () => {
   }, [kits]);
 
   const [currentMode, setCurrentMode] = useState<StudyMode>('home');
+
+  // Reset sereno de scroll al cambiar de pantalla
+  useEffect(() => {
+    const lenis = (window as unknown as { __lenis?: Lenis }).__lenis;
+    if (lenis) {
+      lenis.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [currentMode]);
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
   const [showAIModal, setShowAIModal] = useState(false);
 
