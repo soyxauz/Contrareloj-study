@@ -10,7 +10,6 @@ import {
   HelpCircle,
   Lightbulb,
   FileQuestion,
-  Settings2,
 } from 'lucide-react';
 import { askTheaAI } from '../services/aiService';
 import { FormattedText } from './FormattedText';
@@ -30,7 +29,6 @@ interface Message {
 
 export const AskTheaView: React.FC<AskTheaViewProps> = ({
   kit,
-  onOpenAISettings,
   onNavigateToOral,
 }) => {
   const { theme } = useTheme();
@@ -192,24 +190,6 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
             >
               <Trash2 className="w-4 h-4" />
             </button>
-
-            {/* Ajustes de IA */}
-            {onOpenAISettings && (
-              <button
-                type="button"
-                onClick={onOpenAISettings}
-                className={`p-2 rounded-xl border transition-colors cursor-pointer active:scale-95 ${
-                  theme === 'dark'
-                    ? 'border-white/[0.08] bg-white/[0.025] text-zinc-400 hover:text-white hover:bg-white/[0.06]'
-                    : theme === 'kitty'
-                    ? 'border-pink-200 bg-white text-pink-700 hover:bg-pink-50'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-                title="Configuración de IA"
-              >
-                <Settings2 className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 

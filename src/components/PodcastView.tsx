@@ -14,7 +14,6 @@ import {
   SkipForward,
   ChevronLeft,
   ChevronRight,
-  Settings2,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
 
@@ -1815,24 +1814,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setVoiceModalTab('azure');
-                setShowVoiceModal(true);
-              }}
-              className={`p-1.5 rounded-xl border transition-colors cursor-pointer active:scale-95 ${
-                theme === 'light'
-                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-                  : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700 shadow-xs'
-                  : 'bg-white/[0.025] hover:bg-white/[0.06] border-white/[0.08] text-zinc-400 hover:text-white'
-              }`}
-              title="Configuración de Voces, Locutores y Enfoque"
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-            </button>
-
             <button
               type="button"
               onClick={() => {
