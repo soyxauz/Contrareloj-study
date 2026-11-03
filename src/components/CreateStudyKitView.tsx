@@ -453,7 +453,13 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
         {/* Kit Details */}
         <div className="bg-thea-surface border border-thea-border rounded-2xl p-6 mb-8 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-violet-950/70 border border-violet-500/40 text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
+            <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 border ${
+              theme === 'kitty'
+                ? 'bg-pink-100 border-pink-300 text-pink-800'
+                : theme === 'light'
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-900'
+                : 'bg-violet-950/70 border-violet-500/40 text-violet-300'
+            }`}>
               <Tag className="w-3.5 h-3.5 text-slate-400" />
               Materia Clasificada por IA: {result.kit.category}
             </span>

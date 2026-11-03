@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useTheme } from '../services/themeService';
 import {
   getAISettings,
   saveAISettings,
@@ -54,6 +55,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   onClose,
   onSettingsSaved
 }) => {
+  const { theme } = useTheme();
   const [settings, setSettings] = useState<AISettings>(getAISettings);
   const [showKey, setShowKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -339,25 +341,47 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
-      <div className="bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col will-change-transform">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
+      <div className={`border rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col will-change-transform ${
+        theme === 'dark'
+          ? 'bg-[#0e0b16] border-white/10 text-white'
+          : theme === 'kitty'
+          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
+          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+      }`}>
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.06] shrink-0">
+        <div className={`flex items-center justify-between mb-5 pb-3 border-b shrink-0 ${
+          theme === 'dark' ? 'border-white/[0.06]' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-300">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+              theme === 'kitty'
+                ? 'bg-pink-100 border-pink-200 text-pink-600'
+                : theme === 'light'
+                ? 'bg-rose-50 border-rose-200 text-rose-600'
+                : 'bg-white/[0.04] border-white/10 text-zinc-300'
+            }`}>
               <Bot className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                <h2 className={`text-base sm:text-lg font-bold tracking-tight ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   Motor de Inteligencia Artificial
                 </h2>
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10">
+                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                  theme === 'dark'
+                    ? 'bg-white/[0.05] text-zinc-300 border-white/10'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50 text-pink-800 border-pink-200'
+                    : 'bg-slate-100 text-slate-800 border-slate-200'
+                }`}>
                   {settings.baseUrl?.includes('ollama.com') ? 'Ollama Cloud' : settings.baseUrl?.includes('localhost') ? 'Ollama Local' : 'IA Configurada'}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">
+              <p className={`text-xs ${theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}`}>
                 {settings.baseUrl?.includes('ollama.com')
                   ? 'Servicio oficial de Ollama en la nube con API Key de ollama.com/settings/keys'
                   : 'Configuración de motor de IA para generación inteligente de kits y exámenes'}
@@ -367,14 +391,18 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
           <button
             onClick={handleClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-95"
+            className={`p-2 rounded-xl transition-colors cursor-pointer active:scale-95 ${
+              theme === 'dark'
+                ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
+                : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+            }`}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto space-y-5 pr-1">
+        <div className="flex-1 overflow-y-auto modal-smooth-scroll overscroll-contain space-y-5 pr-1">
           {/* Master AI Status - Siempre Activo */}
           <div className="p-3.5 rounded-2xl bg-thea-surfaceLight border border-thea-border flex items-center justify-between">
             <div className="flex items-center gap-3">

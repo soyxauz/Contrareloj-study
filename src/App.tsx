@@ -1015,8 +1015,13 @@ export const App: React.FC = () => {
   // Whether to show the full navbar with mode tabs (hide on home & create, or when no kit exists)
   const showModeTabs = currentMode !== 'home' && currentMode !== 'create' && currentKit !== null;
 
+  // Study modes designed to fit 100% within the viewport height without outer page scroll
+  const isScreenFittingMode = currentMode === 'podcast' || currentMode === 'ask-thea' || currentMode === 'oral-lesson' || currentMode === 'flashcards';
+
   return (
-    <div className="min-h-screen bg-thea-bg text-slate-100 flex flex-col selection:bg-violet-600 selection:text-white">
+    <div className={`min-h-screen bg-thea-bg text-slate-100 flex flex-col selection:bg-violet-600 selection:text-white ${
+      isScreenFittingMode ? 'h-screen max-h-screen overflow-hidden' : ''
+    }`}>
       {/* Navigation */}
       <Navbar
         kits={kits}
@@ -1036,7 +1041,7 @@ export const App: React.FC = () => {
       {/* Reconnect Google Drive Discrete Banner */}
       {currentUser && driveNeedsReauth && (
 
-        <div className="bg-amber-950/80 border-b border-amber-500/40 px-4 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3 animate-fadeIn">
+        <div className="bg-amber-950/80 border-b border-amber-500/40 px-4 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3 animate-fadeIn shrink-0">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
             <span>Tu cuenta de Google Drive requiere renovar autorización para mantener la sincronización activa.</span>
@@ -1052,7 +1057,7 @@ export const App: React.FC = () => {
       )}
 
       {/* Main Mode View */}
-      <main className="flex-1 pb-24 md:pb-8">
+      <main className={`flex-1 ${isScreenFittingMode ? 'min-h-0 overflow-hidden flex flex-col p-0' : 'pb-24 md:pb-8'}`}>
         <ViewErrorBoundary onReset={() => setCurrentMode('home')}>
         {currentMode === 'home' && (
           <HomeView

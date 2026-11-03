@@ -570,7 +570,13 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
           </div>
 
           {/* Indicador de ayuda al usuario */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3.5 py-1 rounded-full bg-slate-900/85 border border-slate-700 text-[11px] font-medium text-white shadow-md">
+          <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3.5 py-1 rounded-full border text-[11px] font-medium shadow-md ${
+            theme === 'dark'
+              ? 'bg-slate-900/85 border-slate-700 text-white'
+              : theme === 'kitty'
+              ? 'bg-white/90 border-pink-200 text-pink-900 shadow-pink-200/40'
+              : 'bg-white/95 border-slate-300 text-slate-800 shadow-slate-200/50'
+          }`}>
             {zoomLevel > 1
               ? 'Rueda para zoom focalizado • Arrastra para mover a 120 FPS'
               : 'Gira la rueda del ratón o haz clic para ampliar'}

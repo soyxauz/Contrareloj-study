@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit } from '../types';
+import { useTheme } from '../services/themeService';
 import {
   Settings,
   Loader2,
@@ -108,6 +109,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   onOpenAISettings,
   onNavigateToChat,
 }) => {
+  const { theme } = useTheme();
   const [mode, setMode] = useState<OralMode>('exam');
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -877,7 +879,7 @@ Reglas obligatorias estrictas:
   const isInitialState = messages.length <= 1;
 
   return (
-    <div className="relative max-w-4xl mx-auto px-3 sm:px-6 py-4 h-[calc(100vh-5.5rem)] min-h-[640px] flex flex-col justify-between select-none">
+    <div className="relative max-w-4xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 h-full flex flex-col justify-between min-h-0 overflow-hidden select-none">
       {/* Fondo ambiental dinámico con aura pulsante en el centro */}
       <div
         className={`absolute inset-0 -z-10 blur-3xl transition-all duration-1000 pointer-events-none ${
@@ -1008,12 +1010,18 @@ Reglas obligatorias estrictas:
         </div>
       )}
 
-      {/* ── CUERPO PRINCIPAL: INTERFAZ CENTRADA Y MINIMALISTA ── */}
-      <main className="flex-1 flex flex-col items-center justify-center text-center px-4 relative my-auto">
+      {/* ── CUERPO PRINCIPAL: INTERFAZ CENTRADA Y MINIMALISTA SIN OVERFLOW ── */}
+      <main className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-3 sm:px-4 relative my-auto overflow-hidden">
         {/* Subtítulo dinámico / Pregunta actual de Thea */}
-        <div className="w-full max-w-xl mx-auto mb-8 sm:mb-12 transition-all duration-300">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 text-[11px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
-            <Bot className="w-3.5 h-3.5 text-zinc-300" />
+        <div className="w-full max-w-xl mx-auto mb-3 sm:mb-5 transition-all duration-300">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-bold uppercase tracking-widest mb-2.5 ${
+            theme === 'dark'
+              ? 'bg-white/[0.04] border-white/10 text-zinc-400'
+              : theme === 'kitty'
+              ? 'bg-pink-100 border-pink-200 text-pink-700'
+              : 'bg-slate-100 border-slate-200 text-slate-700'
+          }`}>
+            <Bot className="w-3.5 h-3.5" />
             <span>
               {isInterrupted
                 ? 'Pausado: escuchando tu interrupción...'
@@ -1033,10 +1041,12 @@ Reglas obligatorias estrictas:
             </span>
           </div>
 
-          <div className="text-base sm:text-xl text-zinc-100 font-medium leading-relaxed drop-shadow-sm min-h-[3rem] flex items-center justify-center">
+          <div className={`text-sm sm:text-base md:text-lg font-medium leading-relaxed drop-shadow-sm min-h-[2.5rem] flex items-center justify-center ${
+            theme === 'dark' ? 'text-zinc-100' : 'text-zinc-950 font-semibold'
+          }`}>
             {isTyping ? (
-              <div className="flex items-center gap-2 text-zinc-300 text-sm animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin text-zinc-200" />
+              <div className="flex items-center gap-2 text-zinc-400 text-sm animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin text-zinc-300" />
                 <span>
                   {mode === 'exam'
                     ? 'Thea está formulando tu siguiente pregunta...'
@@ -1046,7 +1056,7 @@ Reglas obligatorias estrictas:
             ) : latestTheaMsg ? (
               <FormattedText text={latestTheaMsg.text} />
             ) : (
-              <span className="text-zinc-400">
+              <span className={theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}>
                 {mode === 'exam'
                   ? 'Pulsa el micrófono para iniciar tu lección oral.'
                   : 'Pulsa el micrófono para comenzar la conversación.'}
@@ -1056,25 +1066,25 @@ Reglas obligatorias estrictas:
         </div>
 
         {/* ── HERO CONTROLLER: MICRÓFONO CENTRAL MINIMALISTA Y ATRACTIVO ── */}
-        <div className="relative flex items-center justify-center my-4">
+        <div className="relative flex items-center justify-center my-2 sm:my-3">
           {/* Anillos sutiles cuando está escuchando o hablando */}
           {isInterrupted && (
-            <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-amber-500/10 animate-ping pointer-events-none duration-1000" />
+            <span className="absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-amber-500/10 animate-ping pointer-events-none duration-1000" />
           )}
 
           {listening && (
             <>
-              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full bg-rose-500/10 animate-ping pointer-events-none duration-1000" />
-              <span className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full border border-rose-500/20 animate-pulse pointer-events-none" />
+              <span className="absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-rose-500/10 animate-ping pointer-events-none duration-1000" />
+              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full border border-rose-500/20 animate-pulse pointer-events-none" />
             </>
           )}
 
           {speaking && !isInterrupted && (
-            <span className="absolute w-48 h-48 sm:w-60 sm:h-60 rounded-full border border-violet-500/25 animate-pulse pointer-events-none duration-700" />
+            <span className="absolute w-40 h-40 sm:w-52 sm:h-52 rounded-full border border-violet-500/25 animate-pulse pointer-events-none duration-700" />
           )}
 
           {isTyping && (
-            <span className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full border-2 border-white/20 border-t-white animate-spin pointer-events-none" />
+            <span className="absolute w-32 h-32 sm:w-40 sm:h-40 rounded-full border-2 border-white/20 border-t-white animate-spin pointer-events-none" />
           )}
 
           {/* Botón Central Heroico */}
@@ -1091,13 +1101,13 @@ Reglas obligatorias estrictas:
             }}
             disabled={!canListen || isTyping || transcribing}
             style={(listening || isInterrupted) && useWhisper ? { transform: `scale(${1 + micLevel * 0.12})` } : undefined}
-            className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_16px_50px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.15)] ${
+            className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_16px_40px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] ${
               isInterrupted
-                ? 'bg-gradient-to-b from-[#241315] via-[#1a0c0e] to-[#0f0607] text-amber-200 ring-4 ring-amber-500/30 scale-105 shadow-[0_0_50px_rgba(245,158,11,0.3)]'
+                ? 'bg-gradient-to-b from-[#241315] via-[#1a0c0e] to-[#0f0607] text-amber-200 ring-4 ring-amber-500/30 scale-105 shadow-[0_0_40px_rgba(245,158,11,0.3)]'
                 : listening
-                ? 'bg-gradient-to-b from-[#260e15] via-[#1c080e] to-[#120408] text-white ring-4 ring-rose-500/30 scale-105 shadow-[0_0_50px_rgba(244,63,94,0.3)]'
+                ? 'bg-gradient-to-b from-[#260e15] via-[#1c080e] to-[#120408] text-white ring-4 ring-rose-500/30 scale-105 shadow-[0_0_40px_rgba(244,63,94,0.3)]'
                 : speaking
-                ? 'bg-gradient-to-b from-[#1b142e] via-[#110c22] to-[#0b0718] text-zinc-100 ring-4 ring-violet-500/30 shadow-[0_0_50px_rgba(139,92,246,0.3)] active:scale-95'
+                ? 'bg-gradient-to-b from-[#1b142e] via-[#110c22] to-[#0b0718] text-zinc-100 ring-4 ring-violet-500/30 shadow-[0_0_40px_rgba(139,92,246,0.3)] active:scale-95'
                 : transcribing
                 ? 'bg-gradient-to-b from-[#141b2c] via-[#0d1220] to-[#070b15] text-white ring-4 ring-white/10'
                 : isTyping
@@ -1122,43 +1132,43 @@ Reglas obligatorias estrictas:
           >
             {isInterrupted ? (
               <>
-                <Mic className="w-8 h-8 sm:w-10 sm:h-10 text-amber-300 animate-bounce" />
-                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-amber-300">
+                <Mic className="w-7 h-7 sm:w-9 sm:h-9 text-amber-300 animate-bounce" />
+                <span className="text-[10px] font-bold mt-1.5 uppercase tracking-widest text-amber-300">
                   Oyéndote
                 </span>
               </>
             ) : listening ? (
               <>
-                <Square className="w-8 h-8 sm:w-10 sm:h-10 fill-white text-white" />
-                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-white">
+                <Square className="w-7 h-7 sm:w-9 sm:h-9 fill-white text-white" />
+                <span className="text-[10px] font-bold mt-1.5 uppercase tracking-widest text-white">
                   Detener
                 </span>
               </>
             ) : speaking ? (
               <>
-                <VolumeX className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
-                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-white">
+                <VolumeX className="w-7 h-7 sm:w-9 sm:h-9 text-white" />
+                <span className="text-[10px] font-bold mt-1.5 uppercase tracking-widest text-white">
                   Callar
                 </span>
               </>
             ) : transcribing ? (
               <>
-                <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
-                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-zinc-300">
+                <Loader2 className="w-7 h-7 sm:w-9 sm:h-9 animate-spin text-zinc-300" />
+                <span className="text-[10px] font-bold mt-1.5 uppercase tracking-widest text-zinc-300">
                   Transcribiendo
                 </span>
               </>
             ) : isTyping ? (
               <>
-                <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-zinc-300" />
-                <span className="text-[10px] sm:text-xs font-bold mt-2 uppercase tracking-widest text-zinc-300">
+                <Loader2 className="w-7 h-7 sm:w-9 sm:h-9 animate-spin text-zinc-300" />
+                <span className="text-[10px] font-bold mt-1.5 uppercase tracking-widest text-zinc-300">
                   Pensando
                 </span>
               </>
             ) : (
               <>
-                <Mic className="w-9 h-9 sm:w-12 sm:h-12" />
-                <span className="text-[10px] sm:text-xs font-black mt-1.5 uppercase tracking-widest">
+                <Mic className="w-8 h-8 sm:w-10 sm:h-10" />
+                <span className="text-[10px] font-black mt-1 uppercase tracking-widest">
                   {isInitialState ? 'Empezar' : 'Hablar'}
                 </span>
               </>
@@ -1167,40 +1177,40 @@ Reglas obligatorias estrictas:
         </div>
 
         {/* Transcripción en tiempo real o instrucción interactiva */}
-        <div className="w-full max-w-md mx-auto mt-6 min-h-[3rem] flex flex-col items-center justify-center">
+        <div className="w-full max-w-md mx-auto mt-2 sm:mt-3 min-h-[2.25rem] flex flex-col items-center justify-center">
           {isInterrupted ? (
-            <p className="text-xs sm:text-sm text-amber-300 font-semibold animate-pulse">
+            <p className="text-xs sm:text-sm text-amber-400 font-semibold animate-pulse">
               Thea pausó su voz: di tu duda o acotación en voz alta...
             </p>
           ) : input ? (
-            <p className="text-sm sm:text-base text-rose-300 font-semibold animate-pulse px-4 py-2 rounded-2xl bg-rose-950/40 border border-rose-500/30">
+            <p className="text-xs sm:text-sm text-rose-400 font-semibold animate-pulse px-3 py-1.5 rounded-xl bg-rose-950/40 border border-rose-500/30">
               “{input}”
             </p>
           ) : listening ? (
-            <p className="text-xs sm:text-sm text-rose-300 font-semibold animate-pulse">
+            <p className="text-xs sm:text-sm text-rose-400 font-semibold animate-pulse">
               Escuchando tu voz... habla y pulsa el botón (o suelta Espacio) para enviar
             </p>
           ) : speaking ? (
-            <p className="text-xs sm:text-sm text-amber-300 font-medium">
+            <p className="text-xs sm:text-sm text-amber-400 font-medium">
               Thea está hablando... puedes interrumpir hablando en voz alta o con Espacio
             </p>
           ) : transcribing ? (
-            <p className="text-xs sm:text-sm text-cyan-300 font-medium animate-pulse">
+            <p className="text-xs sm:text-sm text-cyan-400 font-medium animate-pulse">
               Transcribiendo tu respuesta...
             </p>
           ) : isTyping ? (
-            <p className="text-xs sm:text-sm text-cyan-300 font-medium animate-pulse">
+            <p className="text-xs sm:text-sm text-cyan-400 font-medium animate-pulse">
               Evaluando tu respuesta con IA...
             </p>
           ) : (
-            <p className="text-xs sm:text-sm text-slate-400 font-medium">
+            <p className={`text-xs sm:text-sm font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
               {handsFree ? (
-                <span className="text-emerald-400 font-semibold">
+                <span className="text-emerald-500 font-semibold">
                   Manos libres activo: Thea escuchará automáticamente cuando termine
                 </span>
               ) : (
                 <span>
-                  Presiona o mantén pulsada la tecla <strong className="text-white underline decoration-violet-500 decoration-2">Espacio</strong> para responder
+                  Presiona o mantén pulsada la tecla <strong className={theme === 'dark' ? 'text-white underline decoration-violet-500 decoration-2' : 'text-zinc-950 underline decoration-rose-500 decoration-2'}>Espacio</strong> para responder
                 </span>
               )}
             </p>
@@ -1208,7 +1218,7 @@ Reglas obligatorias estrictas:
 
           {/* Aviso normal de voz si existiera */}
           {voiceError && voiceError !== 'brave-blocked' && (
-            <p className="text-xs text-rose-400 mt-2 bg-rose-950/60 px-3 py-1 rounded-xl border border-rose-500/30">
+            <p className="text-xs text-rose-400 mt-1 bg-rose-950/60 px-3 py-0.5 rounded-lg border border-rose-500/30">
               {voiceError}
             </p>
           )}

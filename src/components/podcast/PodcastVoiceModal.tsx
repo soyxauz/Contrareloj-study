@@ -87,8 +87,8 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
   const candidateVoices = esVoices.length > 0 ? esVoices : voices;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl relative text-left ${
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
+      <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto modal-smooth-scroll overscroll-contain shadow-2xl relative text-left ${
         theme === 'dark'
           ? 'bg-thea-surface border-thea-border text-white'
           : theme === 'kitty'
@@ -234,7 +234,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
                   {AZURE_EDGE_VOICES.filter(v => v.gender === 'female').map((v) => {
                     const isSelected = edgeSofiaVoice === v.id;
                     return (
@@ -295,7 +295,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
                   {AZURE_EDGE_VOICES.filter(v => v.gender === 'male').map((v) => {
                     const isSelected = edgeMateoVoice === v.id;
                     return (
@@ -391,7 +391,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
                   <div
                     onClick={() => {
                       onSelectLocalSofiaVoice('');
@@ -503,7 +503,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
                   <div
                     onClick={() => {
                       onSelectLocalMateoVoice('');

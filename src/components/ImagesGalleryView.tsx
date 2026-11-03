@@ -223,21 +223,41 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeIn">
       {/* View Header */}
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-thea-border/60">
+      <div className={`mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b ${
+        theme === 'dark' ? 'border-thea-border/60' : theme === 'kitty' ? 'border-pink-200' : 'border-slate-200'
+      }`}>
         <div>
           <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-            <div className="w-9 h-9 rounded-xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-400">
+            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center ${
+              theme === 'kitty'
+                ? 'bg-pink-100 border-pink-200 text-pink-600'
+                : theme === 'light'
+                ? 'bg-rose-50 border-rose-200 text-rose-600'
+                : 'bg-violet-600/20 border-violet-500/40 text-violet-400'
+            }`}>
               <ImageIcon className="w-5 h-5" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-3">
+            <h1 className={`text-xl sm:text-2xl font-bold flex items-center gap-3 ${
+              theme === 'dark' ? 'text-white' : 'text-zinc-950'
+            }`}>
               <span>Imágenes del Documento</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 font-semibold">
+              <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold tabular-nums border ${
+                theme === 'kitty'
+                  ? 'bg-pink-100 text-pink-700 border-pink-200'
+                  : theme === 'light'
+                  ? 'bg-slate-100 text-slate-700 border-slate-200'
+                  : 'bg-violet-500/20 text-violet-300 border-violet-500/30'
+              }`}>
                 {assets.length} {assets.length === 1 ? 'activo extraído' : 'activos extraídos'}
               </span>
             </h1>
 
             {isHydrating && (
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1.5 animate-pulse">
+              <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold flex items-center gap-1.5 animate-pulse ${
+                theme === 'dark'
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  : 'bg-amber-100 text-amber-900 border-amber-200'
+              }`}>
                 <Loader2 className="w-3 h-3 animate-spin" />
                 <span>
                   {syncProgress
@@ -251,14 +271,22 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
               <button
                 type="button"
                 onClick={loadMissingAssets}
-                className="text-xs px-2.5 py-0.5 rounded-full bg-violet-600/30 hover:bg-violet-600 text-violet-200 border border-violet-500/40 font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  theme === 'kitty'
+                    ? 'bg-pink-100 hover:bg-pink-200 text-pink-800 border-pink-300'
+                    : theme === 'light'
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+                    : 'bg-violet-600/30 hover:bg-violet-600 text-violet-200 border-violet-500/40'
+                }`}
               >
                 <RefreshCw className="w-3 h-3" />
                 <span>Cargar imágenes faltantes</span>
               </button>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
+          <p className={`text-xs sm:text-sm max-w-2xl ${
+            theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+          }`}>
             Todas las figuras, diagramas, esquemas y tablas extraídos de &quot;{kit.title}&quot;.
           </p>
         </div>
@@ -266,7 +294,13 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
 
       {/* Empty State */}
       {assets.length === 0 ? (
-        <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl bg-[#0e0b16]/95 border border-white/[0.08] text-center space-y-4 shadow-xl">
+        <div className={`max-w-xl mx-auto my-12 p-8 rounded-3xl border text-center space-y-4 shadow-xl ${
+          theme === 'dark'
+            ? 'bg-[#0e0b16]/95 border-white/[0.08] text-white'
+            : theme === 'kitty'
+            ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/30'
+            : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/50'
+        }`}>
           <div className="w-16 h-16 mx-auto rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500">
             <ImageIcon className="w-8 h-8" />
           </div>

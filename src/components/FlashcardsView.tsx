@@ -1119,9 +1119,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     const currentCase = guessWhoCases[currentCaseIdx];
 
     return (
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 h-[calc(100vh-4.5rem)] max-h-[860px] flex flex-col justify-between select-none overflow-hidden animate-fadeIn relative">
+      <div className="max-w-5xl w-full mx-auto px-3 sm:px-6 py-1.5 sm:py-2.5 h-full flex flex-col justify-between select-none overflow-hidden animate-fadeIn relative">
         {/* Cabecera del Juego: Botón Salir, Título, Contador de Casos, Marcador y Reiniciar */}
-        <div className={`flex items-center justify-between gap-2 sm:gap-4 shrink-0 pb-2 border-b ${
+        <div className={`flex items-center justify-between gap-2 sm:gap-4 shrink-0 pb-1.5 border-b ${
           theme === 'dark' ? 'border-thea-border/80' : theme === 'kitty' ? 'border-pink-200' : 'border-slate-200'
         }`}>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -1228,7 +1228,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
         ) : (
           <>
             {/* Barra de Progreso de Casos */}
-            <div className="shrink-0 my-1">
+            <div className="shrink-0 my-0.5">
               <div className="flex items-center gap-1.5">
                 {guessWhoCases.map((c, idx) => {
                   const isDone = idx < currentCaseIdx || (idx === currentCaseIdx && isCaseSolved);
@@ -1250,37 +1250,37 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </div>
 
             {/* Tarjeta Central: Entidad Misteriosa */}
-            <div className="shrink-0 my-1.5">
+            <div className="shrink-0 my-1">
               {!isCaseSolved ? (
-                <div className={`h-24 sm:h-26 rounded-2xl p-3 sm:p-4 flex items-center justify-between relative overflow-hidden border ${
+                <div className={`h-20 sm:h-22 rounded-2xl p-2.5 sm:p-3.5 flex items-center justify-between relative overflow-hidden border ${
                   theme === 'light'
                     ? 'border-slate-200 bg-white text-zinc-950 shadow-sm'
                     : theme === 'kitty'
                     ? 'border-pink-200 bg-white text-zinc-950 shadow-sm shadow-pink-100/50'
                     : 'border-violet-500/40 bg-gradient-to-r from-thea-surface via-thea-surfaceLight to-thea-surface shadow-lg text-white'
                 }`}>
-                  <div className="flex items-center gap-3 sm:gap-4 z-10">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-inner ${
+                  <div className="flex items-center gap-2.5 sm:gap-3.5 z-10">
+                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center border shadow-inner shrink-0 ${
                       theme === 'kitty'
                         ? 'bg-pink-100 border-pink-200 text-pink-600'
                         : theme === 'light'
                         ? 'bg-amber-50 border-amber-200 text-amber-600'
                         : 'bg-violet-600/30 border-violet-400/40 text-violet-300'
                     }`}>
-                      <HelpCircle className={`w-6 h-6 animate-pulse ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'}`} />
+                      <HelpCircle className={`w-5 h-5 animate-pulse ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'}`} />
                     </div>
                     <div>
-                      <span className={`text-[10px] sm:text-xs uppercase font-extrabold tracking-wider block ${
+                      <span className={`text-[10px] uppercase font-extrabold tracking-wider block ${
                         theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-600' : 'text-violet-300'
                       }`}>
                         Entidad Oculta • Deducción en Proceso
                       </span>
-                      <h3 className={`text-base sm:text-lg font-black ${
+                      <h3 className={`text-sm sm:text-base font-black ${
                         theme === 'dark' ? 'text-white' : 'text-zinc-950'
                       }`}>
                         ¿Quién es esta entidad misteriosa?
                       </h3>
-                      <p className={`text-[11px] ${
+                      <p className={`text-[10px] sm:text-[11px] line-clamp-1 ${
                         theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
                       }`}>
                         {wrongOptions.length > 0
@@ -1294,7 +1294,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     <span className={`text-[10px] uppercase font-bold ${
                       theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
                     }`}>Recompensa actual</span>
-                    <span className={`text-lg font-black ${
+                    <span className={`text-base font-black ${
                       theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-amber-600' : 'text-amber-300'
                     }`}>
                       {currentCase.clues[revealedCluesCount - 1]?.unlockedScore || 100} pts
@@ -1303,7 +1303,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                       {Array.from({ length: 3 }).map((_, i) => (
                         <Star
                           key={i}
-                          className={`w-3.5 h-3.5 ${
+                          className={`w-3 h-3 ${
                             i < (currentCase.clues[revealedCluesCount - 1]?.stars || 1)
                               ? 'fill-amber-400 text-amber-400'
                               : theme === 'dark' ? 'text-slate-600' : 'text-slate-300'
@@ -1314,33 +1314,33 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   </div>
                 </div>
               ) : (
-                <div className="h-24 sm:h-26 rounded-2xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-950/90 via-emerald-900/90 to-teal-950/90 p-3 sm:p-4 flex items-center justify-between shadow-[0_0_25px_rgba(52,211,153,0.3)] animate-cardCorrect">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300">
-                      <Trophy className="w-6 h-6 text-emerald-300 animate-iconPop" />
+                <div className="h-20 sm:h-22 rounded-2xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-950/90 via-emerald-900/90 to-teal-950/90 p-2.5 sm:p-3.5 flex items-center justify-between shadow-[0_0_25px_rgba(52,211,153,0.3)] animate-cardCorrect">
+                  <div className="flex items-center gap-2.5 sm:gap-3.5">
+                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0">
+                      <Trophy className="w-5 h-5 text-emerald-300 animate-iconPop" />
                     </div>
                     <div>
-                      <span className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider text-emerald-300 block">
+                      <span className="text-[10px] uppercase font-extrabold tracking-wider text-emerald-300 block">
                         ¡Deducción Acertada!
                       </span>
-                      <h3 className="text-lg sm:text-xl md:text-2xl font-black text-white drop-shadow">
+                      <h3 className="text-base sm:text-lg font-black text-white drop-shadow">
                         <FormattedText text={currentCase.targetTerm} inlineOnly={true} />
                       </h3>
-                      <p className="text-[11px] text-emerald-200">
+                      <p className="text-[10px] text-emerald-200">
                         Resuelto usando {revealedCluesCount} de 4 pistas {wrongOptions.length > 0 ? `con ${wrongOptions.length} fallo(s)` : 'sin fallos'}.
                       </p>
                     </div>
                   </div>
 
                   <div className="flex flex-col items-end shrink-0">
-                    <span className="text-base sm:text-xl font-black text-emerald-300">
+                    <span className="text-sm sm:text-lg font-black text-emerald-300">
                       +{caseScoreEarned} pts
                     </span>
                     <div className="flex items-center gap-1 mt-0.5">
                       {Array.from({ length: 3 }).map((_, i) => (
                         <Star
                           key={i}
-                          className={`w-4 h-4 ${
+                          className={`w-3.5 h-3.5 ${
                             i < caseStarsEarned ? 'fill-amber-400 text-amber-400' : 'text-slate-700'
                           }`}
                         />
@@ -1352,7 +1352,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </div>
 
             {/* Tablero Central: Cuadrícula 2x2 de Pistas Progresivas */}
-            <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 my-1.5">
+            <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 my-1">
               {currentCase.clues.map((clue) => {
                 const isUnlocked = clue.level <= revealedCluesCount;
                 const isNextToUnlock = clue.level === revealedCluesCount + 1 && !isCaseSolved;
@@ -1361,7 +1361,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   return (
                     <div
                       key={clue.level}
-                      className={`h-full min-h-0 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between shadow-sm animate-fadeIn border ${
+                      className={`h-full min-h-0 rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between shadow-sm animate-fadeIn border ${
                         theme === 'light'
                           ? 'border-slate-200 bg-white text-zinc-950'
                           : theme === 'kitty'
@@ -1369,10 +1369,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                           : 'border-violet-500/40 bg-thea-surface/95 text-white'
                       }`}
                     >
-                      <div className={`flex items-center justify-between pb-1 border-b shrink-0 ${
+                      <div className={`flex items-center justify-between pb-0.5 border-b shrink-0 ${
                         theme === 'dark' ? 'border-violet-900/40' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
                       }`}>
-                        <span className={`text-[11px] font-extrabold flex items-center gap-1.5 uppercase tracking-wide ${
+                        <span className={`text-[10px] sm:text-[11px] font-extrabold flex items-center gap-1.5 uppercase tracking-wide ${
                           theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-700' : 'text-violet-300'
                         }`}>
                           {clue.level === 1 && <BookOpen className="w-3.5 h-3.5" />}
@@ -1381,7 +1381,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                           {clue.level === 4 && <Award className="w-3.5 h-3.5" />}
                           {clue.title}
                         </span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
+                        <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 rounded-md border ${
                           theme === 'kitty'
                             ? 'text-pink-700 bg-pink-100 border-pink-200'
                             : theme === 'light'
@@ -1391,8 +1391,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                           {clue.unlockedScore} pts ({clue.stars}★)
                         </span>
                       </div>
-                      <div className="flex-1 min-h-0 flex items-center pt-1.5">
-                        <p className={`text-xs sm:text-[13px] leading-snug sm:leading-relaxed line-clamp-4 ${
+                      <div className="flex-1 min-h-0 flex items-center pt-1 overflow-y-auto modal-smooth-scroll">
+                        <p className={`text-[11px] sm:text-xs leading-snug line-clamp-3 sm:line-clamp-4 ${
                           theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
                         }`}>
                           <FormattedText text={clue.text} inlineOnly={true} />
@@ -1408,7 +1408,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                       key={clue.level}
                       type="button"
                       onClick={handleRevealNextClue}
-                      className={`h-full min-h-0 rounded-2xl border-2 border-dashed p-2.5 sm:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all active:scale-[0.98] group ${
+                      className={`h-full min-h-0 rounded-2xl border-2 border-dashed p-2 sm:p-2.5 flex flex-col items-center justify-center text-center cursor-pointer transition-all active:scale-[0.98] group ${
                         theme === 'light'
                           ? 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-zinc-950'
                           : theme === 'kitty'
@@ -1416,18 +1416,18 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                           : 'border-violet-500/50 bg-violet-950/20 hover:bg-violet-900/30 hover:border-violet-400 text-white'
                       }`}
                     >
-                      <Unlock className={`w-5 h-5 group-hover:scale-110 transition-transform mb-1 ${
+                      <Unlock className={`w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform mb-0.5 ${
                         theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'
                       }`} />
-                      <span className={`text-xs sm:text-sm font-extrabold ${
+                      <span className={`text-xs sm:text-[13px] font-extrabold ${
                         theme === 'dark' ? 'text-white' : 'text-zinc-950'
                       }`}>
                         Desbloquear {clue.title}
                       </span>
-                      <span className={`text-[10px] mt-0.5 ${
+                      <span className={`text-[9px] sm:text-[10px] mt-0.5 ${
                         theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-violet-300'
                       }`}>
-                        La recompensa pasará a {clue.unlockedScore} pts ({clue.stars}★)
+                        Recompensa: {clue.unlockedScore} pts ({clue.stars}★)
                       </span>
                     </button>
                   );
@@ -1436,18 +1436,18 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 return (
                   <div
                     key={clue.level}
-                    className="h-full min-h-0 rounded-2xl border border-thea-border/50 bg-thea-surface/50 p-2.5 sm:p-3 flex flex-col items-center justify-center text-center opacity-40 select-none"
+                    className="h-full min-h-0 rounded-2xl border border-thea-border/50 bg-thea-surface/50 p-2 sm:p-2.5 flex flex-col items-center justify-center text-center opacity-40 select-none"
                   >
-                    <Lock className="w-4 h-4 text-slate-500 mb-1" />
-                    <span className="text-xs font-bold text-slate-400">{clue.title}</span>
-                    <span className="text-[10px] text-slate-500">Bloqueada ({clue.unlockedScore} pts)</span>
+                    <Lock className="w-3.5 h-3.5 text-slate-500 mb-0.5" />
+                    <span className="text-[11px] font-bold text-slate-400">{clue.title}</span>
+                    <span className="text-[9px] text-slate-500">Bloqueada ({clue.unlockedScore} pts)</span>
                   </div>
                 );
               })}
             </div>
 
             {/* Grid 2x2 Inferior de Opciones Candidatas */}
-            <div className="shrink-0 grid grid-cols-2 gap-2 sm:gap-2.5 my-1.5">
+            <div className="shrink-0 grid grid-cols-2 gap-1.5 sm:gap-2 my-1">
               {currentCase.options.map((option, idx) => {
                 const isWrong = wrongOptions.includes(option);
                 const isCorrect = isCaseSolved && option === currentCase.targetTerm;
@@ -1476,10 +1476,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     type="button"
                     disabled={isCaseSolved || isWrong}
                     onClick={() => handleSelectGuessOption(option)}
-                    className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex items-center justify-center text-center shadow-sm min-h-[50px] sm:min-h-[56px] ${btnStyle}`}
+                    className={`p-2 sm:p-2.5 rounded-xl border transition-all duration-150 flex items-center justify-center text-center shadow-sm min-h-[42px] sm:min-h-[48px] ${btnStyle}`}
                   >
-                    {isCorrect && <Check className="w-4 h-4 text-emerald-500 mr-1.5 shrink-0" />}
-                    <span className="text-xs sm:text-sm font-bold line-clamp-2 leading-snug">
+                    {isCorrect && <Check className="w-3.5 h-3.5 text-emerald-500 mr-1 shrink-0" />}
+                    <span className="text-xs sm:text-sm font-bold line-clamp-1 leading-snug">
                       <FormattedText text={option} inlineOnly={true} />
                     </span>
                   </button>
@@ -1488,14 +1488,14 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </div>
 
             {/* Barra Inferior: Botón de Siguiente Caso o Guía */}
-            <div className={`shrink-0 pt-1.5 border-t flex items-center justify-between text-[11px] px-1 ${
+            <div className={`shrink-0 pt-1 border-t flex items-center justify-between text-[11px] px-1 ${
               theme === 'dark' ? 'border-thea-border/60 text-slate-400' : 'border-slate-200 text-slate-600'
             }`}>
               {isCaseSolved ? (
                 <button
                   type="button"
                   onClick={handleNextCase}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  className="w-full py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
                 >
                   <span>
                     {currentCaseIdx + 1 < guessWhoCases.length
@@ -1506,11 +1506,11 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 </button>
               ) : (
                 <div className="w-full flex items-center justify-between">
-                  <span className="truncate mr-2">
-                    Toca una opción para adivinar. Si fallas se tachará (-10 pts) y podrás seguir deduciendo.
+                  <span className="truncate mr-2 text-[10px] sm:text-[11px]">
+                    Toca una opción para adivinar (-10 pts por fallo).
                   </span>
-                  <span className="shrink-0 font-bold">
-                    Fallos en caso: <span className={wrongOptions.length > 0 ? 'text-rose-500 font-extrabold' : 'text-slate-500'}>{wrongOptions.length}</span>
+                  <span className="shrink-0 font-bold text-[10px] sm:text-[11px]">
+                    Fallos: <span className={wrongOptions.length > 0 ? 'text-rose-500 font-extrabold' : 'text-slate-500'}>{wrongOptions.length}</span>
                   </span>
                 </div>
               )}
@@ -1520,7 +1520,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
         {/* Modal de Victoria Final (5 casos completados) */}
         {isGameFinished && (
-          <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="absolute inset-0 z-30 bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
             <div className={`max-w-md w-full rounded-3xl p-6 sm:p-7 text-center shadow-2xl relative overflow-hidden animate-feedbackPop border ${
               theme === 'dark'
                 ? 'bg-thea-surface border-emerald-500/40 text-white'
@@ -1612,12 +1612,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl w-full mx-auto px-3 sm:px-6 py-1 sm:py-2 h-full flex flex-col justify-between overflow-hidden animate-fadeIn select-none">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-thea-border">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1.5 mb-1 border-b border-thea-border">
         <div>
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600/30 text-violet-300 border border-violet-500/30">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+            <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-violet-600/30 text-violet-300 border border-violet-500/30">
               REPETICIÓN ESPACIADA
             </span>
             <span className="text-xs text-slate-400 font-medium">
@@ -1625,23 +1625,23 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               {archivedCards.length > 0 && ` • ${archivedCards.length} dominadas archivadas`}
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Layers className="w-6 h-6 text-violet-400" />
+          <h1 className={`text-lg sm:text-xl font-bold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+            <Layers className="w-5 h-5 text-violet-400 shrink-0" />
             <span>Flashcards & Adivina Quién</span>
           </h1>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Selector de Tamaño de Letra */}
-          <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-1 text-xs">
-            <span className="px-2 text-slate-400 flex items-center gap-1 font-semibold text-[11px]">
-              <Type className="w-3.5 h-3.5 text-amber-400" />
+          <div className="flex items-center bg-thea-surface border border-thea-border rounded-xl p-0.5 text-xs">
+            <span className="px-1.5 text-slate-400 flex items-center gap-1 font-semibold text-[10px]">
+              <Type className="w-3 h-3 text-amber-400" />
               Letra:
             </span>
             <button
               type="button"
               onClick={() => setTextSize('medium')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer ${
                 textSize === 'medium' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
               title="Tamaño Mediano"
@@ -1651,7 +1651,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <button
               type="button"
               onClick={() => setTextSize('large')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer ${
                 textSize === 'large' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
               title="Tamaño Grande (Predeterminado)"
@@ -1661,7 +1661,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <button
               type="button"
               onClick={() => setTextSize('huge')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer ${
                 textSize === 'huge' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
               title="Tamaño Extra Grande"
@@ -1674,10 +1674,10 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
           <button
             type="button"
             onClick={() => setShowConfigModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border hover:border-violet-500/60 text-xs font-bold text-slate-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 group"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border hover:border-violet-500/60 text-xs font-bold text-slate-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 group"
             title="Calibrar enfoque y proporción de las flashcards"
           >
-            <Settings className="w-4 h-4 text-violet-400 group-hover:rotate-45 transition-transform" />
+            <Settings className="w-3.5 h-3.5 text-violet-400 group-hover:rotate-45 transition-transform" />
             <span className="hidden sm:inline">Enfoque</span>
           </button>
 
@@ -1687,9 +1687,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               setGameMode('guess-who');
               startNewGuessWhoGame();
             }}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/40 text-xs font-bold text-violet-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/40 text-xs font-bold text-violet-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
           >
-            <HelpCircle className="w-4 h-4 text-amber-400" />
+            <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
             <span>Adivina Quién</span>
           </button>
         </div>
@@ -1697,50 +1697,50 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
       {/* Notificación de estado */}
       {statusNotification && (
-        <div className="mb-6 p-4 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs sm:text-sm flex items-center gap-3 animate-fadeIn shadow-lg">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+        <div className="shrink-0 mb-1.5 p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2 animate-fadeIn shadow-md">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{statusNotification}</span>
         </div>
       )}
 
       {cards.length === 0 ? (
-        <div className="text-center py-16 px-6 rounded-3xl bg-thea-surface border border-thea-border max-w-xl mx-auto shadow-xl animate-fadeIn">
-          <div className="w-16 h-16 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center mx-auto mb-5 text-violet-400">
-            <Brain className="w-8 h-8" />
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center p-6 rounded-2xl bg-thea-surface border border-thea-border max-w-xl mx-auto shadow-xl animate-fadeIn">
+          <div className="w-12 h-12 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center mx-auto mb-3 text-violet-400">
+            <Brain className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Fichas de Estudio Pendientes</h2>
-          <p className="text-sm text-slate-300 mb-8 leading-relaxed">
+          <h2 className="text-xl font-bold text-white mb-1">Fichas de Estudio Pendientes</h2>
+          <p className="text-xs text-slate-300 mb-5 leading-relaxed">
             Este Study Kit fue creado de forma rápida centrada en preguntas. Puedes generar ahora sus tarjetas de memoria interactivas con repetición espaciada utilizando la IA.
           </p>
           <button
             type="button"
             onClick={handleGenerateFlashcards}
             disabled={isGenerating}
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-sm shadow-xl shadow-violet-900/40 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg transition-all transform hover:-translate-y-0.5 cursor-pointer"
           >
             {isGenerating ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Extrayendo Conceptos y Generando Fichas con IA...</span>
               </>
             ) : (
               <>
-                <BookOpen className="w-5 h-5" />
+                <BookOpen className="w-4 h-4" />
                 <span>Generar Flashcards con IA</span>
               </>
             )}
           </button>
         </div>
       ) : gameMode === 'study' ? (
-        <div className="space-y-6">
+        <div className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
           {/* Card Counter, Progress Badges & Management Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm">
-            <div className="flex items-center gap-3">
+          <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs sm:text-sm mb-1">
+            <div className="flex items-center gap-2">
               <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
                 Tarjeta {currentIdx + 1} de {cards.length}
               </span>
-              <div className="flex items-center gap-1.5 text-xs font-semibold tabular-nums">
-                <span className={`px-2.5 py-1 rounded-lg border ${
+              <div className="flex items-center gap-1 text-[11px] font-semibold tabular-nums">
+                <span className={`px-2 py-0.5 rounded-md border ${
                   theme === 'dark'
                     ? 'bg-slate-800 text-slate-300 border-slate-700'
                     : theme === 'kitty'
@@ -1749,14 +1749,14 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 }`}>
                   Por aprender: {cards.filter(c => c.mastery === 'to-learn' || !c.mastery).length}
                 </span>
-                <span className={`px-2.5 py-1 rounded-lg border ${
+                <span className={`px-2 py-0.5 rounded-md border ${
                   theme === 'dark'
                     ? 'bg-amber-950 text-amber-300 border-amber-900/60'
                     : 'bg-amber-100 text-amber-900 border-amber-200'
                 }`}>
                   Conocidas: {cards.filter(c => c.mastery === 'known').length}
                 </span>
-                <span className={`px-2.5 py-1 rounded-lg border ${
+                <span className={`px-2 py-0.5 rounded-md border ${
                   theme === 'dark'
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-900/60'
                     : 'bg-emerald-100 text-emerald-900 border-emerald-200'
@@ -1767,12 +1767,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </div>
 
             {/* Acciones para aumentar baraja o renovar memorizadas */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
                 onClick={handleAddMoreFlashcards}
                 disabled={isAddingMore}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95 ${
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-95 ${
                   theme === 'dark'
                     ? 'bg-violet-950/60 hover:bg-violet-900/80 border-violet-500/40 text-violet-200'
                     : theme === 'kitty'
@@ -1782,9 +1782,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 title="Generar y sumar 10 nuevas tarjetas a este kit"
               >
                 {isAddingMore ? (
-                  <Loader2 className={`w-3.5 h-3.5 animate-spin ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-600 dark:text-violet-300'}`} />
+                  <Loader2 className={`w-3 h-3 animate-spin ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-600 dark:text-violet-300'}`} />
                 ) : (
-                  <PlusCircle className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-600 dark:text-violet-400'}`} />
+                  <PlusCircle className={`w-3 h-3 ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-600 dark:text-violet-400'}`} />
                 )}
                 <span>+10 Flashcards</span>
               </button>
@@ -1793,7 +1793,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 type="button"
                 onClick={handleSwapMasteredFlashcards}
                 disabled={isSwappingMastered || cards.filter(c => c.mastery === 'mastered').length === 0}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all disabled:opacity-40 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95 ${
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-95 ${
                   theme === 'dark'
                     ? 'bg-amber-950/60 hover:bg-amber-900/80 border-amber-500/40 text-amber-200'
                     : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-900'
@@ -1801,9 +1801,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 title="Archivar las flashcards dominadas y traer una baraja de 10 nuevas no vistas"
               >
                 {isSwappingMastered ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600 dark:text-amber-300" />
+                  <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-300" />
                 ) : (
-                  <RefreshCw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <RefreshCw className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                 )}
                 <span>Renovar Dominadas ({cards.filter(c => c.mastery === 'mastered').length})</span>
               </button>
@@ -1811,198 +1811,200 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
           </div>
 
           {/* ── INTERACTIVE 3D PERSPECTIVE FLIP CARD ── */}
-          <div className="perspective-card w-full min-h-[380px] sm:min-h-[440px]">
-            <div
-              onClick={() => setIsFlipped(!isFlipped)}
-              className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group min-h-[380px] sm:min-h-[440px] rounded-3xl`}
-            >
-              {/* CARA FRONTAL (TÉRMINO O PREGUNTA CONCRETA) */}
-              <div className={`card-face rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border ${
-                theme === 'dark'
-                  ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#140e26] via-[#0d0918] to-[#090314] text-white glass-specular'
-                  : theme === 'kitty'
-                  ? 'border-pink-200/90 hover:border-pink-300 bg-white text-zinc-950 shadow-pink-200/40'
-                  : 'border-slate-200/90 hover:border-slate-300 bg-white text-zinc-950 shadow-slate-200/70'
-              }`}>
-                <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
-                  {isQuestionCard ? (
-                    <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
-                      theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-sky-700' : 'text-cyan-400/90'
-                    }`}>
-                      <HelpCircle className="w-3.5 h-3.5" />
-                      Pregunta Concreta
-                    </span>
-                  ) : (
-                    <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
-                      theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-700' : 'text-indigo-400/90'
-                    }`}>
-                      <BookOpen className="w-3.5 h-3.5" />
-                      Término Clave
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2">
-                    {currentCard?.mastery === 'mastered' && (
-                      <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
-                        theme === 'dark'
-                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                          : 'bg-emerald-100 border-emerald-300 text-emerald-800'
-                      }`}>
-                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> ¡Dominada!
-                      </span>
-                    )}
-                    {currentCard?.mastery === 'known' && (
-                      <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
-                        theme === 'dark'
-                          ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                          : 'bg-amber-100 border-amber-300 text-amber-800'
-                      }`}>
-                        <Star className="w-3 h-3 text-amber-600 dark:text-amber-400" /> La conozco
-                      </span>
-                    )}
-                    {currentCard?.mastery === 'to-learn' && (
-                      <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
-                        theme === 'dark'
-                          ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
-                          : 'bg-rose-100 border-rose-300 text-rose-800'
-                      }`}>
-                        <RotateCcw className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Aún no la sé
-                      </span>
-                    )}
-                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border tabular-nums ${
-                      theme === 'dark'
-                        ? 'border-white/[0.08] bg-white/[0.03] text-slate-400'
-                        : theme === 'kitty'
-                        ? 'border-pink-200 bg-pink-50 text-pink-700'
-                        : 'border-slate-200 bg-slate-100 text-slate-600'
-                    }`}>
-                      Frente
-                    </span>
-                  </div>
-                </div>
-
-                <div className="max-w-2xl w-full flex items-center justify-center my-auto py-4">
-                  <div className={`text-center w-full ${termTypographyClasses} ${
-                    theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
-                  }`}>
-                    <FormattedText text={currentCard.term} inlineOnly={true} className="whitespace-pre-line" />
-                  </div>
-                </div>
-
-                <div className={`flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors ${
+          <div className="flex-1 min-h-0 flex flex-col justify-center my-auto w-full max-w-3xl mx-auto py-1">
+            <div className="perspective-card w-full h-[280px] sm:h-[340px] max-h-[46vh]">
+              <div
+                onClick={() => setIsFlipped(!isFlipped)}
+                className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group h-full rounded-2xl sm:rounded-3xl`}
+              >
+                {/* CARA FRONTAL (TÉRMINO O PREGUNTA CONCRETA) */}
+                <div className={`card-face rounded-2xl sm:rounded-3xl transition-all p-4 sm:p-7 shadow-2xl flex flex-col items-center justify-between text-center border ${
                   theme === 'dark'
-                    ? 'text-slate-400 group-hover:text-slate-200'
+                    ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#140e26] via-[#0d0918] to-[#090314] text-white glass-specular'
                     : theme === 'kitty'
-                    ? 'text-pink-600 group-hover:text-pink-800'
-                    : 'text-slate-500 group-hover:text-slate-900'
+                    ? 'border-pink-200/90 hover:border-pink-300 bg-white text-zinc-950 shadow-pink-200/40'
+                    : 'border-slate-200/90 hover:border-slate-300 bg-white text-zinc-950 shadow-slate-200/70'
                 }`}>
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>
-                    {isQuestionCard
-                      ? 'Haz clic para voltear y ver la respuesta'
-                      : 'Haz clic para voltear y ver la definición'}
-                  </span>
-                </div>
-              </div>
-
-              {/* CARA POSTERIOR (DEFINICIÓN O RESPUESTA) */}
-              <div className={`card-face card-back rounded-3xl transition-all p-8 sm:p-14 shadow-2xl flex flex-col items-center justify-between text-center border ${
-                theme === 'dark'
-                  ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#16102c] via-[#0e0a1b] to-[#090314] text-white glass-specular'
-                  : theme === 'kitty'
-                  ? 'border-pink-200/90 hover:border-pink-300 bg-white text-zinc-950 shadow-pink-200/40'
-                  : 'border-slate-200/90 hover:border-slate-300 bg-white text-zinc-950 shadow-slate-200/70'
-              }`}>
-                <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
-                  {isQuestionCard ? (
-                    <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
-                      theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-sky-700' : 'text-sky-400/90'
-                    }`}>
-                      Respuesta Concisa
-                    </span>
-                  ) : (
-                    <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
-                      theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-700' : 'text-indigo-400/90'
-                    }`}>
-                      Definición & Concepto
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2">
-                    {currentCard?.mastery === 'mastered' && (
-                      <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
-                        theme === 'dark'
-                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                          : 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                  <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
+                    {isQuestionCard ? (
+                      <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
+                        theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-sky-700' : 'text-cyan-400/90'
                       }`}>
-                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> ¡Dominada!
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        Pregunta Concreta
+                      </span>
+                    ) : (
+                      <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
+                        theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-700' : 'text-indigo-400/90'
+                      }`}>
+                        <BookOpen className="w-3.5 h-3.5" />
+                        Término Clave
                       </span>
                     )}
-                    {currentCard?.mastery === 'known' && (
-                      <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
+                    <div className="flex items-center gap-1.5">
+                      {currentCard?.mastery === 'mastered' && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
+                          theme === 'dark'
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                            : 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                        }`}>
+                          <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> ¡Dominada!
+                        </span>
+                      )}
+                      {currentCard?.mastery === 'known' && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
+                          theme === 'dark'
+                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                            : 'bg-amber-100 border-amber-300 text-amber-800'
+                        }`}>
+                          <Star className="w-3 h-3 text-amber-600 dark:text-amber-400" /> La conozco
+                        </span>
+                      )}
+                      {currentCard?.mastery === 'to-learn' && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
+                          theme === 'dark'
+                            ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                            : 'bg-rose-100 border-rose-300 text-rose-800'
+                        }`}>
+                          <RotateCcw className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Aún no la sé
+                        </span>
+                      )}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border tabular-nums ${
                         theme === 'dark'
-                          ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                          : 'bg-amber-100 border-amber-300 text-amber-800'
+                          ? 'border-white/[0.08] bg-white/[0.03] text-slate-400'
+                          : theme === 'kitty'
+                          ? 'border-pink-200 bg-pink-50 text-pink-700'
+                          : 'border-slate-200 bg-slate-100 text-slate-600'
                       }`}>
-                        <Star className="w-3 h-3 text-amber-600 dark:text-amber-400" /> La conozco
+                        Frente
                       </span>
-                    )}
-                    {currentCard?.mastery === 'to-learn' && (
-                      <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
-                        theme === 'dark'
-                          ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
-                          : 'bg-rose-100 border-rose-300 text-rose-800'
-                      }`}>
-                        <RotateCcw className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Aún no la sé
-                      </span>
-                    )}
-                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border tabular-nums ${
-                      theme === 'dark'
-                        ? 'border-white/[0.08] bg-white/[0.03] text-slate-400'
-                        : theme === 'kitty'
-                        ? 'border-pink-200 bg-pink-50 text-pink-700'
-                        : 'border-slate-200 bg-slate-100 text-slate-600'
-                    }`}>
-                      Reverso
-                    </span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="max-w-2xl w-full flex items-center justify-center my-auto py-4">
-                  <div className={`text-center w-full ${definitionTypographyClasses} ${
-                    theme === 'dark' ? 'text-slate-100' : 'text-zinc-900 font-medium'
+                  <div className="max-w-2xl w-full flex items-center justify-center my-auto py-2">
+                    <div className={`text-center w-full ${termTypographyClasses} ${
+                      theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
+                    }`}>
+                      <FormattedText text={currentCard.term} inlineOnly={true} className="whitespace-pre-line" />
+                    </div>
+                  </div>
+
+                  <div className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                    theme === 'dark'
+                      ? 'text-slate-400 group-hover:text-slate-200'
+                      : theme === 'kitty'
+                      ? 'text-pink-600 group-hover:text-pink-800'
+                      : 'text-slate-500 group-hover:text-slate-900'
                   }`}>
-                    <FormattedText text={currentCard.definition} inlineOnly={true} className="whitespace-pre-line" />
+                    <RefreshCw className="w-3 h-3" />
+                    <span>
+                      {isQuestionCard
+                        ? 'Haz clic para voltear y ver la respuesta'
+                        : 'Haz clic para voltear y ver la definición'}
+                    </span>
                   </div>
                 </div>
 
-                <div className={`flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors ${
+                {/* CARA POSTERIOR (DEFINICIÓN O RESPUESTA) */}
+                <div className={`card-face card-back rounded-2xl sm:rounded-3xl transition-all p-4 sm:p-7 shadow-2xl flex flex-col items-center justify-between text-center border ${
                   theme === 'dark'
-                    ? 'text-slate-400 group-hover:text-slate-200'
+                    ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#16102c] via-[#0e0a1b] to-[#090314] text-white glass-specular'
                     : theme === 'kitty'
-                    ? 'text-pink-600 group-hover:text-pink-800'
-                    : 'text-slate-500 group-hover:text-slate-900'
+                    ? 'border-pink-200/90 hover:border-pink-300 bg-white text-zinc-950 shadow-pink-200/40'
+                    : 'border-slate-200/90 hover:border-slate-300 bg-white text-zinc-950 shadow-slate-200/70'
                 }`}>
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>
-                    {isQuestionCard
-                      ? 'Haz clic para volver a ver la pregunta'
-                      : 'Haz clic para volver a ver el término'}
-                  </span>
+                  <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
+                    {isQuestionCard ? (
+                      <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
+                        theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-sky-700' : 'text-sky-400/90'
+                      }`}>
+                        Respuesta Concisa
+                      </span>
+                    ) : (
+                      <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${
+                        theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-700' : 'text-indigo-400/90'
+                      }`}>
+                        Definición & Concepto
+                      </span>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      {currentCard?.mastery === 'mastered' && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
+                          theme === 'dark'
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                            : 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                        }`}>
+                          <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> ¡Dominada!
+                        </span>
+                      )}
+                      {currentCard?.mastery === 'known' && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
+                          theme === 'dark'
+                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                            : 'bg-amber-100 border-amber-300 text-amber-800'
+                        }`}>
+                          <Star className="w-3 h-3 text-amber-600 dark:text-amber-400" /> La conozco
+                        </span>
+                      )}
+                      {currentCard?.mastery === 'to-learn' && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
+                          theme === 'dark'
+                            ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                            : 'bg-rose-100 border-rose-300 text-rose-800'
+                        }`}>
+                          <RotateCcw className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Aún no la sé
+                        </span>
+                      )}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border tabular-nums ${
+                        theme === 'dark'
+                          ? 'border-white/[0.08] bg-white/[0.03] text-slate-400'
+                          : theme === 'kitty'
+                          ? 'border-pink-200 bg-pink-50 text-pink-700'
+                          : 'border-slate-200 bg-slate-100 text-slate-600'
+                      }`}>
+                        Reverso
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="max-w-2xl w-full flex items-center justify-center my-auto py-2">
+                    <div className={`text-center w-full ${definitionTypographyClasses} ${
+                      theme === 'dark' ? 'text-slate-100' : 'text-zinc-900 font-medium'
+                    }`}>
+                      <FormattedText text={currentCard.definition} inlineOnly={true} className="whitespace-pre-line" />
+                    </div>
+                  </div>
+
+                  <div className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                    theme === 'dark'
+                      ? 'text-slate-400 group-hover:text-slate-200'
+                      : theme === 'kitty'
+                      ? 'text-pink-600 group-hover:text-pink-800'
+                      : 'text-slate-500 group-hover:text-slate-900'
+                  }`}>
+                    <RefreshCw className="w-3 h-3" />
+                    <span>
+                      {isQuestionCard
+                        ? 'Haz clic para volver a ver la pregunta'
+                        : 'Haz clic para volver a ver el término'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Navegación y Evaluación de Dominio */}
-          <div className="flex items-center justify-between gap-3 pt-2 flex-wrap">
+          <div className="shrink-0 flex items-center justify-between gap-2 pt-1 flex-wrap">
             <button
               type="button"
               onClick={handlePrevCard}
-              className={`active-press p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl border transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5 text-xs font-semibold ${
+              className={`active-press p-2 sm:p-2.5 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
                 theme === 'dark'
                   ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
                   : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-sm'
-                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-sm'
+                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
               }`}
               title="Tarjeta anterior"
             >
@@ -2011,20 +2013,20 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </button>
 
             {/* Botones de Evaluación */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center max-w-md">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-1 justify-center max-w-md">
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('to-learn')}
-                className={`active-press flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm border ${
+                className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
                   currentCard?.mastery === 'to-learn'
                     ? theme === 'dark'
                       ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950/30'
                       : 'bg-rose-100 border-rose-400 text-rose-900 font-bold ring-2 ring-rose-400/30'
                     : theme === 'dark'
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
+                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
                     : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 font-medium shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium shadow-xs'
+                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
                 }`}
               >
                 Aún no la sé
@@ -2032,16 +2034,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('known')}
-                className={`active-press flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm border ${
+                className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
                   currentCard?.mastery === 'known'
                     ? theme === 'dark'
                       ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold shadow-md shadow-amber-950/30'
                       : 'bg-amber-100 border-amber-400 text-amber-900 font-bold ring-2 ring-amber-400/30'
                     : theme === 'dark'
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
+                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
                     : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 font-medium shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium shadow-xs'
+                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
                 }`}
               >
                 La conozco
@@ -2049,16 +2051,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <button
                 type="button"
                 onClick={() => handleUpdateMastery('mastered')}
-                className={`active-press flex-1 py-3 px-2 sm:px-3 min-h-[44px] rounded-2xl transition-all text-center cursor-pointer flex items-center justify-center text-xs sm:text-sm border ${
+                className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
                   currentCard?.mastery === 'mastered'
                     ? theme === 'dark'
                       ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 font-bold shadow-md shadow-emerald-950/30'
                       : 'bg-emerald-100 border-emerald-400 text-emerald-900 font-bold ring-2 ring-emerald-400/30'
                     : theme === 'dark'
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white font-medium'
+                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
                     : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 font-medium shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium shadow-xs'
+                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
                 }`}
               >
                 ¡Dominada!
@@ -2068,12 +2070,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <button
               type="button"
               onClick={handleNextCard}
-              className={`active-press p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-2xl border transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5 text-xs font-semibold ${
+              className={`active-press p-2 sm:p-2.5 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
                 theme === 'dark'
                   ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
                   : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-sm'
-                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-sm'
+                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
               }`}
               title="Siguiente tarjeta"
             >
@@ -2086,7 +2088,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
       {/* Modal de Calibración de Enfoque de Flashcards (Tuerca) */}
       {showConfigModal && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fadeIn">
           <div className={`rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative overflow-hidden border ${
             theme === 'dark'
               ? 'bg-thea-surface border-thea-border text-white'

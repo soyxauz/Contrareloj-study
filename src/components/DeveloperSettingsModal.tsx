@@ -21,22 +21,34 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn">
-      <div className="bg-thea-surface border border-thea-border rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fadeIn">
+      <div className={`border rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto modal-smooth-scroll overscroll-contain ${
+        theme === 'dark'
+          ? 'bg-thea-surface border-thea-border text-white'
+          : theme === 'kitty'
+          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
+          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+      }`}>
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors"
+          className={`absolute top-5 right-5 p-2 rounded-xl transition-colors cursor-pointer ${
+            theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight' : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+          }`}
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-amber-500 flex items-center justify-center text-white">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-amber-500 flex items-center justify-center text-white shrink-0">
             <Cpu className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-lg text-white">Ingeniería Inversa & Entitlements</h3>
-            <p className="text-xs text-slate-400">Banderas extraídas de <code>Experiments-DF9zfxEH.js</code></p>
+            <h3 className={`font-bold text-lg ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+              Ingeniería Inversa & Entitlements
+            </h3>
+            <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+              Banderas extraídas de <code>Experiments-DF9zfxEH.js</code>
+            </p>
           </div>
         </div>
 
@@ -83,8 +95,8 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
                 className="flex items-center justify-between p-3.5 rounded-2xl bg-thea-surfaceLight border border-thea-border"
               >
                 <div>
-                  <h5 className="font-bold text-xs sm:text-sm text-white">{item.label}</h5>
-                  <p className="text-[11px] text-slate-400">{item.desc}</p>
+                  <h5 className={`font-bold text-xs sm:text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>{item.label}</h5>
+                  <p className={`text-[11px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{item.desc}</p>
                 </div>
                 <button
                   type="button"

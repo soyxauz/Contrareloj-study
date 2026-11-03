@@ -114,26 +114,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
-      <div className="w-full max-w-md bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-y-auto will-change-transform">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
+      <div className={`w-full max-w-md border rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-y-auto modal-smooth-scroll overscroll-contain will-change-transform ${
+        theme === 'dark'
+          ? 'bg-[#0e0b16] border-white/10 text-white'
+          : theme === 'kitty'
+          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
+          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+      }`}>
 
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer active:scale-95"
+          className={`absolute top-5 right-5 p-2 rounded-xl transition-all cursor-pointer active:scale-95 ${
+            theme === 'dark'
+              ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
+              : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+          }`}
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-200 mb-3 shadow-sm">
+          <div className={`w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center mb-3 shadow-sm ${
+            theme === 'kitty'
+              ? 'bg-pink-100 border-pink-200 text-pink-600'
+              : theme === 'light'
+              ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
+              : 'bg-white/[0.04] border-white/10 text-zinc-200'
+          }`}>
             {mode === 'login' ? <LogIn className="w-6 h-6" /> : <UserPlus className="w-6 h-6" />}
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">
+          <h2 className={`text-xl font-bold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
             {mode === 'login' ? `Iniciar Sesión en ${appName}` : `Crear Cuenta en ${appName}`}
           </h2>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}`}>
             {mode === 'login'
               ? 'Accede a tus kits, memoria de estudio y progreso guardado'
               : 'Guarda todos tus Study Kits con memoria exacta de tu avance'}
@@ -145,7 +161,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           type="button"
           onClick={handleGoogleLogin}
           disabled={isGoogleLoading || isLoading}
-          className="w-full py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/15 text-white font-semibold text-xs shadow-sm transition-all flex items-center justify-center gap-2.5 mb-4 cursor-pointer disabled:opacity-40 active:scale-95"
+          className={`w-full py-2.5 px-4 rounded-xl border font-semibold text-xs shadow-sm transition-all flex items-center justify-center gap-2.5 mb-4 cursor-pointer disabled:opacity-40 active:scale-95 ${
+            theme === 'dark'
+              ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/15 text-white'
+              : theme === 'kitty'
+              ? 'bg-pink-50 hover:bg-pink-100 border-pink-200 text-pink-950'
+              : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+          }`}
         >
           {isGoogleLoading ? (
             <span>Conectando con Google...</span>
@@ -182,7 +204,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Tab switcher */}
-        <div className="flex rounded-xl bg-white/[0.025] p-1 mb-6 border border-white/[0.08]">
+        <div className={`flex rounded-xl p-1 mb-6 border ${
+          theme === 'dark'
+            ? 'bg-white/[0.025] border-white/[0.08]'
+            : theme === 'kitty'
+            ? 'bg-pink-50 border-pink-200'
+            : 'bg-slate-100 border-slate-200'
+        }`}>
           <button
             type="button"
             onClick={() => {
@@ -191,8 +219,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }}
             className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all active:scale-95 cursor-pointer ${
               mode === 'login'
-                ? 'bg-white/10 text-white border border-white/10 shadow-sm'
-                : 'text-zinc-400 hover:text-white'
+                ? theme === 'dark'
+                  ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                  : theme === 'kitty'
+                  ? 'bg-white text-pink-950 border border-pink-200 shadow-sm'
+                  : 'bg-white text-zinc-950 border border-slate-200 shadow-sm'
+                : theme === 'dark'
+                ? 'text-zinc-400 hover:text-white'
+                : 'text-slate-500 hover:text-zinc-950'
             }`}
           >
             Iniciar Sesión
@@ -205,8 +239,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }}
             className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all active:scale-95 cursor-pointer ${
               mode === 'register'
-                ? 'bg-white/10 text-white border border-white/10 shadow-sm'
-                : 'text-zinc-400 hover:text-white'
+                ? theme === 'dark'
+                  ? 'bg-white/10 text-white border border-white/10 shadow-sm'
+                  : theme === 'kitty'
+                  ? 'bg-white text-pink-950 border border-pink-200 shadow-sm'
+                  : 'bg-white text-zinc-950 border border-slate-200 shadow-sm'
+                : theme === 'dark'
+                ? 'text-zinc-400 hover:text-white'
+                : 'text-slate-500 hover:text-zinc-950'
             }`}
           >
             Crear Cuenta
@@ -225,7 +265,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'register' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className={`block text-xs font-semibold mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-bold'}`}>
                 Nombre o Alias
               </label>
               <div className="relative">
@@ -236,14 +276,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Ej: Sofía Martínez"
-                  className="w-full bg-thea-bg border border-thea-border rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                  className={`w-full border rounded-xl py-2.5 pl-10 pr-4 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all ${
+                    theme === 'dark'
+                      ? 'bg-thea-bg border-thea-border text-white'
+                      : theme === 'kitty'
+                      ? 'bg-pink-50/50 border-pink-200 text-zinc-950'
+                      : 'bg-slate-50 border-slate-200 text-zinc-950'
+                  }`}
                 />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className={`block text-xs font-semibold mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-bold'}`}>
               Nombre de Usuario
             </label>
             <div className="relative">
@@ -254,13 +300,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="usuario_estudio"
-                className="w-full bg-thea-bg border border-thea-border rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all lowercase"
+                className={`w-full border rounded-xl py-2.5 pl-10 pr-4 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all lowercase ${
+                  theme === 'dark'
+                    ? 'bg-thea-bg border-thea-border text-white'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50/50 border-pink-200 text-zinc-950'
+                    : 'bg-slate-50 border-slate-200 text-zinc-950'
+                }`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className={`block text-xs font-semibold mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-bold'}`}>
               Contraseña
             </label>
             <div className="relative">
@@ -271,12 +323,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-thea-bg border border-thea-border rounded-xl py-2.5 pl-10 pr-10 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                className={`w-full border rounded-xl py-2.5 pl-10 pr-10 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all ${
+                  theme === 'dark'
+                    ? 'bg-thea-bg border-thea-border text-white'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50/50 border-pink-200 text-zinc-950'
+                    : 'bg-slate-50 border-slate-200 text-zinc-950'
+                }`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-zinc-950'}`}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -291,7 +349,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={isLoading}
-            className="active-press w-full py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50"
+            className={`active-press w-full py-3 rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50 ${
+              theme === 'kitty'
+                ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+                : theme === 'light'
+                ? 'bg-zinc-950 hover:bg-zinc-800 text-white shadow-zinc-950/20'
+                : 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-lg'
+            }`}
           >
             {isLoading ? (
               <span>Procesando...</span>

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
 import { authService } from '../services/authService';
+import { useTheme } from '../services/themeService';
 import type { StudyKit, User as AppUser } from '../types';
 
 interface GoogleDriveModalProps {
@@ -34,6 +35,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   onKitsSynced,
   onLogout,
 }) => {
+  const { theme } = useTheme();
   const [syncState, setSyncState] = useState<DriveSyncState>(() => googleDriveService.getState());
   const [isProcessing, setIsProcessing] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
@@ -128,26 +130,44 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
-      <div className="w-full max-w-lg bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col will-change-transform">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
+      <div className={`w-full max-w-lg border rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col will-change-transform ${
+        theme === 'dark'
+          ? 'bg-[#0e0b16] border-white/10 text-white shadow-[0_20px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)]'
+          : theme === 'kitty'
+          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
+          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+      }`}>
 
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="active-press absolute top-4 sm:top-5 right-4 sm:right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10 transition-all cursor-pointer z-10"
+          className={`active-press absolute top-4 sm:top-5 right-4 sm:right-5 p-2 rounded-xl border transition-all cursor-pointer z-10 ${
+            theme === 'dark'
+              ? 'text-slate-400 hover:text-white hover:bg-white/[0.06] border-transparent hover:border-white/10'
+              : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100 border-transparent hover:border-slate-200'
+          }`}
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Scrollable Content Container */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div className="flex-1 overflow-y-auto modal-smooth-scroll overscroll-contain space-y-4 pr-1">
           {/* Modal Header */}
           <div className="text-center mb-4 sm:mb-6">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-white/[0.06] border border-white/10 flex items-center justify-center text-white mb-3 shadow-md">
-              <Cloud className="w-6 h-6 text-white" />
+            <div className={`w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center mb-3 shadow-md ${
+              theme === 'kitty'
+                ? 'bg-pink-100 border-pink-200 text-pink-600'
+                : theme === 'light'
+                ? 'bg-sky-50 border-sky-200 text-sky-600'
+                : 'bg-white/[0.06] border-white/10 text-white'
+            }`}>
+              <Cloud className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Google Drive Cloud Sync</h2>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+            <h2 className={`text-xl font-bold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+              Google Drive Cloud Sync
+            </h2>
+            <p className={`text-xs mt-1 max-w-sm mx-auto leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
               Guarda tus usuarios, kits de estudio e imágenes en tu propia unidad para acceder desde cualquier equipo.
             </p>
           </div>
