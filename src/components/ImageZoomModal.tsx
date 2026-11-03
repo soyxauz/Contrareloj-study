@@ -578,7 +578,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               : 'bg-white/95 border-slate-300 text-slate-800 shadow-slate-200/50'
           }`}>
             {zoomLevel > 1
-              ? 'Rueda para zoom focalizado • Arrastra para mover a 120 FPS'
+              ? 'Rueda para zoom focalizado'
               : 'Gira la rueda del ratón o haz clic para ampliar'}
           </div>
         </div>
