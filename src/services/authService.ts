@@ -461,10 +461,10 @@ export const authService = {
       const sanitized = sanitizeSmartStudySession(state) || state;
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
       
-      // Guardar versión de historial completa y resiliente en LocalStorage
+      // Guardar versión de historial completa y resiliente en LocalStorage (orden descendente: más reciente primero)
       const compactSession = {
         ...sanitized,
-        history: Array.isArray(sanitized.history) ? sanitized.history.slice(-30).map(h => ({
+        history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 50).map(h => ({
           id: h.id,
           questionId: h.questionId,
           questionText: h.questionText || '',
@@ -476,6 +476,8 @@ export const authService = {
           type: h.type,
           isCorrect: h.isCorrect,
           timestamp: h.timestamp,
+          timestampEpoch: h.timestampEpoch,
+          attemptNumber: h.attemptNumber,
           level: h.level,
         })) : [],
       };
@@ -613,17 +615,35 @@ export const authService = {
       ...(sanitizedIncoming.revealedQuestionIds || []),
     ]));
 
-    const existingHistKeys = new Set((localSession.history || []).map((h: any) => `${h.questionId || ''}_${h.timestamp || ''}`));
+    const getEpoch = (h: any): number => {
+      if (typeof h?.timestampEpoch === 'number' && !isNaN(h.timestampEpoch)) return h.timestampEpoch;
+      const match = (h?.id || '').match(/^hist-(\d+)/);
+      if (match && match[1]) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val)) return val;
+      }
+      return 0;
+    };
+
+    const existingHistKeys = new Set((localSession.history || []).map((h: any) => `${h.questionId || ''}_${h.timestamp || ''}_${h.id || ''}`));
     const mergedHistory = [...(localSession.history || [])];
     for (const h of (sanitizedIncoming.history || [])) {
-      const key = `${h.questionId || ''}_${h.timestamp || ''}`;
+      const key = `${h.questionId || ''}_${h.timestamp || ''}_${h.id || ''}`;
       if (!existingHistKeys.has(key)) {
         mergedHistory.push(h);
         existingHistKeys.add(key);
       }
     }
-    // Ordenar historial por fecha más reciente
-    mergedHistory.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    // Ordenar historial por fecha más reciente descendente (última pregunta respondida primero)
+    mergedHistory.sort((a, b) => {
+      const epA = getEpoch(a);
+      const epB = getEpoch(b);
+      if (epA !== epB) return epB - epA;
+      if (typeof b.attemptNumber === 'number' && typeof a.attemptNumber === 'number') {
+        return b.attemptNumber - a.attemptNumber;
+      }
+      return 0;
+    });
 
     // Determinar cuál sesión tenía el contexto activo más reciente para cursor y estado de pregunta actual
     const isIncomingMoreRecent = (sanitizedIncoming.lastUpdated || 0) >= (localSession.lastUpdated || 0);

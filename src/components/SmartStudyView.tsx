@@ -113,6 +113,8 @@ export interface StudyHistoryItem {
   isCorrect: boolean;
   explanation: string;
   timestamp: string;
+  timestampEpoch?: number;
+  attemptNumber?: number;
   level: number;
 }
 
@@ -242,22 +244,52 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   // ── Mode Switcher & Historial State ──────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'practice' | 'history'>(savedSession?.activeTab || 'practice');
   const [history, setHistory] = useState<StudyHistoryItem[]>(() => {
-    const raw = (savedSession?.history || []).slice(0, 25);
-    return raw.map(item => {
+    const raw = (savedSession?.history || []).slice(0, 50);
+    const getEpoch = (item: any): number => {
+      if (typeof item?.timestampEpoch === 'number' && !isNaN(item.timestampEpoch)) return item.timestampEpoch;
+      const match = (item?.id || '').match(/^hist-(\d+)/);
+      if (match && match[1]) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val)) return val;
+      }
+      return 0;
+    };
+
+    const hydrated = raw.map(item => {
       const cleanQId = (item.questionId || '').replace(/^(tf-|sa-|mc-|dd-|drag-drop-)/, '');
       const matchedQ = kit.questions.find(q => q.id === item.questionId || q.id === cleanQId);
       const matchedCorrect = matchedQ?.options && matchedQ.correctIndex !== undefined
         ? matchedQ.options[matchedQ.correctIndex]
         : matchedQ?.idealAnswer || item.correctAnswer || 'Respuesta verificada';
+      const epoch = getEpoch(item);
 
       return {
         ...item,
+        timestampEpoch: item.timestampEpoch || (epoch > 0 ? epoch : undefined),
         questionText: item.questionText || matchedQ?.question || 'Pregunta de evaluación',
         explanation: item.explanation || matchedQ?.explanation || 'Respuesta fundamentada en el material de estudio analizado.',
         correctAnswer: item.correctAnswer || matchedCorrect,
         userAnswer: item.userAnswer || (item.isCorrect ? matchedCorrect : 'Respuesta errónea previa'),
       };
     });
+
+    // Ordenar estrictamente de forma descendente (pregunta más reciente al principio)
+    hydrated.sort((a, b) => {
+      const epA = getEpoch(a);
+      const epB = getEpoch(b);
+      if (epA !== epB) return epB - epA;
+      if (typeof b.attemptNumber === 'number' && typeof a.attemptNumber === 'number') {
+        return b.attemptNumber - a.attemptNumber;
+      }
+      return 0;
+    });
+
+    // Asignar attemptNumber cronológico (1 para la más antigua, N para la más reciente) a registros que no lo tengan
+    const totalCount = Math.max(savedSession?.questionsAnsweredTotal || 0, hydrated.length);
+    return hydrated.map((item, idx) => ({
+      ...item,
+      attemptNumber: item.attemptNumber || Math.max(1, totalCount - idx),
+    }));
   });
   const [historyFilter, setHistoryFilter] = useState<'all' | 'correct' | 'incorrect'>(savedSession?.historyFilter || 'all');
   const [historyLevelFilter, setHistoryLevelFilter] = useState<number | 'all'>(savedSession?.historyLevelFilter || 'all');
@@ -573,7 +605,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             isAnswered: false,
             isCurrentCorrect: null,
             activeTab,
-            history: history.slice(0, 25),
+            history: history.slice(0, 50),
             historyFilter,
             historyLevelFilter,
             questionsAnsweredTotal,
@@ -678,7 +710,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         isAnswered: false,
         isCurrentCorrect: null,
         activeTab,
-        history: history.slice(0, 25),
+        history: history.slice(0, 50),
         historyFilter,
         historyLevelFilter,
         questionsAnsweredTotal,
@@ -752,7 +784,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           isAnswered: false,
           isCurrentCorrect: null,
           activeTab,
-          history: history.slice(0, 25),
+          history: history.slice(0, 50),
           historyFilter,
           historyLevelFilter,
           questionsAnsweredTotal,
@@ -1353,7 +1385,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     isAnswered,
     isCurrentCorrect,
     activeTab,
-    history: history.slice(0, 25),
+    history: history.slice(0, 50),
     historyFilter,
     historyLevelFilter,
     questionsAnsweredTotal,
@@ -1399,7 +1431,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       isAnswered,
       isCurrentCorrect,
       activeTab,
-      history: history.slice(0, 25),
+      history: history.slice(0, 50),
       historyFilter,
       historyLevelFilter,
       questionsAnsweredTotal,
@@ -1493,9 +1525,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }).join(', ');
   }, [currentQ?.matchingPairs, shuffledDefinitions]);
 
-  // Historial filtrado para visualización
+  // Historial filtrado para visualización, estrictamente ordenado de forma descendente (última pregunta respondida arriba)
   const filteredHistory = useMemo(() => {
-    return history.filter(item => {
+    const getEpoch = (item: StudyHistoryItem): number => {
+      if (typeof item.timestampEpoch === 'number' && !isNaN(item.timestampEpoch)) return item.timestampEpoch;
+      const match = (item.id || '').match(/^hist-(\d+)/);
+      if (match && match[1]) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val)) return val;
+      }
+      return 0;
+    };
+
+    const list = history.filter(item => {
       const matchesStatus =
         historyFilter === 'all'
           ? true
@@ -1507,6 +1549,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         historyLevelFilter === 'all' ? true : item.level === historyLevelFilter;
 
       return matchesStatus && matchesLevel;
+    });
+
+    // Orden descendente estricto: la última pregunta respondida arriba de todo
+    return [...list].sort((a, b) => {
+      const epA = getEpoch(a);
+      const epB = getEpoch(b);
+      if (epA !== epB) return epB - epA;
+      if (typeof b.attemptNumber === 'number' && typeof a.attemptNumber === 'number') {
+        return b.attemptNumber - a.attemptNumber;
+      }
+      return 0;
     });
   }, [history, historyFilter, historyLevelFilter]);
 
@@ -1523,9 +1576,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const nextQuestionsAnsweredTotal = questionsAnsweredTotal + 1;
     setQuestionsAnsweredTotal(nextQuestionsAnsweredTotal);
 
+    const nowEpoch = Date.now();
     // Guardar en el Historial de Preguntas
     const historyItem: StudyHistoryItem = {
-      id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `hist-${nowEpoch}-${Math.random().toString(36).slice(2, 6)}`,
       questionId: currentQ.id,
       questionText: currentQ.question,
       topic: currentQ.topic || 'Conceptos Clave',
@@ -1535,10 +1589,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       correctAnswer: correctAnswerText,
       isCorrect: correct,
       explanation: currentQ.explanation || 'Respuesta fundamentada en el material de estudio analizado.',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date(nowEpoch).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestampEpoch: nowEpoch,
+      attemptNumber: nextQuestionsAnsweredTotal,
       level,
     };
-    const nextHistory = [historyItem, ...history].slice(0, 25);
+    const nextHistory = [historyItem, ...history].slice(0, 50);
     setHistory(nextHistory);
 
     // Actualizar motor socrático adaptativo y Active Recall
@@ -2106,7 +2162,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         levelCorrectCounts,
         errorQueue,
         isReinforcementMode,
-        history: history.slice(0, 25),
+        history: history.slice(0, 50),
         questionsAnsweredTotal,
         totalErrorsReinforced,
         lastUpdated: Date.now(),
@@ -2619,10 +2675,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                       >
                         {item.isCorrect ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
                       </span>
-                      <span className="text-xs font-bold text-white">
-                        Pregunta #{idx + 1}
+                      <span className="text-xs font-bold text-white tabular-nums">
+                        Pregunta #{item.attemptNumber ?? Math.max(1, (questionsAnsweredTotal || filteredHistory.length) - idx)}
                       </span>
-                      <span className="text-xs text-slate-500">• {item.timestamp}</span>
+                      <span className="text-xs text-slate-500 tabular-nums">• {item.timestamp}</span>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
@@ -3628,7 +3684,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                       levelCorrectCounts,
                       errorQueue,
                       isReinforcementMode,
-                      history: history.slice(0, 25),
+                      history: history.slice(0, 50),
                       questionsAnsweredTotal,
                       totalErrorsReinforced,
                       lastUpdated: Date.now(),

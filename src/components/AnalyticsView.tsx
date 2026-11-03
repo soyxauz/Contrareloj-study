@@ -121,11 +121,24 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
   const historyItems = useMemo(() => {
     if (!session || !session.history || !Array.isArray(session.history)) return [];
+    const getEpoch = (h: any): number => {
+      if (typeof h?.timestampEpoch === 'number' && !isNaN(h.timestampEpoch)) return h.timestampEpoch;
+      const match = (h?.id || '').match(/^hist-(\d+)/);
+      if (match && match[1]) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val)) return val;
+      }
+      return 0;
+    };
     const items = [...session.history];
     items.sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return timeB - timeA;
+      const timeA = getEpoch(a);
+      const timeB = getEpoch(b);
+      if (timeA !== timeB) return timeB - timeA;
+      if (typeof b.attemptNumber === 'number' && typeof a.attemptNumber === 'number') {
+        return b.attemptNumber - a.attemptNumber;
+      }
+      return 0;
     });
     if (historyFilter === 'correct') return items.filter(i => i.isCorrect);
     if (historyFilter === 'incorrect') return items.filter(i => !i.isCorrect);
