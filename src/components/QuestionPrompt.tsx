@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { FormattedText } from './FormattedText';
+import { useTheme } from '../services/themeService';
 
 export interface QuestionPromptProps {
   text: string;
@@ -108,13 +109,29 @@ export const QuestionPrompt: React.FC<QuestionPromptProps> = ({
   inlineOnly = false,
   as: Component = 'div',
 }) => {
+  const { theme } = useTheme();
   const formattedMarkdown = useMemo(() => {
     return getEmphasizedQuestionMarkdown(text, topic);
   }, [text, topic]);
 
+  const strongColorClass =
+    theme === 'kitty'
+      ? '[&_strong]:text-[#be185d] [&_b]:text-[#be185d]'
+      : theme === 'light'
+      ? '[&_strong]:text-zinc-950 [&_b]:text-zinc-950'
+      : '[&_strong]:text-white [&_b]:text-white';
+
+  const baseTextColor =
+    theme === 'kitty'
+      ? 'text-zinc-800'
+      : theme === 'light'
+      ? 'text-slate-800'
+      : 'text-slate-200';
+
   return (
     <Component
-      className={`font-medium text-slate-200 tracking-normal select-text leading-snug [&_strong]:font-extrabold [&_strong]:text-white [&_strong]:tracking-normal [&_b]:font-extrabold [&_b]:text-white ${className}`}
+      data-question-prompt
+      className={`question-prompt font-medium ${baseTextColor} tracking-normal select-text leading-snug [&_strong]:font-extrabold [&_strong]:tracking-normal [&_b]:font-extrabold ${strongColorClass} ${className}`}
     >
       <FormattedText text={formattedMarkdown} inlineOnly={inlineOnly} />
     </Component>

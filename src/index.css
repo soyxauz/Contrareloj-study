@@ -870,5 +870,29 @@ img[alt*="Gráfico"],
   background-color: #fff0f5 !important;
 }
 
+/* ── 9. Enunciados y Letras Enfatizadas en Modo Kitty (Rosa Intenso de Alto Contraste) ── */
+[data-theme="kitty"] .question-prompt strong,
+[data-theme="kitty"] .question-prompt b,
+[data-theme="kitty"] [data-question-prompt] strong,
+[data-theme="kitty"] [data-question-prompt] b,
+[data-theme="kitty"] h1 strong,
+[data-theme="kitty"] h2 strong,
+[data-theme="kitty"] h3 strong,
+[data-theme="kitty"] h4 strong,
+[data-theme="kitty"] h1 b,
+[data-theme="kitty"] h2 b,
+[data-theme="kitty"] h3 b,
+[data-theme="kitty"] h4 b {
+  color: #be185d !important; /* Rosado Pink-700 de alto contraste (6.5:1) legible contra #fff0f5 */
+}
+
+/* Letras blancas huérfanas dentro de preguntas o títulos en Modo Kitty */
+[data-theme="kitty"] .question-prompt .text-white,
+[data-theme="kitty"] [data-question-prompt] .text-white,
+[data-theme="kitty"] h2 .text-white,
+[data-theme="kitty"] h3 .text-white {
+  color: #be185d !important;
+}
+
 
 

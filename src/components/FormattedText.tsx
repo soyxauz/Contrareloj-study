@@ -117,7 +117,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
         const content = token.slice(2, -2);
         parts.push(
           <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
-            theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
+            theme === 'kitty' ? 'text-[#be185d]' : theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
           }`}>
             {renderInline(content)}
           </strong>
@@ -126,7 +126,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
         const content = token.slice(2, -2);
         parts.push(
           <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
-            theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
+            theme === 'kitty' ? 'text-[#be185d]' : theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
           }`}>
             {renderInline(content)}
           </strong>

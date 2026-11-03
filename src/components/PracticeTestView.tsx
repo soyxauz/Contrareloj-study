@@ -391,7 +391,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               as="h3"
               text={enforceQuestionLengthLimit(currentQ.question || '')}
               topic={currentQ.topic}
-              className="text-lg sm:text-xl mb-6 leading-relaxed text-white font-medium"
+              className="text-lg sm:text-xl mb-6 leading-relaxed font-medium"
             />
 
             {/* Renderizado condicional según el tipo de pregunta */}
