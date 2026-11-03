@@ -22,16 +22,27 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Contrareloj Study</title>
-    <!-- Favicon Minimalista de Reloj: Data URI inline para forzar renderizado inmediato en Chrome/Localhost sin problemas de cache -->
+    <!-- Favicon Minimalista Vectorial: Data URI inline para forzar renderizado nítido inmediato en Chrome/Localhost sin problemas de cache -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%20fill='none'%3E%3Cdefs%3E%3ClinearGradient%20id='g'%20x1='0%25'%20y1='0%25'%20x2='100%25'%20y2='100%25'%3E%3Cstop%20offset='0%25'%20stop-color='%238b5cf6'/%3E%3Cstop%20offset='100%25'%20stop-color='%234f46e5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width='64'%20height='64'%20rx='16'%20fill='url(%23g)'/%3E%3Ccircle%20cx='32'%20cy='32'%20r='21'%20stroke='%23ffffff'%20stroke-width='4.5'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Cpolyline%20points='32%2017%2032%2032%2043%2038'%20stroke='%23ffffff'%20stroke-width='4.5'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Ccircle%20cx='32'%20cy='32'%20r='2.5'%20fill='%23ffffff'/%3E%3C/svg%3E" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=5" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=5" />
-    <link rel="shortcut icon" href="/favicon.ico?v=5" />
-    <link rel="apple-touch-icon" href="/favicon-32x32.png?v=5" />
+    <link rel="shortcut icon" href="/favicon.ico?v=6" />
     <script>
       (function() {
-        var svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#4f46e5"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#g)"/><circle cx="32" cy="32" r="21" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="32 17 32 32 43 38" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="32" r="2.5" fill="#ffffff"/></svg>`;
-        var uri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        var savedTheme = 'dark';
+        try {
+          savedTheme = localStorage.getItem('thea_theme_mode') || 'dark';
+        } catch (e) {}
+
+        var clockSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#4f46e5"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#g)"/><circle cx="32" cy="32" r="21" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="32 17 32 32 43 38" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="32" r="2.5" fill="#ffffff"/></svg>`;
+
+        var kittySvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 8 60 48" width="100%" height="100%" fill="none"><path d="M 23 21 C 18 17 13.5 10.5 11 12 C 8 13.5 8.5 21 10 26 C 6 30.5 6 40.5 11 45.5 C 16 50.5 24 52 32 52 C 40 52 48 50.5 53 45.5 C 58 40.5 58 30.5 54 26 C 55.5 21 56 13.5 53 12 C 50.5 10.5 46 17 41 21 C 35.5 19.5 28.5 19.5 23 21 Z" fill="#FFFFFF" stroke="#18181B" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/><path d="M 17 35 L 5 33.5" stroke="#18181B" stroke-width="3" stroke-linecap="round"/><path d="M 16 39.5 L 4 40" stroke="#18181B" stroke-width="3" stroke-linecap="round"/><path d="M 17 44 L 6 47.5" stroke="#18181B" stroke-width="3" stroke-linecap="round"/><path d="M 47 35 L 59 33.5" stroke="#18181B" stroke-width="3" stroke-linecap="round"/><path d="M 48 39.5 L 60 40" stroke="#18181B" stroke-width="3" stroke-linecap="round"/><path d="M 47 44 L 58 47.5" stroke="#18181B" stroke-width="3" stroke-linecap="round"/><ellipse cx="23" cy="38" rx="2.8" ry="4" fill="#18181B"/><ellipse cx="41" cy="38" rx="2.8" ry="4" fill="#18181B"/><ellipse cx="32" cy="41.5" rx="3.6" ry="2.4" fill="#FFD200" stroke="#18181B" stroke-width="1.6"/><g stroke="#18181B" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="39" cy="18" rx="5.8" ry="4.4" transform="rotate(-25 39 18)" fill="#FF1A53"/><ellipse cx="53" cy="22" rx="5.8" ry="4.4" transform="rotate(25 53 22)" fill="#FF1A53"/><circle cx="46" cy="20" r="4.2" fill="#FF1A53"/></g></svg>`;
+
+        var isKitty = savedTheme === 'kitty';
+        if (isKitty) {
+          document.title = 'Kitty Study';
+        }
+
+        var uri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(isKitty ? kittySvg : clockSvg);
+
         function applyFavicon() {
           var links = document.querySelectorAll("link[rel*='icon']");
           links.forEach(function(l) { l.remove(); });
