@@ -1938,7 +1938,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       .map((chip, idx) => `[${idx + 1}] ${chip || '___'}`)
       .join(' , ');
 
-    const correctAns = correctBlanks
+    // Reconstruir la oración completa con las palabras correctas
+    let completedSentence = effectiveTemplateSentence || '';
+    correctBlanks.forEach((blank, idx) => {
+      completedSentence = completedSentence.replace(new RegExp(`\\{${idx}\\}`, 'g'), blank);
+    });
+
+    const correctAns = completedSentence || correctBlanks
       .map((blank, idx) => `[${idx + 1}] ${blank}`)
       .join(' , ');
 
@@ -2003,7 +2009,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       setMatchingPairsMap(solution);
       setMatchingChecked(true);
     } else if (qType === 'drag-drop' && effectiveBlanksCorrect.length > 0) {
-      correctAns = effectiveBlanksCorrect.map((b, idx) => `[${idx + 1}] ${b}`).join(' , ');
+      let completedSentence = effectiveTemplateSentence || '';
+      effectiveBlanksCorrect.forEach((blank, idx) => {
+        completedSentence = completedSentence.replace(new RegExp(`\\{${idx}\\}`, 'g'), blank);
+      });
+      correctAns = completedSentence || effectiveBlanksCorrect.map((b, idx) => `[${idx + 1}] ${b}`).join(' , ');
       setPlacedChips([...effectiveBlanksCorrect]);
       setDragDropChecked(true);
     } else if (qType === 'image-labeling' && currentQ.imageHotspots) {

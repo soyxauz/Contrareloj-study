@@ -1,5 +1,6 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Check } from 'lucide-react';
+import { useTheme } from '../../services/themeService';
 
 export interface DragDropRendererProps {
   effectiveTemplateSentence: string;
@@ -28,6 +29,8 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
   onRemovePlacedChip,
   onCheckDragDrop,
 }) => {
+  const { theme } = useTheme();
+
   return (
     <div className="space-y-6 mb-8">
       <p className="text-xs text-slate-300 font-medium">
@@ -100,6 +103,57 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
           })}
         </div>
       </div>
+
+      {/* ── Oración completa con las palabras correctas (Exclusivo para este tipo de preguntas) ── */}
+      {(dragDropChecked || isAnswered) && (
+        <div className={`p-4 sm:p-5 rounded-2xl border shadow-lg transition-all animate-fadeIn ${
+          theme === 'kitty'
+            ? 'bg-pink-50/90 border-pink-200 text-pink-950 shadow-pink-100/50'
+            : theme === 'light'
+            ? 'bg-emerald-50/90 border-emerald-300 text-slate-900 shadow-emerald-100/50'
+            : 'bg-emerald-950/30 border-emerald-500/40 text-slate-100 shadow-black/40 ring-1 ring-emerald-500/20'
+        }`}>
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+              theme === 'kitty' ? 'bg-pink-500 text-white' : 'bg-emerald-500 text-slate-950'
+            }`}>
+              <Check className="w-3.5 h-3.5 stroke-[3]" />
+            </div>
+            <span className={`text-xs font-extrabold uppercase tracking-wider ${
+              theme === 'kitty' ? 'text-pink-600' : 'text-emerald-400'
+            }`}>
+              Oración completa con las palabras correctas:
+            </span>
+          </div>
+
+          <p className={`text-base sm:text-lg leading-relaxed ${
+            theme === 'kitty' ? 'text-pink-950 font-medium' : theme === 'light' ? 'text-slate-800 font-medium' : 'text-slate-100'
+          }`}>
+            {effectiveTemplateSentence.split(/(\{\d+\})/).map((part, pIdx) => {
+              const match = part.match(/\{(\d+)\}/);
+              if (match) {
+                const slotIdx = parseInt(match[1], 10);
+                const correctWord = effectiveBlanksCorrect?.[slotIdx] || '';
+                return (
+                  <strong
+                    key={pIdx}
+                    className={`inline-flex items-center px-2.5 py-0.5 mx-1 rounded-lg font-bold shadow-sm ${
+                      theme === 'kitty'
+                        ? 'bg-pink-100 border border-pink-300 text-pink-700'
+                        : theme === 'light'
+                        ? 'bg-emerald-100 border border-emerald-400 text-emerald-900'
+                        : 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-300'
+                    }`}
+                  >
+                    {correctWord}
+                  </strong>
+                );
+              }
+              return <span key={pIdx}>{part}</span>;
+            })}
+          </p>
+        </div>
+      )}
 
       {!isAnswered && (
         <button
