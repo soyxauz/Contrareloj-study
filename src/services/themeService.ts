@@ -49,6 +49,16 @@ export function applyThemeToDom(theme: ThemeMode): void {
     metaThemeColor.setAttribute('content', '#0d0408');
     document.title = 'Contrareloj Study';
   }
+
+  // Favicon dinámico: Hello Kitty en Modo Kitty, Reloj en Modo Claro/Oscuro
+  const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (favicon) {
+    if (theme === 'kitty') {
+      favicon.href = '/assets/hello-kitty.png';
+    } else {
+      favicon.href = "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%20fill='none'%3E%3Cdefs%3E%3ClinearGradient%20id='g'%20x1='0%25'%20y1='0%25'%20x2='100%25'%20y2='100%25'%3E%3Cstop%20offset='0%25'%20stop-color='%238b5cf6'/%3E%3Cstop%20offset='100%25'%20stop-color='%234f46e5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width='64'%20height='64'%20rx='16'%20fill='url(%23g)'/%3E%3Ccircle%20cx='32'%20cy='32'%20r='21'%20stroke='%23ffffff'%20stroke-width='4.5'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Cpolyline%20points='32%2017%2032%2032%2043%2038'%20stroke='%23ffffff'%20stroke-width='4.5'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Ccircle%20cx='32'%20cy='32'%20r='2.5'%20fill='%23ffffff'/%3E%3C/svg%3E";
+    }
+  }
 }
 
 export function setStoredTheme(theme: ThemeMode, syncToDrive = true): void {

@@ -5,6 +5,7 @@ import { authService } from '../services/authService';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
 import { useTheme } from '../services/themeService';
 import { ThemeSwitcher } from './ThemeSwitcher';
+import { HELLO_KITTY_PNG_DATA_URL } from '../utils/kittyAsset';
 import {
   Flame,
   BookOpen,
@@ -102,15 +103,24 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Left Side: Logo & Minimal Wordmark + 3-Button Theme Switcher */}
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 shrink-0">
           <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 tracking-tight shadow-sm transition-transform active:scale-95 ${
-              theme === 'kitty'
-                ? 'bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-pink-500/30'
-                : theme === 'light'
-                ? 'bg-gradient-to-br from-rose-500 to-amber-500 text-white shadow-rose-500/25'
-                : 'bg-gradient-to-br from-rose-600 to-violet-700 text-white shadow-black/40'
-            }`}>
-              {theme === 'kitty' ? 'K' : 'C'}
-            </div>
+            {theme === 'kitty' ? (
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 tracking-tight shadow-sm transition-transform active:scale-95 bg-gradient-to-br from-pink-500 to-rose-400 p-0.5 shadow-pink-500/30 overflow-hidden">
+                <img
+                  src={HELLO_KITTY_PNG_DATA_URL}
+                  alt="Hello Kitty Logo"
+                  className="w-full h-full object-contain select-none pointer-events-none drop-shadow-xs"
+                  draggable={false}
+                />
+              </div>
+            ) : (
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 tracking-tight shadow-sm transition-transform active:scale-95 ${
+                theme === 'light'
+                  ? 'bg-gradient-to-br from-rose-500 to-amber-500 text-white shadow-rose-500/25'
+                  : 'bg-gradient-to-br from-rose-600 to-violet-700 text-white shadow-black/40'
+              }`}>
+                C
+              </div>
+            )}
             <div className="flex items-center whitespace-nowrap">
               <span className={`text-sm sm:text-base font-semibold tracking-tight ${
                 theme === 'dark' ? 'text-white' : 'text-zinc-950'
