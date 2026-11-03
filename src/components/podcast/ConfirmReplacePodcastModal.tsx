@@ -22,8 +22,8 @@ export const ConfirmReplacePodcastModal: React.FC<ConfirmReplacePodcastModalProp
   if (!show || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
-      <div className={`border rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative ${
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-modal-backdrop">
+      <div className={`border rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative animate-modal-card ${
         theme === 'dark'
           ? 'bg-[#0e0b16] border-white/10 text-white'
           : theme === 'kitty'

@@ -110,6 +110,35 @@
 .modal-smooth-scroll {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  contain: content;
+  transform: translateZ(0);
+  will-change: scroll-position;
+}
+
+/* ── Telón y Tarjetas de Modal Optimizados a 120 FPS (Cero Blur, Cero Repintados) ── */
+@keyframes modalBackdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-modal-backdrop {
+  animation: modalBackdropFadeIn 150ms var(--ease-out) forwards;
+}
+
+@keyframes modalContentPop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-card {
+  animation: modalContentPop 180ms var(--ease-out) forwards;
+  transform-origin: center center;
 }
 
 /* Sombra fija de alta definición (cero repintados en hover para 120 FPS fluidos) */
@@ -776,19 +805,40 @@ img[alt*="Gráfico"],
   color: #ffffff !important;
 }
 
-/* ── 7. Telón de Fondo de Modales (Backdrop Frosted Glass) ── */
+/* ── 7. Telón de Fondo de Modales (Backdrop Oscuro de Alto Rendimiento a 120 FPS, CERO BLUR) ── */
+.bg-black\/85,
+.bg-black\/80,
+.bg-black\/90,
+.bg-black\/70 {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-theme="dark"] .bg-black\/85,
+[data-theme="dark"] .bg-black\/80,
+[data-theme="dark"] .bg-black\/90,
+[data-theme="dark"] .bg-black\/70 {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 [data-theme="light"] .bg-black\/85,
 [data-theme="light"] .bg-black\/80,
-[data-theme="light"] .bg-black\/90 {
-  background-color: rgba(15, 23, 42, 0.45) !important;
-  backdrop-filter: blur(8px) !important;
+[data-theme="light"] .bg-black\/90,
+[data-theme="light"] .bg-black\/70 {
+  background-color: rgba(15, 23, 42, 0.58) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 [data-theme="kitty"] .bg-black\/85,
 [data-theme="kitty"] .bg-black\/80,
-[data-theme="kitty"] .bg-black\/90 {
-  background-color: rgba(76, 5, 25, 0.4) !important;
-  backdrop-filter: blur(8px) !important;
+[data-theme="kitty"] .bg-black\/90,
+[data-theme="kitty"] .bg-black\/70 {
+  background-color: rgba(36, 10, 22, 0.55) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* ── 8. Ajustes Específicos para Modo Kitty ── */

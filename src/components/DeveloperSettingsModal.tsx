@@ -21,8 +21,8 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fadeIn">
-      <div className={`border rounded-3xl max-w-lg w-full shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden ${
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-modal-backdrop">
+      <div className={`border rounded-3xl max-w-lg w-full shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden animate-modal-card ${
         theme === 'dark'
           ? 'bg-thea-surface border-thea-border text-white'
           : theme === 'kitty'

@@ -114,8 +114,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
-      <div className={`w-full max-w-md border rounded-2xl sm:rounded-3xl shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col ${
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-modal-backdrop">
+      <div className={`w-full max-w-md border rounded-2xl sm:rounded-3xl shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col animate-modal-card ${
         theme === 'dark'
           ? 'bg-[#0e0b16] border-white/10 text-white'
           : theme === 'kitty'
