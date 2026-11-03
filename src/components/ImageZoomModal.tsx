@@ -10,6 +10,8 @@ import {
   ChevronRight,
   Image as ImageIcon
 } from 'lucide-react';
+import { useTheme } from '../services/themeService';
+import { cleanImageBlackBackground } from '../utils/imageCleaner';
 
 export interface ImageZoomModalProps {
   isOpen: boolean;
@@ -40,58 +42,118 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
   currentIndex,
   totalCount
 }) => {
+  const { theme } = useTheme();
   const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [sanitizedUrl, setSanitizedUrl] = useState<string>(imageUrl);
+
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const zoomBadgeRef = useRef<HTMLSpanElement>(null);
 
-  // Mantener referencias frescas para eventos nativos sin reenganchar listeners
-  const zoomRef = useRef<number>(zoomLevel);
-  zoomRef.current = zoomLevel;
-  const panRef = useRef<{ x: number; y: number }>(pan);
-  panRef.current = pan;
+  // Mantener referencias frescas para eventos nativos sin re-renders
+  const zoomRef = useRef<number>(1);
+  const panRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isDraggingRef = useRef<boolean>(false);
+  const isInteractingRef = useRef<boolean>(false);
+
+  const rafId = useRef<number | null>(null);
+  const debounceSyncTimer = useRef<number | null>(null);
+
+  // Garantizar fondo blanco puro en la imagen (eliminando negros de transparencia JPEG)
+  useEffect(() => {
+    let isCurrent = true;
+    if (imageUrl) {
+      setSanitizedUrl(imageUrl);
+      cleanImageBlackBackground(imageUrl).then((cleaned) => {
+        if (isCurrent && cleaned) {
+          setSanitizedUrl(cleaned);
+        }
+      });
+    }
+    return () => {
+      isCurrent = false;
+    };
+  }, [imageUrl]);
+
+  // Aplicar transformación 3D acelerada por hardware directa al nodo DOM
+  const applyTransform = useCallback((x: number, y: number, zoom: number, animate = false) => {
+    if (imgRef.current) {
+      imgRef.current.style.transition = animate
+        ? 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1)'
+        : 'none';
+      imgRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${zoom})`;
+    }
+    if (zoomBadgeRef.current) {
+      zoomBadgeRef.current.textContent = `${Math.round(zoom * 100)}%`;
+    }
+  }, []);
+
+  // Sincronizar estado React de forma diferida (debounced) para no degradar los 120 FPS
+  const scheduleStateSync = useCallback((zoom: number, nextPan: { x: number; y: number }) => {
+    if (debounceSyncTimer.current !== null) {
+      window.clearTimeout(debounceSyncTimer.current);
+    }
+    debounceSyncTimer.current = window.setTimeout(() => {
+      setZoomLevel(zoom);
+      setPan(nextPan);
+      debounceSyncTimer.current = null;
+    }, 120);
+  }, []);
 
   // Resetear zoom y paneo cada vez que cambia la imagen o se abre el modal
   useEffect(() => {
     setZoomLevel(1);
     setPan({ x: 0, y: 0 });
-  }, [imageUrl, isOpen]);
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
+    isInteractingRef.current = false;
+    applyTransform(0, 0, 1, false);
+  }, [imageUrl, isOpen, applyTransform]);
 
-  // Bloquear el scroll de la página de fondo mientras el visor está abierto
+  // Bloquear scroll de fondo de forma limpia
   useEffect(() => {
     if (!isOpen || typeof document === 'undefined') return;
-
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-
     return () => {
       document.body.style.overflow = originalOverflow;
     };
   }, [isOpen]);
 
-  // Funciones de control de zoom con límites seguros
+  // Funciones de control de zoom mediante botones con animación elástica suave
   const handleZoomIn = useCallback(() => {
-    setZoomLevel((prev) => Math.min(Number((prev + 0.25).toFixed(2)), 3.5));
-  }, []);
+    const next = Math.min(Number((zoomRef.current + 0.35).toFixed(2)), 4.0);
+    zoomRef.current = next;
+    applyTransform(panRef.current.x, panRef.current.y, next, true);
+    setZoomLevel(next);
+  }, [applyTransform]);
 
   const handleZoomOut = useCallback(() => {
-    setZoomLevel((prev) => {
-      const next = Math.max(Number((prev - 0.25).toFixed(2)), 0.5);
-      if (next <= 1) {
-        setPan({ x: 0, y: 0 });
-      }
-      return next;
-    });
-  }, []);
+    const next = Math.max(Number((zoomRef.current - 0.35).toFixed(2)), 0.5);
+    zoomRef.current = next;
+    if (next <= 1) {
+      panRef.current = { x: 0, y: 0 };
+      setPan({ x: 0, y: 0 });
+      applyTransform(0, 0, next, true);
+    } else {
+      applyTransform(panRef.current.x, panRef.current.y, next, true);
+    }
+    setZoomLevel(next);
+  }, [applyTransform]);
 
   const handleResetZoom = useCallback(() => {
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
     setZoomLevel(1);
     setPan({ x: 0, y: 0 });
-  }, []);
+    applyTransform(0, 0, 1, true);
+  }, [applyTransform]);
 
-  // Control mediante atajos de teclado
+  // Control mediante teclado
   useEffect(() => {
     if (!isOpen) return;
 
@@ -122,84 +184,128 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     };
   }, [isOpen, onClose, handleZoomIn, handleZoomOut, handleResetZoom, hasPrev, hasNext, onPrev, onNext]);
 
-  // Soporte completo para zoom con la rueda del ratón (focalizado en la posición del puntero)
+  // Soporte de 120 FPS para rueda del ratón con actualización DOM directa sin re-renders
   useEffect(() => {
     if (!isOpen) return;
     const container = containerRef.current;
     if (!container) return;
 
-    const onWheelNative = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    let pendingWheelEvent: WheelEvent | null = null;
+    let wheelRaf: number | null = null;
+
+    const processWheel = () => {
+      if (!pendingWheelEvent) return;
+      const e = pendingWheelEvent;
+      pendingWheelEvent = null;
 
       const currentZoom = zoomRef.current;
       const currentPan = panRef.current;
 
-      // Paso proporcional según velocidad o desplazamiento de la rueda/trackpad
-      const rawStep = -e.deltaY * 0.002;
-      const clampedStep = Math.min(Math.max(rawStep, -0.35), 0.35);
-      const newZoom = Math.min(Math.max(Number((currentZoom + clampedStep).toFixed(2)), 0.5), 4.0);
+      const rawStep = -e.deltaY * 0.0035;
+      const clampedStep = Math.min(Math.max(rawStep, -0.45), 0.45);
+      const newZoom = Math.min(Math.max(Number((currentZoom + clampedStep).toFixed(2)), 0.5), 4.5);
 
       if (newZoom === currentZoom) return;
 
       if (newZoom <= 1) {
-        setZoomLevel(newZoom);
-        setPan({ x: 0, y: 0 });
+        zoomRef.current = newZoom;
+        panRef.current = { x: 0, y: 0 };
+        applyTransform(0, 0, newZoom, false);
+        scheduleStateSync(newZoom, { x: 0, y: 0 });
         return;
       }
 
-      // Zoom focalizado: centrar la ampliación en la coordenada exacta del cursor
       const rect = container.getBoundingClientRect();
       const cx = e.clientX - (rect.left + rect.width / 2);
       const cy = e.clientY - (rect.top + rect.height / 2);
 
       const ratio = newZoom / currentZoom;
-      const newPanX = cx - (cx - currentPan.x) * ratio;
-      const newPanY = cy - (cy - currentPan.y) * ratio;
+      const newPanX = Math.round(cx - (cx - currentPan.x) * ratio);
+      const newPanY = Math.round(cy - (cy - currentPan.y) * ratio);
 
-      setZoomLevel(newZoom);
-      setPan({ x: Math.round(newPanX), y: Math.round(newPanY) });
+      zoomRef.current = newZoom;
+      panRef.current = { x: newPanX, y: newPanY };
+      applyTransform(newPanX, newPanY, newZoom, false);
+      scheduleStateSync(newZoom, { x: newPanX, y: newPanY });
+    };
+
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      pendingWheelEvent = e;
+      isInteractingRef.current = true;
+
+      if (wheelRaf === null) {
+        wheelRaf = requestAnimationFrame(() => {
+          wheelRaf = null;
+          processWheel();
+        });
+      }
     };
 
     container.addEventListener('wheel', onWheelNative, { passive: false });
     return () => {
       container.removeEventListener('wheel', onWheelNative);
+      if (wheelRaf !== null) cancelAnimationFrame(wheelRaf);
     };
-  }, [isOpen]);
+  }, [isOpen, applyTransform, scheduleStateSync]);
 
-  // Arrastre suave para mover la imagen cuando hay zoom activo
+  // Arrastre a 120 FPS sin repaints ni layout thrashing
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (zoomLevel <= 1) return;
-    if (e.button !== 0) return; // Solo botón principal izquierdo
+    if (zoomRef.current <= 1) return;
+    if (e.button !== 0) return;
     setIsDragging(true);
+    isDraggingRef.current = true;
+    isInteractingRef.current = true;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
-    panStartRef.current = { ...pan };
+    panStartRef.current = { ...panRef.current };
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || zoomLevel <= 1) return;
+    if (!isDraggingRef.current || zoomRef.current <= 1) return;
+
     const deltaX = e.clientX - dragStartRef.current.x;
     const deltaY = e.clientY - dragStartRef.current.y;
-    setPan({
-      x: panStartRef.current.x + deltaX,
-      y: panStartRef.current.y + deltaY
-    });
+    const nextX = panStartRef.current.x + deltaX;
+    const nextY = panStartRef.current.y + deltaY;
+
+    panRef.current = { x: nextX, y: nextY };
+
+    if (rafId.current === null) {
+      rafId.current = requestAnimationFrame(() => {
+        rafId.current = null;
+        applyTransform(panRef.current.x, panRef.current.y, zoomRef.current, false);
+      });
+    }
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
+    if (isDraggingRef.current) {
+      setIsDragging(false);
+      isDraggingRef.current = false;
+      isInteractingRef.current = false;
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
+      setPan({ ...panRef.current });
+    }
   };
 
-  // Clic en la imagen para ciclar entre niveles de zoom
   const handleImageClick = () => {
-    // Si hubo arrastre significativo, no cambiar zoom
-    if (Math.abs(pan.x - panStartRef.current.x) > 5 || Math.abs(pan.y - panStartRef.current.y) > 5) {
+    if (Math.abs(panRef.current.x - panStartRef.current.x) > 6 || Math.abs(panRef.current.y - panStartRef.current.y) > 6) {
       return;
     }
-    if (zoomLevel === 1) {
-      setZoomLevel(1.5);
-    } else if (zoomLevel === 1.5) {
-      setZoomLevel(2.2);
+    if (zoomRef.current === 1) {
+      const target = 1.75;
+      zoomRef.current = target;
+      applyTransform(0, 0, target, true);
+      setZoomLevel(target);
+    } else if (zoomRef.current < 2.5) {
+      const target = 2.8;
+      zoomRef.current = target;
+      applyTransform(panRef.current.x, panRef.current.y, target, true);
+      setZoomLevel(target);
     } else {
       handleResetZoom();
     }
@@ -215,32 +321,60 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 select-none animate-fadeIn"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/70 select-none animate-fadeIn"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-5xl h-[92vh] flex flex-col bg-[#0e0b16] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden"
+        className={`relative w-full max-w-5xl h-[92vh] flex flex-col border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden ${
+          theme === 'dark'
+            ? 'bg-[#0e0b16] border-white/10 text-white'
+            : theme === 'kitty'
+            ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
+            : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/60'
+        }`}
       >
         {/* Cabecera del Visor */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
+        <div className={`flex items-center justify-between px-4 sm:px-6 py-3.5 border-b shrink-0 ${
+          theme === 'dark'
+            ? 'border-white/[0.06] bg-white/[0.02]'
+            : theme === 'kitty'
+            ? 'border-pink-100 bg-pink-50/70'
+            : 'border-slate-100 bg-slate-50/90'
+        }`}>
           <div className="flex items-center gap-3 min-w-0 pr-2">
-            <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-300 shrink-0">
+            <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 ${
+              theme === 'dark'
+                ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+                : theme === 'kitty'
+                ? 'bg-pink-100 border-pink-200 text-pink-700'
+                : 'bg-rose-50 border-rose-200 text-rose-600'
+            }`}>
               <ImageIcon className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base font-bold text-white truncate max-w-xs sm:max-w-md tracking-tight">
+                <h3 className={`text-sm sm:text-base font-bold truncate max-w-xs sm:max-w-md tracking-tight ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   {title}
                 </h3>
                 {currentIndex !== undefined && totalCount && totalCount > 1 && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10 tabular-nums">
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border tabular-nums ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.05] text-zinc-300 border-white/10'
+                      : theme === 'kitty'
+                      ? 'bg-pink-100 text-pink-800 border-pink-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
                     {currentIndex + 1} / {totalCount}
                   </span>
                 )}
               </div>
               {subtitle && (
-                <p className="text-[11px] sm:text-xs text-zinc-400 truncate">
+                <p className={`text-[11px] sm:text-xs truncate ${
+                  theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
+                }`}>
                   {subtitle}
                 </p>
               )}
@@ -250,27 +384,54 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
           {/* Barra de herramientas de Zoom y Acciones */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Controles de Zoom */}
-            <div className="flex items-center bg-white/[0.025] border border-white/[0.08] rounded-xl p-1 gap-1">
+            <div className={`flex items-center rounded-xl p-1 gap-1 border ${
+              theme === 'dark'
+                ? 'bg-white/[0.025] border-white/[0.08]'
+                : theme === 'kitty'
+                ? 'bg-pink-50/50 border-pink-200'
+                : 'bg-slate-100 border-slate-200'
+            }`}>
               <button
                 type="button"
                 onClick={handleZoomOut}
                 disabled={zoomLevel <= 0.5}
                 title="Alejar (-)"
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
+                className={`p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer ${
+                  theme === 'dark'
+                    ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
+                    : theme === 'kitty'
+                    ? 'text-pink-700 hover:text-pink-950 hover:bg-pink-100/60'
+                    : 'text-slate-700 hover:text-zinc-950 hover:bg-white'
+                }`}
               >
                 <ZoomOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
-              <span className="text-[11px] font-bold text-zinc-200 px-1.5 min-w-[42px] text-center font-mono tabular-nums">
+              <span
+                ref={zoomBadgeRef}
+                className={`text-[11px] font-bold px-1.5 min-w-[42px] text-center font-mono tabular-nums ${
+                  theme === 'dark'
+                    ? 'text-zinc-200'
+                    : theme === 'kitty'
+                    ? 'text-pink-900'
+                    : 'text-zinc-950'
+                }`}
+              >
                 {zoomPercent}%
               </span>
 
               <button
                 type="button"
                 onClick={handleZoomIn}
-                disabled={zoomLevel >= 3.5}
+                disabled={zoomLevel >= 4.0}
                 title="Acercar (+)"
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
+                className={`p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer ${
+                  theme === 'dark'
+                    ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
+                    : theme === 'kitty'
+                    ? 'text-pink-700 hover:text-pink-950 hover:bg-pink-100/60'
+                    : 'text-slate-700 hover:text-zinc-950 hover:bg-white'
+                }`}
               >
                 <ZoomIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
@@ -279,19 +440,31 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 type="button"
                 onClick={handleResetZoom}
                 title="Restablecer tamaño (0 o R)"
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors active:scale-95 cursor-pointer"
+                className={`p-1.5 rounded-lg transition-colors active:scale-95 cursor-pointer ${
+                  theme === 'dark'
+                    ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
+                    : theme === 'kitty'
+                    ? 'text-pink-700 hover:text-pink-950 hover:bg-pink-100/60'
+                    : 'text-slate-700 hover:text-zinc-950 hover:bg-white'
+                }`}
               >
                 <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
 
             {/* Descargar Imagen */}
-            {imageUrl && (
+            {sanitizedUrl && (
               <a
-                href={imageUrl}
-                download="figura-documento.png"
-                title="Descargar imagen en alta resolución"
-                className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-zinc-300 hover:text-white hover:bg-white/10 transition-colors active:scale-95"
+                href={sanitizedUrl}
+                download="figura-documento.jpg"
+                title="Descargar imagen en alta resolución con fondo limpio"
+                className={`p-2 rounded-xl border transition-colors active:scale-95 ${
+                  theme === 'dark'
+                    ? 'bg-white/[0.04] border-white/[0.08] text-zinc-300 hover:text-white hover:bg-white/10'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-700 hover:text-zinc-950 hover:bg-slate-100 shadow-xs'
+                }`}
               >
                 <Download className="w-4 h-4" />
               </a>
@@ -302,17 +475,23 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               type="button"
               onClick={onClose}
               title="Cerrar visor (Escape)"
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.05] border border-white/[0.08] transition-colors active:scale-95 cursor-pointer"
+              className={`p-2 rounded-xl border transition-colors active:scale-95 cursor-pointer ${
+                theme === 'dark'
+                  ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05] border-white/[0.08]'
+                  : theme === 'kitty'
+                  ? 'text-pink-700 hover:text-pink-950 hover:bg-pink-100/70 border-pink-200 shadow-xs'
+                  : 'text-slate-600 hover:text-zinc-950 hover:bg-slate-100 border-slate-200 shadow-xs'
+              }`}
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
-        {/* Área Central de Visualización y Zoom */}
+        {/* Área Central de Visualización y Zoom: Fondo Blanco Puro en todos los temas */}
         <div
           ref={containerRef}
-          className="relative flex-1 min-h-0 bg-black/80 overflow-hidden flex items-center justify-center p-4 cursor-default select-none"
+          className="relative flex-1 min-h-0 bg-white overflow-hidden flex items-center justify-center p-4 cursor-default select-none"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -327,7 +506,13 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 onPrev();
               }}
               title="Imagen anterior (Flecha izquierda)"
-              className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-thea-surface/90 hover:bg-violet-600 border border-thea-border text-white shadow-xl flex items-center justify-center transition-all hover:scale-105"
+              className={`absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full border shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                theme === 'dark'
+                  ? 'bg-zinc-900/90 hover:bg-violet-600 border-zinc-700 text-white'
+                  : theme === 'kitty'
+                  ? 'bg-white/95 hover:bg-pink-50 border-pink-200 text-pink-700 shadow-pink-200/50'
+                  : 'bg-white/95 hover:bg-slate-100 border-slate-300 text-zinc-900 shadow-slate-300/60'
+              }`}
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -342,7 +527,13 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 onNext();
               }}
               title="Imagen siguiente (Flecha derecha)"
-              className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-thea-surface/90 hover:bg-violet-600 border border-thea-border text-white shadow-xl flex items-center justify-center transition-all hover:scale-105"
+              className={`absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full border shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                theme === 'dark'
+                  ? 'bg-zinc-900/90 hover:bg-violet-600 border-zinc-700 text-white'
+                  : theme === 'kitty'
+                  ? 'bg-white/95 hover:bg-pink-50 border-pink-200 text-pink-700 shadow-pink-200/50'
+                  : 'bg-white/95 hover:bg-slate-100 border-slate-300 text-zinc-900 shadow-slate-300/60'
+              }`}
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -350,16 +541,17 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
 
           {/* Contenedor Centrado de la Imagen */}
           <div className="flex items-center justify-center w-full h-full pointer-events-none">
-            {imageUrl ? (
+            {sanitizedUrl ? (
               <img
-                src={imageUrl}
+                ref={imgRef}
+                src={sanitizedUrl}
                 alt={caption || title}
                 style={{
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})`,
+                  transform: 'translate3d(0px, 0px, 0) scale(1)',
                   transformOrigin: 'center center',
-                  transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                  willChange: 'transform',
                 }}
-                className={`max-h-[68vh] sm:max-h-[72vh] max-w-full object-contain rounded-lg shadow-2xl pointer-events-auto bg-white p-3 ${
+                className={`max-h-[70vh] sm:max-h-[74vh] max-w-full object-contain rounded-xl pointer-events-auto bg-white p-2 ${
                   zoomLevel > 1
                     ? isDragging
                       ? 'cursor-grabbing'
@@ -378,18 +570,26 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
           </div>
 
           {/* Indicador de ayuda al usuario */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3 py-1 rounded-full bg-black/80 border border-white/10 text-[10px] text-slate-300">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3.5 py-1 rounded-full bg-slate-900/85 border border-slate-700 text-[11px] font-medium text-white shadow-md">
             {zoomLevel > 1
-              ? 'Rueda del ratón para zoom focalizado | Arrastra para mover | Clic para ciclar'
-              : 'Gira la rueda del ratón o haz clic en la imagen para ampliar'}
+              ? 'Rueda para zoom focalizado • Arrastra para mover a 120 FPS'
+              : 'Gira la rueda del ratón o haz clic para ampliar'}
           </div>
         </div>
 
         {/* Pie del Visor con Descripción / Caption */}
         {caption && (
-          <div className="shrink-0 px-4 sm:px-6 py-3 bg-thea-surfaceLight/80 border-t border-thea-border/80 text-xs text-slate-300 flex items-start gap-2.5">
-            <span className="font-semibold text-violet-300 shrink-0">Descripción:</span>
-            <p className="leading-relaxed text-slate-200 line-clamp-2">{caption}</p>
+          <div className={`shrink-0 px-4 sm:px-6 py-3 border-t text-xs flex items-start gap-2.5 ${
+            theme === 'dark'
+              ? 'bg-thea-surfaceLight/80 border-thea-border/80 text-slate-300'
+              : theme === 'kitty'
+              ? 'bg-pink-50/50 border-pink-100 text-pink-900'
+              : 'bg-slate-50 border-slate-200 text-slate-700'
+          }`}>
+            <span className={`font-semibold shrink-0 ${theme === 'kitty' ? 'text-pink-600 font-bold' : 'text-rose-600 font-bold dark:text-violet-300'}`}>
+              Descripción:
+            </span>
+            <p className="leading-relaxed line-clamp-2">{caption}</p>
           </div>
         )}
       </div>

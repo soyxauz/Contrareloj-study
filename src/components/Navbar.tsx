@@ -102,12 +102,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Left Side: Logo & Minimal Wordmark + 3-Button Theme Switcher */}
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 shrink-0">
           <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 tracking-tight shadow-sm transition-colors ${
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 tracking-tight shadow-sm transition-transform active:scale-95 ${
               theme === 'kitty'
-                ? 'bg-pink-500 text-white shadow-pink-500/30'
+                ? 'bg-gradient-to-br from-pink-500 to-rose-400 text-white shadow-pink-500/30'
                 : theme === 'light'
-                ? 'bg-zinc-950 text-white shadow-sm'
-                : 'bg-white/[0.08] border border-white/10 text-white'
+                ? 'bg-gradient-to-br from-rose-500 to-amber-500 text-white shadow-rose-500/25'
+                : 'bg-gradient-to-br from-rose-600 to-violet-700 text-white shadow-black/40'
             }`}>
               {theme === 'kitty' ? 'K' : 'C'}
             </div>
@@ -135,10 +135,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => onSelectMode('create')}
               title="Crear nuevo Study Kit"
-              className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border ${
                 currentMode === 'create'
-                  ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                  : 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white'
+                  ? theme === 'kitty'
+                    ? 'bg-pink-500 text-white border-pink-500 shadow-sm'
+                    : 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                  : theme === 'dark'
+                  ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
+                  : theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -151,8 +157,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               title="Inicio"
               className={`active-press p-1.5 rounded-lg border transition-colors cursor-pointer ${
                 currentMode === 'home'
-                  ? 'bg-white/[0.12] text-white border-white/20'
-                  : 'bg-transparent text-slate-400 hover:text-white hover:bg-white/[0.04] border-transparent'
+                  ? theme === 'dark'
+                    ? 'bg-white/[0.12] text-white border-white/20'
+                    : theme === 'kitty'
+                    ? 'bg-pink-100 text-pink-900 border-pink-200'
+                    : 'bg-slate-100 text-slate-900 border-slate-200'
+                  : theme === 'dark'
+                  ? 'bg-transparent text-slate-400 hover:text-white hover:bg-white/[0.04] border-transparent'
+                  : 'bg-transparent text-slate-500 hover:text-zinc-950 hover:bg-slate-100 border-transparent'
               }`}
             >
               <Home className="w-4 h-4" />
@@ -160,15 +172,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Subtle Divider */}
-          <div className="hidden md:block h-4 w-px bg-white/[0.08] mx-1" />
+          <div className={`hidden md:block h-4 w-px mx-1 ${theme === 'dark' ? 'bg-white/[0.08]' : 'bg-slate-200'}`} />
 
           {/* Streak Indicator */}
           <div
             title={`Racha de estudio: ${realStreak} ${realStreak === 1 ? 'día consecutivo' : 'días consecutivos'}`}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-slate-400 font-medium tabular-nums"
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold tabular-nums border ${
+              theme === 'dark'
+                ? 'bg-transparent border-transparent text-slate-400'
+                : theme === 'kitty'
+                ? 'bg-pink-50 border-pink-200 text-pink-900'
+                : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}
           >
-            <Flame className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
-            <span className="text-slate-200">{realStreak}</span>
+            <Flame className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span className={theme === 'dark' ? 'text-slate-200' : 'text-zinc-950'}>{realStreak}</span>
           </div>
 
           {/* Google Drive Cloud Sync */}
@@ -182,19 +200,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'Conectar Google Drive para respaldo en la nube'
             }
             className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer shrink-0 ${
-              driveState.userEmail
-                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
-                : 'bg-transparent hover:bg-white/[0.04] border-transparent text-slate-400 hover:text-white'
+              theme === 'dark'
+                ? driveState.userEmail
+                  ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
+                  : 'bg-transparent hover:bg-white/[0.04] border-transparent text-slate-400 hover:text-white'
+                : theme === 'kitty'
+                ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
             }`}
           >
             {driveState.status === 'syncing' ? (
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
             ) : (
-              <Cloud className="w-3.5 h-3.5 text-slate-400" />
+              <Cloud className={`w-3.5 h-3.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
             )}
             <span className="hidden sm:inline">Drive</span>
             {driveState.userEmail && (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/90 shadow-sm" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" />
             )}
           </button>
 
@@ -202,11 +224,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={onOpenAISettings}
             title="Configuración de IA (Ollama Cloud / API)"
-            className="active-press hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+            className={`active-press hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+              theme === 'dark'
+                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
+                : theme === 'kitty'
+                ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+            }`}
           >
-            <Bot className="w-3.5 h-3.5 text-slate-400" />
+            <Bot className={`w-3.5 h-3.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
             <span>IA Engine</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/90 shadow-sm" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" />
           </button>
 
           {/* User Profile */}
@@ -259,12 +287,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                     ? theme === 'kitty'
                       ? 'bg-pink-500 text-white font-semibold shadow-md shadow-pink-500/30'
                       : theme === 'light'
-                      ? 'bg-zinc-900 text-white font-semibold shadow-md'
+                      ? 'bg-rose-600 text-white font-semibold shadow-md shadow-rose-600/25'
                       : 'bg-violet-600 text-white font-semibold shadow-md shadow-violet-900/30'
                     : theme === 'kitty'
-                    ? 'text-pink-900/70 hover:text-pink-950 hover:bg-pink-100/60'
+                    ? 'text-pink-900 hover:text-pink-950 hover:bg-pink-100/70 font-medium'
                     : theme === 'light'
-                    ? 'text-slate-600 hover:text-zinc-950 hover:bg-slate-100'
+                    ? 'text-slate-700 hover:text-zinc-950 hover:bg-slate-100 font-medium'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-thea-surface'
                 }`}
               >
@@ -272,13 +300,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>{mode.label}</span>
                 {mode.id === 'images' && currentKit?.assets && currentKit.assets.length > 0 && (
                   <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold tabular-nums ${
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold tabular-nums ${
                       active
-                        ? 'bg-white/20 text-white'
+                        ? 'bg-white/25 text-white'
                         : theme === 'kitty'
                         ? 'bg-pink-100 text-pink-700 border border-pink-200'
                         : theme === 'light'
-                        ? 'bg-slate-200 text-slate-700 border border-slate-300'
+                        ? 'bg-slate-100 text-slate-700 border border-slate-200'
                         : 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
                     }`}
                   >

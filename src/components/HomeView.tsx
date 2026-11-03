@@ -955,50 +955,74 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                               e.stopPropagation();
                               setKitMenuOpenId(isMenuOpen ? null : kit.id);
                             }}
-                          title="Opciones de este Study Kit"
-                          className={`active-press p-2 sm:p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-[transform,background-color] cursor-pointer ${
-                            isMenuOpen ? 'bg-white/20 text-white' : ''
-                          }`}
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-
-                        {/* Dropdown contextual */}
-                        {isMenuOpen && (
-                          <div
-                            className="absolute right-0 top-full mt-1.5 w-44 rounded-2xl bg-thea-surface border border-thea-border shadow-2xl py-1.5 z-30 animate-fadeIn"
-                            onClick={e => e.stopPropagation()}
+                            title="Opciones de este Study Kit"
+                            className={`active-press p-2 sm:p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg transition-[transform,background-color] cursor-pointer ${
+                              theme === 'dark'
+                                ? isMenuOpen
+                                  ? 'bg-white/20 text-white'
+                                  : 'text-white/70 hover:text-white hover:bg-white/15'
+                                : theme === 'kitty'
+                                ? isMenuOpen
+                                  ? 'bg-pink-100 text-pink-700'
+                                  : 'text-pink-600 hover:text-pink-900 hover:bg-pink-50'
+                                : isMenuOpen
+                                ? 'bg-slate-200 text-zinc-950'
+                                : 'text-slate-600 hover:text-zinc-950 hover:bg-slate-100'
+                            }`}
                           >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setKitMenuOpenId(null);
-                                setReassignKitModal(kit);
-                              }}
-                              className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-thea-surfaceLight hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
-                            >
-                              <FolderInput className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Cambiar Materia</span>
-                            </button>
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
 
-                            {onDeleteKit && (
+                          {/* Dropdown contextual */}
+                          {isMenuOpen && (
+                            <div
+                              className={`absolute right-0 top-full mt-1.5 w-44 rounded-2xl border shadow-2xl py-1.5 z-30 animate-fadeIn ${
+                                theme === 'dark'
+                                  ? 'bg-thea-surface border-thea-border text-slate-200'
+                                  : theme === 'kitty'
+                                  ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/50'
+                                  : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/80'
+                              }`}
+                              onClick={e => e.stopPropagation()}
+                            >
                               <button
                                 type="button"
                                 onClick={() => {
                                   setKitMenuOpenId(null);
-                                  if (window.confirm(`¿Seguro que deseas eliminar el Study Kit "${kit.title}"?`)) {
-                                    onDeleteKit(kit.id);
-                                  }
+                                  setReassignKitModal(kit);
                                 }}
-                                className="w-full px-3.5 py-2 text-left text-xs text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 flex items-center gap-2 transition-colors cursor-pointer border-t border-thea-border/80"
+                                className={`w-full px-3.5 py-2 text-left text-xs flex items-center gap-2 transition-colors cursor-pointer ${
+                                  theme === 'dark'
+                                    ? 'text-slate-200 hover:bg-thea-surfaceLight hover:text-white'
+                                    : 'text-slate-700 hover:bg-slate-100 hover:text-zinc-950 font-medium'
+                                }`}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Eliminar Kit</span>
+                                <FolderInput className="w-3.5 h-3.5 text-amber-500" />
+                                <span>Cambiar Materia</span>
                               </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
+
+                              {onDeleteKit && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKitMenuOpenId(null);
+                                    if (window.confirm(`¿Seguro que deseas eliminar el Study Kit "${kit.title}"?`)) {
+                                      onDeleteKit(kit.id);
+                                    }
+                                  }}
+                                  className={`w-full px-3.5 py-2 text-left text-xs flex items-center gap-2 transition-colors cursor-pointer border-t ${
+                                    theme === 'dark'
+                                      ? 'text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 border-thea-border/80'
+                                      : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700 border-slate-100 font-medium'
+                                  }`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Eliminar Kit</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                     )}
                     </div>
                   </div>
@@ -1112,31 +1136,47 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-fadeIn"
           onClick={() => setSelectedActionForKit(null)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl sm:rounded-3xl bg-thea-surface border border-thea-border shadow-2xl overflow-hidden"
+            className={`w-full max-w-lg rounded-2xl sm:rounded-3xl border shadow-2xl overflow-hidden ${
+              theme === 'dark'
+                ? 'bg-thea-surface border-thea-border text-white'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/50'
+                : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between">
+            <div className={`p-4 sm:p-5 border-b flex items-center justify-between ${
+              theme === 'dark'
+                ? 'border-thea-border bg-transparent'
+                : theme === 'kitty'
+                ? 'border-pink-100 bg-pink-50/60'
+                : 'border-slate-100 bg-slate-50'
+            }`}>
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${selectedActionForKit.gradient} flex items-center justify-center text-white shrink-0`}>
                   {selectedActionForKit.icon}
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">
+                  <h3 className={`font-bold text-base ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
                     Abrir {selectedActionForKit.label}
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                     Selecciona en cuál de tus libros deseas estudiar
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedActionForKit(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  theme === 'dark'
+                    ? 'text-slate-400 hover:text-white hover:bg-white/5'
+                    : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1149,22 +1189,36 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   onNavigate('create');
                   setSelectedActionForKit(null);
                 }}
-                className="w-full p-3 rounded-xl border border-dashed border-violet-500/40 hover:border-violet-500 bg-violet-950/20 hover:bg-violet-950/40 text-violet-300 flex items-center justify-between text-xs sm:text-sm font-semibold transition-all group"
+                className={`w-full p-3 rounded-xl border border-dashed flex items-center justify-between text-xs sm:text-sm font-semibold transition-all group cursor-pointer ${
+                  theme === 'dark'
+                    ? 'border-violet-500/40 hover:border-violet-500 bg-violet-950/20 hover:bg-violet-950/40 text-violet-300'
+                    : theme === 'kitty'
+                    ? 'border-pink-300 hover:border-pink-400 bg-pink-50 hover:bg-pink-100/70 text-pink-700'
+                    : 'border-rose-300 hover:border-rose-400 bg-rose-50 hover:bg-rose-100/70 text-rose-700'
+                }`}
               >
                 <span className="flex items-center gap-2">
                   <Plus className="w-4 h-4" />
                   Crear un nuevo Study Kit para esta sesión
                 </span>
-                <ArrowRight className="w-4 h-4 text-violet-400 group-hover:translate-x-1 transition-transform shrink-0 ml-2" />
+                <ArrowRight className={`w-4 h-4 group-hover:translate-x-1 transition-transform shrink-0 ml-2 ${
+                  theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-rose-600' : 'text-violet-400'
+                }`} />
               </button>
 
               <div className="pt-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2.5">
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-2.5 ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500 font-bold'
+                }`}>
                   Tus libros disponibles ({kits.length})
                 </p>
 
                 {kits.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 text-xs bg-thea-bg/40 rounded-xl border border-thea-border/60">
+                  <div className={`text-center py-8 text-xs rounded-xl border ${
+                    theme === 'dark'
+                      ? 'text-slate-400 bg-thea-bg/40 border-thea-border/60'
+                      : 'text-slate-500 bg-slate-50 border-slate-200'
+                  }`}>
                     No tienes ningún libro creado actualmente.
                   </div>
                 ) : (
@@ -1179,33 +1233,53 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                             onNavigate(selectedActionForKit.id);
                             setSelectedActionForKit(null);
                           }}
-                          className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all group ${
+                          className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all group cursor-pointer ${
                             isCurrent
-                              ? 'border-violet-500/70 bg-violet-950/30 ring-1 ring-violet-500/30'
+                              ? theme === 'kitty'
+                                ? 'border-pink-400 bg-pink-50/70 ring-1 ring-pink-400/30'
+                                : theme === 'light'
+                                ? 'border-rose-400 bg-rose-50/70 ring-1 ring-rose-400/30'
+                                : 'border-violet-500/70 bg-violet-950/30 ring-1 ring-violet-500/30'
+                              : theme === 'kitty'
+                              ? 'border-pink-100 bg-pink-50/30 hover:border-pink-200 hover:bg-pink-50/70'
+                              : theme === 'light'
+                              ? 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
                               : 'border-thea-border bg-thea-bg/50 hover:border-slate-600 hover:bg-thea-surfaceLight'
                           }`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-lg bg-gradient-to-tr ${kit.color || 'from-violet-600 to-indigo-600'} flex items-center justify-center shrink-0 shadow-sm`}>
+                            <div className={`w-9 h-9 rounded-lg bg-gradient-to-tr ${kit.color || 'from-violet-600 to-indigo-600'} flex items-center justify-center shrink-0 shadow-sm text-white`}>
                               {renderKitIcon(kit.icon)}
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <p className="text-sm font-semibold text-white truncate">
+                                <p className={`text-sm font-semibold truncate ${
+                                  theme === 'dark' ? 'text-white' : 'text-zinc-950 font-bold'
+                                }`}>
                                   {kit.title}
                                 </p>
                                 {isCurrent && (
-                                  <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    theme === 'kitty'
+                                      ? 'bg-pink-100 text-pink-700 border-pink-200'
+                                      : theme === 'light'
+                                      ? 'bg-rose-100 text-rose-700 border-rose-200'
+                                      : 'bg-violet-500/20 text-violet-300 border-violet-500/30'
+                                  }`}>
                                     Último abierto
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-slate-400 truncate">
+                              <p className={`text-xs truncate ${
+                                theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                              }`}>
                                 {kit.category || 'General'} • {kit.questions.length} preguntas
                               </p>
                             </div>
                           </div>
-                          <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-violet-400 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
+                          <ArrowRight className={`w-4 h-4 group-hover:translate-x-1 transition-all shrink-0 ml-2 ${
+                            theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-rose-600' : 'text-slate-500 group-hover:text-violet-400'
+                          }`} />
                         </button>
                       );
                     })}
@@ -1215,10 +1289,16 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surface flex justify-end">
+            <div className={`p-3 sm:p-4 border-t flex justify-end ${
+              theme === 'dark' ? 'border-thea-border bg-thea-surface' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/40' : 'border-slate-100 bg-slate-50'
+            }`}>
               <button
                 onClick={() => setSelectedActionForKit(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 border border-thea-border transition-colors"
+                className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                  theme === 'dark'
+                    ? 'text-slate-300 hover:text-white hover:bg-white/5 border-thea-border'
+                    : 'text-slate-700 hover:text-zinc-950 hover:bg-slate-100 border-slate-200 bg-white shadow-xs'
+                }`}
               >
                 Cancelar
               </button>
@@ -1336,24 +1416,46 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 animate-fadeIn"
           onClick={() => setShowBatchMateriaModal(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-thea-surface border border-thea-border shadow-2xl flex flex-col overflow-hidden text-slate-100"
+            className={`w-full max-w-md rounded-2xl border shadow-2xl flex flex-col overflow-hidden ${
+              theme === 'dark'
+                ? 'bg-thea-surface border-thea-border text-slate-100'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/50'
+                : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+            }`}
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
+            <div className={`p-4 sm:p-5 border-b flex items-center justify-between shrink-0 ${
+              theme === 'dark'
+                ? 'border-thea-border bg-thea-surfaceLight/50'
+                : theme === 'kitty'
+                ? 'border-pink-100 bg-pink-50/70'
+                : 'border-slate-100 bg-slate-50'
+            }`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+                  theme === 'kitty'
+                    ? 'bg-pink-100 border-pink-200 text-pink-600'
+                    : theme === 'light'
+                    ? 'bg-amber-50 border-amber-200 text-amber-600'
+                    : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                }`}>
                   <FolderInput className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-bold text-white">
+                  <h3 className={`text-base sm:text-lg font-bold ${
+                    theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                  }`}>
                     Cambiar Materia en Lote
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs ${
+                    theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
                     Asignando a {selectedKitIds.size} {selectedKitIds.size === 1 ? 'libro seleccionado' : 'libros seleccionados'}
                   </p>
                 </div>
@@ -1361,7 +1463,11 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               <button
                 type="button"
                 onClick={() => setShowBatchMateriaModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  theme === 'dark'
+                    ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
+                    : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1370,7 +1476,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             {/* Body */}
             <div className="p-4 sm:p-5 space-y-4 max-h-[60vh] overflow-y-auto">
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-2">
+                <label className={`text-xs font-semibold block mb-2 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-bold'
+                }`}>
                   Selecciona una materia existente:
                 </label>
                 <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 scrollbar-none">
@@ -1387,7 +1495,15 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
                           isChosen
-                            ? 'ring-2 ring-violet-500 shadow-md bg-violet-600/30 border-violet-500 text-white'
+                            ? theme === 'kitty'
+                              ? 'ring-2 ring-pink-500 shadow-md bg-pink-100 border-pink-400 text-pink-950 font-bold'
+                              : theme === 'light'
+                              ? 'ring-2 ring-rose-500 shadow-md bg-rose-100 border-rose-400 text-rose-950 font-bold'
+                              : 'ring-2 ring-violet-500 shadow-md bg-violet-600/30 border-violet-500 text-white'
+                            : theme === 'kitty'
+                            ? 'bg-pink-50/50 hover:bg-pink-100/60 border-pink-200 text-pink-800'
+                            : theme === 'light'
+                            ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
                             : `${mTheme.chipInactiveClass} hover:border-white/30`
                         }`}
                       >
@@ -1400,7 +1516,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                <label className={`text-xs font-semibold block mb-1.5 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-bold'
+                }`}>
                   O escribe una nueva materia:
                 </label>
                 <input
@@ -1413,21 +1531,35 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       setBatchSelectedMateria('');
                     }
                   }}
-                  className="w-full bg-thea-bg border border-thea-border rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  className={`w-full border rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-colors ${
+                    theme === 'dark'
+                      ? 'bg-thea-bg border-thea-border text-white placeholder:text-slate-500 focus:border-violet-500'
+                      : theme === 'kitty'
+                      ? 'bg-pink-50/40 border-pink-200 text-zinc-950 placeholder:text-pink-300 focus:border-pink-500'
+                      : 'bg-slate-50 border-slate-200 text-zinc-950 placeholder:text-slate-400 focus:border-rose-500'
+                  }`}
                 />
               </div>
 
               {/* Vista previa de libros afectados */}
               <div>
-                <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">
+                <span className={`text-[11px] font-semibold block mb-1.5 ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500 font-bold'
+                }`}>
                   Libros seleccionados ({selectedKitIds.size}):
                 </span>
-                <div className="bg-thea-bg/80 border border-thea-border rounded-xl p-2.5 max-h-28 overflow-y-auto space-y-1 scrollbar-none">
+                <div className={`border rounded-xl p-2.5 max-h-28 overflow-y-auto space-y-1 scrollbar-none ${
+                  theme === 'dark'
+                    ? 'bg-thea-bg/80 border-thea-border text-slate-300'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50/40 border-pink-200 text-zinc-950'
+                    : 'bg-slate-50 border-slate-200 text-zinc-950'
+                }`}>
                   {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
-                    <div key={k.id} className="text-[11px] text-slate-300 flex items-center gap-2 truncate">
-                      <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <div key={k.id} className="text-[11px] flex items-center gap-2 truncate">
+                      <BookOpen className={`w-3.5 h-3.5 shrink-0 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-600' : 'text-slate-400'}`} />
                       <span className="truncate">{k.title}</span>
-                      <span className="text-[10px] text-slate-500 shrink-0 ml-auto">({k.category || 'General'})</span>
+                      <span className="text-[10px] opacity-70 shrink-0 ml-auto">({k.category || 'General'})</span>
                     </div>
                   ))}
                 </div>
@@ -1435,11 +1567,17 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </div>
 
             {/* Footer */}
-            <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex items-center justify-end gap-2 shrink-0">
+            <div className={`p-3 sm:p-4 border-t flex items-center justify-end gap-2 shrink-0 ${
+              theme === 'dark' ? 'border-thea-border bg-thea-surfaceLight/50' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/40' : 'border-slate-100 bg-slate-50'
+            }`}>
               <button
                 type="button"
                 onClick={() => setShowBatchMateriaModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer border ${
+                  theme === 'dark'
+                    ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight border-transparent'
+                    : 'text-slate-700 hover:text-zinc-950 hover:bg-slate-100 border-slate-200 bg-white shadow-xs'
+                }`}
               >
                 Cancelar
               </button>
@@ -1447,7 +1585,13 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                 type="button"
                 disabled={!batchSelectedMateria.trim() && !batchNewMateriaName.trim()}
                 onClick={handleConfirmBatchMateria}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 text-white transition-all shadow-md shadow-violet-900/30 cursor-pointer flex items-center gap-1.5"
+                className={`px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-40 text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5 ${
+                  theme === 'kitty'
+                    ? 'bg-pink-500 hover:bg-pink-600 shadow-pink-500/30'
+                    : theme === 'light'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/25'
+                    : 'bg-violet-600 hover:bg-violet-500 shadow-violet-900/30'
+                }`}
               >
                 <Check className="w-4 h-4" />
                 <span>Aplicar a {selectedKitIds.size} {selectedKitIds.size === 1 ? 'libro' : 'libros'}</span>
@@ -1463,24 +1607,34 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 animate-fadeIn"
           onClick={() => setShowBatchDeleteModal(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-thea-surface border border-rose-500/40 shadow-2xl flex flex-col overflow-hidden text-slate-100"
+            className={`w-full max-w-md rounded-2xl border shadow-2xl flex flex-col overflow-hidden ${
+              theme === 'dark'
+                ? 'bg-thea-surface border-rose-500/40 text-slate-100'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-300 text-zinc-950 shadow-pink-200/50'
+                : 'bg-white border-rose-200 text-zinc-950 shadow-slate-200/70'
+            }`}
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
+            <div className={`p-4 sm:p-5 border-b flex items-center justify-between shrink-0 ${
+              theme === 'dark' ? 'border-thea-border bg-thea-surfaceLight/50' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/70' : 'border-rose-100 bg-rose-50/70'
+            }`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                  theme === 'dark' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' : 'bg-rose-100 border-rose-200 text-rose-600'
+                }`}>
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-bold text-white">
+                  <h3 className={`text-base sm:text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
                     ¿Eliminar {selectedKitIds.size} {selectedKitIds.size === 1 ? 'Study Kit' : 'Study Kits'}?
                   </h3>
-                  <p className="text-xs text-rose-300/80">
+                  <p className={`text-xs ${theme === 'dark' ? 'text-rose-300/80' : 'text-rose-600 font-medium'}`}>
                     Esta acción es irreversible
                   </p>
                 </div>
@@ -1488,7 +1642,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               <button
                 type="button"
                 onClick={() => setShowBatchDeleteModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight' : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1496,15 +1652,21 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
             {/* Body */}
             <div className="p-4 sm:p-5 space-y-3">
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
                 Se eliminarán permanentemente los siguientes {selectedKitIds.size} libros, incluyendo todas sus preguntas, resúmenes, fichas y progreso registrado:
               </p>
 
               {/* Lista previa de libros a eliminar */}
-              <div className="bg-thea-bg/80 border border-thea-border rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1.5 scrollbar-none">
+              <div className={`border rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1.5 scrollbar-none ${
+                theme === 'dark'
+                  ? 'bg-thea-bg/80 border-thea-border text-slate-300'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50/30 border-pink-200 text-zinc-950'
+                  : 'bg-slate-50 border-slate-200 text-zinc-950'
+              }`}>
                 {kits.filter(k => selectedKitIds.has(k.id)).map(k => (
-                  <div key={k.id} className="text-xs text-slate-300 flex items-center gap-2">
-                    <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <div key={k.id} className="text-xs flex items-center gap-2">
+                    <BookOpen className={`w-3.5 h-3.5 shrink-0 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-600' : 'text-slate-400'}`} />
                     <span className="truncate">{k.title}</span>
                   </div>
                 ))}
@@ -1512,11 +1674,17 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </div>
 
             {/* Footer */}
-            <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex items-center justify-end gap-2 shrink-0">
+            <div className={`p-3 sm:p-4 border-t flex items-center justify-end gap-2 shrink-0 ${
+              theme === 'dark' ? 'border-thea-border bg-thea-surfaceLight/50' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/40' : 'border-slate-100 bg-slate-50'
+            }`}>
               <button
                 type="button"
                 onClick={() => setShowBatchDeleteModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer border ${
+                  theme === 'dark'
+                    ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight border-transparent'
+                    : 'text-slate-700 hover:text-zinc-950 hover:bg-slate-100 border-slate-200 bg-white shadow-xs'
+                }`}
               >
                 Cancelar
               </button>
@@ -1555,6 +1723,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
   onMateriasChanged,
   onUpdateKit,
 }) => {
+  const { theme } = useTheme();
   const activeMaterias = React.useMemo(() => getAllAvailableMaterias(kits, userId), [kits, userId]);
   const [editingMateriaName, setEditingMateriaName] = React.useState<string | null>(null);
   const [editingName, setEditingName] = React.useState('');
@@ -1605,31 +1774,53 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl max-h-[85vh] rounded-2xl bg-thea-surface border border-thea-border shadow-2xl flex flex-col overflow-hidden text-slate-100"
+        className={`w-full max-w-xl max-h-[85vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden ${
+          theme === 'dark'
+            ? 'bg-thea-surface border-thea-border text-slate-100'
+            : theme === 'kitty'
+            ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/50'
+            : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+        }`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
+        <div className={`p-4 sm:p-5 border-b flex items-center justify-between shrink-0 ${
+          theme === 'dark' ? 'border-thea-border bg-thea-surfaceLight/50' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/70' : 'border-slate-100 bg-slate-50'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+              theme === 'kitty'
+                ? 'bg-pink-100 border-pink-200 text-pink-600'
+                : theme === 'light'
+                ? 'bg-amber-50 border-amber-200 text-amber-600'
+                : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+            }`}>
               <FolderEdit className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white">
+              <h2 className={`text-base sm:text-lg font-bold ${
+                theme === 'dark' ? 'text-white' : 'text-zinc-950'
+              }`}>
                 Materias Activas
               </h2>
-              <p className="text-xs text-slate-400">
-                Personaliza los colores oscuros de tus materias y renómbralas
+              <p className={`text-xs ${
+                theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+              }`}>
+                Personaliza los colores de tus materias y renómbralas
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              theme === 'dark'
+                ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
+                : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+            }`}
           >
             <X className="w-5 h-5" />
           </button>
@@ -1638,7 +1829,7 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
         {/* Content Scrollable */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
           {activeMaterias.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-6">
+            <p className={`text-sm text-center py-6 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
               No hay materias activas actualmente. Se crearán automáticamente a medida que subas o crees Study Kits.
             </p>
           ) : (
@@ -1650,26 +1841,40 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                   return (
                     <div
                       key={m.name}
-                      className="p-3.5 rounded-xl bg-thea-surfaceLight/80 border border-amber-500/50 space-y-2.5"
+                      className={`p-3.5 rounded-xl border space-y-2.5 ${
+                        theme === 'dark'
+                          ? 'bg-thea-surfaceLight/80 border-amber-500/50'
+                          : theme === 'kitty'
+                          ? 'bg-pink-50/60 border-pink-300'
+                          : 'bg-amber-50/60 border-amber-300'
+                      }`}
                     >
                       <div className="flex gap-2">
                         <input
                           type="text"
                           value={editingName}
                           onChange={e => setEditingName(e.target.value)}
-                          className="flex-1 bg-thea-bg border border-thea-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                          className={`flex-1 border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none ${
+                            theme === 'dark'
+                              ? 'bg-thea-bg border-thea-border text-white focus:border-amber-500'
+                              : 'bg-white border-slate-300 text-zinc-950 focus:border-amber-500'
+                          }`}
                         />
                         <button
                           type="button"
                           onClick={() => handleSaveEdit(m.name)}
-                          className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 cursor-pointer shadow-xs"
                         >
                           Guardar
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingMateriaName(null)}
-                          className="px-2.5 py-1.5 rounded-lg bg-thea-surface text-slate-300 text-xs hover:text-white border border-thea-border cursor-pointer"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs border cursor-pointer ${
+                            theme === 'dark'
+                              ? 'bg-thea-surface text-slate-300 hover:text-white border-thea-border'
+                              : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+                          }`}
                         >
                           Cancelar
                         </button>
@@ -1686,11 +1891,11 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                               onClick={() => setEditingColor(key)}
                               style={{ backgroundColor: p.cardBgHex }}
                               className={`px-2 py-1 rounded border text-[10px] flex items-center gap-1 cursor-pointer ${
-                                editingColor === key ? 'border-amber-400 ring-1 ring-amber-400' : 'border-thea-border'
+                                editingColor === key ? 'border-amber-400 ring-1 ring-amber-400' : 'border-white/10'
                               }`}
                             >
                               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.hex }} />
-                              <span className="text-slate-300">{p.name}</span>
+                              <span className="text-white">{p.name}</span>
                             </button>
                           );
                         })}
@@ -1702,13 +1907,27 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                 return (
                   <div
                     key={m.name}
-                    className="p-3 rounded-xl border border-white/[0.08] bg-white/[0.03] flex items-center justify-between transition-colors"
+                    className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
+                      theme === 'dark'
+                        ? 'border-white/[0.08] bg-white/[0.03]'
+                        : theme === 'kitty'
+                        ? 'border-pink-200 bg-pink-50/30'
+                        : 'border-slate-200 bg-slate-50'
+                    }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-xs sm:text-sm font-semibold text-white truncate">
+                      <span className={`text-xs sm:text-sm font-semibold truncate ${
+                        theme === 'dark' ? 'text-white' : 'text-zinc-950 font-bold'
+                      }`}>
                         {m.name}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-white/[0.05] text-slate-400 border border-white/[0.08] tabular-nums">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium tabular-nums border ${
+                        theme === 'dark'
+                          ? 'bg-white/[0.05] text-slate-400 border-white/[0.08]'
+                          : theme === 'kitty'
+                          ? 'bg-pink-100 text-pink-700 border-pink-200 font-bold'
+                          : 'bg-slate-200 text-slate-700 border-slate-300 font-bold'
+                      }`}>
                         {m.count} {m.count === 1 ? 'kit' : 'kits'}
                       </span>
                     </div>
@@ -1717,7 +1936,11 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleStartEdit(m)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          theme === 'dark'
+                            ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
+                            : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-200/60'
+                        }`}
                         title="Personalizar color o nombre"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -1726,7 +1949,11 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDelete(m.name)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            theme === 'dark'
+                              ? 'text-slate-500 hover:text-rose-400 hover:bg-rose-950/40'
+                              : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                          }`}
                           title="Reasignar a General"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1741,10 +1968,16 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex justify-end shrink-0">
+        <div className={`p-3 sm:p-4 border-t flex justify-end shrink-0 ${
+          theme === 'dark' ? 'border-thea-border bg-thea-surfaceLight/50' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/40' : 'border-slate-100 bg-slate-50'
+        }`}>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 hover:text-white bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border transition-colors cursor-pointer"
+            className={`px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-colors cursor-pointer ${
+              theme === 'dark'
+                ? 'text-slate-200 hover:text-white bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border-thea-border'
+                : 'text-slate-700 hover:text-zinc-950 bg-white hover:bg-slate-100 border-slate-200 shadow-xs'
+            }`}
           >
             Cerrar
           </button>
@@ -1772,6 +2005,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
   onClose,
   onConfirm,
 }) => {
+  const { theme } = useTheme();
   const currentCategory = kit.category || 'General';
   const availableMaterias = React.useMemo(() => getAllAvailableMaterias(kits, userId), [kits, userId]);
 
@@ -1799,31 +2033,43 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-thea-surface border border-thea-border shadow-2xl flex flex-col overflow-hidden text-slate-100"
+        className={`w-full max-w-lg rounded-2xl border shadow-2xl flex flex-col overflow-hidden ${
+          theme === 'dark'
+            ? 'bg-thea-surface border-thea-border text-slate-100'
+            : theme === 'kitty'
+            ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/50'
+            : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+        }`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-thea-border flex items-center justify-between shrink-0 bg-thea-surfaceLight/50">
+        <div className={`p-4 sm:p-5 border-b flex items-center justify-between shrink-0 ${
+          theme === 'dark' ? 'border-thea-border bg-thea-surfaceLight/50' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/70' : 'border-slate-100 bg-slate-50'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-violet-600/15 border border-violet-500/30 flex items-center justify-center text-violet-400">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+              theme === 'kitty' ? 'bg-pink-100 border-pink-200 text-pink-600' : theme === 'light' ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-violet-600/15 border-violet-500/30 text-violet-400'
+            }`}>
               <FolderInput className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-white">
+              <h2 className={`text-sm sm:text-base font-bold ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
                 Reasignar Materia
               </h2>
-              <p className="text-xs text-slate-400 truncate max-w-[280px] sm:max-w-sm">
+              <p className={`text-xs truncate max-w-[280px] sm:max-w-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                 {kit.title}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight' : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+            }`}
           >
             <X className="w-5 h-5" />
           </button>
@@ -1831,16 +2077,28 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
 
         {/* Content */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 max-h-[70vh]">
-          <div className="p-3 rounded-xl bg-thea-surfaceLight/60 border border-thea-border text-xs text-slate-400 flex items-center justify-between">
+          <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+            theme === 'dark'
+              ? 'bg-thea-surfaceLight/60 border-thea-border text-slate-400'
+              : theme === 'kitty'
+              ? 'bg-pink-50/40 border-pink-200 text-pink-800'
+              : 'bg-slate-50 border-slate-200 text-slate-700'
+          }`}>
             <span>Materia actual del kit:</span>
-            <span className="font-bold text-white px-2 py-0.5 rounded bg-thea-surface border border-thea-border">
+            <span className={`font-bold px-2 py-0.5 rounded border ${
+              theme === 'dark'
+                ? 'bg-thea-surface border-thea-border text-white'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 text-pink-700'
+                : 'bg-white border-slate-300 text-zinc-950'
+            }`}>
               {currentCategory}
             </span>
           </div>
 
           {!isCreatingNew ? (
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300 block">
+              <label className={`text-xs font-semibold block ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-bold'}`}>
                 Selecciona la nueva materia:
               </label>
               <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
@@ -1853,21 +2111,37 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                       onClick={() => setSelectedTarget(m.name)}
                       className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-white/[0.10] border-white/30 ring-1 ring-white/20 shadow-md'
+                          ? theme === 'kitty'
+                            ? 'bg-pink-100/70 border-pink-400 ring-1 ring-pink-400/40 shadow-sm'
+                            : theme === 'light'
+                            ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-400/40 shadow-sm'
+                            : 'bg-white/[0.10] border-white/30 ring-1 ring-white/20 shadow-md'
+                          : theme === 'kitty'
+                          ? 'bg-pink-50/30 hover:bg-pink-50/70 border-pink-200 text-pink-900'
+                          : theme === 'light'
+                          ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
                           : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-xs sm:text-sm font-semibold text-white">
+                        <span className={`text-xs sm:text-sm font-semibold ${
+                          theme === 'dark' ? 'text-white' : 'text-zinc-950 font-bold'
+                        }`}>
                           {m.name}
                         </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-white/[0.05] text-slate-400 border border-white/[0.08] tabular-nums">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium tabular-nums border ${
+                          theme === 'dark'
+                            ? 'bg-white/[0.05] text-slate-400 border-white/[0.08]'
+                            : theme === 'kitty'
+                            ? 'bg-pink-100 text-pink-700 border-pink-200 font-bold'
+                            : 'bg-slate-200 text-slate-700 border-slate-300 font-bold'
+                        }`}>
                           {m.count} {m.count === 1 ? 'kit' : 'kits'}
                         </span>
                       </div>
 
                       {isSelected && (
-                        <Check className="w-4 h-4 text-violet-400 shrink-0" />
+                        <Check className={`w-4 h-4 shrink-0 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-rose-600' : 'text-violet-400'}`} />
                       )}
                     </button>
                   );
@@ -1877,20 +2151,34 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCreatingNew(true)}
-                className="w-full mt-2 py-2 px-3 rounded-xl border border-dashed border-thea-border hover:border-violet-500 text-xs text-slate-400 hover:text-violet-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className={`w-full mt-2 py-2 px-3 rounded-xl border border-dashed flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs font-semibold ${
+                  theme === 'kitty'
+                    ? 'border-pink-300 hover:border-pink-400 text-pink-700 hover:bg-pink-50'
+                    : theme === 'light'
+                    ? 'border-rose-300 hover:border-rose-400 text-rose-700 hover:bg-rose-50'
+                    : 'border-thea-border hover:border-violet-500 text-slate-400 hover:text-violet-300'
+                }`}
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Crear y asignar a una materia nueva</span>
               </button>
             </div>
           ) : (
-            <div className="space-y-3 p-4 rounded-xl bg-thea-surfaceLight/60 border border-thea-border">
+            <div className={`space-y-3 p-4 rounded-xl border ${
+              theme === 'dark'
+                ? 'bg-thea-surfaceLight/60 border-thea-border'
+                : theme === 'kitty'
+                ? 'bg-pink-50/40 border-pink-200'
+                : 'bg-slate-50 border-slate-200'
+            }`}>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-400">Crear nueva materia:</span>
+                <span className={`text-xs font-bold ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-rose-600' : 'text-amber-400'}`}>
+                  Crear nueva materia:
+                </span>
                 <button
                   type="button"
                   onClick={() => setIsCreatingNew(false)}
-                  className="text-[11px] text-slate-400 hover:text-white"
+                  className={`text-[11px] cursor-pointer ${theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-zinc-950 font-medium'}`}
                 >
                   Volver a existentes
                 </button>
@@ -1901,12 +2189,16 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                 value={newMateriaInput}
                 onChange={e => setNewMateriaInput(e.target.value)}
                 placeholder="Nombre de la nueva materia..."
-                className="w-full bg-thea-bg border border-thea-border rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500"
+                className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm focus:outline-none ${
+                  theme === 'dark'
+                    ? 'bg-thea-bg border-thea-border text-white focus:border-amber-500'
+                    : 'bg-white border-slate-300 text-zinc-950 focus:border-rose-500'
+                }`}
               />
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1.5">
-                  Color opaco:
+                <label className={`text-[11px] font-semibold block mb-1.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600 font-bold'}`}>
+                  Color de materia:
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1">
                   {paletteKeys.map(key => {
@@ -1919,11 +2211,11 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                         onClick={() => setNewMateriaColor(key)}
                         style={{ backgroundColor: pal.cardBgHex }}
                         className={`p-1.5 rounded-lg border text-left flex items-center gap-1.5 text-[10px] cursor-pointer ${
-                          isSelected ? 'border-amber-400 ring-1 ring-amber-400' : 'border-thea-border'
+                          isSelected ? 'border-amber-400 ring-1 ring-amber-400' : 'border-white/10'
                         }`}
                       >
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pal.hex }} />
-                        <span className="text-slate-300 truncate">{pal.name}</span>
+                        <span className="text-white truncate">{pal.name}</span>
                       </button>
                     );
                   })}
@@ -1934,11 +2226,17 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-3 sm:p-4 border-t border-thea-border bg-thea-surfaceLight/50 flex items-center justify-end gap-2 shrink-0">
+        <div className={`p-3 sm:p-4 border-t flex items-center justify-end gap-2 shrink-0 ${
+          theme === 'dark' ? 'border-thea-border bg-thea-surfaceLight/50' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/40' : 'border-slate-100 bg-slate-50'
+        }`}>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer border ${
+              theme === 'dark'
+                ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight border-transparent'
+                : 'text-slate-700 hover:text-zinc-950 hover:bg-slate-100 border-slate-200 bg-white shadow-xs'
+            }`}
           >
             Cancelar
           </button>
@@ -1946,7 +2244,13 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isCreatingNew && !newMateriaInput.trim()}
-            className="active-press px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white hover:bg-zinc-200 text-zinc-950 disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1.5 shadow-md"
+            className={`active-press px-5 py-2 rounded-xl text-xs sm:text-sm font-bold disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1.5 shadow-md ${
+              theme === 'kitty'
+                ? 'bg-pink-500 hover:bg-pink-600 text-white'
+                : theme === 'light'
+                ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                : 'bg-white hover:bg-zinc-200 text-zinc-950'
+            }`}
           >
             <Check className="w-4 h-4" />
             <span>Guardar Cambios</span>

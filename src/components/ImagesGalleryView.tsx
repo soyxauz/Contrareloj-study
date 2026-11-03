@@ -11,6 +11,7 @@ import { ImageZoomModal } from './ImageZoomModal';
 import { getAssetsMap, getAssetById } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
 import { useTheme } from '../services/themeService';
+import { cleanImageBlackBackground } from '../utils/imageCleaner';
 
 interface ImagesGalleryViewProps {
   kit: StudyKit;
@@ -29,6 +30,40 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
   useEffect(() => {
     setAssets(kit.assets || []);
   }, [kit.id, kit.assets]);
+
+  // Garantizar fondo blanco puro (#ffffff) eliminando fondos negros de transparencia JPEG
+  useEffect(() => {
+    let isMounted = true;
+    const sanitize = async () => {
+      const rawAssets = kit.assets || [];
+      let changed = false;
+      const sanitized = await Promise.all(
+        rawAssets.map(async (a) => {
+          if (a.dataUrl && a.dataUrl.startsWith('data:image')) {
+            const cleaned = await cleanImageBlackBackground(a.dataUrl);
+            if (cleaned !== a.dataUrl) {
+              changed = true;
+              return { ...a, dataUrl: cleaned };
+            }
+          }
+          return a;
+        })
+      );
+      if (isMounted && changed) {
+        setAssets(sanitized);
+        if (onUpdateKit) {
+          onUpdateKit({
+            ...kit,
+            assets: sanitized,
+          });
+        }
+      }
+    };
+    sanitize();
+    return () => {
+      isMounted = false;
+    };
+  }, [kit.id, kit.assets, onUpdateKit]);
 
   // Carga individual e inmediata para una imagen específica al pulsar sobre ella
   const loadSingleAsset = async (assetId: string) => {
@@ -271,19 +306,13 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                     : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'
                 }`}
               >
-                {/* Image Box */}
-                <div className={`relative aspect-video overflow-hidden flex items-center justify-center p-2 border-b ${
-                  theme === 'dark'
-                    ? 'bg-black/40 border-white/[0.06]'
-                    : theme === 'kitty'
-                    ? 'bg-pink-50/40 border-pink-100'
-                    : 'bg-slate-50 border-slate-100'
-                }`}>
+                {/* Image Box - Pure White Background in all themes per user request */}
+                <div className="relative aspect-video overflow-hidden flex items-center justify-center p-2 border-b bg-white border-slate-200">
                   {asset.dataUrl ? (
                     <img
                       src={asset.dataUrl}
                       alt={asset.caption || 'Figura del documento'}
-                      className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300 bg-white"
                       loading="lazy"
                     />
                   ) : isAssetLoading ? (

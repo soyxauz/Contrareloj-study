@@ -43,6 +43,7 @@ import {
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
 import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
+import { useTheme } from '../services/themeService';
 import {
   generateAIPedagogicalQuestions,
   generateSocraticReformulatedQuestion,
@@ -333,6 +334,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [dragDropChecked, setDragDropChecked] = useState(wasPreviouslyAnswered ? false : (savedSession?.dragDropChecked || false));
   const [placedImageLabels, setPlacedImageLabels] = useState<Record<string, string>>(wasPreviouslyAnswered ? {} : ((savedSession as any)?.placedImageLabels || {}));
   const [activeLabelChip, setActiveLabelChip] = useState<string | null>(null);
+  const { theme } = useTheme();
   const [imageLabelChecked, setImageLabelChecked] = useState(wasPreviouslyAnswered ? false : ((savedSession as any)?.imageLabelChecked || false));
 
   // ── RAG Evidence Modal State ───────────────────────────────────────────
@@ -3195,33 +3197,57 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   {showSourceModal && modalChunk && typeof document !== 'undefined' &&
     createPortal(
       <div
-        className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/85 animate-fadeIn"
+        className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/70 animate-fadeIn"
         onClick={(e) => {
           if (e.target === e.currentTarget) setShowSourceModal(false);
         }}
       >
-        <div className="bg-thea-surface border border-violet-500/40 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] flex flex-col">
+        <div className={`rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] flex flex-col border ${
+          theme === 'dark'
+            ? 'bg-thea-surface border-violet-500/40 text-white'
+            : theme === 'kitty'
+            ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/50'
+            : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/60'
+        }`}>
           {/* Modal Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-thea-border/80">
+          <div className={`flex items-center justify-between pb-4 border-b ${
+            theme === 'dark' ? 'border-thea-border/80' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
+          }`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-400">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${
+                theme === 'dark'
+                  ? 'bg-violet-600/20 border-violet-500/40 text-violet-400'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 border-pink-200 text-pink-600'
+                  : 'bg-rose-50 border-rose-200 text-rose-600'
+              }`}>
                 <FileSearch className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <h3 className={`text-base sm:text-lg font-bold flex items-center gap-2 ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                }`}>
                   Fragmento de Origen (RAG)
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 uppercase tracking-wider">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                    theme === 'dark'
+                      ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300'
+                      : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                  }`}>
                     Contexto Cerrado
                   </span>
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                   Evidencia documental para garantizar fidelidad académica y evitar alucinaciones
                 </p>
               </div>
             </div>
             <button
               onClick={() => setShowSourceModal(false)}
-              className="w-8 h-8 rounded-xl bg-thea-surfaceLight border border-thea-border flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                theme === 'dark'
+                  ? 'bg-thea-surfaceLight border-thea-border text-slate-400 hover:text-white'
+                  : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-zinc-950 hover:bg-slate-200'
+              }`}
             >
               <X className="w-4 h-4" />
             </button>
@@ -3231,51 +3257,91 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
             {/* Metadata badges */}
             <div className="flex items-center gap-2 flex-wrap text-xs">
-              <span className="px-3 py-1 rounded-lg bg-thea-surfaceLight border border-thea-border text-slate-300 font-medium">
+              <span className={`px-3 py-1 rounded-lg border font-medium ${
+                theme === 'dark'
+                  ? 'bg-thea-surfaceLight border-thea-border text-slate-300'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 border-pink-200 text-pink-800'
+                  : 'bg-slate-100 border-slate-200 text-slate-700'
+              }`}>
                 Fragmento: <strong>#{modalChunk.id || '1'}</strong>
               </span>
               {modalChunk.pageOrSlide && (
-                <span className="px-3 py-1 rounded-lg bg-violet-950/60 border border-violet-500/40 text-violet-300 font-medium">
+                <span className={`px-3 py-1 rounded-lg border font-medium ${
+                  theme === 'dark'
+                    ? 'bg-violet-950/60 border-violet-500/40 text-violet-300'
+                    : theme === 'kitty'
+                    ? 'bg-pink-100 border-pink-200 text-pink-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}>
                   Ubicación: <strong>Página o Diapositiva {modalChunk.pageOrSlide}</strong>
                 </span>
               )}
-              <span className="px-3 py-1 rounded-lg bg-thea-surfaceLight border border-thea-border text-slate-400 flex items-center gap-1">
-                <Database className="w-3.5 h-3.5 text-amber-400" />
+              <span className={`px-3 py-1 rounded-lg border flex items-center gap-1 ${
+                theme === 'dark'
+                  ? 'bg-thea-surfaceLight border-thea-border text-slate-400'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 border-pink-200 text-pink-700'
+                  : 'bg-slate-100 border-slate-200 text-slate-600'
+              }`}>
+                <Database className="w-3.5 h-3.5 text-amber-500" />
                 Índice Vectorial Local
               </span>
             </div>
 
             {/* Verbatim Quote */}
-            <div className="bg-thea-bg rounded-2xl p-5 border border-thea-border/80 relative">
-              <div className="text-slate-400 text-xs uppercase font-extrabold tracking-wider mb-2 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-violet-400" />
+            <div className={`rounded-2xl p-5 border relative ${
+              theme === 'dark'
+                ? 'bg-thea-bg border-thea-border/80 text-slate-200'
+                : theme === 'kitty'
+                ? 'bg-pink-50/40 border-pink-200 text-zinc-950'
+                : 'bg-slate-50 border-slate-200 text-zinc-950'
+            }`}>
+              <div className={`text-xs uppercase font-extrabold tracking-wider mb-2 flex items-center gap-1.5 ${
+                theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+              }`}>
+                <FileText className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-600' : 'text-violet-400'}`} />
                 Cita exacta del documento fuente:
               </div>
-              <div className="text-sm text-slate-200 leading-relaxed border-l-2 border-violet-500 pl-4 py-1 italic bg-violet-950/10 rounded-r-xl">
+              <div className={`text-sm leading-relaxed pl-4 py-1.5 italic rounded-r-xl border-l-4 ${
+                theme === 'dark'
+                  ? 'border-violet-500 text-slate-200 bg-violet-950/10'
+                  : theme === 'kitty'
+                  ? 'border-pink-500 text-zinc-950 bg-pink-100/50'
+                  : 'border-rose-500 text-zinc-950 bg-rose-50/50'
+              }`}>
                 <FormattedText text={modalChunk.text || 'Contenido del fragmento analizado en el material original.'} />
               </div>
             </div>
 
             {/* Multimodal Asset if available */}
             {modalChunk.asset && (
-              <div className="p-4 rounded-2xl bg-thea-surfaceLight border border-thea-border/80">
-                <span className="text-xs font-bold text-slate-300 block mb-2 flex items-center gap-1.5">
-                  <ImageIcon className="w-3.5 h-3.5 text-violet-400" />
+              <div className={`p-4 rounded-2xl border ${
+                theme === 'dark'
+                  ? 'bg-thea-surfaceLight border-thea-border/80'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50/40 border-pink-200'
+                  : 'bg-slate-50 border-slate-200'
+              }`}>
+                <span className={`text-xs font-bold block mb-2 flex items-center gap-1.5 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-zinc-900'
+                }`}>
+                  <ImageIcon className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-600' : 'text-violet-400'}`} />
                   Activo multimodal vinculado: {modalChunk.asset.caption || 'Figura del documento'}
                 </span>
                 {modalChunk.asset.dataUrl && (
                   <div
                     onClick={() => setZoomAsset(modalChunk.asset)}
-                    className="rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center p-2 max-h-60 cursor-pointer hover:border-violet-500/80 transition-colors group relative"
+                    className="rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center p-2 max-h-60 cursor-pointer hover:border-rose-500/80 transition-colors group relative"
                     title="Clic para ampliar con zoom interactivo"
                   >
                     <img
                       src={modalChunk.asset.dataUrl}
                       alt={modalChunk.asset.caption || 'Gráfico'}
-                      className="max-h-56 object-contain rounded-lg group-hover:scale-[1.02] transition-transform duration-200"
+                      className="max-h-56 object-contain rounded-lg group-hover:scale-[1.02] transition-transform duration-200 bg-white"
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                      <div className="w-8 h-8 rounded-full bg-violet-600/90 text-white flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                      <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
                         <ZoomIn className="w-4 h-4" />
                       </div>
                     </div>
@@ -3284,8 +3350,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </div>
             )}
 
-            <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-2xl p-4 text-xs text-emerald-200 leading-relaxed flex items-start gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className={`border rounded-2xl p-4 text-xs leading-relaxed flex items-start gap-2.5 ${
+              theme === 'dark'
+                ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+            }`}>
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <p>
                 <strong>Garantía de Fidelidad RAG:</strong> La pregunta, la respuesta correcta y las retroalimentaciones de descarte fueron contrastadas rigurosamente contra este segmento del documento, asegurando coherencia y anclaje total.
               </p>
@@ -3293,10 +3363,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
 
           {/* Modal Footer */}
-          <div className="pt-4 border-t border-thea-border/80 flex justify-end">
+          <div className={`pt-4 border-t flex justify-end ${
+            theme === 'dark' ? 'border-thea-border/80' : 'border-slate-200'
+          }`}>
             <button
               onClick={() => setShowSourceModal(false)}
-              className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+              className={`px-5 py-2 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer ${
+                theme === 'kitty'
+                  ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/30'
+                  : theme === 'light'
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25'
+                  : 'bg-violet-600 hover:bg-violet-500 text-white'
+              }`}
             >
               Cerrar Fragmento
             </button>

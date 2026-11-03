@@ -344,6 +344,70 @@ html {
   box-shadow: 0 2px 8px -1px rgba(244, 114, 182, 0.15), 0 6px 16px -2px rgba(244, 114, 182, 0.1) !important;
 }
 
+/* Caras de Flashcards en modo claro y kitty */
+[data-theme="light"] .perspective-card .card-face,
+[data-theme="light"] .card-face {
+  background: #ffffff !important;
+  color: #09090b !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="kitty"] .perspective-card .card-face,
+[data-theme="kitty"] .card-face {
+  background: #ffffff !important;
+  color: #09090b !important;
+  border-color: #fbcfe8 !important;
+  box-shadow: 0 10px 25px -5px rgba(244, 114, 182, 0.2) !important;
+}
+
+/* Gradients oscuros convertidos a blanco puro */
+[data-theme="light"] [class*="from-[#140e26]"],
+[data-theme="light"] [class*="from-[#16102c]"],
+[data-theme="light"] [class*="from-[#161224]"] {
+  background-image: none !important;
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="kitty"] [class*="from-[#140e26]"],
+[data-theme="kitty"] [class*="from-[#16102c]"],
+[data-theme="kitty"] [class*="from-[#161224]"] {
+  background-image: none !important;
+  background-color: #ffffff !important;
+  border-color: #fbcfe8 !important;
+}
+
+/* ── FONDO BLANCO OBLIGATORIO PARA TODAS LAS IMÁGENES (SEA EL TEMA QUE SEA) ── */
+.aspect-video,
+.aspect-video img,
+.explanation-figure,
+.explanation-figure img,
+.explanation-figure div,
+[class*="aspect-video"],
+img[alt*="Figura"],
+img[alt*="diagrama"],
+img[alt*="Ilustración"],
+img[alt*="Activo del documento"],
+img[alt*="Gráfico"],
+.image-zoom-container,
+.image-zoom-container img {
+  background-color: #ffffff !important;
+}
+
+/* Colores más vivos y saturados en modo claro y kitty */
+[data-theme="light"] {
+  --thea-accent: #e11d48;
+  --thea-accent-hover: #be123c;
+  --thea-accent-light: #fff1f2;
+}
+
+[data-theme="kitty"] {
+  --thea-accent: #ec4899;
+  --thea-accent-hover: #db2777;
+  --thea-accent-light: #fdf2f8;
+}
+
 [data-theme="light"] [class*="bg-thea-surfaceLight"] {
   background-color: #f8fafc !important;
   border-color: #e2e8f0 !important;

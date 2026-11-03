@@ -1135,6 +1135,8 @@ async function blobToOptimizedDataUrl(blob: Blob, maxDim = 1200): Promise<string
         canvas.height = targetH;
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(bmp, 0, 0, targetW, targetH);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           canvas.width = 0;
@@ -1529,13 +1531,22 @@ async function extractContentFromPDF(file: File): Promise<{ text: string; assets
                         const ctx = canvas.getContext('2d');
                         try {
                           if (ctx) {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, targetW, targetH);
                             if (imgObj.bitmap) {
                               ctx.drawImage(imgObj.bitmap, 0, 0, targetW, targetH);
                             } else if (imgObj.data) {
                               if (targetW === w && targetH === h) {
                                 const imgDataObj = ctx.createImageData(w, h);
                                 if (imgObj.data.length === w * h * 4) {
-                                  imgDataObj.data.set(imgObj.data);
+                                  // Mezclar canal alfa transparente sobre fondo blanco puro (#ffffff) para evitar fondo negro en JPEG
+                                  for (let p = 0; p < imgObj.data.length; p += 4) {
+                                    const a = imgObj.data[p + 3] / 255;
+                                    imgDataObj.data[p] = Math.round(imgObj.data[p] * a + 255 * (1 - a));
+                                    imgDataObj.data[p + 1] = Math.round(imgObj.data[p + 1] * a + 255 * (1 - a));
+                                    imgDataObj.data[p + 2] = Math.round(imgObj.data[p + 2] * a + 255 * (1 - a));
+                                    imgDataObj.data[p + 3] = 255;
+                                  }
                                 } else if (imgObj.data.length === w * h * 3) {
                                   for (let p = 0, q = 0; p < imgObj.data.length; p += 3, q += 4) {
                                     imgDataObj.data[q] = imgObj.data[p];
@@ -1553,7 +1564,13 @@ async function extractContentFromPDF(file: File): Promise<{ text: string; assets
                                 if (bufCtx) {
                                   const imgDataObj = bufCtx.createImageData(w, h);
                                   if (imgObj.data.length === w * h * 4) {
-                                    imgDataObj.data.set(imgObj.data);
+                                    for (let p = 0; p < imgObj.data.length; p += 4) {
+                                      const a = imgObj.data[p + 3] / 255;
+                                      imgDataObj.data[p] = Math.round(imgObj.data[p] * a + 255 * (1 - a));
+                                      imgDataObj.data[p + 1] = Math.round(imgObj.data[p + 1] * a + 255 * (1 - a));
+                                      imgDataObj.data[p + 2] = Math.round(imgObj.data[p + 2] * a + 255 * (1 - a));
+                                      imgDataObj.data[p + 3] = 255;
+                                    }
                                   } else if (imgObj.data.length === w * h * 3) {
                                     for (let p = 0, q = 0; p < imgObj.data.length; p += 3, q += 4) {
                                       imgDataObj.data[q] = imgObj.data[p];

@@ -87,17 +87,25 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
   const candidateVoices = esVoices.length > 0 ? esVoices : voices;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn">
-      <div className="bg-thea-surface border border-thea-border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl relative text-left">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl relative text-left ${
+        theme === 'dark'
+          ? 'bg-thea-surface border-thea-border text-white'
+          : theme === 'kitty'
+          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/30'
+          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/50'
+      }`}>
         {/* Encabezado del Modal */}
-        <div className="flex items-center justify-between pb-4 border-b border-thea-border mb-4">
+        <div className={`flex items-center justify-between pb-4 border-b mb-4 ${
+          theme === 'dark' ? 'border-thea-border' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
+        }`}>
           <div className="flex items-center gap-2.5">
             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${
               voiceModalTab === 'new_episode'
-                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-500'
                 : voiceEngine === 'edge'
-                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                : 'bg-violet-600/20 border-violet-500/40 text-violet-400'
+                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-500'
+                : 'bg-violet-600/20 border-violet-500/40 text-violet-500'
             }`}>
               {voiceModalTab === 'new_episode' ? (
                 <Sparkles className="w-5 h-5" />
@@ -108,12 +116,12 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
               )}
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">
+              <h3 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
                 {voiceModalTab === 'new_episode'
                   ? 'Crear Nuevo Episodio de Podcast'
                   : 'Configuración de Voces y Locutores'}
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                 {voiceModalTab === 'new_episode'
                   ? 'Configura un formato o duración distinta para este material'
                   : 'Personaliza el motor acústico para Sofía y Mateo'}
@@ -123,14 +131,24 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors cursor-pointer"
+            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+              theme === 'dark'
+                ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
+                : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+            }`}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Pestañas de Selección del Modal: Azure Neural | Voces Locales | Nuevo Episodio */}
-        <div className="grid grid-cols-3 gap-2 p-1.5 bg-thea-surfaceLight/80 border border-thea-border rounded-2xl mb-4">
+        <div className={`grid grid-cols-3 gap-2 p-1.5 border rounded-2xl mb-4 ${
+          theme === 'dark'
+            ? 'bg-thea-surfaceLight/80 border-thea-border'
+            : theme === 'kitty'
+            ? 'bg-pink-50 border-pink-200'
+            : 'bg-slate-100 border-slate-200'
+        }`}>
           <button
             type="button"
             onClick={() => {
@@ -139,14 +157,14 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
             }}
             className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
               voiceModalTab === 'azure'
-                ? 'bg-emerald-500/25 border border-emerald-500/50 text-emerald-300 shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-emerald-500/25 border border-emerald-500/50 text-emerald-600 dark:text-emerald-300 shadow-md'
+                : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
             }`}
           >
-            <Headphones className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Headphones className="w-4 h-4 text-emerald-500 shrink-0" />
             <div className="text-left hidden sm:block">
               <div className="font-bold">Azure Neural</div>
-              <div className="text-[10px] font-normal text-emerald-400/90">Voces Oficiales</div>
+              <div className="text-[10px] font-normal text-emerald-600/90 dark:text-emerald-400/90">Voces Oficiales</div>
             </div>
             <span className="sm:hidden text-xs font-bold">Azure</span>
           </button>
@@ -159,14 +177,14 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
             }}
             className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
               voiceModalTab === 'browser'
-                ? 'bg-violet-600/25 border border-violet-500/50 text-violet-300 shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-violet-600/25 border border-violet-500/50 text-violet-600 dark:text-violet-300 shadow-md'
+                : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
             }`}
           >
-            <Volume2 className="w-4 h-4 text-violet-400 shrink-0" />
+            <Volume2 className="w-4 h-4 text-violet-500 shrink-0" />
             <div className="text-left hidden sm:block">
               <div className="font-bold">Voces Locales</div>
-              <div className="text-[10px] font-normal text-violet-400/90">Navegador offline</div>
+              <div className="text-[10px] font-normal text-violet-600/90 dark:text-violet-400/90">Navegador offline</div>
             </div>
             <span className="sm:hidden text-xs font-bold">Locales</span>
           </button>
@@ -176,14 +194,14 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
             onClick={() => onTabChange('new_episode')}
             className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
               voiceModalTab === 'new_episode'
-                ? 'bg-amber-500/25 border border-amber-500/50 text-amber-300 shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-amber-500/25 border border-amber-500/50 text-amber-600 dark:text-amber-300 shadow-md'
+                : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+            <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
             <div className="text-left hidden sm:block">
               <div className="font-bold">Nuevo Episodio</div>
-              <div className="text-[10px] font-normal text-amber-400/90">Reemplazar podcast</div>
+              <div className="text-[10px] font-normal text-amber-600/90 dark:text-amber-400/90">Reemplazar podcast</div>
             </div>
             <span className="sm:hidden text-xs font-bold">Nuevo</span>
           </button>
@@ -700,28 +718,48 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
 
               {/* Orientación */}
               <div>
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
+                <label className={`text-xs font-bold uppercase tracking-wider block mb-1.5 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-bold'
+                }`}>
                   Orientación Personalizada (Opcional)
                 </label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   <button
                     type="button"
                     onClick={() => onOrientationChange('Enfoque riguroso para examen: conceptos clave, definiciones exactas, fórmulas o leyes relevantes y posibles preguntas trampa.')}
-                    className="px-2 py-0.5 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[10px] text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
+                    className={`px-2 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer border ${
+                      theme === 'dark'
+                        ? 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border-thea-border text-slate-300 hover:text-amber-300'
+                        : theme === 'kitty'
+                        ? 'bg-pink-50 hover:bg-pink-100/70 border-pink-200 text-pink-700'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                    }`}
                   >
                     Examen riguroso
                   </button>
                   <button
                     type="button"
                     onClick={() => onOrientationChange('Debate dinámico y conversacional entre Sofía y Mateo: usan analogías de la vida real, tono entretenido y explicaciones frescas.')}
-                    className="px-2 py-0.5 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[10px] text-slate-300 hover:text-violet-300 transition-colors cursor-pointer"
+                    className={`px-2 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer border ${
+                      theme === 'dark'
+                        ? 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border-thea-border text-slate-300 hover:text-violet-300'
+                        : theme === 'kitty'
+                        ? 'bg-pink-50 hover:bg-pink-100/70 border-pink-200 text-pink-700'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                    }`}
                   >
                     Debate ameno
                   </button>
                   <button
                     type="button"
                     onClick={() => onOrientationChange('Explicación pedagógica paso a paso desde los fundamentos básicos hasta los avanzados, ideal para aprender el tema por primera vez.')}
-                    className="px-2 py-0.5 rounded-lg bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-[10px] text-slate-300 hover:text-emerald-300 transition-colors cursor-pointer"
+                    className={`px-2 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer border ${
+                      theme === 'dark'
+                        ? 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border-thea-border text-slate-300 hover:text-emerald-300'
+                        : theme === 'kitty'
+                        ? 'bg-pink-50 hover:bg-pink-100/70 border-pink-200 text-pink-700'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                    }`}
                   >
                     Explicación pedagógica
                   </button>
@@ -731,16 +769,28 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   value={orientationInput}
                   onChange={(e) => onOrientationChange(e.target.value)}
                   placeholder="Instrucciones adicionales para la IA en este nuevo episodio..."
-                  className="w-full bg-thea-bg border border-thea-border rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed font-sans"
+                  className={`w-full border rounded-xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none leading-relaxed font-sans ${
+                    theme === 'dark'
+                      ? 'bg-thea-bg border-thea-border text-white placeholder-slate-500'
+                      : theme === 'kitty'
+                      ? 'bg-pink-50/50 border-pink-200 text-zinc-950 placeholder-pink-300'
+                      : 'bg-slate-50 border-slate-200 text-zinc-950 placeholder-slate-400'
+                  }`}
                 />
               </div>
 
               {/* Botones de Acción */}
-              <div className="pt-3 border-t border-thea-border flex items-center justify-between gap-3">
+              <div className={`pt-3 border-t flex items-center justify-between gap-3 ${
+                theme === 'dark' ? 'border-thea-border' : 'border-slate-200'
+              }`}>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border border-thea-border text-slate-300 text-xs font-semibold cursor-pointer"
+                  className={`px-4 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                    theme === 'dark'
+                      ? 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border-thea-border text-slate-300'
+                      : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                  }`}
                 >
                   Cancelar
                 </button>

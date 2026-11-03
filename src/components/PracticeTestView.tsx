@@ -18,12 +18,14 @@ import {
 } from 'lucide-react';
 import { generateSpecializedExamQuestions, evaluateShortAnswer, enforceQuestionLengthLimit } from '../services/aiService';
 import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
+import { useTheme } from '../services/themeService';
 
 interface PracticeTestViewProps {
   kit: StudyKit;
 }
 
 export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
+  const { theme } = useTheme();
   const [testState, setTestState] = useState<'config' | 'taking' | 'results'>('config');
   const [questionCount, setQuestionCount] = useState<number>(10);
   const [customInstructions, setCustomInstructions] = useState<string>(
@@ -416,18 +418,27 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               <div className="space-y-3 mb-8">
                 {(currentQ.options || []).map((option, optIdx) => {
                   const isSelected = userAnswers[currentIdx] === optIdx;
+
+                  let btnClasses = theme === 'dark'
+                    ? (isSelected ? 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white ring-1 ring-[#be123c]/50 shadow-md' : 'border-[#881337]/40 bg-[#1e0711]/75 text-slate-200 hover:border-[#be123c]/60 hover:bg-[#2c0b19]/90 shadow-sm')
+                    : theme === 'kitty'
+                    ? (isSelected ? 'border-pink-500 bg-pink-50 text-pink-950 ring-2 ring-pink-500/40 font-bold shadow-md' : 'border-pink-200 bg-white hover:bg-pink-50/50 hover:border-pink-300 text-zinc-950 shadow-xs')
+                    : (isSelected ? 'border-rose-600 bg-rose-50 text-rose-950 ring-2 ring-rose-500/40 font-bold shadow-md' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-zinc-950 shadow-xs');
+
+                  let letterClasses = theme === 'dark'
+                    ? (isSelected ? 'bg-[#be123c] text-white border border-[#e11d48]' : 'bg-[#881337]/30 border border-[#9f1239]/45 text-rose-200')
+                    : theme === 'kitty'
+                    ? (isSelected ? 'bg-pink-500 text-white border border-pink-400 font-bold' : 'bg-pink-100 text-pink-800 border border-pink-200 font-semibold')
+                    : (isSelected ? 'bg-rose-600 text-white border border-rose-500 font-bold' : 'bg-slate-100 text-slate-700 border border-slate-200 font-semibold');
+
                   return (
                     <button
                       key={optIdx}
                       onClick={() => setUserAnswers(prev => ({ ...prev, [currentIdx]: optIdx }))}
-                      className={`active-press w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 cursor-pointer ${
-                        isSelected ? 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white ring-1 ring-[#be123c]/50 shadow-md' : 'border-[#881337]/40 bg-[#1e0711]/75 text-slate-200 hover:border-[#be123c]/60 hover:bg-[#2c0b19]/90 shadow-sm'
-                      }`}
+                      className={`active-press w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 cursor-pointer ${btnClasses}`}
                     >
                       <div
-                        className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 tabular-nums transition-colors shadow-sm ${
-                          isSelected ? 'bg-[#be123c] text-white border border-[#e11d48]' : 'bg-[#881337]/30 border border-[#9f1239]/45 text-rose-200'
-                        }`}
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 tabular-nums transition-colors shadow-sm ${letterClasses}`}
                       >
                         {String.fromCharCode(65 + optIdx)}
                       </div>
@@ -439,11 +450,15 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
             )}
 
             {/* Controles de Navegación */}
-            <div className="flex items-center justify-between pt-4 border-t border-white/[0.08]">
+            <div className={`flex items-center justify-between pt-4 border-t ${
+              theme === 'dark' ? 'border-white/[0.08]' : theme === 'kitty' ? 'border-pink-200' : 'border-slate-200'
+            }`}>
               <button
                 disabled={currentIdx === 0}
                 onClick={() => setCurrentIdx(prev => prev - 1)}
-                className="active-press flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                className={`active-press flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-30 cursor-pointer ${
+                  theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
+                }`}
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Anterior</span>
@@ -452,7 +467,11 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               {currentIdx < activeTestQuestions.length - 1 ? (
                 <button
                   onClick={() => setCurrentIdx(prev => prev + 1)}
-                  className="active-press flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold shadow-md shadow-black/40 cursor-pointer"
+                  className={`active-press flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'bg-pink-500 hover:bg-pink-600 shadow-pink-500/25'
+                      : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/25'
+                  }`}
                 >
                   <span>Siguiente</span>
                   <ArrowRight className="w-4 h-4" />
@@ -461,11 +480,15 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                 <button
                   onClick={handleFinishTest}
                   disabled={isEvaluatingAnswers}
-                  className="active-press px-6 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-md shadow-black/40 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className={`active-press px-6 py-2.5 rounded-xl text-white font-bold text-xs shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                    theme === 'kitty'
+                      ? 'bg-pink-500 hover:bg-pink-600 shadow-pink-500/25'
+                      : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/25'
+                  }`}
                 >
                   {isEvaluatingAnswers ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
                       <span>Evaluando con IA...</span>
                     </>
                   ) : (
