@@ -1223,7 +1223,7 @@ Reglas obligatorias estrictas:
           ) : (
             <p className={`text-xs sm:text-sm font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
               {handsFree ? (
-                <span className="text-emerald-500 font-semibold">
+                <span className={`font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-800'}`}>
                   Manos libres activo: Thea escuchará automáticamente cuando termine
                 </span>
               ) : (
@@ -1257,9 +1257,11 @@ Reglas obligatorias estrictas:
             <button
               type="button"
               onClick={() => setHandsFree((h) => !h)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                 handsFree
-                  ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300 shadow-sm'
+                  ? theme === 'dark'
+                    ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-300 shadow-sm'
+                    : 'bg-emerald-100 border-emerald-400 text-emerald-800 shadow-xs'
                   : theme === 'dark'
                   ? 'bg-thea-surface/80 border-thea-border/70 text-slate-400 hover:text-white'
                   : theme === 'kitty'
@@ -1267,7 +1269,6 @@ Reglas obligatorias estrictas:
                   : 'bg-white border-slate-200 text-slate-700 shadow-xs hover:bg-slate-100'
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${handsFree ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
               <span>Manos Libres: {handsFree ? 'ON' : 'OFF'}</span>
             </button>
           )}

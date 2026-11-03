@@ -1974,24 +1974,22 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                     })}
                   </div>
 
-                  {/* Equalizer Waveform */}
-                  <div className="flex items-center gap-1 h-5 shrink-0">
-                    {[12, 35, 60, 85, 45, 70, 95, 50, 30, 65, 90, 40, 20].map((height, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          height: isPlaying && isAudioActive
-                            ? `${Math.max(20, Math.min(100, height * (Math.sin(i * 0.8 + currentLineIndex * 2) + 1.2) * 0.6))}%`
-                            : '20%',
-                        }}
-                        className={`w-1 rounded-full transition-all duration-300 ${
-                          isPlaying && isAudioActive
-                            ? theme === 'kitty' ? 'bg-gradient-to-t from-pink-500 to-rose-400' : 'bg-gradient-to-t from-violet-500 to-zinc-100'
-                            : theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  {/* Equalizer Waveform - Solo visible durante reproduccion activa */}
+                  {isPlaying && isAudioActive && (
+                    <div className="flex items-center gap-1 h-5 shrink-0 animate-fadeIn">
+                      {[12, 35, 60, 85, 45, 70, 95, 50, 30, 65, 90, 40, 20].map((height, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            height: `${Math.max(20, Math.min(100, height * (Math.sin(i * 0.8 + currentLineIndex * 2) + 1.2) * 0.6))}%`,
+                          }}
+                          className={`w-1 rounded-full transition-all duration-300 ${
+                            theme === 'kitty' ? 'bg-gradient-to-t from-pink-500 to-rose-400' : 'bg-gradient-to-t from-violet-500 to-zinc-100'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Current Active Dialogue Bubble */}
