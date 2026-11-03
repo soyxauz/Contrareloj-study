@@ -1733,48 +1733,46 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
         </div>
       ) : gameMode === 'study' ? (
         <div className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
-          {/* Card Counter, Progress Badges & Management Actions */}
-          <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs sm:text-sm mb-1">
-            <div className="flex items-center gap-2">
-              <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
-                Tarjeta {currentIdx + 1} de {cards.length}
+          {/* Card Counter, Progress Badges & Management Actions (Agrupados armónicamente a la izquierda) */}
+          <div className="shrink-0 w-full max-w-2xl mx-auto flex items-center justify-start gap-2 sm:gap-2.5 flex-wrap text-xs sm:text-sm mb-1.5">
+            <span className={`font-bold shrink-0 ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+              Tarjeta {currentIdx + 1} de {cards.length}
+            </span>
+            <div className="flex items-center gap-1 text-[11px] font-semibold tabular-nums">
+              <span className={`px-2 py-0.5 rounded-md border ${
+                theme === 'dark'
+                  ? 'bg-slate-800 text-slate-300 border-slate-700'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 text-pink-900 border-pink-200 font-bold'
+                  : 'bg-slate-100 text-slate-800 border-slate-300 font-bold'
+              }`}>
+                Por aprender: {cards.filter(c => c.mastery === 'to-learn' || !c.mastery).length}
               </span>
-              <div className="flex items-center gap-1 text-[11px] font-semibold tabular-nums">
-                <span className={`px-2 py-0.5 rounded-md border ${
-                  theme === 'dark'
-                    ? 'bg-slate-800 text-slate-300 border-slate-700'
-                    : theme === 'kitty'
-                    ? 'bg-pink-100 text-pink-900 border-pink-200 font-bold'
-                    : 'bg-slate-100 text-slate-800 border-slate-300 font-bold'
-                }`}>
-                  Por aprender: {cards.filter(c => c.mastery === 'to-learn' || !c.mastery).length}
-                </span>
-                <span className={`px-2 py-0.5 rounded-md border ${
-                  theme === 'dark'
-                    ? 'bg-amber-950 text-amber-300 border-amber-900/60'
-                    : theme === 'kitty'
-                    ? 'bg-pink-100 text-pink-950 border-pink-300 font-bold'
-                    : 'bg-amber-100 text-amber-950 border-amber-300 font-bold'
-                }`}>
-                  Conocidas: {cards.filter(c => c.mastery === 'known').length}
-                </span>
-                <span className={`px-2 py-0.5 rounded-md border ${
-                  theme === 'dark'
-                    ? 'bg-emerald-950 text-emerald-300 border-emerald-900/60'
-                    : 'bg-emerald-100 text-emerald-950 border-emerald-300 font-bold'
-                }`}>
-                  Dominadas: {cards.filter(c => c.mastery === 'mastered').length}
-                </span>
-              </div>
+              <span className={`px-2 py-0.5 rounded-md border ${
+                theme === 'dark'
+                  ? 'bg-amber-950 text-amber-300 border-amber-900/60'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 text-pink-950 border-pink-300 font-bold'
+                  : 'bg-amber-100 text-amber-950 border-amber-300 font-bold'
+              }`}>
+                Conocidas: {cards.filter(c => c.mastery === 'known').length}
+              </span>
+              <span className={`px-2 py-0.5 rounded-md border ${
+                theme === 'dark'
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-900/60'
+                  : 'bg-emerald-100 text-emerald-950 border-emerald-300 font-bold'
+              }`}>
+                Dominadas: {cards.filter(c => c.mastery === 'mastered').length}
+              </span>
             </div>
 
-            {/* Acciones para aumentar baraja o renovar memorizadas */}
+            {/* Acciones para aumentar baraja o renovar memorizadas agrupadas junto a los contadores */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
                 onClick={handleAddMoreFlashcards}
                 disabled={isAddingMore}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-95 ${
+                className={`active-press flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs ${
                   theme === 'dark'
                     ? 'bg-violet-950/60 hover:bg-violet-900/80 border-violet-500/40 text-violet-200'
                     : theme === 'kitty'
@@ -1795,7 +1793,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 type="button"
                 onClick={handleSwapMasteredFlashcards}
                 disabled={isSwappingMastered || cards.filter(c => c.mastery === 'mastered').length === 0}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-95 ${
+                className={`active-press flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-xs ${
                   theme === 'dark'
                     ? 'bg-amber-950/60 hover:bg-amber-900/80 border-amber-500/40 text-amber-200'
                     : theme === 'kitty'
@@ -1814,9 +1812,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </div>
           </div>
 
-          {/* ── INTERACTIVE 3D PERSPECTIVE FLIP CARD ── */}
-          <div className="flex-1 min-h-0 flex flex-col justify-center my-auto w-full max-w-3xl mx-auto py-1">
-            <div className="perspective-card w-full h-[280px] sm:h-[340px] max-h-[46vh]">
+          {/* ── INTERACTIVE 3D PERSPECTIVE FLIP CARD (Proporción equilibrada y altura calibrada) ── */}
+          <div className="flex-1 min-h-0 flex flex-col justify-center my-auto w-full max-w-2xl mx-auto py-1">
+            <div className="perspective-card w-full h-[280px] sm:h-[330px] max-h-[45vh]">
               <div
                 onClick={() => setIsFlipped(!isFlipped)}
                 className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group h-full rounded-2xl sm:rounded-3xl`}
@@ -1895,7 +1893,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
                   <div className="max-w-2xl w-full flex items-center justify-center my-auto py-2">
                     <div className={`text-center w-full ${termTypographyClasses} ${
-                      theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
+                      theme === 'dark' ? 'text-white keep-white' : 'text-zinc-950 font-black'
                     }`}>
                       <FormattedText text={currentCard.term} inlineOnly={true} className="whitespace-pre-line" />
                     </div>
@@ -1989,7 +1987,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
 
                   <div className="max-w-2xl w-full flex items-center justify-center my-auto py-2">
                     <div className={`text-center w-full ${definitionTypographyClasses} ${
-                      theme === 'dark' ? 'text-slate-100' : 'text-zinc-900 font-medium'
+                      theme === 'dark' ? 'text-slate-100 keep-white' : 'text-zinc-900 font-medium'
                     }`}>
                       <FormattedText text={currentCard.definition} inlineOnly={true} className="whitespace-pre-line" />
                     </div>
@@ -2014,29 +2012,29 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             </div>
           </div>
 
-          {/* Navegación y Evaluación de Dominio */}
-          <div className="shrink-0 flex items-center justify-between gap-2 pt-1 flex-wrap">
-            <button
-              type="button"
-              onClick={handlePrevCard}
-              className={`active-press p-2 sm:p-2.5 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
-                theme === 'dark'
-                  ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
-                  : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
-              }`}
-              title="Tarjeta anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Anterior</span>
-            </button>
+          {/* Navegación y Evaluación de Dominio (Centrado y Proporcional) */}
+          {currentCard?.mastery === 'mastered' ? (
+            <div className="shrink-0 flex items-center justify-center gap-3 pt-1.5 w-full max-w-md mx-auto">
+              <button
+                type="button"
+                onClick={handlePrevCard}
+                className={`active-press px-3.5 py-2 min-h-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
+                  theme === 'dark'
+                    ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
+                    : theme === 'kitty'
+                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                }`}
+                title="Tarjeta anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Anterior</span>
+              </button>
 
-            {currentCard?.mastery === 'mastered' ? (
               <button
                 type="button"
                 onClick={handleNextCard}
-                className={`active-press flex-1 max-w-md py-2 px-4 min-h-[38px] rounded-xl font-bold text-xs sm:text-sm transition-all text-center cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
+                className={`active-press flex-1 py-2 px-5 min-h-[38px] rounded-xl font-bold text-xs sm:text-sm transition-all text-center cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
                   theme === 'kitty'
                     ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
                     : theme === 'light'
@@ -2048,77 +2046,93 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 <span>Siguiente</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
-            ) : (
-              <>
-                {/* Botones de Evaluación */}
-                <div className="flex items-center gap-1.5 sm:gap-2 flex-1 justify-center max-w-md">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateMastery('to-learn')}
-                    className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
-                      currentCard?.mastery === 'to-learn'
-                        ? theme === 'dark'
-                          ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950/30'
-                          : 'bg-rose-100 border-rose-400 text-rose-900 font-bold ring-2 ring-rose-400/30'
-                        : theme === 'dark'
-                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
-                        : theme === 'kitty'
-                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-                    }`}
-                  >
-                    Aún no la sé
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateMastery('known')}
-                    className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
-                      currentCard?.mastery === 'known'
-                        ? theme === 'dark'
-                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold shadow-md shadow-amber-950/30'
-                          : 'bg-amber-100 border-amber-400 text-amber-900 font-bold ring-2 ring-amber-400/30'
-                        : theme === 'dark'
-                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
-                        : theme === 'kitty'
-                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-                    }`}
-                  >
-                    La conozco
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateMastery('mastered')}
-                    className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
-                      theme === 'dark'
-                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
-                        : theme === 'kitty'
-                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-                    }`}
-                  >
-                    ¡Dominada!
-                  </button>
-                </div>
+            </div>
+          ) : (
+            <div className="shrink-0 flex items-center justify-between gap-2 pt-1.5 w-full max-w-2xl mx-auto flex-wrap sm:flex-nowrap">
+              <button
+                type="button"
+                onClick={handlePrevCard}
+                className={`active-press p-2 sm:px-3 sm:py-2 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
+                  theme === 'dark'
+                    ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
+                    : theme === 'kitty'
+                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                }`}
+                title="Tarjeta anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Anterior</span>
+              </button>
 
+              {/* Botones de Evaluación */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-1 justify-center max-w-md">
                 <button
                   type="button"
-                  onClick={handleNextCard}
-                  className={`active-press p-2 sm:p-2.5 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
+                  onClick={() => handleUpdateMastery('to-learn')}
+                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                    currentCard?.mastery === 'to-learn'
+                      ? theme === 'dark'
+                        ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950/30'
+                        : 'bg-rose-100 border-rose-400 text-rose-900 font-bold ring-2 ring-rose-400/30'
+                      : theme === 'dark'
+                      ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
                       : theme === 'kitty'
                       ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                      : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
                   }`}
-                  title="Siguiente tarjeta"
                 >
-                  <span className="hidden sm:inline">Siguiente</span>
-                  <ChevronRight className="w-4 h-4" />
+                  Aún no la sé
                 </button>
-              </>
-            )}
-          </div>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateMastery('known')}
+                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                    currentCard?.mastery === 'known'
+                      ? theme === 'dark'
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold shadow-md shadow-amber-950/30'
+                        : 'bg-amber-100 border-amber-400 text-amber-900 font-bold ring-2 ring-amber-400/30'
+                      : theme === 'dark'
+                      ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
+                      : theme === 'kitty'
+                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                  }`}
+                >
+                  La conozco
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateMastery('mastered')}
+                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
+                      : theme === 'kitty'
+                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                  }`}
+                >
+                  ¡Dominada!
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextCard}
+                className={`active-press p-2 sm:px-3 sm:py-2 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
+                  theme === 'dark'
+                    ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
+                    : theme === 'kitty'
+                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                }`}
+                title="Siguiente tarjeta"
+              >
+                <span className="hidden sm:inline">Siguiente</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       ) : null}
 
