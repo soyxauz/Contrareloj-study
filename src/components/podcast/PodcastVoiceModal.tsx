@@ -438,7 +438,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   </span>
                 </div>
                 <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-                  THEA modula automáticamente los registros: Sofía en tono agudo vivaz (1.25x) y Mateo en barítono grave (0.68x). Puedes seleccionar una voz instalada específica para cada uno o usar la asignación automática recomendada.
+                  Contrareloj modula automáticamente los registros: Sofía en tono agudo vivaz (1.25x) y Mateo en barítono grave (0.68x). Puedes seleccionar una voz instalada específica para cada uno o usar la asignación automática recomendada.
                 </p>
               </div>
 

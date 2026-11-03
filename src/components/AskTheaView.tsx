@@ -235,7 +235,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
                   msg.sender === 'user' && theme !== 'dark' ? 'text-white/80' : 'opacity-70'
                 }`}>
                   <span className="font-semibold uppercase tracking-wider">
-                    {msg.sender === 'thea' ? (theme === 'kitty' ? 'Kitty Tutor' : 'Tutor Thea') : 'Tú'}
+                    {msg.sender === 'thea' ? (theme === 'kitty' ? 'Kitty Tutor' : 'Tutor Contrareloj') : 'Tú'}
                   </span>
                   <span className="font-mono tabular-nums">{msg.timestamp}</span>
                 </div>

@@ -830,7 +830,7 @@ Reglas obligatorias estrictas:
     if (modeRef.current === 'exam') {
       handleSend('Empezar lección oral', ORAL_EXAM_DIRECTIVE + 'empezar');
     } else {
-      handleSend('Iniciar conversación', CONVERSATION_DIRECTIVE + 'Hola Thea, conversemos sobre el tema.');
+      handleSend('Iniciar conversación', CONVERSATION_DIRECTIVE + 'Hola Contrareloj, conversemos sobre el tema.');
     }
   };
   startOralLessonRef.current = startOralLesson;
@@ -1024,9 +1024,9 @@ Reglas obligatorias estrictas:
             <Bot className="w-3.5 h-3.5" />
             <span>
               {isInterrupted
-                ? 'Pausado: escuchando tu interrupción...'
+                ? 'Pausado: escuchando...'
                 : speaking
-                ? 'Thea está hablando... (habla para interrumpir)'
+                ? 'Contrareloj está hablando...'
                 : isTyping
                 ? mode === 'exam'
                   ? 'Evaluando respuesta...'
@@ -1037,7 +1037,7 @@ Reglas obligatorias estrictas:
                   : 'Conversación Lista'
                 : mode === 'exam'
                 ? 'Pregunta de Examen'
-                : 'Conversación con Thea'}
+                : 'Conversación con Contrareloj'}
             </span>
           </div>
 
@@ -1049,8 +1049,8 @@ Reglas obligatorias estrictas:
                 <Loader2 className="w-4 h-4 animate-spin text-zinc-300" />
                 <span>
                   {mode === 'exam'
-                    ? 'Thea está formulando tu siguiente pregunta...'
-                    : 'Thea está preparando su respuesta...'}
+                    ? 'Contrareloj está formulando tu siguiente pregunta...'
+                    : 'Contrareloj está preparando su respuesta...'}
                 </span>
               </div>
             ) : latestTheaMsg ? (
@@ -1136,11 +1136,11 @@ Reglas obligatorias estrictas:
               transcribing
                 ? 'Transcribiendo audio con Groq Whisper...'
                 : isInterrupted
-                ? 'Escuchando tu interrupción... di tu comentario'
+                ? 'Escuchando tu comentario...'
                 : listening
                 ? 'Escuchando tu respuesta... se transcribirá automáticamente al terminar de hablar'
                 : speaking
-                ? 'Pulsar o presionar Espacio para pausar a Thea y hablar'
+                ? 'Pulsar o presionar Espacio para pausar a Contrareloj y hablar'
                 : isInitialState
                 ? mode === 'exam'
                   ? 'Pulsar o presionar Espacio para empezar la lección oral'
@@ -1198,7 +1198,7 @@ Reglas obligatorias estrictas:
         <div className="w-full max-w-md mx-auto mt-2 sm:mt-3 min-h-[2.25rem] flex flex-col items-center justify-center">
           {isInterrupted ? (
             <p className="text-xs sm:text-sm text-amber-400 font-semibold animate-pulse">
-              Thea pausó su voz: di tu duda o acotación en voz alta...
+              Contrareloj pausó su voz: di tu duda o acotación en voz alta...
             </p>
           ) : input ? (
             <p className="text-xs sm:text-sm text-rose-400 font-semibold animate-pulse px-3 py-1.5 rounded-xl bg-rose-950/40 border border-rose-500/30">
@@ -1210,7 +1210,7 @@ Reglas obligatorias estrictas:
             </p>
           ) : speaking ? (
             <p className="text-xs sm:text-sm text-amber-400 font-medium">
-              Thea está hablando... puedes interrumpir hablando en voz alta o con Espacio
+              Contrareloj está hablando...
             </p>
           ) : transcribing ? (
             <p className="text-xs sm:text-sm text-cyan-400 font-medium animate-pulse">
@@ -1224,7 +1224,7 @@ Reglas obligatorias estrictas:
             <p className={`text-xs sm:text-sm font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
               {handsFree ? (
                 <span className={`font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-800'}`}>
-                  Manos libres activo: Thea escuchará automáticamente cuando termine
+                  Manos libres activo: Contrareloj escuchará automáticamente cuando termine
                 </span>
               ) : (
                 <span>
