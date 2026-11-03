@@ -1843,13 +1843,21 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     )}
                     <div className="flex items-center gap-1.5">
                       {currentCard?.mastery === 'mastered' && (
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
-                          theme === 'dark'
-                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                            : 'bg-emerald-100 border-emerald-300 text-emerald-800'
-                        }`}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUpdateMastery('to-learn');
+                          }}
+                          title="Tarjeta dominada (clic para volver a repasar)"
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums cursor-pointer hover:opacity-85 transition-opacity ${
+                            theme === 'dark'
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                              : 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                          }`}
+                        >
                           <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> ¡Dominada!
-                        </span>
+                        </button>
                       )}
                       {currentCard?.mastery === 'known' && (
                         <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
@@ -1929,13 +1937,21 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     )}
                     <div className="flex items-center gap-1.5">
                       {currentCard?.mastery === 'mastered' && (
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
-                          theme === 'dark'
-                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                            : 'bg-emerald-100 border-emerald-300 text-emerald-800'
-                        }`}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUpdateMastery('to-learn');
+                          }}
+                          title="Tarjeta dominada (clic para volver a repasar)"
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums cursor-pointer hover:opacity-85 transition-opacity ${
+                            theme === 'dark'
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                              : 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                          }`}
+                        >
                           <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> ¡Dominada!
-                        </span>
+                        </button>
                       )}
                       {currentCard?.mastery === 'known' && (
                         <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold text-[10px] tabular-nums ${
@@ -2012,76 +2028,92 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <span className="hidden sm:inline">Anterior</span>
             </button>
 
-            {/* Botones de Evaluación */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-1 justify-center max-w-md">
+            {currentCard?.mastery === 'mastered' ? (
               <button
                 type="button"
-                onClick={() => handleUpdateMastery('to-learn')}
-                className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
-                  currentCard?.mastery === 'to-learn'
-                    ? theme === 'dark'
-                      ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950/30'
-                      : 'bg-rose-100 border-rose-400 text-rose-900 font-bold ring-2 ring-rose-400/30'
-                    : theme === 'dark'
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
-                    : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                onClick={handleNextCard}
+                className={`active-press flex-1 max-w-md py-2 px-4 min-h-[38px] rounded-xl font-bold text-xs sm:text-sm transition-all text-center cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
+                  theme === 'kitty'
+                    ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+                    : theme === 'light'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
                 }`}
+                title="Siguiente tarjeta dominada"
               >
-                Aún no la sé
+                <span>Siguiente</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                onClick={() => handleUpdateMastery('known')}
-                className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
-                  currentCard?.mastery === 'known'
-                    ? theme === 'dark'
-                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold shadow-md shadow-amber-950/30'
-                      : 'bg-amber-100 border-amber-400 text-amber-900 font-bold ring-2 ring-amber-400/30'
-                    : theme === 'dark'
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
-                    : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-                }`}
-              >
-                La conozco
-              </button>
-              <button
-                type="button"
-                onClick={() => handleUpdateMastery('mastered')}
-                className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
-                  currentCard?.mastery === 'mastered'
-                    ? theme === 'dark'
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 font-bold shadow-md shadow-emerald-950/30'
-                      : 'bg-emerald-100 border-emerald-400 text-emerald-900 font-bold ring-2 ring-emerald-400/30'
-                    : theme === 'dark'
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
-                    : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-                }`}
-              >
-                ¡Dominada!
-              </button>
-            </div>
+            ) : (
+              <>
+                {/* Botones de Evaluación */}
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-1 justify-center max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateMastery('to-learn')}
+                    className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                      currentCard?.mastery === 'to-learn'
+                        ? theme === 'dark'
+                          ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950/30'
+                          : 'bg-rose-100 border-rose-400 text-rose-900 font-bold ring-2 ring-rose-400/30'
+                        : theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                    }`}
+                  >
+                    Aún no la sé
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateMastery('known')}
+                    className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                      currentCard?.mastery === 'known'
+                        ? theme === 'dark'
+                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold shadow-md shadow-amber-950/30'
+                          : 'bg-amber-100 border-amber-400 text-amber-900 font-bold ring-2 ring-amber-400/30'
+                        : theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                    }`}
+                  >
+                    La conozco
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateMastery('mastered')}
+                    className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                    }`}
+                  >
+                    ¡Dominada!
+                  </button>
+                </div>
 
-            <button
-              type="button"
-              onClick={handleNextCard}
-              className={`active-press p-2 sm:p-2.5 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
-                theme === 'dark'
-                  ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
-                  : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
-              }`}
-              title="Siguiente tarjeta"
-            >
-              <span className="hidden sm:inline">Siguiente</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+                <button
+                  type="button"
+                  onClick={handleNextCard}
+                  className={`active-press p-2 sm:p-2.5 min-h-[38px] min-w-[38px] rounded-xl border transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5 text-xs font-semibold ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
+                      : theme === 'kitty'
+                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                      : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                  }`}
+                  title="Siguiente tarjeta"
+                >
+                  <span className="hidden sm:inline">Siguiente</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       ) : null}
