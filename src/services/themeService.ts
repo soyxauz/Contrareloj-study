@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { authService } from './authService';
 import { googleDriveService } from './googleDriveService';
-import { HELLO_KITTY_FAVICON_DATA_URL } from '../utils/kittyAsset';
+import { HELLO_KITTY_PNG_DATA_URL } from '../utils/kittyAsset';
 
 export type ThemeMode = 'dark' | 'light' | 'kitty';
 
@@ -53,19 +53,20 @@ export function applyThemeToDom(theme: ThemeMode): void {
     document.title = 'Contrareloj Study';
   }
 
-  // Favicon dinámico: Vector SVG de Hello Kitty en Modo Kitty, Reloj en Modo Claro/Oscuro
+  // Favicon dinámico: Hello Kitty auténtica en Modo Kitty, Reloj en Modo Claro/Oscuro
   const iconLinks = document.querySelectorAll<HTMLLinkElement>('link[rel*="icon"]');
-  const targetFavicon = theme === 'kitty' ? HELLO_KITTY_FAVICON_DATA_URL : DEFAULT_CLOCK_FAVICON_DATA_URL;
+  const targetFavicon = theme === 'kitty' ? HELLO_KITTY_PNG_DATA_URL : DEFAULT_CLOCK_FAVICON_DATA_URL;
+  const targetType = theme === 'kitty' ? 'image/png' : 'image/svg+xml';
 
   if (iconLinks.length > 0) {
     iconLinks.forEach((link) => {
-      link.type = 'image/svg+xml';
+      link.type = targetType;
       link.href = targetFavicon;
     });
   } else {
     const link = document.createElement('link');
     link.rel = 'icon';
-    link.type = 'image/svg+xml';
+    link.type = targetType;
     link.href = targetFavicon;
     document.head.appendChild(link);
   }
