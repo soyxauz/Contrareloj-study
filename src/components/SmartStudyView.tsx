@@ -241,7 +241,24 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // ── Mode Switcher & Historial State ──────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'practice' | 'history'>(savedSession?.activeTab || 'practice');
-  const [history, setHistory] = useState<StudyHistoryItem[]>(() => (savedSession?.history || []).slice(0, 25));
+  const [history, setHistory] = useState<StudyHistoryItem[]>(() => {
+    const raw = (savedSession?.history || []).slice(0, 25);
+    return raw.map(item => {
+      const cleanQId = (item.questionId || '').replace(/^(tf-|sa-|mc-|dd-|drag-drop-)/, '');
+      const matchedQ = kit.questions.find(q => q.id === item.questionId || q.id === cleanQId);
+      const matchedCorrect = matchedQ?.options && matchedQ.correctIndex !== undefined
+        ? matchedQ.options[matchedQ.correctIndex]
+        : matchedQ?.idealAnswer || item.correctAnswer || 'Respuesta verificada';
+
+      return {
+        ...item,
+        questionText: item.questionText || matchedQ?.question || 'Pregunta de evaluación',
+        explanation: item.explanation || matchedQ?.explanation || 'Respuesta fundamentada en el material de estudio analizado.',
+        correctAnswer: item.correctAnswer || matchedCorrect,
+        userAnswer: item.userAnswer || (item.isCorrect ? matchedCorrect : 'Respuesta errónea previa'),
+      };
+    });
+  });
   const [historyFilter, setHistoryFilter] = useState<'all' | 'correct' | 'incorrect'>(savedSession?.historyFilter || 'all');
   const [historyLevelFilter, setHistoryLevelFilter] = useState<number | 'all'>(savedSession?.historyLevelFilter || 'all');
   const [shuffleSeed, setShuffleSeed] = useState<number>(savedSession?.lastUpdated ? (savedSession as any).shuffleSeed || 1 : 1);
@@ -2678,58 +2695,71 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   </div>
 
                   {/* Explicación Pedagógica (solo visible al pulsar Justificación) */}
-                  {expandedHistoryQuestions.has(item.questionId) && (
-                    <div className="p-4 rounded-2xl bg-thea-surfaceLight/60 border border-thea-border/80 text-xs sm:text-sm text-slate-300 animate-fadeIn space-y-2 mt-2">
-                      <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
-                        <span className="font-bold text-amber-400 flex items-center gap-1.5 text-xs">
-                          <Lightbulb className="w-3.5 h-3.5" />
-                          Explicación Conceptual:
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              const matchedQ = kit.questions.find(q => q.id === item.questionId);
-                              setModalChunk({
-                                id: matchedQ?.sourceChunkId,
-                                text: matchedQ?.sourceChunkText || kit.chunks?.find(c => c.id === matchedQ?.sourceChunkId)?.text || item.explanation,
-                                pageOrSlide: matchedQ?.sourcePageOrSlide,
-                                asset: matchedQ?.sourceAsset,
-                              });
-                              setShowSourceModal(true);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-violet-950/60 border border-violet-500/40 text-violet-300 hover:text-white hover:bg-violet-600/40 transition-colors text-xs flex items-center gap-1 cursor-pointer"
-                            title="Ver fragmento original del documento (RAG)"
-                          >
-                            <FileSearch className="w-3.5 h-3.5 text-violet-400" />
-                            <span>Fragmento RAG</span>
-                          </button>
-                          <button
-                            onClick={() => handleReadAloud(item.explanation)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors"
-                            title="Escuchar explicación"
-                          >
-                            <Volume2 className="w-4 h-4" />
-                          </button>
+                  {expandedHistoryQuestions.has(item.questionId) && (() => {
+                    const cleanQId = (item.questionId || '').replace(/^(tf-|sa-|mc-|dd-|drag-drop-)/, '');
+                    const matchedQ: Question = kit.questions.find(q => q.id === item.questionId || q.id === cleanQId) || {
+                      id: item.questionId,
+                      question: item.questionText || 'Concepto evaluado',
+                      difficulty: item.difficulty || 'easy',
+                      topic: item.topic || 'General',
+                      explanation: item.explanation || 'Respuesta fundamentada en el material de estudio analizado.',
+                      options: [item.correctAnswer || 'Respuesta verificada'],
+                      correctIndex: 0,
+                    };
+
+                    const effectiveExplanation = item.explanation || matchedQ.explanation || 'Respuesta fundamentada en el material de estudio analizado.';
+                    const cleanedExplanation = effectiveExplanation
+                      .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '')
+                      .trim() || effectiveExplanation;
+
+                    return (
+                      <div className="p-4 rounded-2xl bg-thea-surfaceLight/60 border border-thea-border/80 text-xs sm:text-sm text-slate-300 animate-fadeIn space-y-2 mt-2">
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                          <span className="font-bold text-amber-400 flex items-center gap-1.5 text-xs">
+                            <Lightbulb className="w-3.5 h-3.5" />
+                            Explicación Conceptual:
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setModalChunk({
+                                  id: matchedQ.sourceChunkId,
+                                  text: matchedQ.sourceChunkText || kit.chunks?.find(c => c.id === matchedQ.sourceChunkId)?.text || effectiveExplanation,
+                                  pageOrSlide: matchedQ.sourcePageOrSlide,
+                                  asset: matchedQ.sourceAsset,
+                                });
+                                setShowSourceModal(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-violet-950/60 border border-violet-500/40 text-violet-300 hover:text-white hover:bg-violet-600/40 transition-colors text-xs flex items-center gap-1 cursor-pointer"
+                              title="Ver fragmento original del documento (RAG)"
+                            >
+                              <FileSearch className="w-3.5 h-3.5 text-violet-400" />
+                              <span>Fragmento RAG</span>
+                            </button>
+                            <button
+                              onClick={() => handleReadAloud(effectiveExplanation)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors"
+                              title="Escuchar explicación"
+                            >
+                              <Volume2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="my-2">
+                          <TheaExplanationView
+                            question={matchedQ}
+                            kitAssets={kit.assets || []}
+                            onZoomImage={(asset) => setZoomAsset(asset)}
+                          />
+                        </div>
+
+                        <div className="leading-relaxed text-slate-300">
+                          <FormattedText text={cleanedExplanation} />
                         </div>
                       </div>
-                      {(() => {
-                        const matchedQ = kit.questions.find(q => q.id === item.questionId);
-                        if (!matchedQ) return null;
-                        return (
-                          <div className="my-2">
-                            <TheaExplanationView
-                              question={matchedQ}
-                              kitAssets={kit.assets || []}
-                              onZoomImage={(asset) => setZoomAsset(asset)}
-                            />
-                          </div>
-                        );
-                      })()}
-                      <div className="leading-relaxed text-slate-300">
-                        <FormattedText text={item.explanation.replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '').trim() || item.explanation} />
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ))}
             </div>

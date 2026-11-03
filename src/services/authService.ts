@@ -461,13 +461,16 @@ export const authService = {
       const sanitized = sanitizeSmartStudySession(state) || state;
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
       
-      // Guardar versión ligera en LocalStorage para no saturar la cuota ni congelar la UI.
-      // Omitimos textos largos de explicación en LocalStorage, conservando telemetría de estadísticas
+      // Guardar versión de historial completa y resiliente en LocalStorage
       const compactSession = {
         ...sanitized,
         history: Array.isArray(sanitized.history) ? sanitized.history.slice(-30).map(h => ({
           id: h.id,
           questionId: h.questionId,
+          questionText: h.questionText || '',
+          userAnswer: h.userAnswer || '',
+          correctAnswer: h.correctAnswer || '',
+          explanation: h.explanation || '',
           topic: h.topic,
           difficulty: h.difficulty,
           type: h.type,

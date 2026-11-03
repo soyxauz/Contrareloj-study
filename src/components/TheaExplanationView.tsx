@@ -6,7 +6,7 @@ import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
 
 export function cleanExplanationBullet(text: string): string {
-  if (!text) return '';
+  if (!text || typeof text !== 'string') return '';
   const isDocReference = /^(?:referencia en el texto|referencia textual)[:\s*-]*/i.test(text.trim());
   let cleaned = text
     .replace(/^(?:desmonte del error previo|referencia en el texto|referencia textual|descarte de opciones|discriminación de distractores|fundamentación académica|explicación lógica)[:\s*-]*/gi, '')
@@ -39,11 +39,12 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
   // 1. Extraer o formular exactamente 3 viñetas pedagógicas limpias
   const bullets = React.useMemo(() => {
     let rawBullets: string[] = [];
+    const safeExplanation = question?.explanation || '';
 
-    if (question.googleOverview?.bullets && question.googleOverview.bullets.length >= 2) {
+    if (question?.googleOverview?.bullets && question.googleOverview.bullets.length >= 2) {
       rawBullets = question.googleOverview.bullets.slice(0, 3);
-    } else {
-      const matched = question.explanation.match(/(?:> •|•|\*|-|\d+\.)\s*([^\n]+)/g);
+    } else if (safeExplanation) {
+      const matched = safeExplanation.match(/(?:> •|•|\*|-|\d+\.)\s*([^\n]+)/g);
       if (matched && matched.length >= 2) {
         rawBullets = matched.slice(0, 3).map(b => b.replace(/^(?:> •|•|\*|-|\d+\.)\s*/, '').trim());
       }
@@ -51,15 +52,15 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
 
     if (rawBullets.length < 3) {
       // Extraer párrafos limpios del desglose
-      const parts = question.explanation
+      const parts = safeExplanation
         .split('\n\n')
         .map(p => p.replace(/[#*`>]/g, '').trim())
         .filter(p => p.length > 25 && !p.toLowerCase().includes('búsqueda en google'));
 
       const correctOption =
-        question.options && question.correctIndex !== undefined
+        question?.options && question.correctIndex !== undefined
           ? question.options[question.correctIndex]
-          : question.idealAnswer || '';
+          : question?.idealAnswer || '';
 
       if (parts.length >= 3) {
         rawBullets = parts.slice(0, 3);
@@ -92,16 +93,17 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
 
   // 2. Término de búsqueda para la consulta e ilustración web
   const searchTerm = React.useMemo(() => {
-    if (question.googleOverview?.query) {
+    if (question?.googleOverview?.query) {
       return question.googleOverview.query;
     }
-    if (question.googleOverview?.imageSearchTerm) {
+    if (question?.googleOverview?.imageSearchTerm) {
       return question.googleOverview.imageSearchTerm;
     }
-    if (question.topic && question.topic.length > 3) {
+    if (question?.topic && question.topic.length > 3) {
       return question.topic;
     }
-    return question.question.replace(/\*\*([^*]+)\*\*/g, '$1').slice(0, 80);
+    const safeQ = question?.question || 'Concepto de estudio';
+    return safeQ.replace(/\*\*([^*]+)\*\*/g, '$1').slice(0, 80);
   }, [question]);
 
   // 3. Buscar ilustración en la web (Wikipedia / Wikimedia / Fallback)
@@ -110,7 +112,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
     setIsImgLoaded(false);
 
     // Si la pregunta ya tiene una imagen asociada en su metadata
-    if (question.googleOverview?.imageUrl) {
+    if (question?.googleOverview?.imageUrl) {
       setImageResult({
         imageUrl: question.googleOverview.imageUrl,
         sourceUrl:
@@ -124,7 +126,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
       return;
     }
 
-    searchIllustrationForQuestion(searchTerm, question.topic, kitAssets)
+    searchIllustrationForQuestion(searchTerm, question?.topic || 'General', kitAssets)
       .then(res => {
         if (!isMounted) return;
         if (res && res.imageUrl) {
@@ -198,7 +200,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <a
-                href={question.googleOverview?.searchUrl || `https://www.google.com/search?q=${encodeURIComponent(searchTerm)}`}
+                href={question?.googleOverview?.searchUrl || `https://www.google.com/search?q=${encodeURIComponent(searchTerm)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer active-press border ${
@@ -216,7 +218,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
               <a
                 href={
                   imageResult?.sourceUrl ||
-                  question.googleOverview?.wikipediaUrl ||
+                  question?.googleOverview?.wikipediaUrl ||
                   `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`
                 }
                 target="_blank"
