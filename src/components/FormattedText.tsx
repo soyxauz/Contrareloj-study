@@ -1,5 +1,6 @@
 import React from 'react';
 import katex from 'katex';
+import { useTheme } from '../services/themeService';
 
 interface FormattedTextProps {
   text: string;
@@ -53,6 +54,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
   className = '',
   inlineOnly = false,
 }) => {
+  const { theme } = useTheme();
   if (!text) return null;
 
   // Renderizado inline de matemáticas, negrita, cursiva, código y enlaces
@@ -114,14 +116,18 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       } else if (token.startsWith('**') && token.endsWith('**')) {
         const content = token.slice(2, -2);
         parts.push(
-          <strong key={`b-${match.index}`} className="font-bold text-white tracking-normal">
+          <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
+            theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
+          }`}>
             {renderInline(content)}
           </strong>
         );
       } else if (token.startsWith('__') && token.endsWith('__')) {
         const content = token.slice(2, -2);
         parts.push(
-          <strong key={`b-${match.index}`} className="font-bold text-white tracking-normal">
+          <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
+            theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
+          }`}>
             {renderInline(content)}
           </strong>
         );
@@ -130,7 +136,13 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
         parts.push(
           <code
             key={`c-${match.index}`}
-            className="px-1.5 py-0.5 rounded-md bg-thea-surfaceLight border border-thea-border/80 text-amber-300 font-mono text-[11px] sm:text-xs"
+            className={`px-1.5 py-0.5 rounded-md border font-mono text-[11px] sm:text-xs ${
+              theme === 'light'
+                ? 'bg-slate-100 border-slate-300 text-indigo-700 font-semibold'
+                : theme === 'kitty'
+                ? 'bg-pink-100 border-pink-200 text-pink-900 font-semibold'
+                : 'bg-thea-surfaceLight border-thea-border/80 text-amber-300'
+            }`}
           >
             {content}
           </code>
@@ -138,14 +150,18 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       } else if (token.startsWith('*') && token.endsWith('*')) {
         const content = token.slice(1, -1);
         parts.push(
-          <em key={`i-${match.index}`} className="italic text-slate-200">
+          <em key={`i-${match.index}`} className={`italic ${
+            theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
+          }`}>
             {renderInline(content)}
           </em>
         );
       } else if (token.startsWith('_') && token.endsWith('_')) {
         const content = token.slice(1, -1);
         parts.push(
-          <em key={`i-${match.index}`} className="italic text-slate-200">
+          <em key={`i-${match.index}`} className={`italic ${
+            theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
+          }`}>
             {renderInline(content)}
           </em>
         );
@@ -195,8 +211,12 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <ul key={key} className="space-y-1.5 my-3 pl-1">
           {currentList.items.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
-              <span className="w-1.5 h-1.5 rounded-full bg-violet-400 mt-2 shrink-0 shadow-xs" />
+            <li key={idx} className={`flex items-start gap-2.5 text-xs sm:text-sm leading-relaxed ${
+              theme === 'dark' ? 'text-slate-300' : 'text-zinc-800'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 shadow-xs ${
+                theme === 'light' ? 'bg-indigo-600' : theme === 'kitty' ? 'bg-pink-500' : 'bg-violet-400'
+              }`} />
               <span className="flex-1">{renderInline(item)}</span>
             </li>
           ))}
@@ -206,8 +226,12 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <ol key={key} className="space-y-1.5 my-3 pl-1">
           {currentList.items.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
-              <span className="text-xs font-bold text-amber-400 font-mono mt-0.5 shrink-0">{idx + 1}.</span>
+            <li key={idx} className={`flex items-start gap-2.5 text-xs sm:text-sm leading-relaxed ${
+              theme === 'dark' ? 'text-slate-300' : 'text-zinc-800'
+            }`}>
+              <span className={`text-xs font-bold font-mono mt-0.5 shrink-0 ${
+                theme === 'light' ? 'text-indigo-600' : theme === 'kitty' ? 'text-pink-600' : 'text-amber-400'
+              }`}>{idx + 1}.</span>
               <span className="flex-1">{renderInline(item)}</span>
             </li>
           ))}
@@ -230,7 +254,14 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
     // Regla horizontal
     if (/^(\-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
       if (currentList) flushList(`list-${i}`);
-      blocks.push(<hr key={`hr-${i}`} className="border-thea-border/80 my-4" />);
+      blocks.push(
+        <hr
+          key={`hr-${i}`}
+          className={`my-4 ${
+            theme === 'light' ? 'border-slate-200' : theme === 'kitty' ? 'border-pink-200' : 'border-thea-border/80'
+          }`}
+        />
+      );
       continue;
     }
 
@@ -287,19 +318,35 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
         blocks.push(
           <div
             key={`table-block-${i}`}
-            className="my-5 overflow-hidden rounded-2xl border border-thea-border/80 bg-slate-950/85 shadow-xl"
+            className={`my-5 overflow-hidden rounded-2xl border shadow-md transition-colors ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 shadow-slate-200/60'
+                : theme === 'kitty'
+                ? 'bg-white border-pink-200 shadow-pink-100/60'
+                : 'bg-slate-950/85 border-thea-border/80 shadow-xl'
+            }`}
           >
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs sm:text-sm">
                 {headers.length > 0 && (
-                  <thead className="bg-gradient-to-r from-violet-950/70 via-slate-900/90 to-indigo-950/60 border-b border-thea-border">
+                  <thead className={`border-b transition-colors ${
+                    theme === 'light'
+                      ? 'bg-slate-100/95 border-slate-200 text-slate-900'
+                      : theme === 'kitty'
+                      ? 'bg-pink-100/85 border-pink-200 text-pink-950'
+                      : 'bg-gradient-to-r from-violet-950/70 via-slate-900/90 to-indigo-950/60 border-thea-border text-violet-300'
+                  }`}>
                     <tr>
                       {headers.map((h, colIdx) => (
                         <th
                           key={`th-${i}-${colIdx}`}
-                          className={`px-4 py-3.5 font-bold text-violet-300 uppercase tracking-wider text-[11px] sm:text-xs border-r border-thea-border/30 last:border-r-0 ${
-                            alignments[colIdx] || 'text-left'
-                          }`}
+                          className={`px-4 py-3.5 font-bold uppercase tracking-wider text-[11px] sm:text-xs border-r last:border-r-0 ${
+                            theme === 'light'
+                              ? 'border-slate-200 text-slate-800 font-extrabold'
+                              : theme === 'kitty'
+                              ? 'border-pink-200 text-pink-900 font-extrabold'
+                              : 'border-thea-border/30 text-violet-300 font-bold'
+                          } ${alignments[colIdx] || 'text-left'}`}
                         >
                           {renderInline(h)}
                         </th>
@@ -307,18 +354,34 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
                     </tr>
                   </thead>
                 )}
-                <tbody className="divide-y divide-thea-border/30">
+                <tbody className={`divide-y transition-colors ${
+                  theme === 'light'
+                    ? 'divide-slate-200/80'
+                    : theme === 'kitty'
+                    ? 'divide-pink-100'
+                    : 'divide-thea-border/30'
+                }`}>
                   {rows.map((row, rIdx) => (
                     <tr
                       key={`tr-${i}-${rIdx}`}
-                      className="hover:bg-violet-500/10 transition-colors odd:bg-slate-900/30"
+                      className={`transition-colors ${
+                        theme === 'light'
+                          ? 'odd:bg-slate-50/70 hover:bg-slate-100/80'
+                          : theme === 'kitty'
+                          ? 'odd:bg-pink-50/40 hover:bg-pink-100/60'
+                          : 'odd:bg-slate-900/30 hover:bg-violet-500/10'
+                      }`}
                     >
                       {row.map((cell, cIdx) => (
                         <td
                           key={`td-${i}-${rIdx}-${cIdx}`}
-                          className={`px-4 py-3 text-slate-200 leading-relaxed border-r border-thea-border/20 last:border-r-0 ${
-                            alignments[cIdx] || 'text-left'
-                          }`}
+                          className={`px-4 py-3 leading-relaxed border-r last:border-r-0 ${
+                            theme === 'light'
+                              ? 'text-zinc-900 font-medium border-slate-200/70'
+                              : theme === 'kitty'
+                              ? 'text-zinc-900 font-medium border-pink-100'
+                              : 'text-slate-200 border-thea-border/20'
+                          } ${alignments[cIdx] || 'text-left'}`}
                         >
                           {renderInline(cell)}
                         </td>
@@ -354,10 +417,18 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <div
           key={`math-block-${i}`}
-          className="my-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-violet-950/40 via-thea-surface to-indigo-950/30 border border-violet-500/30 overflow-x-auto text-center shadow-xs"
+          className={`my-3 p-3.5 sm:p-4 rounded-2xl border overflow-x-auto text-center shadow-xs transition-colors ${
+            theme === 'light'
+              ? 'bg-slate-50 border-slate-200 text-zinc-900'
+              : theme === 'kitty'
+              ? 'bg-pink-50/60 border-pink-200 text-zinc-900'
+              : 'bg-gradient-to-r from-violet-950/40 via-thea-surface to-indigo-950/30 border-violet-500/30 text-slate-100'
+          }`}
         >
           <div
-            className="katex-display-wrapper text-slate-100 text-sm sm:text-base inline-block max-w-full"
+            className={`katex-display-wrapper text-sm sm:text-base inline-block max-w-full ${
+              theme === 'light' || theme === 'kitty' ? 'text-zinc-900 font-semibold' : 'text-slate-100'
+            }`}
             dangerouslySetInnerHTML={{ __html: html }}
           />
         </div>
@@ -371,7 +442,9 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <h1
           key={`h1-${i}`}
-          className="text-xl sm:text-2xl font-black text-amber-300 mt-5 mb-2.5 tracking-tight flex items-center gap-2"
+          className={`text-xl sm:text-2xl font-black mt-5 mb-2.5 tracking-tight flex items-center gap-2 ${
+            theme === 'light' ? 'text-zinc-950' : theme === 'kitty' ? 'text-pink-600' : 'text-amber-300'
+          }`}
         >
           {renderInline(trimmed.replace(/^#\s+/, ''))}
         </h1>
@@ -384,7 +457,13 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <h2
           key={`h2-${i}`}
-          className="text-lg sm:text-xl font-extrabold text-violet-300 mt-4 mb-2 tracking-tight border-b border-thea-border/40 pb-1"
+          className={`text-lg sm:text-xl font-extrabold mt-4 mb-2 tracking-tight border-b pb-1 ${
+            theme === 'light'
+              ? 'text-zinc-950 border-slate-200'
+              : theme === 'kitty'
+              ? 'text-pink-600 border-pink-200'
+              : 'text-violet-300 border-thea-border/40'
+          }`}
         >
           {renderInline(trimmed.replace(/^##\s+/, ''))}
         </h2>
@@ -397,7 +476,9 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <h3
           key={`h3-${i}`}
-          className="text-base sm:text-lg font-bold text-white mt-3.5 mb-1.5"
+          className={`text-base sm:text-lg font-bold mt-3.5 mb-1.5 ${
+            theme === 'dark' ? 'text-white' : 'text-zinc-900 font-extrabold'
+          }`}
         >
           {renderInline(trimmed.replace(/^###\s+/, ''))}
         </h3>
@@ -410,7 +491,9 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <h4
           key={`h4-${i}`}
-          className="text-sm sm:text-base font-semibold text-slate-200 mt-3 mb-1"
+          className={`text-sm sm:text-base font-semibold mt-3 mb-1 ${
+            theme === 'dark' ? 'text-slate-200' : 'text-zinc-800 font-bold'
+          }`}
         >
           {renderInline(trimmed.replace(/^####\s+/, ''))}
         </h4>
@@ -424,7 +507,13 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <blockquote
           key={`bq-${i}`}
-          className="border-l-3 border-amber-400 bg-amber-500/10 pl-4 py-2 my-2.5 rounded-r-xl text-amber-200 text-xs sm:text-sm italic leading-relaxed"
+          className={`border-l-3 pl-4 py-2 my-2.5 rounded-r-xl text-xs sm:text-sm italic leading-relaxed transition-colors ${
+            theme === 'light'
+              ? 'border-amber-500 bg-amber-50 text-amber-950'
+              : theme === 'kitty'
+              ? 'border-pink-500 bg-pink-50 text-pink-950'
+              : 'border-amber-400 bg-amber-500/10 text-amber-200'
+          }`}
         >
           {renderInline(trimmed.replace(/^>\s+/, ''))}
         </blockquote>
@@ -461,7 +550,9 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
 
     // Párrafo normal
     blocks.push(
-      <p key={`p-${i}`} className="my-1.5 text-xs sm:text-sm leading-relaxed text-slate-300">
+      <p key={`p-${i}`} className={`my-1.5 text-xs sm:text-sm leading-relaxed ${
+        theme === 'dark' ? 'text-slate-300' : 'text-zinc-800'
+      }`}>
         {renderInline(trimmed)}
       </p>
     );

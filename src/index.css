@@ -415,6 +415,83 @@ html {
   border-color: #fbcfe8 !important;
 }
 
+/* ── TABLAS DE GUÍAS DE ESTUDIO Y MARKDOWN EN MODO CLARO Y KITTY (FONDO BLANCO Y ALTO CONTRASTE) ── */
+[data-theme="light"] table,
+[data-theme="kitty"] table {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+}
+
+[data-theme="light"] table [class*="bg-slate-950"],
+[data-theme="light"] [class*="bg-slate-950"],
+[data-theme="light"] .formatted-content [class*="bg-slate-950"],
+[data-theme="kitty"] table [class*="bg-slate-950"],
+[data-theme="kitty"] [class*="bg-slate-950"],
+[data-theme="kitty"] .formatted-content [class*="bg-slate-950"] {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 14px -2px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="light"] table thead,
+[data-theme="light"] thead[class*="from-violet-950"] {
+  background-image: none !important;
+  background-color: #f1f5f9 !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+
+[data-theme="kitty"] table thead,
+[data-theme="kitty"] thead[class*="from-violet-950"] {
+  background-image: none !important;
+  background-color: #fce7f3 !important;
+  border-bottom-color: #fbcfe8 !important;
+}
+
+[data-theme="light"] th,
+[data-theme="light"] th[class*="text-violet-300"] {
+  color: #0f172a !important;
+  border-right-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="kitty"] th,
+[data-theme="kitty"] th[class*="text-violet-300"] {
+  color: #831843 !important;
+  border-right-color: #fbcfe8 !important;
+  background-color: #fce7f3 !important;
+}
+
+[data-theme="light"] td,
+[data-theme="light"] td[class*="text-slate-200"] {
+  color: #09090b !important;
+  border-right-color: #e2e8f0 !important;
+}
+
+[data-theme="kitty"] td,
+[data-theme="kitty"] td[class*="text-slate-200"] {
+  color: #09090b !important;
+  border-right-color: #fce7f3 !important;
+}
+
+[data-theme="light"] tbody tr:nth-child(odd),
+[data-theme="light"] tr[class*="odd:bg-slate-900"] {
+  background-color: #f8fafc !important;
+}
+
+[data-theme="kitty"] tbody tr:nth-child(odd),
+[data-theme="kitty"] tr[class*="odd:bg-slate-900"] {
+  background-color: #fff5f8 !important;
+}
+
+[data-theme="light"] tbody tr:hover,
+[data-theme="light"] tr[class*="hover:bg-violet-500"]:hover {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="kitty"] tbody tr:hover,
+[data-theme="kitty"] tr[class*="hover:bg-violet-500"]:hover {
+  background-color: #fdf2f8 !important;
+}
+
 /* ── FONDO BLANCO OBLIGATORIO PARA TODAS LAS IMÁGENES (SEA EL TEMA QUE SEA) ── */
 .aspect-video,
 .aspect-video img,
