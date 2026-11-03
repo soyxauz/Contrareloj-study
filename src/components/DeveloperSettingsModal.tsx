@@ -22,115 +22,125 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fadeIn">
-      <div className={`border rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto modal-smooth-scroll overscroll-contain ${
+      <div className={`border rounded-3xl max-w-lg w-full shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden ${
         theme === 'dark'
           ? 'bg-thea-surface border-thea-border text-white'
           : theme === 'kitty'
           ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
           : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
       }`}>
-        <button
-          onClick={onClose}
-          className={`absolute top-5 right-5 p-2 rounded-xl transition-colors cursor-pointer ${
-            theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight' : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
-          }`}
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-amber-500 flex items-center justify-center text-white shrink-0">
-            <Cpu className="w-5 h-5" />
+        {/* Header fijo */}
+        <div className={`p-6 pb-4 border-b shrink-0 flex items-center justify-between ${
+          theme === 'dark' ? 'border-thea-border' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-amber-500 flex items-center justify-center text-white shrink-0">
+              <Cpu className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className={`font-bold text-lg ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+                Ingeniería Inversa & Entitlements
+              </h3>
+              <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                Banderas extraídas de <code>Experiments-DF9zfxEH.js</code>
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className={`font-bold text-lg ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
-              Ingeniería Inversa & Entitlements
-            </h3>
-            <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-              Banderas extraídas de <code>Experiments-DF9zfxEH.js</code>
+          <button
+            onClick={onClose}
+            className={`p-2 rounded-xl transition-colors duration-150 cursor-pointer active:scale-95 ${
+              theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight' : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+            }`}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Cuerpo con Scroll Hardware-Accelerated 120 FPS */}
+        <div className="flex-1 min-h-0 overflow-y-auto modal-smooth-scroll overscroll-contain p-6 py-4 space-y-4">
+          <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-200 flex items-start gap-2.5">
+            <ShieldCheck className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
+            <p>
+              Todas las funciones y herramientas se encuentran habilitadas y disponibles en <strong>{theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study'}</strong>.
             </p>
           </div>
-        </div>
 
-        <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-200 mb-6 flex items-start gap-2.5">
-          <ShieldCheck className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
-          <p>
-            Todas las funciones y herramientas se encuentran habilitadas y disponibles en <strong>{theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study'}</strong>.
-          </p>
-        </div>
-
-        {/* Feature Switches */}
-        <div className="space-y-3 mb-6">
-          {[
-            {
-              key: 'serverHasTheaPlus',
-              label: 'Funciones Avanzadas (Full Access)',
-              desc: 'Habilita todos los componentes y estilos avanzados sin restricciones.'
-            },
-            {
-              key: 'unlimitedQuestions',
-              label: 'Preguntas Ilimitadas (Smart Study)',
-              desc: 'Elimina el paywall de fin de cuota diaria de preguntas.'
-            },
-            {
-              key: 'unlockedSmartEdit',
-              label: 'Smart Edit con IA en Guías',
-              desc: 'Permite reescritura, resúmenes y prompts personalizados.'
-            },
-            {
-              key: 'unlockedPodcast',
-              label: 'Review Podcast Generator',
-              desc: 'Permite sintetizar apuntes en episodios de audio sin límites.'
-            },
-            {
-              key: 'unlockedAskThea',
-              label: 'Tutor IA Interactivo',
-              desc: 'Chatbot contextual activo sin restricciones.'
-            }
-          ].map(item => {
-            const val = (settings as any)[item.key];
-            return (
-              <div
-                key={item.key}
-                className="flex items-center justify-between p-3.5 rounded-2xl bg-thea-surfaceLight border border-thea-border"
-              >
-                <div>
-                  <h5 className={`font-bold text-xs sm:text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>{item.label}</h5>
-                  <p className={`text-[11px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{item.desc}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onUpdate({ ...settings, [item.key]: !val })}
-                  className={`w-12 h-6 rounded-full transition-colors p-1 flex items-center ${
-                    val ? 'bg-gradient-to-r from-amber-400 to-rose-500 justify-end' : 'bg-slate-700 justify-start'
-                  }`}
+          {/* Feature Switches */}
+          <div className="space-y-3">
+            {[
+              {
+                key: 'serverHasTheaPlus',
+                label: 'Funciones Avanzadas (Full Access)',
+                desc: 'Habilita todos los componentes y estilos avanzados sin restricciones.'
+              },
+              {
+                key: 'unlimitedQuestions',
+                label: 'Preguntas Ilimitadas (Smart Study)',
+                desc: 'Elimina el paywall de fin de cuota diaria de preguntas.'
+              },
+              {
+                key: 'unlockedSmartEdit',
+                label: 'Smart Edit con IA en Guías',
+                desc: 'Permite reescritura, resúmenes y prompts personalizados.'
+              },
+              {
+                key: 'unlockedPodcast',
+                label: 'Review Podcast Generator',
+                desc: 'Permite sintetizar apuntes en episodios de audio sin límites.'
+              },
+              {
+                key: 'unlockedAskThea',
+                label: 'Tutor IA Interactivo',
+                desc: 'Chatbot contextual activo sin restricciones.'
+              }
+            ].map(item => {
+              const val = (settings as any)[item.key];
+              return (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between p-3.5 rounded-2xl bg-thea-surfaceLight border border-thea-border"
                 >
-                  <div className="w-4 h-4 rounded-full bg-white shadow-md" />
-                </button>
-              </div>
-            );
-          })}
+                  <div>
+                    <h5 className={`font-bold text-xs sm:text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>{item.label}</h5>
+                    <p className={`text-[11px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{item.desc}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate({ ...settings, [item.key]: !val })}
+                    className={`w-12 h-6 rounded-full transition-colors duration-150 active:scale-95 p-1 flex items-center cursor-pointer ${
+                      val ? 'bg-gradient-to-r from-amber-400 to-rose-500 justify-end' : 'bg-slate-700 justify-start'
+                    }`}
+                  >
+                    <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Technical Provenance Note */}
+          <div className="text-[11px] text-slate-500 border-t border-thea-border/60 pt-3 flex items-center gap-1.5">
+            <Code2 className="w-3.5 h-3.5 text-violet-400" />
+            <span>Storage Key local: <code>thea_developersettings</code></span>
+          </div>
         </div>
 
-        {/* Technical Provenance Note */}
-        <div className="text-[11px] text-slate-500 border-t border-thea-border/60 pt-4 flex items-center gap-1.5">
-          <Code2 className="w-3.5 h-3.5 text-violet-400" />
-          <span>Storage Key local: <code>thea_developersettings</code></span>
-        </div>
-
-        <div className="mt-6 flex items-center justify-between">
+        {/* Footer fijo */}
+        <div className={`p-6 py-4 border-t shrink-0 flex items-center justify-between ${
+          theme === 'dark' ? 'border-thea-border bg-thea-surface' : theme === 'kitty' ? 'border-pink-100 bg-white' : 'border-slate-100 bg-white'
+        }`}>
           {onResetKits && (
             <button
               type="button"
               onClick={onResetKits}
-              className="px-4 py-2.5 rounded-xl border border-rose-500/30 text-rose-300 hover:bg-rose-950/30 font-medium text-xs transition-colors"
+              className="px-4 py-2.5 rounded-xl border border-rose-500/30 text-rose-300 hover:bg-rose-950/30 font-medium text-xs transition-colors duration-150 active:scale-[0.985] cursor-pointer"
             >
               Restablecer Kits Iniciales
             </button>
           )}
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs ml-auto"
+            className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs ml-auto transition-colors duration-150 active:scale-[0.985] cursor-pointer shadow-md"
           >
             Guardar & Cerrar
           </button>

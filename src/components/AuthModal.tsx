@@ -115,18 +115,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
-      <div className={`w-full max-w-md border rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-y-auto modal-smooth-scroll overscroll-contain will-change-transform ${
+      <div className={`w-full max-w-md border rounded-2xl sm:rounded-3xl shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col ${
         theme === 'dark'
           ? 'bg-[#0e0b16] border-white/10 text-white'
           : theme === 'kitty'
           ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
           : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
       }`}>
-
         {/* Close button */}
         <button
           onClick={onClose}
-          className={`absolute top-5 right-5 p-2 rounded-xl transition-all cursor-pointer active:scale-95 ${
+          className={`absolute top-4 right-4 p-2 rounded-xl transition-colors duration-150 cursor-pointer active:scale-95 z-10 ${
             theme === 'dark'
               ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
               : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
@@ -135,7 +134,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {/* Header */}
+        <div className="flex-1 min-h-0 overflow-y-auto modal-smooth-scroll overscroll-contain p-5 sm:p-8">
+          {/* Header */}
         <div className="text-center mb-6">
           <div className={`w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center mb-3 shadow-sm ${
             theme === 'kitty'
@@ -381,7 +381,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </p>
         </div>
       </div>
-    </div>,
+    </div>
+  </div>,
     document.body
   );
 };

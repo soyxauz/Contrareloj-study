@@ -342,7 +342,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
-      <div className={`border rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col will-change-transform ${
+      <div className={`border rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col ${
         theme === 'dark'
           ? 'bg-[#0e0b16] border-white/10 text-white'
           : theme === 'kitty'

@@ -110,8 +110,6 @@
 .modal-smooth-scroll {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  will-change: scroll-position;
-  transform: translateZ(0);
 }
 
 /* Sombra fija de alta definición (cero repintados en hover para 120 FPS fluidos) */

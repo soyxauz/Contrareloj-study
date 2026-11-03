@@ -88,15 +88,15 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-fadeIn">
-      <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto modal-smooth-scroll overscroll-contain shadow-2xl relative text-left ${
+      <div className={`border rounded-2xl sm:rounded-3xl max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative text-left overflow-hidden ${
         theme === 'dark'
           ? 'bg-thea-surface border-thea-border text-white'
           : theme === 'kitty'
           ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/30'
           : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/50'
       }`}>
-        {/* Encabezado del Modal */}
-        <div className={`flex items-center justify-between pb-4 border-b mb-4 ${
+        {/* Encabezado fijo del Modal */}
+        <div className={`p-4 sm:p-6 pb-3.5 border-b shrink-0 flex items-center justify-between ${
           theme === 'dark' ? 'border-thea-border' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
         }`}>
           <div className="flex items-center gap-2.5">
@@ -131,7 +131,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+            className={`p-2 rounded-xl transition-colors duration-150 cursor-pointer active:scale-95 ${
               theme === 'dark'
                 ? 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
                 : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
@@ -141,73 +141,78 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
           </button>
         </div>
 
-        {/* Pestañas de Selección del Modal: Azure Neural | Voces Locales | Nuevo Episodio */}
-        <div className={`grid grid-cols-3 gap-2 p-1.5 border rounded-2xl mb-4 ${
-          theme === 'dark'
-            ? 'bg-thea-surfaceLight/80 border-thea-border'
-            : theme === 'kitty'
-            ? 'bg-pink-50 border-pink-200'
-            : 'bg-slate-100 border-slate-200'
+        {/* Pestañas fijas de Selección */}
+        <div className={`px-4 sm:px-6 py-2.5 border-b shrink-0 ${
+          theme === 'dark' ? 'border-thea-border' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
         }`}>
-          <button
-            type="button"
-            onClick={() => {
-              onTabChange('azure');
-              onSwitchEngine('edge');
-            }}
-            className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              voiceModalTab === 'azure'
-                ? 'bg-emerald-500/25 border border-emerald-500/50 text-emerald-600 dark:text-emerald-300 shadow-md'
-                : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
-            }`}
-          >
-            <Headphones className="w-4 h-4 text-emerald-500 shrink-0" />
-            <div className="text-left hidden sm:block">
-              <div className="font-bold">Azure Neural</div>
-              <div className="text-[10px] font-normal text-emerald-600/90 dark:text-emerald-400/90">Voces Oficiales</div>
-            </div>
-            <span className="sm:hidden text-xs font-bold">Azure</span>
-          </button>
+          <div className={`grid grid-cols-3 gap-2 p-1.5 border rounded-2xl ${
+            theme === 'dark'
+              ? 'bg-thea-surfaceLight/80 border-thea-border'
+              : theme === 'kitty'
+              ? 'bg-pink-50 border-pink-200'
+              : 'bg-slate-100 border-slate-200'
+          }`}>
+            <button
+              type="button"
+              onClick={() => {
+                onTabChange('azure');
+                onSwitchEngine('edge');
+              }}
+              className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-colors duration-150 active:scale-[0.985] flex items-center justify-center gap-2 cursor-pointer ${
+                voiceModalTab === 'azure'
+                  ? 'bg-emerald-500/25 border border-emerald-500/50 text-emerald-600 dark:text-emerald-300 shadow-sm'
+                  : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
+              }`}
+            >
+              <Headphones className="w-4 h-4 text-emerald-500 shrink-0" />
+              <div className="text-left hidden sm:block">
+                <div className="font-bold">Azure Neural</div>
+                <div className="text-[10px] font-normal text-emerald-600/90 dark:text-emerald-400/90">Voces Oficiales</div>
+              </div>
+              <span className="sm:hidden text-xs font-bold">Azure</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              onTabChange('browser');
-              onSwitchEngine('browser');
-            }}
-            className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              voiceModalTab === 'browser'
-                ? 'bg-violet-600/25 border border-violet-500/50 text-violet-600 dark:text-violet-300 shadow-md'
-                : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
-            }`}
-          >
-            <Volume2 className="w-4 h-4 text-violet-500 shrink-0" />
-            <div className="text-left hidden sm:block">
-              <div className="font-bold">Voces Locales</div>
-              <div className="text-[10px] font-normal text-violet-600/90 dark:text-violet-400/90">Navegador offline</div>
-            </div>
-            <span className="sm:hidden text-xs font-bold">Locales</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                onTabChange('browser');
+                onSwitchEngine('browser');
+              }}
+              className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-colors duration-150 active:scale-[0.985] flex items-center justify-center gap-2 cursor-pointer ${
+                voiceModalTab === 'browser'
+                  ? 'bg-violet-600/25 border border-violet-500/50 text-violet-600 dark:text-violet-300 shadow-sm'
+                  : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
+              }`}
+            >
+              <Volume2 className="w-4 h-4 text-violet-500 shrink-0" />
+              <div className="text-left hidden sm:block">
+                <div className="font-bold">Voces Locales</div>
+                <div className="text-[10px] font-normal text-violet-600/90 dark:text-violet-400/90">Navegador offline</div>
+              </div>
+              <span className="sm:hidden text-xs font-bold">Locales</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onTabChange('new_episode')}
-            className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              voiceModalTab === 'new_episode'
-                ? 'bg-amber-500/25 border border-amber-500/50 text-amber-600 dark:text-amber-300 shadow-md'
-                : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-            <div className="text-left hidden sm:block">
-              <div className="font-bold">Nuevo Episodio</div>
-              <div className="text-[10px] font-normal text-amber-600/90 dark:text-amber-400/90">Reemplazar podcast</div>
-            </div>
-            <span className="sm:hidden text-xs font-bold">Nuevo</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => onTabChange('new_episode')}
+              className={`py-2 px-2.5 rounded-xl font-bold text-xs transition-colors duration-150 active:scale-[0.985] flex items-center justify-center gap-2 cursor-pointer ${
+                voiceModalTab === 'new_episode'
+                  ? 'bg-amber-500/25 border border-amber-500/50 text-amber-600 dark:text-amber-300 shadow-sm'
+                  : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+              <div className="text-left hidden sm:block">
+                <div className="font-bold">Nuevo Episodio</div>
+                <div className="text-[10px] font-normal text-amber-600/90 dark:text-amber-400/90">Reemplazar podcast</div>
+              </div>
+              <span className="sm:hidden text-xs font-bold">Nuevo</span>
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-4">
+        {/* Cuerpo con Scroll Hardware-Accelerated a 120 FPS */}
+        <div className="flex-1 min-h-0 overflow-y-auto modal-smooth-scroll overscroll-contain p-4 sm:p-6 space-y-4">
           {/* PESTAÑA 1: AZURE NEURAL */}
           {voiceModalTab === 'azure' && (
             <div className="space-y-4">
@@ -244,7 +249,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {AZURE_EDGE_VOICES.filter(v => v.gender === 'female').map((v) => {
                     const isSelected = edgeSofiaVoice === v.id;
                     return (
@@ -257,7 +262,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                             googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                           }
                         }}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer flex flex-col justify-between ${
                           isSelected
                             ? theme === 'kitty'
                               ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -335,7 +340,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {AZURE_EDGE_VOICES.filter(v => v.gender === 'male').map((v) => {
                     const isSelected = edgeMateoVoice === v.id;
                     return (
@@ -348,7 +353,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                             googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                           }
                         }}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer flex flex-col justify-between ${
                           isSelected
                             ? theme === 'kitty'
                               ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -471,7 +476,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div
                     onClick={() => {
                       onSelectLocalSofiaVoice('');
@@ -480,7 +485,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                       }
                     }}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer flex flex-col justify-between ${
                       !localSofiaVoice
                         ? theme === 'kitty'
                           ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -536,7 +541,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                             googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                           }
                         }}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer flex flex-col justify-between ${
                           isSelected
                             ? theme === 'kitty'
                               ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -623,7 +628,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto modal-smooth-scroll overscroll-contain pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div
                     onClick={() => {
                       onSelectLocalMateoVoice('');
@@ -632,7 +637,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                       }
                     }}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer flex flex-col justify-between ${
                       !localMateoVoice
                         ? theme === 'kitty'
                           ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -688,7 +693,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                             googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                           }
                         }}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer flex flex-col justify-between ${
                           isSelected
                             ? theme === 'kitty'
                               ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -777,7 +782,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                       <div
                         key={`modal-fmt-${f.id}`}
                         onClick={() => onSelectFormat(f.id)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer flex flex-col justify-between ${
                           isSelected
                             ? theme === 'kitty'
                               ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -831,7 +836,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                       <div
                         key={`modal-dur-${d.id}`}
                         onClick={() => onSelectDuration(d.id)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        className={`p-3 rounded-2xl border text-left transition-colors duration-150 active:scale-[0.985] cursor-pointer ${
                           isSelected
                             ? theme === 'kitty'
                               ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
@@ -931,84 +936,88 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                 />
               </div>
 
-              {/* Botones de Acción */}
-              <div className={`pt-3 border-t flex items-center justify-between gap-3 ${
-                theme === 'dark' ? 'border-thea-border' : 'border-slate-200'
-              }`}>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={`px-4 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-                    theme === 'dark'
-                      ? 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border-thea-border text-slate-300'
-                      : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onRequestConfirmReplace}
-                  disabled={isGenerating}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-900/30 cursor-pointer flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Crear y reemplazar episodio actual</span>
-                </button>
-              </div>
             </div>
           )}
+        </div>
 
-          {/* SECCIÓN INFERIOR PARA PESTAÑAS AZURE Y BROWSER (BOTONES DE PRUEBA) */}
-          {voiceModalTab !== 'new_episode' && (
-            <div className={`pt-3 border-t ${theme === 'dark' ? 'border-thea-border' : 'border-slate-200'}`}>
-              <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <button
-                    type="button"
-                    disabled={isTestingVoice}
-                    onClick={() => onTestVoiceSample('sofia')}
-                    className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5 ${
-                      theme === 'dark'
-                        ? 'bg-thea-surfaceLight border-thea-border hover:border-amber-400 text-slate-300 hover:text-white'
-                        : theme === 'kitty'
-                        ? 'bg-white border-pink-200 hover:border-pink-400 text-pink-900 shadow-xs'
-                        : 'bg-white border-slate-200 hover:border-slate-400 text-slate-800 shadow-xs'
-                    }`}
-                  >
-                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-500" />}
-                    <span>Probar Sofía</span>
-                  </button>
+        {/* Pie de Acciones Fijo (Siempre Visible, 120 FPS sin repaint de sombra) */}
+        <div className={`p-4 sm:p-6 py-3 border-t shrink-0 flex items-center justify-between gap-3 ${
+          theme === 'dark'
+            ? 'border-thea-border bg-thea-surface'
+            : theme === 'kitty'
+            ? 'border-pink-100 bg-white'
+            : 'border-slate-100 bg-white'
+        }`}>
+          {voiceModalTab === 'new_episode' ? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className={`px-4 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-colors duration-150 active:scale-[0.985] ${
+                  theme === 'dark'
+                    ? 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 border-thea-border text-slate-300'
+                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                }`}
+              >
+                Cancelar
+              </button>
 
-                  <button
-                    type="button"
-                    disabled={isTestingVoice}
-                    onClick={() => onTestVoiceSample('mateo')}
-                    className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5 ${
-                      theme === 'dark'
-                        ? 'bg-thea-surfaceLight border-thea-border hover:border-violet-400 text-slate-300 hover:text-white'
-                        : theme === 'kitty'
-                        ? 'bg-white border-pink-200 hover:border-pink-400 text-pink-900 shadow-xs'
-                        : 'bg-white border-slate-200 hover:border-slate-400 text-slate-800 shadow-xs'
-                    }`}
-                  >
-                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-500" />}
-                    <span>Probar Mateo</span>
-                  </button>
-                </div>
+              <button
+                type="button"
+                onClick={onRequestConfirmReplace}
+                disabled={isGenerating}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 active:scale-[0.985] disabled:opacity-50 text-slate-950 font-extrabold text-xs transition-transform duration-150 shadow-lg shadow-amber-900/30 cursor-pointer flex items-center gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
+                <span>Crear y reemplazar episodio actual</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  disabled={isTestingVoice}
+                  onClick={() => onTestVoiceSample('sofia')}
+                  className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-semibold transition-colors duration-150 active:scale-[0.985] disabled:opacity-40 cursor-pointer flex items-center gap-1.5 ${
+                    theme === 'dark'
+                      ? 'bg-thea-surfaceLight border-thea-border hover:border-amber-400 text-slate-300 hover:text-white'
+                      : theme === 'kitty'
+                      ? 'bg-white border-pink-200 hover:border-pink-400 text-pink-900 shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-400 text-slate-800 shadow-xs'
+                  }`}
+                >
+                  {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-500" />}
+                  <span>Probar Sofía</span>
+                </button>
 
                 <button
                   type="button"
-                  onClick={onClose}
-                  className={`px-4 py-1.5 sm:px-5 sm:py-2 rounded-xl font-bold text-xs transition-colors cursor-pointer text-white shadow-md ${
-                    theme === 'kitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-violet-600 hover:bg-violet-500'
+                  disabled={isTestingVoice}
+                  onClick={() => onTestVoiceSample('mateo')}
+                  className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-semibold transition-colors duration-150 active:scale-[0.985] disabled:opacity-40 cursor-pointer flex items-center gap-1.5 ${
+                    theme === 'dark'
+                      ? 'bg-thea-surfaceLight border-thea-border hover:border-violet-400 text-slate-300 hover:text-white'
+                      : theme === 'kitty'
+                      ? 'bg-white border-pink-200 hover:border-pink-400 text-pink-900 shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-400 text-slate-800 shadow-xs'
                   }`}
                 >
-                  Listo
+                  {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-500" />}
+                  <span>Probar Mateo</span>
                 </button>
               </div>
-            </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className={`px-4 py-1.5 sm:px-5 sm:py-2 rounded-xl font-bold text-xs transition-colors duration-150 active:scale-[0.985] cursor-pointer text-white shadow-md ${
+                  theme === 'kitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-violet-600 hover:bg-violet-500'
+                }`}
+              >
+                Listo
+              </button>
+            </>
           )}
         </div>
       </div>
