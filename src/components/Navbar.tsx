@@ -239,14 +239,26 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* User Profile */}
           <div className="hidden md:flex items-center gap-1.5 ml-1">
-            <div className="h-4 w-px bg-white/[0.08] mr-1" />
+            <div className={`h-4 w-px mr-1 ${theme === 'dark' ? 'bg-white/[0.08]' : 'bg-slate-200'}`} />
             {currentUser ? (
               <div className="flex items-center gap-1">
                 <div
                   title={`Conectado como @${currentUser.username}`}
-                  className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-medium text-slate-300"
+                  className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-xs font-medium ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.04] border-white/[0.08] text-slate-300'
+                      : theme === 'kitty'
+                      ? 'bg-white border-pink-200 text-pink-900 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-800 shadow-xs'
+                  }`}
                 >
-                  <div className="w-5 h-5 rounded-full bg-white/[0.12] border border-white/10 flex items-center justify-center text-[10px] font-semibold text-white">
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-semibold ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.12] border-white/10 text-white'
+                      : theme === 'kitty'
+                      ? 'bg-pink-100 border-pink-200 text-pink-700'
+                      : 'bg-slate-100 border-slate-200 text-slate-800'
+                  }`}>
                     {currentUser.displayName.charAt(0).toUpperCase()}
                   </div>
                   <span className="hidden md:inline max-w-[90px] truncate">{currentUser.displayName}</span>
@@ -254,7 +266,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={onLogout}
                   title="Cerrar Sesión"
-                  className="active-press p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  className={`active-press p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    theme === 'dark'
+                      ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                      : theme === 'kitty'
+                      ? 'text-pink-600 hover:text-pink-900 hover:bg-pink-100/60'
+                      : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
+                  }`}
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>

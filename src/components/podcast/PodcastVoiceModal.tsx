@@ -211,14 +211,18 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
           {/* PESTAÑA 1: AZURE NEURAL */}
           {voiceModalTab === 'azure' && (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1.5">
-                <div className="flex items-center justify-between text-emerald-300 font-bold">
+              <div className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
+                theme === 'dark'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}>
+                <div className="flex items-center justify-between font-bold">
                   <span className="flex items-center gap-1.5">
-                    <Headphones className="w-4 h-4 text-emerald-400" />
+                    <Headphones className="w-4 h-4 text-emerald-500" />
                     Microsoft Azure Neural Voices (Edge TTS)
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
+                <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
                   Voces neuronales auténticas de Microsoft Azure con entonación natural, cadencia humana y emoción conversacional. Todo el audio se precarga automáticamente en segundo plano y se almacena en IndexedDB para respuesta a 0ms sin pausas.
                 </p>
               </div>
@@ -226,9 +230,15 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
               {/* Sofía */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <label className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                    theme === 'dark' ? 'text-slate-300' : 'text-slate-800'
+                  }`}>
                     <span>Voz de Sofía (Host Principal)</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold lowercase">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold lowercase ${
+                      theme === 'dark'
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                        : 'bg-amber-100 text-amber-900 border-amber-200'
+                    }`}>
                       femenina • azure neural
                     </span>
                   </label>
@@ -249,32 +259,56 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                           isSelected
-                            ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                            ? theme === 'kitty'
+                              ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                              : theme === 'light'
+                              ? 'border-amber-500 bg-amber-50 text-amber-950 shadow-md ring-1 ring-amber-500/40'
+                              : 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                            : theme === 'kitty'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
+                            : theme === 'light'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-sm text-white">{v.name.replace(' Neural', '')}</span>
+                            <span className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+                              {v.name.replace(' Neural', '')}
+                            </span>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-thea-bg border border-thea-border text-amber-300 font-medium">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                                theme === 'dark'
+                                  ? 'bg-thea-bg border-thea-border text-amber-300'
+                                  : 'bg-white border-slate-200 text-amber-700 shadow-xs'
+                              }`}>
                                 {v.country}
                               </span>
-                              {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                              {isSelected && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'}`} />}
                             </div>
                           </div>
-                          <p className="text-[11px] text-slate-300 line-clamp-1">{v.tone}</p>
-                          {v.roleHint && <span className="text-[10px] text-amber-400/90 block mt-0.5 font-medium">{v.roleHint}</span>}
+                          <p className={`text-[11px] line-clamp-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                            {v.tone}
+                          </p>
+                          {v.roleHint && (
+                            <span className={`text-[10px] block mt-0.5 font-medium ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-600 dark:text-amber-400/90'}`}>
+                              {v.roleHint}
+                            </span>
+                          )}
                         </div>
                         <div className="flex justify-end mt-2">
                           <button
                             type="button"
                             disabled={isTestingVoice}
                             onClick={(e) => onPreviewAzureVoice(e, v)}
-                            className="px-2.5 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40"
+                            className={`px-2.5 py-1 rounded-lg border text-[10px] flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40 ${
+                              theme === 'dark'
+                                ? 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-amber-300 hover:text-white'
+                                : 'bg-white hover:bg-slate-100 border-slate-200 text-amber-800 hover:text-amber-950 shadow-xs'
+                            }`}
                             title={`Escuchar muestra de ${v.name}`}
                           >
-                            <Volume2 className="w-3 h-3 text-amber-400" />
+                            <Volume2 className="w-3 h-3 text-amber-500" />
                             <span>Escuchar</span>
                           </button>
                         </div>
@@ -287,9 +321,15 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
               {/* Mateo */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <label className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                    theme === 'dark' ? 'text-slate-300' : 'text-slate-800'
+                  }`}>
                     <span>Voz de Mateo (Co-Host Analítico)</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/30 font-semibold lowercase">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold lowercase ${
+                      theme === 'dark'
+                        ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+                        : 'bg-violet-100 text-violet-900 border-violet-200'
+                    }`}>
                       masculina • azure neural
                     </span>
                   </label>
@@ -310,32 +350,56 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                           isSelected
-                            ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                            ? theme === 'kitty'
+                              ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                              : theme === 'light'
+                              ? 'border-violet-500 bg-violet-50 text-violet-950 shadow-md ring-1 ring-violet-500/40'
+                              : 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                            : theme === 'kitty'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
+                            : theme === 'light'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-sm text-white">{v.name.replace(' Neural', '')}</span>
+                            <span className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+                              {v.name.replace(' Neural', '')}
+                            </span>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-thea-bg border border-thea-border text-violet-300 font-medium">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                                theme === 'dark'
+                                  ? 'bg-thea-bg border-thea-border text-violet-300'
+                                  : 'bg-white border-slate-200 text-violet-700 shadow-xs'
+                              }`}>
                                 {v.country}
                               </span>
-                              {isSelected && <Check className="w-4 h-4 text-violet-400" />}
+                              {isSelected && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-500'}`} />}
                             </div>
                           </div>
-                          <p className="text-[11px] text-slate-300 line-clamp-1">{v.tone}</p>
-                          {v.roleHint && <span className="text-[10px] text-violet-400/90 block mt-0.5 font-medium">{v.roleHint}</span>}
+                          <p className={`text-[11px] line-clamp-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                            {v.tone}
+                          </p>
+                          {v.roleHint && (
+                            <span className={`text-[10px] block mt-0.5 font-medium ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-600 dark:text-violet-400/90'}`}>
+                              {v.roleHint}
+                            </span>
+                          )}
                         </div>
                         <div className="flex justify-end mt-2">
                           <button
                             type="button"
                             disabled={isTestingVoice}
                             onClick={(e) => onPreviewAzureVoice(e, v)}
-                            className="px-2.5 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40"
+                            className={`px-2.5 py-1 rounded-lg border text-[10px] flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40 ${
+                              theme === 'dark'
+                                ? 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-violet-300 hover:text-white'
+                                : 'bg-white hover:bg-slate-100 border-slate-200 text-violet-800 hover:text-violet-950 shadow-xs'
+                            }`}
                             title={`Escuchar muestra de ${v.name}`}
                           >
-                            <Volume2 className="w-3 h-3 text-violet-400" />
+                            <Volume2 className="w-3 h-3 text-violet-500" />
                             <span>Escuchar</span>
                           </button>
                         </div>
@@ -350,17 +414,25 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
           {/* PESTAÑA 2: VOCES LOCALES */}
           {voiceModalTab === 'browser' && (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1.5">
-                <div className="flex items-center justify-between text-emerald-300 font-bold">
+              <div className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
+                theme === 'dark'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}>
+                <div className="flex items-center justify-between font-bold">
                   <span className="flex items-center gap-1.5">
-                    <Headphones className="w-4 h-4 text-emerald-400" />
+                    <Headphones className="w-4 h-4 text-emerald-500" />
                     Síntesis Vocal Local ({candidateVoices.length} voces disponibles)
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                    theme === 'dark'
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                      : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  }`}>
                     Ilimitado
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
+                <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
                   THEA modula automáticamente los registros: Sofía en tono agudo vivaz (1.25x) y Mateo en barítono grave (0.68x). Puedes seleccionar una voz instalada específica para cada uno o usar la asignación automática recomendada.
                 </p>
               </div>
@@ -368,9 +440,15 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
               {/* Sofía Local */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <label className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                    theme === 'dark' ? 'text-slate-300' : 'text-slate-800'
+                  }`}>
                     <span>Voz para Sofía (Host Principal)</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold lowercase">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold lowercase ${
+                      theme === 'dark'
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                        : 'bg-amber-100 text-amber-900 border-amber-200'
+                    }`}>
                       femenina • pitch 1.25
                     </span>
                   </label>
@@ -384,7 +462,9 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                           googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                         }
                       }}
-                      className="text-[11px] text-slate-400 hover:text-amber-300 underline cursor-pointer"
+                      className={`text-[11px] underline cursor-pointer ${
+                        theme === 'dark' ? 'text-slate-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-900'
+                      }`}
                     >
                       Restablecer a automática
                     </button>
@@ -402,25 +482,39 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                     }}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                       !localSofiaVoice
-                        ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                        ? theme === 'kitty'
+                          ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                          : theme === 'light'
+                          ? 'border-amber-500 bg-amber-50 text-amber-950 shadow-md ring-1 ring-amber-500/40'
+                          : 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                        : theme === 'kitty'
+                        ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
+                        : theme === 'light'
+                        ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                         : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-sm text-white">Automática Inteligente</span>
-                      {!localSofiaVoice && <Check className="w-4 h-4 text-amber-400" />}
+                      <span className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+                        Automática Inteligente
+                      </span>
+                      {!localSofiaVoice && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'}`} />}
                     </div>
-                    <p className="text-[11px] text-slate-400 mb-2">
+                    <p className={`text-[11px] mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                       Asignación óptima detectada con modulación femenina 1.25x.
                     </p>
                     <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={(e) => onPreviewAutomaticLocalSample(e, 'female')}
-                        className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                        className={`px-2 py-1 rounded-lg border text-[10px] flex items-center gap-1 cursor-pointer transition-colors ${
+                          theme === 'dark'
+                            ? 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-amber-300 hover:text-white'
+                            : 'bg-white hover:bg-slate-100 border-slate-200 text-amber-800 hover:text-amber-950 shadow-xs'
+                        }`}
                         title="Escuchar muestra automática de Sofía"
                       >
-                        <Volume2 className="w-3 h-3 text-amber-400" />
+                        <Volume2 className="w-3 h-3 text-amber-500" />
                         <span>Escuchar</span>
                       </button>
                     </div>
@@ -444,30 +538,48 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                           isSelected
-                            ? 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                            ? theme === 'kitty'
+                              ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                              : theme === 'light'
+                              ? 'border-amber-500 bg-amber-50 text-amber-950 shadow-md ring-1 ring-amber-500/40'
+                              : 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
+                            : theme === 'kitty'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
+                            : theme === 'light'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-sm text-white">{cleanName}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-400 font-mono">
+                            <span className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+                              {cleanName}
+                            </span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-mono ${
+                              theme === 'dark'
+                                ? 'bg-thea-bg border-thea-border text-slate-400'
+                                : 'bg-white border-slate-200 text-slate-600 shadow-xs'
+                            }`}>
                               {v.lang}
                             </span>
                           </div>
-                          {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                          {isSelected && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'}`} />}
                         </div>
-                        <p className="text-[11px] text-slate-400 mb-2 truncate" title={v.name}>
+                        <p className={`text-[11px] mb-2 truncate ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`} title={v.name}>
                           {v.name}
                         </p>
                         <div className="flex justify-end">
                           <button
                             type="button"
                             onClick={(e) => onPreviewLocalVoice(e, v, 'female')}
-                            className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                            className={`px-2 py-1 rounded-lg border text-[10px] flex items-center gap-1 cursor-pointer transition-colors ${
+                              theme === 'dark'
+                                ? 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-amber-300 hover:text-white'
+                                : 'bg-white hover:bg-slate-100 border-slate-200 text-amber-800 hover:text-amber-950 shadow-xs'
+                            }`}
                             title={`Escuchar a Sofía con la voz de ${cleanName}`}
                           >
-                            <Volume2 className="w-3 h-3 text-amber-400" />
+                            <Volume2 className="w-3 h-3 text-amber-500" />
                             <span>Escuchar</span>
                           </button>
                         </div>
@@ -480,9 +592,15 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
               {/* Mateo Local */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <label className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                    theme === 'dark' ? 'text-slate-300' : 'text-slate-800'
+                  }`}>
                     <span>Voz para Mateo (Co-Host Analítico)</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/30 font-semibold lowercase">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold lowercase ${
+                      theme === 'dark'
+                        ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+                        : 'bg-violet-100 text-violet-900 border-violet-200'
+                    }`}>
                       masculina • pitch 0.68
                     </span>
                   </label>
@@ -496,7 +614,9 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                           googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
                         }
                       }}
-                      className="text-[11px] text-slate-400 hover:text-violet-300 underline cursor-pointer"
+                      className={`text-[11px] underline cursor-pointer ${
+                        theme === 'dark' ? 'text-slate-400 hover:text-violet-300' : 'text-violet-700 hover:text-violet-900'
+                      }`}
                     >
                       Restablecer a automática
                     </button>
@@ -514,25 +634,39 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                     }}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                       !localMateoVoice
-                        ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                        ? theme === 'kitty'
+                          ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                          : theme === 'light'
+                          ? 'border-violet-500 bg-violet-50 text-violet-950 shadow-md ring-1 ring-violet-500/40'
+                          : 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                        : theme === 'kitty'
+                        ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
+                        : theme === 'light'
+                        ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                         : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-sm text-white">Automática Inteligente</span>
-                      {!localMateoVoice && <Check className="w-4 h-4 text-violet-400" />}
+                      <span className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+                        Automática Inteligente
+                      </span>
+                      {!localMateoVoice && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-500'}`} />}
                     </div>
-                    <p className="text-[11px] text-slate-400 mb-2">
+                    <p className={`text-[11px] mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                       Asignación masculina o barítono grave modulado a 0.68x.
                     </p>
                     <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={(e) => onPreviewAutomaticLocalSample(e, 'male')}
-                        className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                        className={`px-2 py-1 rounded-lg border text-[10px] flex items-center gap-1 cursor-pointer transition-colors ${
+                          theme === 'dark'
+                            ? 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-violet-300 hover:text-white'
+                            : 'bg-white hover:bg-slate-100 border-slate-200 text-violet-800 hover:text-violet-950 shadow-xs'
+                        }`}
                         title="Escuchar muestra automática de Mateo"
                       >
-                        <Volume2 className="w-3 h-3 text-violet-400" />
+                        <Volume2 className="w-3 h-3 text-violet-500" />
                         <span>Escuchar</span>
                       </button>
                     </div>
@@ -556,30 +690,48 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                           isSelected
-                            ? 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                            ? theme === 'kitty'
+                              ? 'border-pink-500 bg-pink-50 text-pink-950 shadow-md ring-1 ring-pink-500/40'
+                              : theme === 'light'
+                              ? 'border-violet-500 bg-violet-50 text-violet-950 shadow-md ring-1 ring-violet-500/40'
+                              : 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
+                            : theme === 'kitty'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
+                            : theme === 'light'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-sm text-white">{cleanName}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-thea-bg border border-thea-border text-slate-400 font-mono">
+                            <span className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-zinc-950'}`}>
+                              {cleanName}
+                            </span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-mono ${
+                              theme === 'dark'
+                                ? 'bg-thea-bg border-thea-border text-slate-400'
+                                : 'bg-white border-slate-200 text-slate-600 shadow-xs'
+                            }`}>
                               {v.lang}
                             </span>
                           </div>
-                          {isSelected && <Check className="w-4 h-4 text-violet-400" />}
+                          {isSelected && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-violet-500'}`} />}
                         </div>
-                        <p className="text-[11px] text-slate-400 mb-2 truncate" title={v.name}>
+                        <p className={`text-[11px] mb-2 truncate ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`} title={v.name}>
                           {v.name}
                         </p>
                         <div className="flex justify-end">
                           <button
                             type="button"
                             onClick={(e) => onPreviewLocalVoice(e, v, 'male')}
-                            className="px-2 py-1 rounded-lg bg-thea-surface hover:bg-thea-surfaceLight border border-thea-border text-[10px] text-violet-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                            className={`px-2 py-1 rounded-lg border text-[10px] flex items-center gap-1 cursor-pointer transition-colors ${
+                              theme === 'dark'
+                                ? 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-violet-300 hover:text-white'
+                                : 'bg-white hover:bg-slate-100 border-slate-200 text-violet-800 hover:text-violet-950 shadow-xs'
+                            }`}
                             title={`Escuchar a Mateo con la voz de ${cleanName}`}
                           >
-                            <Volume2 className="w-3 h-3 text-violet-400" />
+                            <Volume2 className="w-3 h-3 text-violet-500" />
                             <span>Escuchar</span>
                           </button>
                         </div>
