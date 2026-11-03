@@ -355,7 +355,9 @@ html {
 /* Caras de Flashcards en modo claro y kitty */
 [data-theme="light"] .perspective-card .card-face,
 [data-theme="light"] .card-face {
+  background-image: none !important;
   background: #ffffff !important;
+  background-color: #ffffff !important;
   color: #09090b !important;
   border-color: #e2e8f0 !important;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
@@ -363,10 +365,37 @@ html {
 
 [data-theme="kitty"] .perspective-card .card-face,
 [data-theme="kitty"] .card-face {
+  background-image: none !important;
   background: #ffffff !important;
+  background-color: #ffffff !important;
   color: #09090b !important;
   border-color: #fbcfe8 !important;
   box-shadow: 0 10px 25px -5px rgba(244, 114, 182, 0.2) !important;
+}
+
+/* Tarjetas de Study Kits en HomeView en modo claro y kitty */
+[data-theme="light"] .study-kit-card {
+  background-image: none !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 16px -2px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="kitty"] .study-kit-card {
+  background-image: none !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #fbcfe8 !important;
+  box-shadow: 0 2px 8px -1px rgba(244, 114, 182, 0.15), 0 6px 16px -2px rgba(244, 114, 182, 0.1) !important;
+}
+
+[data-theme="light"] .glass-specular {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 6px 18px -2px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="kitty"] .glass-specular {
+  box-shadow: 0 2px 8px -1px rgba(244, 114, 182, 0.15), 0 6px 18px -2px rgba(244, 114, 182, 0.1) !important;
 }
 
 /* Gradients oscuros convertidos a blanco puro */

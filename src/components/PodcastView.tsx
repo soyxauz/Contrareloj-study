@@ -1762,18 +1762,32 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         {/* Fila 2: Motor de Voz y Acciones */}
         <div className="mt-1.5 pt-1.5 border-t border-thea-border/40 flex items-center justify-between gap-2 flex-wrap">
           {/* Selector de Motor de Voz Dinámico (Azure Neural vs Sistema) */}
-          <div className="flex items-center bg-white/[0.025] border border-white/[0.08] rounded-xl p-0.5 text-xs gap-0.5">
+          <div className={`flex items-center rounded-xl p-0.5 text-xs gap-0.5 border ${
+            theme === 'light'
+              ? 'bg-slate-100/90 border-slate-200'
+              : theme === 'kitty'
+              ? 'bg-pink-100/70 border-pink-200'
+              : 'bg-white/[0.025] border-white/[0.08]'
+          }`}>
             <button
               type="button"
               onClick={() => handleSwitchEngine('edge')}
               className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-semibold transition-all flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
                 voiceEngine === 'edge'
-                  ? 'bg-white/10 border border-white/15 text-zinc-100 shadow-sm'
+                  ? theme === 'light'
+                    ? 'bg-white text-zinc-950 border border-slate-200 shadow-xs'
+                    : theme === 'kitty'
+                    ? 'bg-white text-pink-700 border border-pink-200 shadow-xs'
+                    : 'bg-white/10 border border-white/15 text-zinc-100 shadow-sm'
+                  : theme === 'light'
+                  ? 'text-slate-600 hover:text-zinc-950'
+                  : theme === 'kitty'
+                  ? 'text-pink-600/80 hover:text-pink-950'
                   : 'text-zinc-400 hover:text-white'
               }`}
               title="Azure Neural: Voces oficiales de Microsoft Azure."
             >
-              <Headphones className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
+              <Headphones className="w-3.5 h-3.5 shrink-0" />
               <span>Azure Neural</span>
             </button>
 
@@ -1782,12 +1796,20 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               onClick={() => handleSwitchEngine('browser')}
               className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
                 voiceEngine === 'browser'
-                  ? 'bg-white/10 border border-white/15 text-zinc-100 shadow-sm'
+                  ? theme === 'light'
+                    ? 'bg-white text-zinc-950 border border-slate-200 shadow-xs'
+                    : theme === 'kitty'
+                    ? 'bg-white text-pink-700 border border-pink-200 shadow-xs'
+                    : 'bg-white/10 border border-white/15 text-zinc-100 shadow-sm'
+                  : theme === 'light'
+                  ? 'text-slate-600 hover:text-zinc-950'
+                  : theme === 'kitty'
+                  ? 'text-pink-600/80 hover:text-pink-950'
                   : 'text-zinc-400 hover:text-white'
               }`}
               title="Voz del Sistema: Síntesis local offline del navegador"
             >
-              <Volume2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <Volume2 className="w-3.5 h-3.5 shrink-0" />
               <span>Voz Local</span>
             </button>
           </div>
@@ -1799,7 +1821,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 setVoiceModalTab('azure');
                 setShowVoiceModal(true);
               }}
-              className="p-1.5 rounded-xl bg-white/[0.025] hover:bg-white/[0.06] border border-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer active:scale-95"
+              className={`p-1.5 rounded-xl border transition-colors cursor-pointer active:scale-95 ${
+                theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                  : theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700 shadow-xs'
+                  : 'bg-white/[0.025] hover:bg-white/[0.06] border-white/[0.08] text-zinc-400 hover:text-white'
+              }`}
               title="Configuración de Voces, Locutores y Enfoque"
             >
               <Settings2 className="w-3.5 h-3.5" />
@@ -1811,10 +1839,16 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 setVoiceModalTab('new_episode');
                 setShowVoiceModal(true);
               }}
-              className="px-2.5 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-zinc-200 hover:text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.985]"
+              className={`px-2.5 py-1 rounded-xl border font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.985] ${
+                theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900 shadow-xs'
+                  : theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.12] text-zinc-200 hover:text-white'
+              }`}
               title="Crear un nuevo episodio con otras configuraciones de formato y duración"
             >
-              <Plus className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
+              <Plus className="w-3.5 h-3.5 shrink-0" />
               <span>Nuevo Episodio</span>
             </button>
           </div>
@@ -1824,7 +1858,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       {activeTab === 'player' ? (
         <div className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
           {/* Main Visual Player Card */}
-          <div className={`flex-1 min-h-0 flex flex-col justify-between rounded-2xl sm:rounded-3xl p-3 sm:p-5 relative overflow-hidden text-center border ${
+          <div className={`flex-1 min-h-0 flex flex-col justify-between rounded-2xl sm:rounded-3xl p-3 sm:p-5 relative overflow-hidden border ${
             theme === 'light'
               ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
               : theme === 'kitty'
@@ -1834,116 +1868,64 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             {/* Background Glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Episode Title */}
-            <div className="relative z-10 mb-1 sm:mb-2 shrink-0">
-              <div className="flex items-center justify-center gap-2 mb-1 flex-wrap">
-                <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest ${
-                  theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
+            {/* Episode Title Row (Compact Header) */}
+            <div className="relative z-10 mb-2 shrink-0 flex items-center justify-between gap-3 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest ${
+                    theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
+                  }`}>
+                    REPASO DE AUDIO DINÁMICO
+                  </span>
+                  {podcast.format && (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.05] text-zinc-300 border-white/[0.08]'
+                        : theme === 'kitty'
+                        ? 'bg-pink-100 text-pink-700 border-pink-200'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}>
+                      {podcast.format === 'detailed'
+                        ? 'Información detallada'
+                        : podcast.format === 'brief'
+                        ? 'Breve'
+                        : podcast.format === 'critique'
+                        ? 'Crítica'
+                        : 'Debate'}
+                    </span>
+                  )}
+                  {podcast.durationMode && (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.05] text-zinc-300 border-white/[0.08]'
+                        : theme === 'kitty'
+                        ? 'bg-pink-100 text-pink-700 border-pink-200'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}>
+                      {podcast.durationMode === 'short'
+                        ? 'Corto (-2 min)'
+                        : podcast.durationMode === 'normal'
+                        ? 'Normal (4-6 min)'
+                        : 'Largo (10-30 min)'}
+                    </span>
+                  )}
+                </div>
+                <h2 className={`text-sm sm:text-base md:text-lg font-extrabold leading-snug tracking-tight truncate ${
+                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
                 }`}>
-                  REPASO DE AUDIO DINÁMICO
-                </span>
-                {podcast.format && (
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.05] text-zinc-300 border-white/[0.08]'
-                      : theme === 'kitty'
-                      ? 'bg-pink-100 text-pink-700 border-pink-200'
-                      : 'bg-slate-100 text-slate-700 border-slate-200'
-                  }`}>
-                    {podcast.format === 'detailed'
-                      ? 'Información detallada'
-                      : podcast.format === 'brief'
-                      ? 'Breve'
-                      : podcast.format === 'critique'
-                      ? 'Crítica'
-                      : 'Debate'}
-                  </span>
-                )}
-                {podcast.durationMode && (
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.05] text-zinc-300 border-white/[0.08]'
-                      : theme === 'kitty'
-                      ? 'bg-pink-100 text-pink-700 border-pink-200'
-                      : 'bg-slate-100 text-slate-700 border-slate-200'
-                  }`}>
-                    {podcast.durationMode === 'short'
-                      ? 'Corto (-2 min)'
-                      : podcast.durationMode === 'normal'
-                      ? 'Normal (4-6 min)'
-                      : 'Largo (10-30 min)'}
-                  </span>
-                )}
+                  {podcast.title}
+                </h2>
               </div>
-              <h2 className={`text-base sm:text-lg md:text-xl font-extrabold mb-0.5 leading-snug tracking-tight ${
-                theme === 'dark' ? 'text-white' : 'text-zinc-950'
-              }`}>
-                {podcast.title}
-              </h2>
-              <p className={`text-[10px] sm:text-[11px] tabular-nums ${
+              <span className={`text-[10px] sm:text-[11px] tabular-nums shrink-0 font-medium ${
                 theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
               }`}>
-                Duración: {podcast.duration} • Generado a partir de tus materiales
-              </p>
-            </div>
-
-            {/* Host Cards */}
-            <div className="flex justify-center items-center gap-3 sm:gap-5 mb-1 sm:mb-2 relative z-10 shrink-0">
-              {podcast.hosts.map((host, idx) => {
-                const isCurrentHostSpeaking =
-                  isPlaying &&
-                  isAudioActive &&
-                  currentItem.speaker.toLowerCase().includes(host.name.split(' ')[0].toLowerCase());
-
-                return (
-                  <div key={idx} className="flex flex-col items-center">
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl border flex items-center justify-center font-bold text-sm sm:text-base shadow-sm transition-all duration-300 relative ${
-                      isCurrentHostSpeaking
-                        ? theme === 'dark'
-                          ? 'border-white/40 ring-4 ring-white/10 scale-105 shadow-white/5 bg-white/10 text-white'
-                          : 'border-pink-400 ring-4 ring-pink-300/40 scale-105 bg-pink-100 text-pink-700'
-                        : theme === 'dark'
-                        ? 'border-white/[0.08] bg-white/[0.03] text-zinc-300 opacity-70'
-                        : 'border-slate-200 bg-slate-100 text-zinc-800 opacity-80'
-                    }`}>
-                      {host.name.charAt(0)}
-                      {isCurrentHostSpeaking && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white animate-pulse" />
-                      )}
-                    </div>
-                    <span className={`text-[10px] sm:text-[11px] font-bold mt-1 ${
-                      theme === 'dark' ? 'text-white' : 'text-zinc-950'
-                    }`}>{host.name}</span>
-                    <span className={`text-[9px] ${
-                      theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
-                    }`}>{host.role}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Animated Audio Equalizer Waveform */}
-            <div className="flex items-center justify-center gap-1 sm:gap-1.5 h-4 sm:h-6 mb-1 sm:mb-2 relative z-10 shrink-0">
-              {[12, 28, 45, 60, 32, 50, 75, 90, 65, 40, 20, 55, 80, 45, 30, 65, 85, 50, 35, 70, 40, 25].map((height, i) => (
-                <div
-                  key={i}
-                  style={{
-                    height: isPlaying && isAudioActive
-                      ? `${Math.max(20, Math.min(100, height * (Math.sin(i * 0.8 + currentLineIndex * 2) + 1.2) * 0.6))}%`
-                      : '15%',
-                  }}
-                  className={`w-1 sm:w-1.5 rounded-full transition-all duration-300 ${
-                    isPlaying && isAudioActive
-                      ? theme === 'kitty' ? 'bg-gradient-to-t from-pink-500 to-rose-400' : 'bg-gradient-to-t from-violet-500 to-zinc-100'
-                      : theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'
-                  }`}
-                />
-              ))}
+                Duración: {podcast.duration}
+              </span>
             </div>
 
             {/* Alerta visible si la síntesis de voz experimenta un error */}
             {synthesisError && (
-              <div className="mb-2 max-w-2xl mx-auto px-3 py-1.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs flex items-center justify-between gap-2 shadow-lg animate-fadeIn shrink-0">
+              <div className="mb-2 px-3 py-1.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs flex items-center justify-between gap-2 shadow-lg animate-fadeIn shrink-0">
                 <span className="flex-1 leading-relaxed font-medium text-left truncate">
                   {synthesisError}
                 </span>
@@ -1969,302 +1951,350 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               </div>
             )}
 
-            {/* Current Active Dialogue Bubble */}
-            <div className={`rounded-xl sm:rounded-2xl p-2.5 sm:p-3 mb-1 sm:mb-2 max-w-2xl mx-auto shadow-inner text-left relative z-10 shrink-0 border ${
-              theme === 'dark'
-                ? 'bg-white/[0.03] border-white/[0.08]'
-                : theme === 'kitty'
-                ? 'bg-pink-50/70 border-pink-200'
-                : 'bg-slate-50 border-slate-200'
-            }`}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={`font-bold text-xs flex items-center gap-1.5 ${
-                  theme === 'dark' ? 'text-zinc-200' : 'text-zinc-950'
+            {/* ── 2 COLUMNAS: IZQUIERDA = PRESENTADORES & DIÁLOGO | DERECHA = CONTROLES ARMONIOSOS ── */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-5 flex-1 min-h-0 items-center relative z-10">
+              {/* COLUMNA IZQUIERDA: Presentadores y Burbuja Activa */}
+              <div className="md:col-span-7 flex flex-col justify-between h-full min-h-0 space-y-2">
+                {/* Host Cards + Equalizer Waveform Row */}
+                <div className="flex items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-3">
+                    {podcast.hosts.map((host, idx) => {
+                      const isCurrentHostSpeaking =
+                        isPlaying &&
+                        isAudioActive &&
+                        currentItem.speaker.toLowerCase().includes(host.name.split(' ')[0].toLowerCase());
+
+                      return (
+                        <div key={idx} className="flex items-center gap-2">
+                          <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl border flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm transition-all duration-300 relative ${
+                            isCurrentHostSpeaking
+                              ? theme === 'dark'
+                                ? 'border-white/40 ring-4 ring-white/10 scale-105 shadow-white/5 bg-white/10 text-white'
+                                : 'border-pink-400 ring-4 ring-pink-300/40 scale-105 bg-pink-100 text-pink-700'
+                              : theme === 'dark'
+                              ? 'border-white/[0.08] bg-white/[0.03] text-zinc-300 opacity-70'
+                              : 'border-slate-200 bg-slate-100 text-zinc-800 opacity-80'
+                          }`}>
+                            {host.name.charAt(0)}
+                            {isCurrentHostSpeaking && (
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white animate-pulse" />
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <div className={`text-[11px] font-bold leading-tight ${
+                              theme === 'dark' ? 'text-white' : 'text-zinc-950'
+                            }`}>{host.name}</div>
+                            <div className={`text-[9px] leading-tight ${
+                              theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
+                            }`}>{host.role}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Equalizer Waveform */}
+                  <div className="flex items-center gap-1 h-5 shrink-0">
+                    {[12, 35, 60, 85, 45, 70, 95, 50, 30, 65, 90, 40, 20].map((height, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          height: isPlaying && isAudioActive
+                            ? `${Math.max(20, Math.min(100, height * (Math.sin(i * 0.8 + currentLineIndex * 2) + 1.2) * 0.6))}%`
+                            : '20%',
+                        }}
+                        className={`w-1 rounded-full transition-all duration-300 ${
+                          isPlaying && isAudioActive
+                            ? theme === 'kitty' ? 'bg-gradient-to-t from-pink-500 to-rose-400' : 'bg-gradient-to-t from-violet-500 to-zinc-100'
+                            : theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Current Active Dialogue Bubble */}
+                <div className={`rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-inner text-left flex-1 min-h-0 flex flex-col justify-between border ${
+                  theme === 'dark'
+                    ? 'bg-white/[0.03] border-white/[0.08]'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50/70 border-pink-200'
+                    : 'bg-slate-50 border-slate-200'
                 }`}>
-                  <Volume2 className={`w-3.5 h-3.5 ${isAudioActive ? 'text-violet-400 animate-pulse' : theme === 'dark' ? 'text-zinc-500' : 'text-slate-400'}`} />
-                  {currentItem.speaker}
-                </span>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  {voiceEngine === 'edge' ? (
-                    isSynthesizing ? (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 animate-pulse ${
-                        theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-pink-100 border-pink-200 text-pink-700'
-                      }`}>
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        <span className="hidden sm:inline">Sintetizando voz neuronal...</span>
-                        <span className="sm:hidden">Sintetizando...</span>
-                      </span>
-                    ) : (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 font-medium ${
-                        theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-                      }`}>
-                        <Headphones className="w-3 h-3 text-zinc-400 shrink-0" />
-                        <span className="hidden sm:inline">Azure Neural ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})</span>
-                        <span className="sm:hidden">Azure</span>
-                      </span>
-                    )
-                  ) : (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 font-medium ${
-                      theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                  <div className="flex items-center justify-between mb-1.5 shrink-0">
+                    <span className={`font-bold text-xs flex items-center gap-1.5 ${
+                      theme === 'dark' ? 'text-zinc-200' : 'text-zinc-950'
                     }`}>
-                      <Headphones className="w-3 h-3 text-zinc-400 shrink-0" />
-                      <span className="truncate max-w-[100px] sm:max-w-none">{speakerAcoustics.voiceName}</span>
+                      <Volume2 className={`w-3.5 h-3.5 ${isAudioActive ? 'text-violet-400 animate-pulse' : theme === 'dark' ? 'text-zinc-500' : 'text-slate-400'}`} />
+                      {currentItem.speaker}
                     </span>
-                  )}
-                  <span className={`text-[10px] sm:text-[11px] font-mono tabular-nums ${
-                    theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
-                  }`}>
-                    {currentItem.time}
-                  </span>
+                    <div className="flex items-center gap-1.5">
+                      {voiceEngine === 'edge' ? (
+                        isSynthesizing ? (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 animate-pulse ${
+                            theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-pink-100 border-pink-200 text-pink-700'
+                          }`}>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span className="hidden sm:inline">Sintetizando...</span>
+                          </span>
+                        ) : (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 font-medium ${
+                            theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                          }`}>
+                            <Headphones className="w-3 h-3 text-zinc-400 shrink-0" />
+                            <span>Azure ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})</span>
+                          </span>
+                        )
+                      ) : (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 font-medium ${
+                          theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                        }`}>
+                          <Headphones className="w-3 h-3 text-zinc-400 shrink-0" />
+                          <span className="truncate max-w-[100px]">{speakerAcoustics.voiceName}</span>
+                        </span>
+                      )}
+                      <span className={`text-[10px] sm:text-[11px] font-mono tabular-nums ${
+                        theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
+                      }`}>
+                        {currentItem.time}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs sm:text-sm font-medium leading-relaxed flex flex-wrap gap-x-1.5 gap-y-0.5 select-none overflow-y-auto max-h-20 sm:max-h-24 modal-smooth-scroll pr-1">
+                    {currentSegmentWords.map((word, wIdx) => {
+                      const isCurrent = wIdx === currentWordIndexInSegment;
+                      const isPast = wIdx < currentWordIndexInSegment;
+                      return (
+                        <span
+                          key={wIdx}
+                          onClick={() => {
+                            const baseGlobal = segmentStartGlobalIndices[currentLineIndex] || 0;
+                            seekToGlobalWord(baseGlobal + wIdx);
+                          }}
+                          className={`cursor-pointer transition-colors duration-150 ${
+                            theme === 'dark'
+                              ? isCurrent
+                                ? 'text-white font-bold underline decoration-violet-400'
+                                : isPast
+                                ? 'text-zinc-400 hover:text-white'
+                                : 'text-zinc-500 hover:text-white'
+                              : isCurrent
+                              ? 'text-zinc-950 font-black bg-pink-100/90 px-1 rounded'
+                              : isPast
+                              ? 'text-zinc-600 hover:text-zinc-950'
+                              : 'text-zinc-400 hover:text-zinc-950'
+                          }`}
+                          title={`Saltar a la palabra "${word}"`}
+                        >
+                          {word}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-              <div className="text-xs sm:text-sm font-medium leading-relaxed flex flex-wrap gap-x-1.5 gap-y-0.5 select-none max-h-12 sm:max-h-16 overflow-y-auto pr-1 modal-smooth-scroll">
-                {currentSegmentWords.map((word, wIdx) => {
-                  const isCurrent = wIdx === currentWordIndexInSegment;
-                  const isPast = wIdx < currentWordIndexInSegment;
-                  return (
-                    <span
-                      key={wIdx}
-                      onClick={() => {
-                        const baseGlobal = segmentStartGlobalIndices[currentLineIndex] || 0;
-                        seekToGlobalWord(baseGlobal + wIdx);
-                      }}
-                      className={`cursor-pointer transition-colors duration-150 ${
-                        theme === 'dark'
-                          ? isCurrent
-                            ? 'text-white font-bold underline decoration-violet-400'
-                            : isPast
-                            ? 'text-zinc-400 hover:text-white'
-                            : 'text-zinc-500 hover:text-white'
-                          : isCurrent
-                          ? 'text-zinc-950 font-black bg-pink-100/90 px-1 rounded'
-                          : isPast
-                          ? 'text-zinc-600 hover:text-zinc-950'
-                          : 'text-zinc-400 hover:text-zinc-950'
-                      }`}
-                      title={`Saltar a la palabra "${word}"`}
-                    >
-                      {word}
+
+              {/* COLUMNA DERECHA: Controles de Reproducción Armoniosos */}
+              <div className="md:col-span-5 flex flex-col justify-between h-full min-h-0 border-t md:border-t-0 md:border-l border-thea-border/40 md:pl-5 pt-3 md:pt-0 space-y-3">
+                {/* 1. Scrubber Line */}
+                <div className="w-full">
+                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono mb-1 tabular-nums">
+                    <span className={`font-semibold text-xs ${
+                      theme === 'dark' ? 'text-zinc-100' : 'text-zinc-950 font-bold'
+                    }`}>{currentTimeDisplay}</span>
+                    <span className={`font-medium font-sans ${
+                      theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
+                    }`}>
+                      Segmento {currentLineIndex + 1} de {podcast.dialogue.length}
                     </span>
-                  );
-                })}
-              </div>
-            </div>
+                    <span className={theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}>{podcast.duration}</span>
+                  </div>
 
-            {/* ── LÍNEA DE TIEMPO INTERACTIVA ULTRA-FLUIDA (SMOOTH SCRUBBER) ── */}
-            <div className="max-w-2xl mx-auto mb-1.5 sm:mb-2 px-1 sm:px-2 relative z-10 shrink-0">
-              <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono mb-1 tabular-nums">
-                <span className={`font-semibold text-xs ${
-                  theme === 'dark' ? 'text-zinc-100' : 'text-zinc-950 font-bold'
-                }`}>{currentTimeDisplay}</span>
-                <span className={`font-medium font-sans ${
-                  theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
-                }`}>
-                  Segmento {currentLineIndex + 1} de {podcast.dialogue.length}
-                </span>
-                <span className={theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}>{podcast.duration}</span>
-              </div>
+                  <div className="relative flex items-center group py-1.5">
+                    <div className={`w-full h-1.5 group-hover:h-2 rounded-full overflow-hidden transition-all duration-150 relative ${
+                      theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'
+                    }`}>
+                      <div
+                        className={`h-full rounded-full ${
+                          theme === 'kitty'
+                            ? 'bg-gradient-to-r from-pink-500 via-rose-400 to-pink-300'
+                            : 'bg-gradient-to-r from-violet-500 via-indigo-500 to-zinc-200'
+                        }`}
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white border border-zinc-300 shadow-md transition-transform group-hover:scale-125 pointer-events-none"
+                      style={{ left: `${progressPercent}%` }}
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={1000}
+                      step={1}
+                      value={Math.round(progressPercent * 10)}
+                      onPointerDown={handleProgressPointerDown}
+                      onChange={(e) => handleProgressChange(Number(e.target.value))}
+                      onPointerUp={handleProgressPointerUp}
+                      onKeyUp={handleProgressPointerUp}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      title="Arrastra para avanzar o retroceder suavemente en el podcast"
+                    />
+                  </div>
+                </div>
 
-              {/* Slider interactivo suave a 60fps con track visual y perla */}
-              <div className="relative flex items-center group py-1.5">
-                {/* Pista de fondo */}
-                <div className={`w-full h-1.5 group-hover:h-2 rounded-full overflow-hidden transition-all duration-150 relative ${
-                  theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'
-                }`}>
-                  {/* Pista de relleno suave */}
-                  <div
-                    className={`h-full rounded-full ${
-                      theme === 'kitty'
-                        ? 'bg-gradient-to-r from-pink-500 via-rose-400 to-pink-300'
-                        : 'bg-gradient-to-r from-violet-500 via-indigo-500 to-zinc-200'
+                {/* 2. Botones Primarios de Reproducción */}
+                <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRestart}
+                    className={`p-2 rounded-xl border transition-colors cursor-pointer active:scale-95 ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                     }`}
-                    style={{ width: `${progressPercent}%` }}
-                  />
+                    title="Reiniciar podcast desde el principio"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSkipBackward}
+                    disabled={currentLineIndex === 0}
+                    className={`p-2 rounded-xl border transition-colors cursor-pointer active:scale-95 disabled:opacity-30 ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                    title="Atrasar al segmento anterior"
+                  >
+                    <SkipBack className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSkipSeconds(-10)}
+                    disabled={currentPlaybackSecs <= 0}
+                    className={`px-2 py-1 rounded-xl border transition-all cursor-pointer flex items-center gap-0.5 font-semibold text-xs font-mono tabular-nums active:scale-95 disabled:opacity-30 ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-300 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                    title="Retroceder 10 segundos"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>-10s</span>
+                  </button>
+
+                  {/* Play / Pausa Botón Central */}
+                  <button
+                    type="button"
+                    onClick={handleTogglePlay}
+                    className={`w-11 h-11 sm:w-13 sm:h-13 rounded-2xl active:scale-95 transition-transform duration-150 shadow-xl flex items-center justify-center font-bold cursor-pointer shrink-0 ${
+                      theme === 'kitty'
+                        ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+                        : theme === 'light'
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25'
+                        : 'bg-white hover:bg-zinc-200 text-zinc-950'
+                    }`}
+                    title={isPlaying ? 'Pausar' : 'Reproducir'}
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-5 h-5 fill-current" />
+                    ) : (
+                      <Play className="w-5 h-5 fill-current ml-0.5" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSkipSeconds(10)}
+                    disabled={currentPlaybackSecs >= totalDurationSecs}
+                    className={`px-2 py-1 rounded-xl border transition-all cursor-pointer flex items-center gap-0.5 font-semibold text-xs font-mono tabular-nums active:scale-95 disabled:opacity-30 ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-300 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                    title="Adelantar 10 segundos"
+                  >
+                    <span>+10s</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSkipForward}
+                    disabled={currentLineIndex >= podcast.dialogue.length - 1}
+                    className={`p-2 rounded-xl border transition-colors cursor-pointer active:scale-95 disabled:opacity-30 ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                    title="Adelantar al siguiente segmento"
+                  >
+                    <SkipForward className="w-4 h-4" />
+                  </button>
                 </div>
 
-                {/* Thumb perla brillante deslizante */}
-                <div
-                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white border border-zinc-300 shadow-md transition-transform group-hover:scale-125 pointer-events-none"
-                  style={{ left: `${progressPercent}%` }}
-                />
+                {/* 3. Controles Secundarios: Silenciar y Velocidad */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-thea-border/40">
+                  <button
+                    type="button"
+                    onClick={handleToggleMute}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-colors cursor-pointer text-xs active:scale-95 ${
+                      isMuted
+                        ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                        : theme === 'dark'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                    }`}
+                    title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5" />
+                    )}
+                    <span className="text-[11px] font-medium">{isMuted ? 'Mudo' : 'Sonido'}</span>
+                  </button>
 
-                {/* Input nativo transparente para control táctil y ratón con 1000 pasos */}
-                <input
-                  type="range"
-                  min={0}
-                  max={1000}
-                  step={1}
-                  value={Math.round(progressPercent * 10)}
-                  onPointerDown={handleProgressPointerDown}
-                  onChange={(e) => handleProgressChange(Number(e.target.value))}
-                  onPointerUp={handleProgressPointerUp}
-                  onKeyUp={handleProgressPointerUp}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  title="Arrastra para avanzar o retroceder suavemente en el podcast"
-                />
-              </div>
-            </div>
-
-            {/* Controles de Reproducción y Navegación en 2 Filas */}
-            <div className="max-w-2xl mx-auto space-y-1.5 sm:space-y-2 relative z-10 shrink-0">
-              {/* Fila 1: Botones Primarios de Reproducción */}
-              <div className="flex items-center justify-center gap-1.5 sm:gap-2.5">
-                {/* Reiniciar */}
-                <button
-                  type="button"
-                  onClick={handleRestart}
-                  className={`p-2 rounded-xl border transition-colors cursor-pointer active:scale-95 ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
-                      : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                  title="Reiniciar podcast desde el principio"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-
-                {/* Segmento Anterior */}
-                <button
-                  type="button"
-                  onClick={handleSkipBackward}
-                  disabled={currentLineIndex === 0}
-                  className={`p-2 rounded-xl border transition-colors cursor-pointer active:scale-95 disabled:opacity-30 ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
-                      : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                  title="Atrasar al segmento anterior"
-                >
-                  <SkipBack className="w-4 h-4" />
-                </button>
-
-                {/* Retroceder 10 Segundos */}
-                <button
-                  type="button"
-                  onClick={() => handleSkipSeconds(-10)}
-                  disabled={currentPlaybackSecs <= 0}
-                  className={`px-2 py-1 rounded-xl border transition-all cursor-pointer flex items-center gap-0.5 font-semibold text-xs font-mono tabular-nums active:scale-95 disabled:opacity-30 ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-300 hover:text-white'
-                      : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                  title="Retroceder 10 segundos"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>-10s</span>
-                </button>
-
-                {/* Play / Pausa Botón Central */}
-                <button
-                  type="button"
-                  onClick={handleTogglePlay}
-                  className={`w-11 h-11 sm:w-13 sm:h-13 rounded-2xl active:scale-95 transition-transform duration-150 shadow-xl flex items-center justify-center font-bold cursor-pointer shrink-0 ${
-                    theme === 'kitty'
-                      ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
-                      : theme === 'light'
-                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25'
-                      : 'bg-white hover:bg-zinc-200 text-zinc-950'
-                  }`}
-                  title={isPlaying ? 'Pausar' : 'Reproducir'}
-                >
-                  {isPlaying ? (
-                    <Pause className="w-5 h-5 fill-current" />
-                  ) : (
-                    <Play className="w-5 h-5 fill-current ml-0.5" />
-                  )}
-                </button>
-
-                {/* Adelantar 10 Segundos */}
-                <button
-                  type="button"
-                  onClick={() => handleSkipSeconds(10)}
-                  disabled={currentPlaybackSecs >= totalDurationSecs}
-                  className={`px-2 py-1 rounded-xl border transition-all cursor-pointer flex items-center gap-0.5 font-semibold text-xs font-mono tabular-nums active:scale-95 disabled:opacity-30 ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-300 hover:text-white'
-                      : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                  title="Adelantar 10 segundos"
-                >
-                  <span>+10s</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Segmento Siguiente */}
-                <button
-                  type="button"
-                  onClick={handleSkipForward}
-                  disabled={currentLineIndex >= podcast.dialogue.length - 1}
-                  className={`p-2 rounded-xl border transition-colors cursor-pointer active:scale-95 disabled:opacity-30 ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
-                      : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                  title="Adelantar al siguiente segmento"
-                >
-                  <SkipForward className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Fila 2: Controles Secundarios (Silenciar y Velocidad) */}
-              <div className="flex items-center justify-between sm:justify-center gap-2 sm:gap-4 pt-1.5 border-t border-thea-border/40">
-                {/* Mute */}
-                <button
-                  type="button"
-                  onClick={handleToggleMute}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-colors cursor-pointer text-xs active:scale-95 ${
-                    isMuted
-                      ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                      : theme === 'dark'
-                      ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
-                      : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-                  }`}
-                  title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-3.5 h-3.5 text-rose-400" />
-                  ) : (
-                    <Volume2 className="w-3.5 h-3.5" />
-                  )}
-                  <span className="text-[11px] font-medium">{isMuted ? 'Mudo' : 'Sonido'}</span>
-                </button>
-
-                {/* Speed Controller */}
-                <div className={`flex items-center gap-0.5 rounded-xl p-0.5 text-xs border ${
-                  theme === 'dark' ? 'bg-white/[0.025] border-white/[0.08]' : theme === 'kitty' ? 'bg-pink-50 border-pink-200' : 'bg-slate-100 border-slate-200'
-                }`}>
-                  {speeds.map(s => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => handleSpeedChange(s)}
-                      className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer text-[10px] sm:text-xs tabular-nums active:scale-95 ${
-                        playbackSpeed === s
-                          ? theme === 'kitty'
-                            ? 'bg-pink-500 text-white shadow-sm'
-                            : theme === 'light'
-                            ? 'bg-rose-600 text-white shadow-sm'
-                            : 'bg-white text-zinc-950 shadow-sm'
-                          : theme === 'dark'
-                          ? 'text-zinc-400 hover:text-white'
-                          : 'text-slate-600 hover:text-zinc-950'
-                      }`}
-                    >
-                      {s}x
-                    </button>
-                  ))}
+                  <div className={`flex items-center gap-0.5 rounded-xl p-0.5 text-xs border ${
+                    theme === 'dark' ? 'bg-white/[0.025] border-white/[0.08]' : theme === 'kitty' ? 'bg-pink-50 border-pink-200' : 'bg-slate-100 border-slate-200'
+                  }`}>
+                    {speeds.map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => handleSpeedChange(s)}
+                        className={`px-1.5 sm:px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer text-[10px] sm:text-xs tabular-nums active:scale-95 ${
+                          playbackSpeed === s
+                            ? theme === 'kitty'
+                              ? 'bg-pink-500 text-white shadow-sm'
+                              : theme === 'light'
+                              ? 'bg-rose-600 text-white shadow-sm'
+                              : 'bg-white text-zinc-950 shadow-sm'
+                            : theme === 'dark'
+                            ? 'text-zinc-400 hover:text-white'
+                            : 'text-slate-600 hover:text-zinc-950'
+                        }`}
+                      >
+                        {s}x
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

@@ -1019,7 +1019,9 @@ export const App: React.FC = () => {
   const isScreenFittingMode = currentMode === 'podcast' || currentMode === 'ask-thea' || currentMode === 'oral-lesson' || currentMode === 'flashcards';
 
   return (
-    <div className={`min-h-screen bg-thea-bg text-slate-100 flex flex-col selection:bg-violet-600 selection:text-white ${
+    <div className={`min-h-screen bg-thea-bg flex flex-col selection:bg-violet-600 selection:text-white ${
+      theme === 'dark' ? 'text-slate-100' : 'text-zinc-950'
+    } ${
       isScreenFittingMode ? 'h-screen max-h-screen overflow-hidden' : ''
     }`}>
       {/* Navigation */}

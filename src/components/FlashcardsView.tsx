@@ -1744,22 +1744,24 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   theme === 'dark'
                     ? 'bg-slate-800 text-slate-300 border-slate-700'
                     : theme === 'kitty'
-                    ? 'bg-pink-100 text-pink-800 border-pink-200'
-                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                    ? 'bg-pink-100 text-pink-900 border-pink-200 font-bold'
+                    : 'bg-slate-100 text-slate-800 border-slate-300 font-bold'
                 }`}>
                   Por aprender: {cards.filter(c => c.mastery === 'to-learn' || !c.mastery).length}
                 </span>
                 <span className={`px-2 py-0.5 rounded-md border ${
                   theme === 'dark'
                     ? 'bg-amber-950 text-amber-300 border-amber-900/60'
-                    : 'bg-amber-100 text-amber-900 border-amber-200'
+                    : theme === 'kitty'
+                    ? 'bg-pink-100 text-pink-950 border-pink-300 font-bold'
+                    : 'bg-amber-100 text-amber-950 border-amber-300 font-bold'
                 }`}>
                   Conocidas: {cards.filter(c => c.mastery === 'known').length}
                 </span>
                 <span className={`px-2 py-0.5 rounded-md border ${
                   theme === 'dark'
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-900/60'
-                    : 'bg-emerald-100 text-emerald-900 border-emerald-200'
+                    : 'bg-emerald-100 text-emerald-950 border-emerald-300 font-bold'
                 }`}>
                   Dominadas: {cards.filter(c => c.mastery === 'mastered').length}
                 </span>
@@ -1776,8 +1778,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   theme === 'dark'
                     ? 'bg-violet-950/60 hover:bg-violet-900/80 border-violet-500/40 text-violet-200'
                     : theme === 'kitty'
-                    ? 'bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-900'
-                    : 'bg-violet-100 hover:bg-violet-200 border-violet-300 text-violet-900'
+                    ? 'bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-900 font-extrabold'
+                    : 'bg-violet-100 hover:bg-violet-200 border-violet-300 text-violet-900 font-extrabold'
                 }`}
                 title="Generar y sumar 10 nuevas tarjetas a este kit"
               >
@@ -1796,7 +1798,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-40 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-95 ${
                   theme === 'dark'
                     ? 'bg-amber-950/60 hover:bg-amber-900/80 border-amber-500/40 text-amber-200'
-                    : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-900'
+                    : theme === 'kitty'
+                    ? 'bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-950 font-extrabold'
+                    : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-950 font-extrabold'
                 }`}
                 title="Archivar las flashcards dominadas y traer una baraja de 10 nuevas no vistas"
               >

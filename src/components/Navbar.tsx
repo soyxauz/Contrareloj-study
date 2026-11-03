@@ -302,11 +302,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-bold tabular-nums ${
                       active
-                        ? 'bg-white/25 text-white'
+                        ? 'bg-white/30 text-white shadow-xs'
                         : theme === 'kitty'
-                        ? 'bg-pink-100 text-pink-700 border border-pink-200'
+                        ? 'bg-pink-100 text-pink-800 border border-pink-200 font-extrabold'
                         : theme === 'light'
-                        ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-200 font-extrabold'
                         : 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
                     }`}
                   >

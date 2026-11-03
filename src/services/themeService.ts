@@ -9,6 +9,12 @@ export const THEME_STORAGE_KEY = 'thea_theme_mode';
 export function getStoredTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'dark';
   try {
+    if (typeof document !== 'undefined') {
+      const domTheme = document.documentElement.getAttribute('data-theme') as ThemeMode;
+      if (domTheme === 'light' || domTheme === 'kitty' || domTheme === 'dark') {
+        return domTheme;
+      }
+    }
     const saved = localStorage.getItem(THEME_STORAGE_KEY);
     if (saved === 'light' || saved === 'kitty' || saved === 'dark') {
       return saved;
@@ -78,6 +84,11 @@ export function setStoredTheme(theme: ThemeMode, syncToDrive = true): void {
 export function initTheme(): ThemeMode {
   const theme = getStoredTheme();
   applyThemeToDom(theme);
+  window.dispatchEvent(
+    new CustomEvent('thea_theme_changed', {
+      detail: { theme },
+    })
+  );
   return theme;
 }
 
@@ -95,8 +106,25 @@ export function useTheme() {
     };
 
     window.addEventListener('thea_theme_changed', handleThemeChange);
+
+    // Observer para cambios directos de atributo en el elemento <html>
+    let observer: MutationObserver | null = null;
+    if (typeof document !== 'undefined') {
+      observer = new MutationObserver(() => {
+        const currentDom = document.documentElement.getAttribute('data-theme') as ThemeMode;
+        if (currentDom === 'light' || currentDom === 'kitty' || currentDom === 'dark') {
+          setThemeState(currentDom);
+        }
+      });
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme'],
+      });
+    }
+
     return () => {
       window.removeEventListener('thea_theme_changed', handleThemeChange);
+      if (observer) observer.disconnect();
     };
   }, []);
 

@@ -858,9 +858,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   }}
                   style={{
                     background: theme === 'light'
-                      ? `linear-gradient(135deg, ${mTheme.hex}14 0%, #ffffff 42%, #ffffff 100%)`
+                      ? '#ffffff'
                       : theme === 'kitty'
-                      ? `linear-gradient(135deg, ${mTheme.hex}18 0%, #ffffff 40%, #fff7fa 100%)`
+                      ? '#ffffff'
                       : `radial-gradient(ellipse 120% 90% at 0% 0%, ${mTheme.hex}22 0%, ${mTheme.cardBgHex} 65%, #0e0b16 100%)`,
                     borderColor: theme === 'light'
                       ? '#e2e8f0'
@@ -869,26 +869,30 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       : `${mTheme.hex}30`,
                     animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
-                  className={`animate-stagger-item glass-specular group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-2xl hover:border-white/35 active:scale-[0.985] ${
+                  className={`animate-stagger-item study-kit-card ${
+                    theme === 'dark' ? 'glass-specular' : theme === 'kitty' ? 'shadow-sm shadow-pink-100/50' : 'shadow-sm'
+                  } group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-xl active:scale-[0.985] ${
                     isSelectionMode && isKitSelected
                       ? 'ring-2 ring-white/50 border-white shadow-2xl'
                       : isActive
-                      ? 'ring-1 ring-white/30 border-white/40 shadow-2xl'
+                      ? theme === 'dark' ? 'ring-1 ring-white/30 border-white/40 shadow-2xl' : 'ring-1 ring-slate-300 border-slate-300'
                       : ''
                   }`}
                 >
                   {/* Línea de luz superior con el color distintivo de la materia */}
                   <div
-                    className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity duration-200"
+                    className="absolute top-0 left-0 right-0 h-[2.5px] pointer-events-none opacity-90 group-hover:opacity-100 transition-opacity duration-200"
                     style={{
-                      background: `linear-gradient(90deg, ${mTheme.hex}cc 0%, ${mTheme.hex}35 60%, transparent 100%)`,
+                      background: `linear-gradient(90deg, ${mTheme.hex} 0%, ${mTheme.hex}55 60%, transparent 100%)`,
                     }}
                   />
 
                   {/* Marca de agua ilustrativa interactiva con animación hover pop-up y rotación dinámica */}
                   <div
                     style={{ color: mTheme.hex }}
-                    className="absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-all duration-300 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 opacity-45 group-hover:rotate-0 group-hover:-translate-y-1.5 group-hover:translate-x-0 group-hover:opacity-100"
+                    className={`absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-all duration-300 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 ${
+                      theme === 'dark' ? 'opacity-40 group-hover:opacity-90' : 'opacity-15 group-hover:opacity-30'
+                    } group-hover:rotate-0 group-hover:-translate-y-1.5 group-hover:translate-x-0`}
                   >
                     {renderWatermarkIcon(kit.icon, kit.category, kit.title)}
                   </div>
@@ -905,7 +909,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                           className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 mt-0.5 ${
                             isKitSelected
                               ? 'bg-white text-zinc-950 border-white shadow-md'
-                              : 'bg-black/50 border-white/30 text-transparent hover:border-white/70'
+                              : theme === 'dark'
+                              ? 'bg-black/50 border-white/30 text-transparent hover:border-white/70'
+                              : 'bg-slate-100 border-slate-300 text-transparent hover:border-slate-500'
                           }`}
                         >
                           <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -914,7 +920,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       <div>
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <span
-                            className="text-[11px] font-semibold tracking-wider uppercase"
+                            className="text-[11px] font-bold tracking-wider uppercase"
                             style={{ color: mTheme.hex }}
                           >
                             {kit.category || 'General'}
@@ -1030,8 +1036,8 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   {/* Bottom Area: Estadísticas + Micro-barra de progreso con respiración amplia */}
                   <div className="mt-7 relative z-10 space-y-3">
                     {/* Estadísticas del kit */}
-                    <div className={`flex items-center gap-4 text-xs font-medium flex-wrap tabular-nums ${
-                      theme === 'dark' ? 'text-white/90' : 'text-zinc-700'
+                    <div className={`flex items-center gap-4 text-xs font-semibold flex-wrap tabular-nums ${
+                      theme === 'dark' ? 'text-white/90' : 'text-slate-800'
                     }`}>
                       <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
                         <Brain className="w-3.5 h-3.5 shrink-0" style={{ color: mTheme.hex }} />
@@ -1049,14 +1055,14 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       </span>
                       {kStats.assetsCount > 0 && (
                         <span className="flex items-center gap-1.5">
-                          <ImageIcon className={`w-3.5 h-3.5 shrink-0 ${theme === 'dark' ? 'text-white/70' : 'text-zinc-500'}`} />
+                          <ImageIcon className={`w-3.5 h-3.5 shrink-0 ${theme === 'dark' ? 'text-white/70' : 'text-slate-700'}`} />
                           <span>{kStats.assetsCount} img</span>
                         </span>
                       )}
                     </div>
 
                     {/* Barra de progreso de precisión con color distintivo de la materia */}
-                    <div className={`w-full h-1 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-black/50' : 'bg-slate-200'}`}>
+                    <div className={`w-full h-1.5 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-black/50' : 'bg-slate-200'}`}>
                       <div
                         style={{
                           width: `${progressPercent}%`,

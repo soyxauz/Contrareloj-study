@@ -604,7 +604,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                     Regeneración
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
+                <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700 font-medium'}`}>
                   Elige un nuevo formato y duración para generar otra perspectiva sobre tus fuentes de estudio. El episodio actual y los audios en caché se borrarán para dar paso al nuevo guión.
                 </p>
               </div>
@@ -612,10 +612,10 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
               {/* Formato */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  <label className={`text-xs font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-slate-300' : 'text-slate-800'}`}>
                     Formato del Podcast
                   </label>
-                  <span className="text-[10px] text-amber-400 font-medium">Estilo NotebookLM</span>
+                  <span className={`text-[10px] font-semibold ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>Estilo NotebookLM</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {PODCAST_FORMAT_OPTIONS.map((f) => {
@@ -633,9 +633,9 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                               ? 'border-amber-500 bg-amber-50 text-amber-950 shadow-md ring-1 ring-amber-500/40'
                               : 'border-amber-400 bg-amber-500/15 shadow-md ring-1 ring-amber-400/40'
                             : theme === 'kitty'
-                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-600'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
                             : theme === 'light'
-                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
@@ -645,7 +645,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                               <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
                                 isSelected
                                   ? (theme === 'kitty' ? 'bg-pink-500 text-white font-bold' : 'bg-amber-400 text-slate-950 font-bold')
-                                  : (theme === 'dark' ? 'bg-thea-bg text-slate-400 border border-thea-border' : 'bg-slate-200 text-slate-600')
+                                  : (theme === 'dark' ? 'bg-thea-bg text-slate-400 border border-thea-border' : 'bg-slate-200 text-slate-700')
                               }`}>
                                 <IconComp className="w-3.5 h-3.5" />
                               </div>
@@ -653,7 +653,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                                 theme === 'dark' ? 'text-white' : 'text-zinc-950'
                               }`}>{f.title}</span>
                             </div>
-                            {isSelected && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-400'}`} />}
+                            {isSelected && <Check className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : 'text-amber-500'}`} />}
                           </div>
                           <p className={`text-[11px] leading-relaxed ${
                             theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
@@ -669,7 +669,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
 
               {/* Duración */}
               <div>
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
+                <label className={`text-xs font-bold uppercase tracking-wider block mb-2 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-800'}`}>
                   Duración del Podcast
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -687,9 +687,9 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                               ? 'border-violet-500 bg-violet-50 text-violet-950 shadow-md ring-1 ring-violet-500/40'
                               : 'border-violet-400 bg-violet-600/15 shadow-md ring-1 ring-violet-400/40'
                             : theme === 'kitty'
-                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-600'
+                            ? 'border-pink-200 bg-pink-50/40 hover:bg-pink-50 text-slate-700'
                             : theme === 'light'
-                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'
+                            ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                             : 'border-thea-border bg-thea-surfaceLight/50 hover:bg-thea-surfaceLight text-slate-400'
                         }`}
                       >
@@ -706,7 +706,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                           </span>
                         </div>
                         <p className={`text-[10px] leading-snug ${
-                          theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                          theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
                         }`}>
                           {d.detail}
                         </p>
@@ -810,16 +810,22 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
 
           {/* SECCIÓN INFERIOR PARA PESTAÑAS AZURE Y BROWSER (BOTONES DE PRUEBA) */}
           {voiceModalTab !== 'new_episode' && (
-            <div className="pt-3 border-t border-thea-border">
+            <div className={`pt-3 border-t ${theme === 'dark' ? 'border-thea-border' : 'border-slate-200'}`}>
               <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <button
                     type="button"
                     disabled={isTestingVoice}
                     onClick={() => onTestVoiceSample('sofia')}
-                    className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-amber-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                    className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5 ${
+                      theme === 'dark'
+                        ? 'bg-thea-surfaceLight border-thea-border hover:border-amber-400 text-slate-300 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white border-pink-200 hover:border-pink-400 text-pink-900 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-400 text-slate-800 shadow-xs'
+                    }`}
                   >
-                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
+                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-amber-500" />}
                     <span>Probar Sofía</span>
                   </button>
 
@@ -827,9 +833,15 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                     type="button"
                     disabled={isTestingVoice}
                     onClick={() => onTestVoiceSample('mateo')}
-                    className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-thea-surfaceLight border border-thea-border hover:border-violet-400 text-slate-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                    className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5 ${
+                      theme === 'dark'
+                        ? 'bg-thea-surfaceLight border-thea-border hover:border-violet-400 text-slate-300 hover:text-white'
+                        : theme === 'kitty'
+                        ? 'bg-white border-pink-200 hover:border-pink-400 text-pink-900 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-400 text-slate-800 shadow-xs'
+                    }`}
                   >
-                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-400" />}
+                    {isTestingVoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5 text-violet-500" />}
                     <span>Probar Mateo</span>
                   </button>
                 </div>
@@ -837,7 +849,9 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-1.5 sm:px-5 sm:py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                  className={`px-4 py-1.5 sm:px-5 sm:py-2 rounded-xl font-bold text-xs transition-colors cursor-pointer text-white shadow-md ${
+                    theme === 'kitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-violet-600 hover:bg-violet-500'
+                  }`}
                 >
                   Listo
                 </button>

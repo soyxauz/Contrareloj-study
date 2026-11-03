@@ -1011,10 +1011,10 @@ Reglas obligatorias estrictas:
       )}
 
       {/* ── CUERPO PRINCIPAL: INTERFAZ CENTRADA Y MINIMALISTA SIN OVERFLOW ── */}
-      <main className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-3 sm:px-4 relative my-auto overflow-hidden">
+      <main className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-3 sm:px-4 relative py-1 overflow-hidden">
         {/* Subtítulo dinámico / Pregunta actual de Thea */}
-        <div className="w-full max-w-xl mx-auto mb-3 sm:mb-5 transition-all duration-300">
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-bold uppercase tracking-widest mb-2.5 ${
+        <div className="w-full max-w-xl mx-auto mb-2 sm:mb-3 transition-all duration-300 shrink-0">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-bold uppercase tracking-widest mb-1.5 ${
             theme === 'dark'
               ? 'bg-white/[0.04] border-white/10 text-zinc-400'
               : theme === 'kitty'
@@ -1066,28 +1066,28 @@ Reglas obligatorias estrictas:
         </div>
 
         {/* ── HERO CONTROLLER: MICRÓFONO CENTRAL MINIMALISTA Y ATRACTIVO ── */}
-        <div className="relative flex items-center justify-center my-2 sm:my-3">
+        <div className="relative flex items-center justify-center my-1.5 sm:my-2 shrink-0">
           {/* Anillos sutiles cuando está escuchando o hablando */}
           {isInterrupted && (
-            <span className="absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-amber-500/10 animate-ping pointer-events-none duration-1000" />
+            <span className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-amber-500/10 animate-ping pointer-events-none duration-1000" />
           )}
 
           {listening && (
             <>
-              <span className="absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-rose-500/10 animate-ping pointer-events-none duration-1000" />
-              <span className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full border border-rose-500/20 animate-pulse pointer-events-none" />
+              <span className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-rose-500/10 animate-ping pointer-events-none duration-1000" />
+              <span className="absolute w-44 h-44 sm:w-52 sm:h-52 rounded-full border border-rose-500/20 animate-pulse pointer-events-none" />
             </>
           )}
 
           {speaking && !isInterrupted && (
-            <span className="absolute w-40 h-40 sm:w-52 sm:h-52 rounded-full border border-violet-500/25 animate-pulse pointer-events-none duration-700" />
+            <span className="absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full border border-violet-500/25 animate-pulse pointer-events-none duration-700" />
           )}
 
           {isTyping && (
-            <span className="absolute w-32 h-32 sm:w-40 sm:h-40 rounded-full border-2 border-white/20 border-t-white animate-spin pointer-events-none" />
+            <span className="absolute w-32 h-32 sm:w-36 sm:h-36 rounded-full border-2 border-white/20 border-t-white animate-spin pointer-events-none" />
           )}
 
-          {/* Botón Central Heroico */}
+          {/* Botón Central Heroico Adaptado a Modo Claro / Kitty / Oscuro */}
           <button
             type="button"
             onClick={() => {
@@ -1101,17 +1101,35 @@ Reglas obligatorias estrictas:
             }}
             disabled={!canListen || isTyping || transcribing}
             style={(listening || isInterrupted) && useWhisper ? { transform: `scale(${1 + micLevel * 0.12})` } : undefined}
-            className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-[0_16px_40px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] ${
-              isInterrupted
+            className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative select-none shadow-xl ${
+              theme === 'kitty'
+                ? isInterrupted
+                  ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-white ring-4 ring-amber-300/50 scale-105 shadow-[0_0_35px_rgba(245,158,11,0.35)]'
+                  : listening
+                  ? 'bg-gradient-to-b from-rose-500 to-pink-600 text-white ring-4 ring-rose-400/50 scale-105 shadow-[0_0_35px_rgba(244,63,94,0.35)]'
+                  : speaking
+                  ? 'bg-gradient-to-b from-pink-400 to-rose-400 text-white ring-4 ring-pink-300/50 shadow-[0_0_35px_rgba(244,114,182,0.35)] active:scale-95'
+                  : transcribing || isTyping
+                  ? 'bg-gradient-to-b from-pink-300 to-rose-300 text-white ring-4 ring-pink-200'
+                  : 'bg-gradient-to-b from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white ring-4 ring-pink-300/40 shadow-pink-500/25 active:scale-95'
+                : theme === 'light'
+                ? isInterrupted
+                  ? 'bg-gradient-to-b from-amber-500 to-amber-600 text-white ring-4 ring-amber-300/50 scale-105 shadow-[0_0_35px_rgba(245,158,11,0.35)]'
+                  : listening
+                  ? 'bg-gradient-to-b from-rose-600 to-rose-700 text-white ring-4 ring-rose-400/50 scale-105 shadow-[0_0_35px_rgba(225,29,72,0.35)]'
+                  : speaking
+                  ? 'bg-gradient-to-b from-rose-500 to-rose-600 text-white ring-4 ring-rose-300/50 shadow-[0_0_35px_rgba(225,29,72,0.35)] active:scale-95'
+                  : transcribing || isTyping
+                  ? 'bg-gradient-to-b from-slate-400 to-slate-500 text-white ring-4 ring-slate-200'
+                  : 'bg-gradient-to-b from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white ring-4 ring-rose-300/40 shadow-rose-600/25 active:scale-95'
+                : isInterrupted
                 ? 'bg-gradient-to-b from-[#241315] via-[#1a0c0e] to-[#0f0607] text-amber-200 ring-4 ring-amber-500/30 scale-105 shadow-[0_0_40px_rgba(245,158,11,0.3)]'
                 : listening
                 ? 'bg-gradient-to-b from-[#260e15] via-[#1c080e] to-[#120408] text-white ring-4 ring-rose-500/30 scale-105 shadow-[0_0_40px_rgba(244,63,94,0.3)]'
                 : speaking
                 ? 'bg-gradient-to-b from-[#1b142e] via-[#110c22] to-[#0b0718] text-zinc-100 ring-4 ring-violet-500/30 shadow-[0_0_40px_rgba(139,92,246,0.3)] active:scale-95'
-                : transcribing
+                : transcribing || isTyping
                 ? 'bg-gradient-to-b from-[#141b2c] via-[#0d1220] to-[#070b15] text-white ring-4 ring-white/10'
-                : isTyping
-                ? 'bg-gradient-to-b from-[#181129] via-[#0f0a1d] to-[#0a0515] text-white ring-4 ring-white/10'
                 : 'bg-gradient-to-b from-[#181129] via-[#0f0a1d] to-[#0a0515] hover:from-[#201736] border border-white/20 text-white ring-4 ring-white/[0.05] hover:ring-white/[0.12] active:scale-95'
             } disabled:opacity-40 disabled:cursor-not-allowed`}
             title={
@@ -1226,7 +1244,13 @@ Reglas obligatorias estrictas:
       </main>
 
       {/* ── BARRA INFERIOR DISCRETA CON OPCIONES SECUNDARIAS ── */}
-      <footer className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-t border-thea-border/40 text-xs text-slate-400 shrink-0">
+      <footer className={`flex flex-wrap items-center justify-between gap-3 px-3 py-1.5 border-t text-xs shrink-0 rounded-b-2xl ${
+        theme === 'dark'
+          ? 'border-thea-border/40 text-slate-400'
+          : theme === 'kitty'
+          ? 'border-pink-200 text-pink-700 bg-pink-50/50'
+          : 'border-slate-200 text-slate-600 bg-slate-50/50'
+      }`}>
         <div className="flex items-center gap-2">
           {/* Conmutador Modo Manos Libres */}
           {canListen && (
@@ -1235,8 +1259,12 @@ Reglas obligatorias estrictas:
               onClick={() => setHandsFree((h) => !h)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                 handsFree
-                  ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300 shadow-sm'
-                  : 'bg-thea-surface/80 border-thea-border/70 text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300 shadow-sm'
+                  : theme === 'dark'
+                  ? 'bg-thea-surface/80 border-thea-border/70 text-slate-400 hover:text-white'
+                  : theme === 'kitty'
+                  ? 'bg-white border-pink-200 text-pink-800 shadow-xs hover:bg-pink-50'
+                  : 'bg-white border-slate-200 text-slate-700 shadow-xs hover:bg-slate-100'
               }`}
             >
               <span className={`w-2 h-2 rounded-full ${handsFree ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
@@ -1249,7 +1277,13 @@ Reglas obligatorias estrictas:
             <button
               type="button"
               onClick={() => setShowHistoryModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-thea-border/70 bg-thea-surface/80 hover:bg-thea-surface text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                theme === 'dark'
+                  ? 'border-thea-border/70 bg-thea-surface/80 hover:bg-thea-surface text-slate-300 hover:text-white'
+                  : theme === 'kitty'
+                  ? 'border-pink-200 bg-white hover:bg-pink-50 text-pink-800 shadow-xs'
+                  : 'border-slate-200 bg-white hover:bg-slate-100 text-slate-700 shadow-xs'
+              }`}
             >
               <History className="w-3.5 h-3.5 text-violet-400" />
               <span>Historial ({messages.length - 1})</span>
@@ -1261,7 +1295,13 @@ Reglas obligatorias estrictas:
         <button
           type="button"
           onClick={() => setShowTextInput((v) => !v)}
-          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+          className={`flex items-center gap-1.5 text-xs transition-colors cursor-pointer ${
+            theme === 'dark'
+              ? 'text-slate-400 hover:text-slate-200'
+              : theme === 'kitty'
+              ? 'text-pink-700 hover:text-pink-950 font-medium'
+              : 'text-slate-600 hover:text-zinc-950 font-medium'
+          }`}
         >
           <Keyboard className="w-3.5 h-3.5" />
           <span>{showTextInput ? 'Ocultar teclado' : 'Responder por escrito'}</span>
