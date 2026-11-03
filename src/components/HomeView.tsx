@@ -8,7 +8,6 @@ import {
   Brain,
   BookOpen,
   Headphones,
-  RotateCcw,
   Layers,
   MessageSquareText,
   FileCheck2,
@@ -162,7 +161,6 @@ interface HomeViewProps {
   onOpenAuth?: () => void;
   onDeleteKitsBatch?: (kitIds: string[]) => void;
   onChangeCategoryBatch?: (kitIds: string[], newCategory: string) => void;
-  onResetDefaultKits?: () => void;
 }
 
 const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.ReactNode; gradient: string }[] = [
@@ -187,7 +185,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenAuth,
   onDeleteKitsBatch,
   onChangeCategoryBatch,
-  onResetDefaultKits,
 }) => {
   const { theme } = useTheme();
 
@@ -784,21 +781,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-white mb-2">No tienes ningún Study Kit activo</h3>
             <p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-              {userId
-                ? 'No se encontraron Study Kits en esta sesión. Puedes restaurar los kits de estudio de demostración para empezar de inmediato o crear un kit propio.'
-                : 'Puedes restaurar los kits de estudio de fábrica para explorar la plataforma, iniciar sesión para recuperar tu progreso guardado o crear un kit nuevo.'}
+              No tienes ningún kit de estudio creado todavía. Sube tus apuntes, archivos PDF o genera un tema nuevo con Inteligencia Artificial para comenzar.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              {onResetDefaultKits && (
-                <button
-                  type="button"
-                  onClick={onResetDefaultKits}
-                  className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Restaurar Kits Predeterminados</span>
-                </button>
-              )}
               {!userId && onOpenAuth && (
                 <button
                   type="button"
@@ -812,7 +797,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               <button
                 type="button"
                 onClick={() => onNavigate('create')}
-                className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-200 hover:text-white hover:bg-thea-surfaceLight font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 <span>Crear nuevo Study Kit</span>

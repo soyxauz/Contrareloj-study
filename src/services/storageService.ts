@@ -594,19 +594,24 @@ export interface StudyKitIndexItem {
   pendingDriveSync?: boolean;
 }
 
+export const RETIRED_TEST_KIT_IDS: readonly string[] = ['bio-respiration', 'cs-algorithms', 'cs-algo'];
 const DELETED_KITS_KEY = 'thea_deleted_kit_ids';
 
 /**
- * Obtiene el conjunto de identificadores de kits eliminados explícitamente por el usuario.
+ * Obtiene el conjunto de identificadores de kits eliminados explícitamente por el usuario
+ * e incluye de forma fija los kits de prueba retirados.
  */
 export function getDeletedKitIds(): Set<string> {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(DELETED_KITS_KEY) : null;
-    if (!raw) return new Set<string>();
-    const arr = JSON.parse(raw);
-    return new Set<string>(Array.isArray(arr) ? arr : []);
+    const arr = raw ? JSON.parse(raw) : [];
+    const set = new Set<string>(Array.isArray(arr) ? arr : []);
+    for (const id of RETIRED_TEST_KIT_IDS) {
+      set.add(id);
+    }
+    return set;
   } catch {
-    return new Set<string>();
+    return new Set<string>(RETIRED_TEST_KIT_IDS);
   }
 }
 

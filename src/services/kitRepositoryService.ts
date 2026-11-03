@@ -16,6 +16,50 @@ import {
 export const inMemoryKitsCache = new Map<string, StudyKit[]>();
 
 /**
+ * Purga de forma inmediata e irreversible los kits de prueba retirados ('bio-respiration', 'cs-algorithms')
+ * de todos los almacenamientos locales para que la aplicación inicie siempre limpia y vacía.
+ */
+function purgeRetiredTestKitsFromStorage() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const currentId = localStorage.getItem('thea_current_kit_id');
+    if (currentId && (currentId === 'bio-respiration' || currentId.startsWith('cs-algo'))) {
+      localStorage.removeItem('thea_current_kit_id');
+    }
+
+    const keysToClean = ['thea_guest_kits', 'thea_study_kits_v2'];
+    for (const k of keysToClean) {
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((item: any) => item && item.id !== 'bio-respiration' && !String(item.id).startsWith('cs-algo'));
+            localStorage.setItem(k, JSON.stringify(filtered));
+          }
+        } catch {}
+      }
+    }
+
+    const indexKeys = ['thea_guest_kits_index'];
+    for (const k of indexKeys) {
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((item: any) => item && item.id !== 'bio-respiration' && !String(item.id).startsWith('cs-algo'));
+            localStorage.setItem(k, JSON.stringify(filtered));
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+}
+
+purgeRetiredTestKitsFromStorage();
+
+/**
  * Hidrata las flashcards de cada kit con el estado de dominio más reciente guardado en memoria y LocalStorage.
  * Garantiza que cualquier cambio ("dominada", "no dominada", "la conozco") persista de inmediato en todo el sistema.
  */
@@ -68,16 +112,16 @@ export const kitRepositoryService = {
     try {
       const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
 
+      const deletedIds = getDeletedKitIds();
+
       // 1. Memoria rapida inmediata
       if (inMemoryKitsCache.has(key)) {
         const mem = inMemoryKitsCache.get(key);
         if (mem && Array.isArray(mem) && mem.length > 0) {
-          const cleanMem = mem.filter(k => !isCorruptedKit(k));
+          const cleanMem = mem.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
           if (cleanMem.length > 0) return hydrateFlashcardsMastery(userId, cleanMem);
         }
       }
-
-      const deletedIds = getDeletedKitIds();
 
       // 2. Intentar leer kits completos o aligerados de LocalStorage
       const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;

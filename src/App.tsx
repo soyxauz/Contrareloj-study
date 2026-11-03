@@ -155,11 +155,15 @@ export const App: React.FC = () => {
     const initialKits = authService.getUserKits(currentUser ? currentUser.id : null).filter(k => !isCorruptedKit(k));
     const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
     if (savedCurrentId) {
-      const activeIdx = initialKits.findIndex(k => k.id === savedCurrentId);
-      if (activeIdx > 0) {
-        const active = initialKits[activeIdx];
-        const rest = initialKits.filter((_, i) => i !== activeIdx);
-        return [active, ...rest];
+      if (['bio-respiration', 'cs-algorithms', 'cs-algo'].includes(savedCurrentId)) {
+        try { localStorage.removeItem(STORAGE_CURRENT_KIT_KEY); } catch {}
+      } else {
+        const activeIdx = initialKits.findIndex(k => k.id === savedCurrentId);
+        if (activeIdx > 0) {
+          const active = initialKits[activeIdx];
+          const rest = initialKits.filter((_, i) => i !== activeIdx);
+          return [active, ...rest];
+        }
       }
     }
     return initialKits;
@@ -167,10 +171,14 @@ export const App: React.FC = () => {
 
   // Selección inicial del kit activo
   const [currentKit, setCurrentKit] = useState<StudyKit | null>(() => {
-    const savedCurrentId = localStorage.getItem(STORAGE_CURRENT_KIT_KEY);
+    const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
     if (savedCurrentId) {
-      const found = kits.find(k => k.id === savedCurrentId && !isCorruptedKit(k));
-      if (found) return found;
+      if (['bio-respiration', 'cs-algorithms', 'cs-algo'].includes(savedCurrentId)) {
+        try { localStorage.removeItem(STORAGE_CURRENT_KIT_KEY); } catch {}
+      } else {
+        const found = kits.find(k => k.id === savedCurrentId && !isCorruptedKit(k));
+        if (found) return found;
+      }
     }
     const cleanFirst = kits.find(k => !isCorruptedKit(k));
     if (cleanFirst) {
@@ -840,16 +848,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleResetDefaults = () => {
-    const defaults = authService.resetToDefaultKits(currentUser ? currentUser.id : null);
-    const clean = defaults.filter(k => !isCorruptedKit(k));
-    setKits(clean);
-    if (clean.length > 0) {
-      setCurrentKit(clean[0]);
-      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, clean[0].id);
-    }
-  };
-
   const handleSelectKit = (kit: StudyKit, pushToHistory = false) => {
     if (!kit || isCorruptedKit(kit)) return;
 
@@ -1071,7 +1069,6 @@ export const App: React.FC = () => {
             onUpdateKit={handleUpdateKit}
             onDeleteKitsBatch={handleDeleteKitsBatch}
             onChangeCategoryBatch={handleChangeCategoryBatch}
-            onResetDefaultKits={handleResetDefaults}
             userId={currentUser?.id || null}
             onOpenAISettings={handleOpenAIModal}
             onOpenAuth={handleOpenAuthModal}
@@ -1154,20 +1151,20 @@ export const App: React.FC = () => {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">No hay ningún Study Kit activo</h3>
               <p className="text-sm text-slate-400 mb-6">
-                No tienes ningún kit de estudio seleccionado. Puedes restaurar los kits de demostración iniciales o crear uno nuevo.
+                No tienes ningún kit de estudio seleccionado. Crea un nuevo Study Kit o regresa al inicio para comenzar.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  onClick={handleResetDefaults}
-                  className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm transition-all cursor-pointer shadow-lg shadow-violet-900/30"
-                >
-                  Restaurar Kits Predeterminados
-                </button>
-                <button
                   onClick={() => setCurrentMode('create')}
-                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-300 hover:text-white text-sm font-semibold transition-all cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm transition-all cursor-pointer shadow-lg shadow-violet-900/30 active:scale-95"
                 >
                   Crear Study Kit
+                </button>
+                <button
+                  onClick={() => setCurrentMode('home')}
+                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-300 hover:text-white text-sm font-semibold transition-all cursor-pointer active:scale-95"
+                >
+                  Volver al Inicio
                 </button>
                 <button
                   onClick={() => setCurrentMode('home')}
