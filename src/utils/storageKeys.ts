@@ -69,6 +69,7 @@ export function isProtectedStorageKey(k: string): boolean {
     k === 'thea_ai_settings' ||
     k.startsWith('thea_user_kits_index_') ||
     k === 'thea_guest_kits_index' ||
+    k === 'thea_global_stats_snap_active' ||
     k.startsWith('thea_global_stats_snap_') ||
     k.startsWith('thea_ss_mem_') ||
     k.startsWith('thea_fc_mem_') ||
@@ -88,11 +89,34 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
   if (typeof localStorage === 'undefined') return;
   try {
     const keysToRemove: string[] = [];
+    const keysToSanitizeSS: string[] = [];
+    const keysToSanitizeFC: string[] = [];
+
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (!k || isProtectedStorageKey(k)) continue;
+      if (!k) continue;
 
-      // 1. Purgar copias legacy de kits completos en LocalStorage (los kits residen en IndexedDB e índice ligero)
+      // 1. Saneamiento profundo de sesiones de Smart Study si tienen imagenes base64 o historial masivo
+      if (k.startsWith('thea_ss_mem_')) {
+        const val = localStorage.getItem(k);
+        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 25000)) {
+          keysToSanitizeSS.push(k);
+        }
+        continue;
+      }
+
+      // 2. Saneamiento de progreso de Flashcards si contiene imagenes
+      if (k.startsWith('thea_fc_mem_')) {
+        const val = localStorage.getItem(k);
+        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 25000)) {
+          keysToSanitizeFC.push(k);
+        }
+        continue;
+      }
+
+      if (isProtectedStorageKey(k)) continue;
+
+      // 3. Purgar copias legacy de kits completos en LocalStorage (los kits residen en IndexedDB e índice ligero)
       if (
         (k.startsWith('thea_user_kits_') && !k.startsWith('thea_user_kits_index_')) ||
         k === 'thea_guest_kits' ||
@@ -102,17 +126,62 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
         continue;
       }
 
-      // 2. Purgar cualquier activo que contenga imágenes base64, PDFs o cadenas masivas
+      // 4. Purgar cualquier activo no protegido que contenga imágenes base64, PDFs o cadenas masivas
       const val = localStorage.getItem(k);
       if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 50000)) {
         keysToRemove.push(k);
       }
     }
+
+    // Ejecutar purga de claves pesadas no esenciales
     keysToRemove.forEach(k => {
       try {
         localStorage.removeItem(k);
       } catch {}
     });
+
+    // Desprender base64 y podar historial en sesiones de Smart Study saturadas
+    for (const key of keysToSanitizeSS) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (parsed.currentQuestion?.sourceAsset?.dataUrl) {
+          delete parsed.currentQuestion.sourceAsset.dataUrl;
+        }
+        if (Array.isArray(parsed.history)) {
+          parsed.history = parsed.history.slice(0, 15).map((h: any) => ({
+            id: h.id,
+            questionId: h.questionId,
+            questionText: typeof h.questionText === 'string' ? h.questionText.slice(0, 120) : '',
+            userAnswer: typeof h.userAnswer === 'string' ? h.userAnswer.slice(0, 80) : '',
+            correctAnswer: typeof h.correctAnswer === 'string' ? h.correctAnswer.slice(0, 80) : '',
+            explanation: typeof h.explanation === 'string' ? h.explanation.slice(0, 120) : '',
+            isCorrect: Boolean(h.isCorrect),
+            timestamp: h.timestamp,
+            level: h.level,
+          }));
+        }
+        localStorage.setItem(key, JSON.stringify(parsed));
+      } catch {
+        try { localStorage.removeItem(key); } catch {}
+      }
+    }
+
+    // Saneamiento de flashcards
+    for (const key of keysToSanitizeFC) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.masteredCards)) {
+          parsed.masteredCards = parsed.masteredCards.slice(0, 50);
+        }
+        localStorage.setItem(key, JSON.stringify(parsed));
+      } catch {
+        try { localStorage.removeItem(key); } catch {}
+      }
+    }
   } catch {}
 }
 

@@ -1,5 +1,5 @@
 import type { DocumentAsset, StudyKit, Flashcard } from '../types';
-import { isProtectedStorageKey } from '../utils/storageKeys';
+import { isProtectedStorageKey, purgeOversizedLegacyDataFromLocalStorage } from '../utils/storageKeys';
 
 /**
  * Servicio de persistencia de activos pesados en IndexedDB.
@@ -922,9 +922,16 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       return false;
     }
 
-    console.warn(`[StorageService] Alerta de cuota en LocalStorage al guardar '${key}'. Iniciando purga automática LRU.`);
+    console.warn(`[StorageService] Alerta de cuota en LocalStorage al guardar '${key}'. Iniciando purga automática.`);
 
-    // 1. Purga de claves temporales secundarias en LocalStorage
+    // 1. Ejecutar purga y saneamiento profundo de Base64 e historiales pesados
+    try {
+      purgeOversizedLegacyDataFromLocalStorage();
+      localStorage.setItem(key, value);
+      return true;
+    } catch {}
+
+    // 2. Purga de claves temporales secundarias en LocalStorage
     try {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {

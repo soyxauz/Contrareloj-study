@@ -60,7 +60,7 @@ function removeSessionCookie(key: string): void {
 
 function persistSessionRecord(userId: string): void {
   try {
-    localStorage.setItem(STORAGE_CURRENT_SESSION_KEY, userId);
+    safeLocalStorageSetItem(STORAGE_CURRENT_SESSION_KEY, userId);
     setSessionCookie(STORAGE_CURRENT_SESSION_KEY, userId, 365);
     saveSessionItem(STORAGE_CURRENT_SESSION_KEY, userId).catch(() => {});
     requestPersistentStorage().catch(() => {});
@@ -100,7 +100,7 @@ function getStoredUsers(): StoredUserRecord[] {
 
 function saveStoredUsers(users: StoredUserRecord[]): void {
   try {
-    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
+    safeLocalStorageSetItem(STORAGE_USERS_KEY, JSON.stringify(users));
     saveSessionItem(STORAGE_USERS_KEY, users).catch(() => {});
   } catch (e) {
     console.error('Error al guardar usuarios en localStorage', e);
@@ -200,15 +200,37 @@ export const authService = {
       if (!currentId) {
         currentId = getSessionCookie(STORAGE_CURRENT_SESSION_KEY);
         if (currentId) {
-          localStorage.setItem(STORAGE_CURRENT_SESSION_KEY, currentId);
+          safeLocalStorageSetItem(STORAGE_CURRENT_SESSION_KEY, currentId);
         }
       }
       if (!currentId) return null;
       const users = getStoredUsers();
       const user = users.find(u => u.id === currentId);
-      if (!user) return null;
-      const { passwordHash: _, ...safeUser } = user;
-      return safeUser;
+      if (user) {
+        const { passwordHash: _, ...safeUser } = user;
+        return safeUser;
+      }
+
+      // Fallback sincrono inmediato en 0ms si la coleccion de usuarios esta hidratando desde IndexedDB
+      try {
+        const rawProf = localStorage.getItem('thea_gdrive_profile');
+        if (rawProf) {
+          const prof = JSON.parse(rawProf);
+          return {
+            id: currentId,
+            username: prof.email ? prof.email.split('@')[0] : currentId,
+            displayName: prof.name || prof.email || 'Usuario',
+            createdAt: new Date().toISOString(),
+          };
+        }
+      } catch {}
+
+      return {
+        id: currentId,
+        username: currentId,
+        displayName: 'Usuario',
+        createdAt: new Date().toISOString(),
+      };
     } catch (e) {
       console.error(e);
       return null;
@@ -461,7 +483,7 @@ export const authService = {
       if (sanitized) {
         inMemorySessionCache.set(userKey, sanitized);
         if (sanitized.level !== parsed.level || sanitized.levelCorrectCount !== parsed.levelCorrectCount) {
-          localStorage.setItem(userKey, JSON.stringify(sanitized));
+          safeLocalStorageSetItem(userKey, JSON.stringify(sanitized));
           saveSessionItem(userKey, sanitized).catch(() => {});
         }
       }
@@ -758,7 +780,7 @@ export const authService = {
           const union = Array.from(new Set([...current, ...ids]));
           const key = `thea_revealed_q_${userId || 'guest'}_${kitId}`;
           try {
-            localStorage.setItem(key, JSON.stringify(union));
+            safeLocalStorageSetItem(key, JSON.stringify(union));
             saveSessionItem(key, union).catch(() => {});
           } catch {}
         }
@@ -865,7 +887,7 @@ export const authService = {
         current.push(questionId);
       }
       const key = `thea_revealed_q_${userId || 'guest'}_${kitId}`;
-      localStorage.setItem(key, JSON.stringify(current));
+      safeLocalStorageSetItem(key, JSON.stringify(current));
       saveSessionItem(key, current).catch(() => {});
 
       // Actualizar también la sesión activa para consistencia inmediata
@@ -923,7 +945,7 @@ export const authService = {
     if (!userId) return;
     try {
       const key = `thea_user_ai_settings_${userId}`;
-      localStorage.setItem(key, JSON.stringify(settings));
+      safeLocalStorageSetItem(key, JSON.stringify(settings));
 
       // Guardar también dentro del registro de usuario para sincronización con Google Drive
       const users = getStoredUsers();
@@ -964,7 +986,7 @@ export const authService = {
     if (!userId) return;
     try {
       const key = `thea_user_podcast_settings_${userId}`;
-      localStorage.setItem(key, JSON.stringify(settings));
+      safeLocalStorageSetItem(key, JSON.stringify(settings));
 
       const users = getStoredUsers();
       const userIndex = users.findIndex(u => u.id === userId);

@@ -301,7 +301,7 @@ export const kitRepositoryService = {
         }
         return item;
       });
-      localStorage.setItem(indexKey, JSON.stringify(updatedIndex));
+      safeLocalStorageSetItem(indexKey, JSON.stringify(updatedIndex));
     } catch {}
   },
 
@@ -346,7 +346,13 @@ export const kitRepositoryService = {
     const cleanKits = Array.isArray(kits)
       ? kits
           .filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id))
-          .map(k => ({ ...k, updatedAt: k.updatedAt || Date.now() }))
+          .map(k => ({
+            ...k,
+            updatedAt: k.updatedAt || Date.now(),
+            questions: Array.isArray(k.questions)
+              ? k.questions.filter(q => q && q.type !== 'image-labeling')
+              : [],
+          }))
       : [];
 
     const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';

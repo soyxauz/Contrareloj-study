@@ -1,5 +1,6 @@
 import type { StudyKit, SmartStudySessionState } from '../types';
 import { authService } from './authService';
+import { safeLocalStorageSetItem } from './storageService';
 
 export interface TopicMasteryStat {
   topic: string;
@@ -165,7 +166,8 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     ? Math.round((correctAnswers / (history.length || questionsAnswered)) * 1000) / 10
     : 0;
 
-  const level = (session?.level as 1 | 2 | 3) || 1;
+  const fastSnap = !session ? getGlobalStatsSnapshot(userId)?.booksMap?.[kit.id] : undefined;
+  const level = (session?.level as 1 | 2 | 3) || (fastSnap?.level as 1 | 2 | 3) || 1;
   const levelNames = {
     1: 'Nivel 1: Retención & Fundamentos',
     2: 'Nivel 2: Razonamiento & Análisis',
@@ -175,8 +177,12 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
   const levelTarget = 25;
   const levelCorrectCount = (session?.levelCorrectCounts && typeof session.levelCorrectCounts[level] === 'number')
     ? session.levelCorrectCounts[level]
-    : (typeof session?.levelCorrectCount === 'number' ? session.levelCorrectCount : 0);
-  const smartStudyProgressPercent = Math.min(100, Math.round((levelCorrectCount / levelTarget) * 100));
+    : (typeof session?.levelCorrectCount === 'number'
+        ? session.levelCorrectCount
+        : (fastSnap?.levelCorrectCount || 0));
+  const smartStudyProgressPercent = fastSnap && !session
+    ? fastSnap.smartStudyProgressPercent
+    : Math.min(100, Math.round((levelCorrectCount / levelTarget) * 100));
 
   const flashcardProgress = authService.getFlashcardProgress(userId, kit.id);
   const flashcardMap = flashcardProgress?.masteryMap || {};
@@ -359,6 +365,15 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
   return resultStats;
 }
 
+export interface BookSnapshotItem {
+  level: 1 | 2 | 3;
+  levelCorrectCount: number;
+  smartStudyProgressPercent: number;
+  questionsAnswered: number;
+  accuracy: number;
+}
+
+export const SNAPSHOT_ACTIVE_KEY = 'thea_global_stats_snap_active';
 const SNAPSHOT_KEY_PREFIX = 'thea_global_stats_snap_';
 
 export interface GlobalStatsSnapshot {
@@ -375,15 +390,32 @@ export interface GlobalStatsSnapshot {
   realStreakDays: number;
   activeBooksCount: number;
   updatedAt: number;
+  booksMap?: Record<string, BookSnapshotItem>;
 }
 
 /**
- * Guarda un resumen ultra compacto (< 200 bytes) en LocalStorage y Cookie para persistencia instantánea.
+ * Guarda un resumen ultra compacto en LocalStorage y Cookie para persistencia instantanea en 0ms.
  */
 export function saveGlobalStatsSnapshot(stats: GlobalStats, userId: string | null = null): void {
   if (typeof window === 'undefined') return;
   try {
     const key = `${SNAPSHOT_KEY_PREFIX}${userId || 'guest'}`;
+
+    const booksMap: Record<string, BookSnapshotItem> = {};
+    if (Array.isArray(stats.booksSummary)) {
+      for (const b of stats.booksSummary) {
+        if (b && b.kitId) {
+          booksMap[b.kitId] = {
+            level: b.level,
+            levelCorrectCount: b.levelCorrectCount,
+            smartStudyProgressPercent: b.smartStudyProgressPercent,
+            questionsAnswered: b.questionsAnswered,
+            accuracy: b.accuracy,
+          };
+        }
+      }
+    }
+
     const snap: GlobalStatsSnapshot = {
       totalBooks: stats.totalBooks,
       totalQuestions: stats.totalQuestions,
@@ -398,41 +430,59 @@ export function saveGlobalStatsSnapshot(stats: GlobalStats, userId: string | nul
       realStreakDays: stats.realStreakDays,
       activeBooksCount: stats.activeBooksCount,
       updatedAt: Date.now(),
+      booksMap,
     };
     const serialized = JSON.stringify(snap);
-    localStorage.setItem(key, serialized);
-    // Respaldo en cookie de larga duración para garantizar persistencia síncrona
-    document.cookie = `${key}=${encodeURIComponent(serialized)}; path=/; max-age=31536000; SameSite=Lax`;
+
+    // 1. Guardar con clave de usuario y clave activa universal
+    safeLocalStorageSetItem(key, serialized);
+    safeLocalStorageSetItem(SNAPSHOT_ACTIVE_KEY, serialized);
+
+    // 2. Respaldo en cookie de 365 dias para garantizar lectura sincrona antes del inicio de JS
+    try {
+      document.cookie = `${key}=${encodeURIComponent(serialized)}; path=/; max-age=31536000; SameSite=Lax`;
+      document.cookie = `${SNAPSHOT_ACTIVE_KEY}=${encodeURIComponent(serialized)}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch {}
   } catch {}
 }
 
 /**
- * Recupera el resumen persistente instantáneo desde LocalStorage o Cookie.
+ * Recupera el resumen persistente instantaneo desde LocalStorage o Cookie en 0ms.
  */
 export function getGlobalStatsSnapshot(userId: string | null = null): GlobalStatsSnapshot | null {
   if (typeof window === 'undefined') return null;
-  const key = `${SNAPSHOT_KEY_PREFIX}${userId || 'guest'}`;
-  try {
-    // 1. LocalStorage
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed && typeof parsed.totalQuestions === 'number') {
-        return parsed;
-      }
-    }
-  } catch {}
+  const candidateKeys: string[] = [];
+  if (userId) {
+    candidateKeys.push(`${SNAPSHOT_KEY_PREFIX}${userId}`);
+  }
+  candidateKeys.push(SNAPSHOT_ACTIVE_KEY);
+  candidateKeys.push(`${SNAPSHOT_KEY_PREFIX}guest`);
 
-  try {
-    // 2. Cookie fallback
-    const match = document.cookie.match(new RegExp(`(?:^|; )${key}=([^;]*)`));
-    if (match && match[1]) {
-      const parsed = JSON.parse(decodeURIComponent(match[1]));
-      if (parsed && typeof parsed.totalQuestions === 'number') {
-        return parsed;
+  // 1. Intentar LocalStorage en orden de prioridad
+  for (const k of candidateKeys) {
+    try {
+      const stored = localStorage.getItem(k);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed.totalQuestions === 'number') {
+          return parsed;
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
+
+  // 2. Intentar Cookie fallback
+  for (const k of candidateKeys) {
+    try {
+      const match = document.cookie.match(new RegExp(`(?:^|; )${k}=([^;]*)`));
+      if (match && match[1]) {
+        const parsed = JSON.parse(decodeURIComponent(match[1]));
+        if (parsed && typeof parsed.totalQuestions === 'number') {
+          return parsed;
+        }
+      }
+    } catch {}
+  }
 
   return null;
 }

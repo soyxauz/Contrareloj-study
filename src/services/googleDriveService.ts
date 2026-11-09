@@ -683,7 +683,7 @@ export const googleDriveService = {
         const client = (window as any).google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-          prompt: '',
+          prompt: 'select_account',
           callback: (response: any) => {
             if (isResolved) return;
             if (response.error) {
@@ -715,7 +715,7 @@ export const googleDriveService = {
             if (isPopupBlocked) {
               updateState({
                 status: 'error',
-                errorMessage: 'El navegador bloqueó la ventana emergente o fue cerrada. Permite ventanas emergentes para este sitio.'
+                errorMessage: 'El navegador bloqueó la ventana emergente de Google. Haz clic en el icono de ventana bloqueada en la barra de direcciones de tu navegador y permite las ventanas emergentes.'
               });
               reject(new Error('POPUP_BLOCKED'));
               return;
@@ -754,7 +754,7 @@ export const googleDriveService = {
     }
 
     const serverlessStatus = cachedServerlessStatus || {
-      available: true,
+      available: Boolean(this.getClientSecret()),
       hasClientId: Boolean(clientId),
       hasClientSecret: Boolean(this.getClientSecret())
     };
@@ -829,7 +829,7 @@ export const googleDriveService = {
                 if (isPopupBlocked) {
                   updateState({
                     status: 'error',
-                    errorMessage: 'El navegador bloqueó la ventana emergente o fue cerrada. Permite ventanas emergentes para este sitio.'
+                    errorMessage: 'El navegador bloqueó la ventana emergente de Google. Haz clic en el icono de ventana bloqueada en la barra de direcciones de tu navegador y permite las ventanas emergentes.'
                   });
                   reject(new Error('POPUP_BLOCKED'));
                   return;
@@ -1601,7 +1601,7 @@ export const googleDriveService = {
           };
           saveAISettings(merged);
           if (effectiveRemoteAI.geminiApiKey?.trim()) {
-            localStorage.setItem('contrareloj_gemini_api_key', effectiveRemoteAI.geminiApiKey.trim());
+            safeLocalStorageSetItem('contrareloj_gemini_api_key', effectiveRemoteAI.geminiApiKey.trim());
             savePodcastSettings({ geminiApiKey: effectiveRemoteAI.geminiApiKey.trim() });
           }
           if (userId) {
@@ -1628,7 +1628,7 @@ export const googleDriveService = {
           authService.saveUserPodcastSettings(userId, remotePodcastSettings);
         }
         if (remotePodcastSettings.geminiApiKey && remotePodcastSettings.geminiApiKey.trim().length > 0) {
-          localStorage.setItem('contrareloj_gemini_api_key', remotePodcastSettings.geminiApiKey.trim());
+          safeLocalStorageSetItem('contrareloj_gemini_api_key', remotePodcastSettings.geminiApiKey.trim());
           const currAi = getAISettings();
           saveAISettings({
             ...currAi,
@@ -1676,7 +1676,7 @@ export const googleDriveService = {
       });
 
       try {
-        localStorage.setItem(`thea_last_drive_sync_${userId}`, Date.now().toString());
+        safeLocalStorageSetItem(`thea_last_drive_sync_${userId}`, Date.now().toString());
       } catch {}
 
       // 8. Descarga de activos visuales en segundo plano sin bloquear el retorno ni la UI

@@ -71,7 +71,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           onOpenGoogleDriveSetup();
         }
       } else {
-        setError(err?.message || 'Error al iniciar sesión con Google.');
+        const msg = String(err?.message || '');
+        if (msg === 'POPUP_BLOCKED' || msg.toLowerCase().includes('popup')) {
+          setError('El navegador bloqueó la ventana emergente de Google. Permite las ventanas emergentes en la barra de direcciones de tu navegador para continuar.');
+        } else {
+          setError(msg || 'Error al iniciar sesión con Google.');
+        }
       }
     } finally {
       setIsGoogleLoading(false);

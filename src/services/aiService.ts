@@ -1750,22 +1750,6 @@ Genera el JSON completo respetando la estructura exigida:`;
         ? parseCorrectIndices(p.indices_correctos, optionsArray)
         : undefined;
 
-      const imageHotspots = Array.isArray(p.etiquetas_diagrama)
-        ? p.etiquetas_diagrama.map((h: any, hIdx: number) => ({
-            id: String(h.id || `pin-${hIdx + 1}`),
-            label: String(h.etiqueta || h.label || `Etiqueta ${hIdx + 1}`).trim(),
-            xPercent: Number(h.x_porcentaje || h.xPercent || 25 + (hIdx * 20)),
-            yPercent: Number(h.y_porcentaje || h.yPercent || 30 + (hIdx * 15)),
-            hint: h.pista || h.hint || `Punto ${hIdx + 1}`
-          }))
-        : undefined;
-
-      const imageWordBank = Array.isArray(p.banco_etiquetas)
-        ? p.banco_etiquetas.map((b: any) => String(b).trim())
-        : (imageHotspots ? imageHotspots.map((h: any) => h.label) : undefined);
-
-      const diagramTitle = p.titulo_diagrama || p.diagramTitle || undefined;
-
       return {
         id: `q-pedagogical-${difficulty}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
         type: qType,
@@ -1779,9 +1763,6 @@ Genera el JSON completo respetando la estructura exigida:`;
         templateSentence,
         blanksCorrect,
         wordBank,
-        imageHotspots,
-        imageWordBank,
-        diagramTitle,
         explanation,
         googleOverview,
         sourceChunkId,
@@ -3741,22 +3722,6 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       ? parseCorrectIndices(p.indices_correctos, optionsArray)
       : undefined;
 
-    const imageHotspots = Array.isArray(p.etiquetas_diagrama)
-      ? p.etiquetas_diagrama.map((h: any, hIdx: number) => ({
-          id: String(h.id || `pin-${hIdx + 1}`),
-          label: String(h.etiqueta || h.label || `Etiqueta ${hIdx + 1}`).trim(),
-          xPercent: Number(h.x_porcentaje || h.xPercent || 25 + (hIdx * 20)),
-          yPercent: Number(h.y_porcentaje || h.yPercent || 30 + (hIdx * 15)),
-          hint: h.pista || h.hint || `Punto ${hIdx + 1}`
-        }))
-      : undefined;
-
-    const imageWordBank = Array.isArray(p.banco_etiquetas)
-      ? p.banco_etiquetas.map((b: any) => String(b).trim())
-      : (imageHotspots ? imageHotspots.map((h: any) => h.label) : undefined);
-
-    const diagramTitle = p.titulo_diagrama || p.diagramTitle || undefined;
-
     return {
       id: `q-calibrated-lvl${level}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
       type: qType,
@@ -3770,9 +3735,6 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       templateSentence,
       blanksCorrect,
       wordBank,
-      imageHotspots,
-      imageWordBank,
-      diagramTitle,
       explanation,
       googleOverview,
       sourceChunkId,

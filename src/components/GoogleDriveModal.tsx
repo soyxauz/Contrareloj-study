@@ -180,7 +180,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           </div>
         )}
 
-        {noticeMessage && (
+        {!syncState.errorMessage && noticeMessage && (
           <div className="mb-4 p-3 rounded-xl bg-white/[0.04] border border-white/15 text-zinc-200 text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
             <span className="flex-1">{noticeMessage}</span>

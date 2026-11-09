@@ -1051,15 +1051,10 @@ export async function processContentAsync(
       }
     }
 
-    // Asociacion por pagina o distribucion visual si existen activos en el kit
-    if (!q.sourceAsset && assets.length > 0) {
-      if (q.sourcePageOrSlide) {
-        const pageAsset = assets.find(a => a.pageOrSlide === q.sourcePageOrSlide);
-        if (pageAsset) q.sourceAsset = pageAsset;
-      }
-      if (!q.sourceAsset && assets[idx % assets.length]) {
-        q.sourceAsset = assets[idx % assets.length];
-      }
+    // Asociacion precisa por pagina solo si existe un activo vinculado directamente a esa lamina/pagina
+    if (!q.sourceAsset && assets.length > 0 && q.sourcePageOrSlide) {
+      const pageAsset = assets.find(a => a.pageOrSlide === q.sourcePageOrSlide);
+      if (pageAsset) q.sourceAsset = pageAsset;
     }
   }
 

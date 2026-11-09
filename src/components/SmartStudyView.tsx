@@ -223,24 +223,25 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
     }
   }
 
-  // 4. Si la pregunta es de tipo 'image-labeling', convertirla inmediatamente a matching conceptual o multiple-choice para nunca mostrar fotos aleatorias
-  if (q.type === 'image-labeling') {
-    if (q.imageHotspots && q.imageHotspots.length >= 2) {
+  // 4. Si la pregunta es de tipo 'image-labeling', convertirla inmediatamente a matching conceptual o multiple-choice desprendiendo cualquier activo de imagen
+  if (q.type === 'image-labeling' || (q as any).imageHotspots) {
+    const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, ...restQ } = q as any;
+    if (imageHotspots && imageHotspots.length >= 2) {
       return {
-        ...q,
+        ...restQ,
         type: 'matching',
-        question: q.diagramTitle ? `Empareja las fases o componentes del ${q.diagramTitle}:` : (q.question || 'Empareja los conceptos correspondientes:'),
-        matchingPairs: q.imageHotspots.map((h, i) => ({
+        question: diagramTitle ? `Empareja las fases o componentes del ${diagramTitle}:` : (restQ.question || 'Empareja los conceptos correspondientes:'),
+        matchingPairs: imageHotspots.map((h: any, i: number) => ({
           term: h.label || `Componente ${i + 1}`,
           definition: h.hint || `Paso o zona ${i + 1}`,
         })),
       };
     }
     return {
-      ...q,
+      ...restQ,
       type: 'multiple-choice',
-      options: Array.isArray(q.options) && q.options.length >= 2 ? q.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
-      correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+      options: Array.isArray(restQ.options) && restQ.options.length >= 2 ? restQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+      correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
     };
   }
 
