@@ -12,7 +12,8 @@ import {
   isCorruptedKit,
   mergeKitsByUpdatedAt,
   getDeletedKitIds,
-  registerDriveAssetDownloader
+  registerDriveAssetDownloader,
+  safeLocalStorageSetItem
 } from './storageService';
 import { isSmoothScrollActive } from '../utils/smoothScroll';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
@@ -434,7 +435,7 @@ export const googleDriveService = {
   setRefreshToken(token: string): void {
     const clean = token.trim();
     if (clean) {
-      localStorage.setItem(STORAGE_REFRESH_TOKEN_KEY, clean);
+      safeLocalStorageSetItem(STORAGE_REFRESH_TOKEN_KEY, clean);
       saveSessionItem(STORAGE_REFRESH_TOKEN_KEY, clean).catch(() => {});
       updateState({ hasRefreshToken: true, authType: 'serverless_refresh' });
     } else {
@@ -560,70 +561,14 @@ export const googleDriveService = {
           }
         }
       } catch (err) {
-        console.warn('[GoogleDriveService] Renovación serverless no disponible, recurriendo a fallback:', err);
+        console.warn('[GoogleDriveService] Renovación serverless no disponible:', err);
       }
     }
 
-    // 2. Fallback con Google Identity Services en el navegador
-    try {
-      await ensureGsiLoaded();
-
-      let userEmail: string | undefined;
-      const rawProfile = localStorage.getItem(STORAGE_PROFILE_KEY);
-      if (rawProfile) {
-        try {
-          const p = JSON.parse(rawProfile);
-          if (p?.email) userEmail = p.email;
-        } catch {}
-      }
-      if (!userEmail && currentState.userEmail) {
-        userEmail = currentState.userEmail;
-      }
-
-      return await new Promise<string | null>((resolve) => {
-        try {
-          const timeout = setTimeout(() => {
-            resolve(null);
-          }, 6000);
-
-          const clientConfig: any = {
-            client_id: clientId,
-            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-            prompt: '',
-            callback: (response: any) => {
-              clearTimeout(timeout);
-              if (response.error || !response.access_token) {
-                resolve(null);
-                return;
-              }
-              const expiresIn = response.expires_in ? parseInt(response.expires_in, 10) : 3600;
-              this.setAccessToken(response.access_token, expiresIn);
-              updateState({ status: 'synced', errorMessage: null });
-              resolve(response.access_token);
-            },
-            error_callback: () => {
-              clearTimeout(timeout);
-              resolve(null);
-            },
-          };
-
-          if (userEmail) {
-            clientConfig.hint = userEmail;
-          }
-
-          const client = (window as any).google.accounts.oauth2.initTokenClient(clientConfig);
-          const reqOpts: any = { prompt: '' };
-          if (userEmail) {
-            reqOpts.hint = userEmail;
-          }
-          client.requestAccessToken(reqOpts);
-        } catch {
-          resolve(null);
-        }
-      });
-    } catch {
-      return null;
-    }
+    // Si no hay refresh_token o el canje serverless no tuvo éxito, retornar null inmediatamente.
+    // Se elimina el intento de iframe silencioso en el navegador con prompt: '', ya que los navegadores
+    // modernos lo bloquean como popup no solicitado produciendo "Failed to open popup window".
+    return null;
   },
 
   /**
@@ -664,8 +609,8 @@ export const googleDriveService = {
    */
   setAccessToken(token: string, expiresInSec: number = 3600): void {
     const expTime = Date.now() + expiresInSec * 1000;
-    localStorage.setItem(STORAGE_TOKEN_KEY, token);
-    localStorage.setItem(STORAGE_TOKEN_EXP_KEY, expTime.toString());
+    safeLocalStorageSetItem(STORAGE_TOKEN_KEY, token);
+    safeLocalStorageSetItem(STORAGE_TOKEN_EXP_KEY, expTime.toString());
     saveSessionItem(STORAGE_TOKEN_KEY, token).catch(() => {});
     saveSessionItem(STORAGE_TOKEN_EXP_KEY, expTime.toString()).catch(() => {});
   },
@@ -946,11 +891,14 @@ export const googleDriveService = {
    * Flujo unificado: Iniciar sesión con Google, vincular la cuenta en Contrareloj Study y sincronizar datos.
    * Admite callback para cerrar el modal de forma instantánea tan pronto se autoriza la cuenta de Google.
    */
-  async loginAndSync(onFastAuthenticated?: (user: User, localOrFastKits: StudyKit[]) => void): Promise<{ user: User; kits: StudyKit[] | null }> {
+  async loginAndSync(
+    onFastAuthenticated?: (user: User, localOrFastKits: StudyKit[]) => void,
+    skipSilentRefresh: boolean = false
+  ): Promise<{ user: User; kits: StudyKit[] | null }> {
     updateState({ status: 'syncing', errorMessage: null });
     try {
       let token = this.getValidAccessToken();
-      if (!token && this.getRefreshToken()) {
+      if (!token && !skipSilentRefresh && this.getRefreshToken()) {
         token = await this.attemptSilentTokenRefresh();
       }
       if (!token) {
@@ -999,7 +947,13 @@ export const googleDriveService = {
             errorMessage: 'Sesión de Google Drive expirada. Haz clic en Reconectar Cuenta.',
           });
         } else {
-          updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+          const isBlocked = err?.message === 'POPUP_BLOCKED' ||
+            err?.type === 'popup_failed_to_open' ||
+            String(err?.message || '').toLowerCase().includes('popup');
+          const errorMsg = isBlocked
+            ? 'El navegador bloqueó la ventana emergente. Por favor permite las ventanas emergentes en la barra de direcciones para conectar tu cuenta de Google.'
+            : (err?.message || 'Error al sincronizar con Google Drive.');
+          updateState({ status: 'error', errorMessage: errorMsg });
         }
       }
       throw err;

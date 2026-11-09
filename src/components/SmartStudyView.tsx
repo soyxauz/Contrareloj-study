@@ -66,7 +66,6 @@ import {
   MultiSelectRenderer,
   MatchingRenderer,
   DragDropRenderer,
-  ImageLabelingRenderer,
   TrueFalseRenderer,
   ShortAnswerRenderer,
 } from './smart-study';
@@ -224,10 +223,44 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
     }
   }
 
+  // 4. Si la pregunta es de tipo 'image-labeling', convertirla inmediatamente a matching conceptual o multiple-choice para nunca mostrar fotos aleatorias
+  if (q.type === 'image-labeling') {
+    if (q.imageHotspots && q.imageHotspots.length >= 2) {
+      return {
+        ...q,
+        type: 'matching',
+        question: q.diagramTitle ? `Empareja las fases o componentes del ${q.diagramTitle}:` : (q.question || 'Empareja los conceptos correspondientes:'),
+        matchingPairs: q.imageHotspots.map((h, i) => ({
+          term: h.label || `Componente ${i + 1}`,
+          definition: h.hint || `Paso o zona ${i + 1}`,
+        })),
+      };
+    }
+    return {
+      ...q,
+      type: 'multiple-choice',
+      options: Array.isArray(q.options) && q.options.length >= 2 ? q.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+      correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+    };
+  }
+
   return q;
 }
 
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
+  // Purga automatica de preguntas obsoletas de tipo 'image-labeling'
+  useEffect(() => {
+    if (kit?.questions?.some(q => q.type === 'image-labeling')) {
+      const clean = kit.questions.filter(q => q.type !== 'image-labeling');
+      if (onUpdateKit) {
+        onUpdateKit({
+          ...kit,
+          questions: clean,
+        });
+      }
+    }
+  }, [kit?.id]);
+
   // ── Session Restoration (Memoria Total en Tiempo Real) ────────────────────
   const savedSession = useMemo(() => {
     return authService.getSmartStudySession(userId || null, kit.id);
@@ -381,10 +414,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [placedChips, setPlacedChips] = useState<(string | null)[]>(wasPreviouslyAnswered ? [] : (savedSession?.placedChips || []));
   const [draggedChip, setDraggedChip] = useState<string | null>(null);
   const [dragDropChecked, setDragDropChecked] = useState(wasPreviouslyAnswered ? false : (savedSession?.dragDropChecked || false));
-  const [placedImageLabels, setPlacedImageLabels] = useState<Record<string, string>>(wasPreviouslyAnswered ? {} : ((savedSession as any)?.placedImageLabels || {}));
-  const [activeLabelChip, setActiveLabelChip] = useState<string | null>(null);
   const { theme } = useTheme();
-  const [imageLabelChecked, setImageLabelChecked] = useState(wasPreviouslyAnswered ? false : ((savedSession as any)?.imageLabelChecked || false));
 
   // ── RAG Evidence Modal State ───────────────────────────────────────────
   const [showSourceModal, setShowSourceModal] = useState(false);
@@ -507,7 +537,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
 
     const targetDiff: 'easy' | 'medium' | 'hard' = selectedLvl === 1 ? 'easy' : selectedLvl === 2 ? 'medium' : 'hard';
-    const allInDiff = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
+    const allInDiff = kit.questions.filter(q => q.type !== 'image-labeling' && (q.difficulty || 'easy') === targetDiff);
 
     // Conjunto de preguntas ya consumidas (respondidas o vistas)
     const consumedIds = new Set([
@@ -574,9 +604,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           setMatchingChecked(false);
           setPlacedChips([]);
           setDragDropChecked(false);
-          setPlacedImageLabels({});
-          setActiveLabelChip(null);
-          setImageLabelChecked(false);
           setShortAnswerInput('');
           setShortAnswerEvalResult(null);
           setIsManuallyOverridden(false);
@@ -679,9 +706,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       setMatchingChecked(false);
       setPlacedChips([]);
       setDragDropChecked(false);
-      setPlacedImageLabels({});
-      setActiveLabelChip(null);
-      setImageLabelChecked(false);
       setShortAnswerInput('');
       setShortAnswerEvalResult(null);
       setIsManuallyOverridden(false);
@@ -903,7 +927,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const t = q.type || 'multiple-choice';
     if (t === 'short-answer') return 'shortAnswer';
     if (t === 'true-false') return 'trueFalse';
-    if (t === 'matching' || t === 'drag-drop' || t === 'image-labeling') return 'practical';
+    if (t === 'matching' || t === 'drag-drop') return 'practical';
     return 'multipleChoice';
   }, []);
 
@@ -1135,15 +1159,25 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         }
         const practiceLevel = activePracticeLevel || level || 1;
         const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
-        const pool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
-        const finalPool = pool.length > 0 ? pool : kit.questions;
-        const first = finalPool[0] || kit.questions[0];
+        const pool = kit.questions.filter(q => q.type !== 'image-labeling' && (q.difficulty || 'easy') === targetDiff);
+        const finalPool = pool.length > 0 ? pool : kit.questions.filter(q => q.type !== 'image-labeling');
+        const first = finalPool[0] || kit.questions.find(q => q.type !== 'image-labeling') || kit.questions[0];
         if (first) {
           setCurrentQuestion(sanitizeQuestionStructure(first, kit.questions));
         }
       }
     }
   }, [kit.questions, currentQuestion?.id, activePracticeLevel, level]);
+
+  // Si la pregunta actual restaurada o cargada era de tipo image-labeling, cambiar de inmediato a pregunta valida
+  useEffect(() => {
+    if (currentQuestion && currentQuestion.type === 'image-labeling') {
+      const valid = (kit.questions || []).find(q => q.type !== 'image-labeling');
+      if (valid) {
+        setCurrentQuestion(sanitizeQuestionStructure(valid, kit.questions));
+      }
+    }
+  }, [currentQuestion?.id, currentQuestion?.type, kit.questions]);
 
   const currentQ: Question = currentQuestion;
 
@@ -1346,9 +1380,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setMatchingPairsMap({});
     setMatchingChecked(false);
     setDragDropChecked(false);
-    setPlacedImageLabels({});
-    setActiveLabelChip(null);
-    setImageLabelChecked(false);
     setShortAnswerInput('');
     setShortAnswerEvalResult(null);
     setIsManuallyOverridden(false);
@@ -1924,39 +1955,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     markQuestionResult(allCorrect, userAns, correctAns);
   };
 
-  // 5. Image & Diagram Hotspot Labeling Handlers
-  const handlePlaceImageLabel = (hotspotId: string, label: string) => {
-    if (isAnswered) return;
-    setPlacedImageLabels(prev => ({ ...prev, [hotspotId]: label }));
-    setActiveLabelChip(null);
-  };
-
-  const handleRemoveImageLabel = (hotspotId: string) => {
-    if (isAnswered) return;
-    setPlacedImageLabels(prev => {
-      const copy = { ...prev };
-      delete copy[hotspotId];
-      return copy;
-    });
-  };
-
-  const handleCheckImageLabel = () => {
-    if (isAnswered || !currentQ.imageHotspots) return;
-    setImageLabelChecked(true);
-    const hotspots = currentQ.imageHotspots;
-    const allCorrect = hotspots.every(
-      h => placedImageLabels[h.id]?.trim().toLowerCase() === h.label.trim().toLowerCase()
-    );
-
-    const userAns = hotspots.map(h => `${h.hint || h.id}: ${placedImageLabels[h.id] || '(vacío)'}`).join(' • ');
-    const correctAns = hotspots.map(h => `${h.hint || h.id}: ${h.label}`).join(' • ');
-
-    if (allCorrect) {
-      confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
-    }
-    markQuestionResult(allCorrect, userAns, correctAns);
-  };
-
   // ── Progression Check & Next Question ────────────────────────────────────
 
   const handleSkipQuestion = () => {
@@ -1989,12 +1987,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       correctAns = completedSentence || effectiveBlanksCorrect.map((b, idx) => `[${idx + 1}] ${b}`).join(' , ');
       setPlacedChips([...effectiveBlanksCorrect]);
       setDragDropChecked(true);
-    } else if (qType === 'image-labeling' && currentQ.imageHotspots) {
-      correctAns = currentQ.imageHotspots.map(h => `${h.id}: ${h.label}`).join(' | ');
-      const solution: Record<string, string> = {};
-      currentQ.imageHotspots.forEach(h => { solution[h.id] = h.label; });
-      setPlacedImageLabels(solution);
-      setImageLabelChecked(true);
     } else {
       correctAns = safeOptions[safeCorrectIndex] || 'Opción señalada en verde';
     }
@@ -2165,9 +2157,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       ? nextQ.blanksCorrect.length
       : (nextQ?.templateSentence?.match(/\{\d+\}/g)?.length || nextQ?.question?.match(/\{\d+\}/g)?.length || 0);
     setPlacedChips(nextBlanksCount > 0 ? new Array(nextBlanksCount).fill(null) : []);
-    setPlacedImageLabels({});
-    setActiveLabelChip(null);
-    setImageLabelChecked(false);
     setShortAnswerInput('');
     setShortAnswerEvalResult(null);
     setIsManuallyOverridden(false);
@@ -2210,9 +2199,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setMatchingChecked(false);
     setPlacedChips([]);
     setDragDropChecked(false);
-    setPlacedImageLabels({});
-    setActiveLabelChip(null);
-    setImageLabelChecked(false);
     setShortAnswerInput('');
     setShortAnswerEvalResult(null);
     setIsManuallyOverridden(false);
@@ -3029,27 +3015,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         )}
 
 
-        {/* 5. IMAGE & DIAGRAM LABELING RENDERER */}
-        {qType === 'image-labeling' && (
-          <ImageLabelingRenderer
-            diagramTitle={currentQ.diagramTitle}
-            imageUrl={currentQ.sourceAsset?.dataUrl || kit.assets?.[0]?.dataUrl}
-            topic={currentQ.topic}
-            explanation={currentQ.explanation}
-            imageHotspots={currentQ.imageHotspots}
-            imageWordBank={currentQ.imageWordBank}
-            placedImageLabels={placedImageLabels}
-            imageLabelChecked={imageLabelChecked}
-            activeLabelChip={activeLabelChip}
-            isAnswered={isAnswered}
-            onPlaceImageLabel={handlePlaceImageLabel}
-            onRemoveImageLabel={handleRemoveImageLabel}
-            onSetActiveLabelChip={setActiveLabelChip}
-            onCheckImageLabel={handleCheckImageLabel}
-          />
-        )}
-
-        {/* 6. TRUE / FALSE RENDERER */}
+        {/* 5. TRUE / FALSE RENDERER */}
         {qType === 'true-false' && (
           <TrueFalseRenderer
             selectedOption={selectedOption}

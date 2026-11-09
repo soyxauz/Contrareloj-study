@@ -10,9 +10,6 @@ export type { MatchingRendererProps, MatchingPairItem } from './MatchingRenderer
 export { DragDropRenderer } from './DragDropRenderer';
 export type { DragDropRendererProps } from './DragDropRenderer';
 
-export { ImageLabelingRenderer } from './ImageLabelingRenderer';
-export type { ImageLabelingRendererProps, ImageHotspot } from './ImageLabelingRenderer';
-
 export { TrueFalseRenderer } from './TrueFalseRenderer';
 export type { TrueFalseRendererProps } from './TrueFalseRenderer';
 

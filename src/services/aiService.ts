@@ -1468,12 +1468,11 @@ Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosam
 1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote con variedad pedagógica amplia:
    - Preguntas afirmativas de comprensión directa, principios clave y deducción en casos prácticos (la gran mayoría, ~80%-85%).
    - Preguntas de detección de concepto equivocado, afirmación falsa o elemento impostor de forma moderada (~15%-20% del total de opción múltiple: ej. '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:').
-2. El 55% restante DEBE distribuirse de forma equitativa y activa entre los otros 5 formatos interactivos:
+2. El 55% restante DEBE distribuirse de forma equitativa y activa entre los otros 4 formatos interactivos:
    - "matching": Emparejar conceptos (3 o 4 pares de "termino" <-> "definicion" exacta del texto).
    - "true-false": Pregunta de Verdadero o Falso donde el campo "pregunta" DEBE ser una afirmación conceptual declarativa directa (ej. "La fosforilación oxidativa se produce en la membrana interna mitocondrial.") para juzgar si es Verdadera o Falsa, con "opciones": { "A": "Verdadero", "B": "Falso" } y "respuesta_correcta": "A" o "B". ESTÁ ESTRICTAMENTE PROHIBIDO redactar 'true-false' como pregunta de selección múltiple (ej. "¿Cuál de las siguientes..." o "Selecciona la opción...").
    - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas (tanto para marcar afirmaciones verdaderas como ocasionalmente para identificar errores).
    - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
-   - "image-labeling": Etiquetado de diagrama o esquema funcional descrito en el texto (ubicar partes o fases en un esquema).
 
 FASE 3: DISTRIBUCIÓN DE EXTENSIÓN DEL ENUNCIADO (PREDOMINIO DE PREGUNTAS CORTAS Y DIRECTAS)
 - REGLA CLAVE DE EXTENSIÓN: La mayor parte de las preguntas (~75% a 80%) DEBEN SER CORTAS, DIRECTAS Y CONCISAS (entre 8 y 22 palabras, 1 o 2 líneas sin rodeos ni preámbulos). Preguntan directamente por definiciones, causas, efectos, funciones o diferencias conceptuales precisas (ej. '¿Cuál es la función principal del ribosoma?', '¿Qué arteria irriga el nódulo sinusal?', '¿En qué plazo prescribe la acción penal?').
@@ -1493,7 +1492,7 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
     {
       "id": 1,
       "chunk_id_origen": "ID del fragmento origen (ej: chk-0-abc)",
-      "tipo": "multiple-choice | matching | drag-drop | multi-select | image-labeling | true-false",
+      "tipo": "multiple-choice | matching | drag-drop | multi-select | true-false",
       "longitud_enunciado": "corto (75% del lote) | extenso_caso (25% del lote)",
       "concepto_evaluado": "Concepto o tema evaluado",
       "pregunta": "Enunciado de la pregunta (resalta con **...** la parte nuclear o clave de la pregunta, dejando el contexto preliminar sin formato)",
@@ -1509,12 +1508,6 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       "oracion_plantilla": "El proceso de {0} se lleva a cabo en {1}.",
       "huecos_correctos": ["término 1", "término 2"],
       "banco_palabras": ["término 1", "término 2", "distractor 1", "distractor 2"],
-      "titulo_diagrama": "Esquema de ...",
-      "etiquetas_diagrama": [
-        { "id": "p1", "etiqueta": "Estructura A", "x_porcentaje": 25, "y_porcentaje": 30, "pista": "Paso 1" },
-        { "id": "p2", "etiqueta": "Estructura B", "x_porcentaje": 75, "y_porcentaje": 65, "pista": "Paso 2" }
-      ],
-      "banco_etiquetas": ["Estructura A", "Estructura B", "Distractor A", "Distractor B"],
       "retroalimentacion": {
         "busqueda_google": {
           "consulta": "Búsqueda textual exacta y natural en Google/Wikipedia para verificar la respuesta (ej: mecanismo de accion de la furosemida en el asa de henle)",
@@ -1567,7 +1560,7 @@ ${sourceRepresentation}
 - COBERTURA COMPLETA OBLIGATORIA: Distribuye las preguntas de manera equilibrada a lo largo de TODAS las diapositivas/páginas presentadas (desde el inicio, pasando por el desarrollo intermedio, hasta la última diapositiva). ESTÁ PROHIBIDO concentrar las preguntas solo en las primeras 4 o 5 diapositivas.
 - PROPORCIÓN Y VARIEDAD BALANCEADA:
   * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D), priorizando preguntas afirmativas de comprensión directa y deducción, con presencia moderada (~15%-20%) de preguntas de afirmación falsa o concepto equivocado.
-  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop", "image-labeling").
+  * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop").
 - DISTRIBUCIÓN DE EXTENSIÓN (PREDOMINIO DE PREGUNTAS CORTAS): La mayor parte (~75%-80%) de las preguntas DEBEN ser CORTAS y directas (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Solo una minoría (~20%-25%) deben ser más extensas (entre 35 y 55 palabras) cuando se trate de casos prácticos o viñetas clínicas aplicadas. Límite máximo: 28 palabras para preguntas directas y 55 palabras para casos.
 - REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
 - TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
@@ -1627,7 +1620,15 @@ Genera el JSON completo respetando la estructura exigida:`;
       } else if (detectedType.includes('multi-select') || (Array.isArray(p.indices_correctos) && p.indices_correctos.length > 1)) {
         qType = 'multi-select';
       } else if (detectedType.includes('image') || detectedType.includes('labeling') || (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 2)) {
-        qType = 'image-labeling';
+        if (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 2) {
+          qType = 'matching';
+          p.pares_emparejamiento = p.etiquetas_diagrama.map((h: any, i: number) => ({
+            termino: String(h.etiqueta || h.label || `Elemento ${i + 1}`).trim(),
+            definicion: String(h.pista || h.hint || p.titulo_diagrama || `Fase o componente ${i + 1}`).trim(),
+          }));
+        } else {
+          qType = 'multiple-choice';
+        }
       } else {
         qType = 'multiple-choice';
       }
@@ -3509,7 +3510,6 @@ DIRECTRICES GENERALES DE GENERACIÓN:
    - "matching": Emparejar 3 o 4 conceptos específicos con sus definiciones/roles.
    - "drag-drop": Oración con huecos {0}, {1} y banco de palabras con distractores.
    - "multi-select": 4 o 5 opciones con 2 o 3 respuestas a marcar (tanto para seleccionar las correctas como para seleccionar las afirmaciones falsas).
-   - "image-labeling": Etiquetar zonas de un diagrama o esquema.
    - "true-false": Afirmación conceptual declarativa directa para evaluar veracidad (afirmación declarativa con opciones Verdadero o Falso, NUNCA redactar como "¿Cuál de las siguientes..." ni con 4 alternativas).
 4. DISTRIBUCIÓN DE EXTENSIÓN (PREDOMINIO DE PREGUNTAS CORTAS):
    - La gran mayoría (~75% a 80%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 a 2 líneas concisas sin preámbulos) para agilidad mental y memorización activa de conceptos específicos.
@@ -3525,7 +3525,7 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
     {
       "id": 1,
       "chunk_id_origen": "ID del fragmento utilizado",
-      "tipo": "multiple-choice | matching | drag-drop | multi-select | image-labeling | true-false",
+      "tipo": "multiple-choice | matching | drag-drop | multi-select | true-false",
       "longitud_enunciado": "corto | medio_largo",
       "concepto_evaluado": "Subconcepto específico evaluado",
       "contexto_o_enunciado": "Planteamiento del escenario o premisa.",
@@ -3541,11 +3541,6 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
       "oracion_plantilla": "El {0} actúa sobre {1}.",
       "huecos_correctos": ["término 1", "término 2"],
       "banco_palabras": ["término 1", "término 2", "distractor 1", "distractor 2"],
-      "titulo_diagrama": "Diagrama de ...",
-      "etiquetas_diagrama": [
-        { "id": "p1", "etiqueta": "Elemento A", "x_porcentaje": 30, "y_porcentaje": 40 }
-      ],
-      "banco_etiquetas": ["Elemento A", "Elemento B"],
       "retroalimentacion": {
         "busqueda_google": {
           "consulta": "¿Cómo funciona [concepto evaluado]?",
@@ -3624,7 +3619,15 @@ Genera las ${count} preguntas en formato JSON estricto:`;
     } else if (detectedType.includes('multi-select') || (Array.isArray(p.indices_correctos) && p.indices_correctos.length > 1)) {
       qType = 'multi-select';
     } else if (detectedType.includes('image') || detectedType.includes('labeling') || (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 1)) {
-      qType = 'image-labeling';
+      if (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 2) {
+        qType = 'matching';
+        p.pares_emparejamiento = p.etiquetas_diagrama.map((h: any, i: number) => ({
+          termino: String(h.etiqueta || h.label || `Elemento ${i + 1}`).trim(),
+          definicion: String(h.pista || h.hint || p.titulo_diagrama || `Fase o componente ${i + 1}`).trim(),
+        }));
+      } else {
+        qType = 'multiple-choice';
+      }
     } else {
       qType = 'multiple-choice';
     }

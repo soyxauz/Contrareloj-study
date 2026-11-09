@@ -946,6 +946,35 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       return true;
     } catch {}
 
+    // 2b. Si persiste la saturación, purgar datos legacy con imágenes base64 o que excedan 80KB
+    try {
+      const oversizedKeys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        if (
+          k.includes('token') ||
+          k.includes('user') ||
+          k.includes('session') ||
+          k.includes('theme') ||
+          k.includes('client_id') ||
+          k.includes('client_secret')
+        ) {
+          continue;
+        }
+        const val = localStorage.getItem(k);
+        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 80000)) {
+          oversizedKeys.push(k);
+        }
+      }
+      oversizedKeys.forEach(k => {
+        try { localStorage.removeItem(k); } catch {}
+      });
+
+      localStorage.setItem(key, value);
+      return true;
+    } catch {}
+
     // 2. Podar historiales de sesiones de Smart Study antiguas en LocalStorage
     try {
       const sessionKeys: { key: string; updatedAt: number }[] = [];
@@ -976,6 +1005,35 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
           }
         } catch {}
       }
+
+      localStorage.setItem(key, value);
+      return true;
+    } catch {}
+
+    // 2b. Si persiste la saturación, purgar datos legacy con imágenes base64 o que excedan 80KB
+    try {
+      const oversizedKeys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        if (
+          k.includes('token') ||
+          k.includes('user') ||
+          k.includes('session') ||
+          k.includes('theme') ||
+          k.includes('client_id') ||
+          k.includes('client_secret')
+        ) {
+          continue;
+        }
+        const val = localStorage.getItem(k);
+        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 80000)) {
+          oversizedKeys.push(k);
+        }
+      }
+      oversizedKeys.forEach(k => {
+        try { localStorage.removeItem(k); } catch {}
+      });
 
       localStorage.setItem(key, value);
       return true;

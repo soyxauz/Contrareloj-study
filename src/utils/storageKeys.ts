@@ -42,10 +42,48 @@ export function isCorruptedStorageKey(key: string): boolean {
 }
 
 /**
+ * Purga de LocalStorage cualquier dato residual o legacy de kits o imágenes en Base64
+ * que exceda 100KB o contenga data:image/data:application/pdf.
+ * Los activos completos residen de forma segura y permanente en IndexedDB y Google Drive,
+ * por lo que LocalStorage solo debe almacenar índices y tokens de estado ultraligeros (<50KB).
+ */
+export function purgeOversizedLegacyDataFromLocalStorage(): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      // Proteger credenciales críticas y sesión
+      if (
+        k.includes('token') ||
+        k.includes('user') ||
+        k.includes('session') ||
+        k.includes('theme') ||
+        k.includes('client_id') ||
+        k.includes('client_secret')
+      ) {
+        continue;
+      }
+      const val = localStorage.getItem(k);
+      if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 100000)) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach(k => {
+      try {
+        localStorage.removeItem(k);
+      } catch {}
+    });
+  } catch {}
+}
+
+/**
  * Inspecciona LocalStorage una sola vez en el arranque de la aplicacion,
  * recupera el progreso que pudiera haber quedado en claves corruptas y las purga.
  */
 export function recoverAndPurgeCorruptedKeys(): void {
+  purgeOversizedLegacyDataFromLocalStorage();
   if (typeof localStorage === 'undefined') return;
   try {
     const keysToPurge: string[] = [];

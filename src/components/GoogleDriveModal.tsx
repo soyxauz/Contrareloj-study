@@ -53,7 +53,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     setIsProcessing(true);
     setNoticeMessage(null);
     try {
-      const res = await googleDriveService.loginAndSync();
+      const res = await googleDriveService.loginAndSync(undefined, true);
       if (res.user && onAuthSuccess) {
         onAuthSuccess(res.user);
       }
@@ -64,8 +64,8 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         window.dispatchEvent(new Event('thea_ai_settings_changed'));
       }
       setNoticeMessage('Conexión con Google Drive establecida y datos sincronizados.');
-    } catch (err: any) {
-      setNoticeMessage(err?.message || 'Error al conectar con Google Drive.');
+    } catch {
+      setNoticeMessage(null);
     } finally {
       setIsProcessing(false);
     }
@@ -109,7 +109,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       setNoticeMessage('Sincronización bidireccional completada con éxito.');
     } catch (err: any) {
       console.error('Error durante la sincronización manual:', err);
-      setNoticeMessage('Error al sincronizar con Google Drive.');
+      setNoticeMessage(null);
     } finally {
       setIsProcessing(false);
     }

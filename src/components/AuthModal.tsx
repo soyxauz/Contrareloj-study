@@ -59,7 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const res = await googleDriveService.loginAndSync((fastUser, fastKits) => {
         onAuthSuccess(fastUser, fastKits);
         onClose();
-      });
+      }, true);
       if (res.user) {
         onAuthSuccess(res.user, res.kits);
         onClose();

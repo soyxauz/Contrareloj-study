@@ -830,7 +830,7 @@ export const App: React.FC = () => {
           return;
         }
       }
-      const res = await googleDriveService.loginAndSync();
+      const res = await googleDriveService.loginAndSync(undefined, true);
       if (res.kits) {
         const clean = res.kits.filter(k => !isCorruptedKit(k));
         if (clean.length > 0) {
