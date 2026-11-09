@@ -163,9 +163,7 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
           }));
         }
         localStorage.setItem(key, JSON.stringify(parsed));
-      } catch {
-        try { localStorage.removeItem(key); } catch {}
-      }
+      } catch {}
     }
 
     // Saneamiento de flashcards
@@ -178,9 +176,7 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
           parsed.masteredCards = parsed.masteredCards.slice(0, 50);
         }
         localStorage.setItem(key, JSON.stringify(parsed));
-      } catch {
-        try { localStorage.removeItem(key); } catch {}
-      }
+      } catch {}
     }
   } catch {}
 }

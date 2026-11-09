@@ -579,9 +579,11 @@ export const googleDriveService = {
     const lastSync = typeof localStorage !== 'undefined' ? Number(localStorage.getItem(lastSyncKey) || '0') : 0;
     const now = Date.now();
     const hasLocalKits = authService.getUserKits(userId).length > 0;
+    const localSessions = authService.getAllSmartStudySessions(userId);
+    const hasProgress = Object.values(localSessions).some(s => Array.isArray(s.history) && s.history.length > 0);
 
-    // Si los kits locales ya existen en la PC y se sincronizó hace menos de 5 minutos, no gastar recursos
-    if (hasLocalKits && now - lastSync < 5 * 60 * 1000) {
+    // Si los kits locales ya existen, tienen progreso y se sincronizó hace menos de 5 minutos, no gastar recursos
+    if (hasLocalKits && hasProgress && now - lastSync < 5 * 60 * 1000) {
       updateState({ status: 'idle', errorMessage: null });
       return null;
     }
@@ -601,6 +603,7 @@ export const googleDriveService = {
       return null;
     }
 
+    await this.pullProgressFromDrive(userId).catch(() => {});
     return this.pullFromDrive(userId);
   },
 
@@ -1788,6 +1791,12 @@ export const googleDriveService = {
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
       const userFlashcards = authService.getAllFlashcardProgress(userId);
+
+      // Escudo protector: nunca sobrescribir el archivo en la nube con un payload vacio
+      // si la sesion local todavia no se ha hidratado desde IndexedDB.
+      if (Object.keys(userSessions).length === 0 && Object.keys(userFlashcards).length === 0) {
+        return;
+      }
       const userProgressPayload = {
         version: 1,
         updatedAt: Date.now(),
@@ -1944,6 +1953,12 @@ export const googleDriveService = {
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
       const userFlashcards = authService.getAllFlashcardProgress(userId);
+
+      // Escudo protector: nunca sobrescribir el archivo en la nube con un payload vacio
+      // si la sesion local todavia no se ha hidratado desde IndexedDB.
+      if (Object.keys(userSessions).length === 0 && Object.keys(userFlashcards).length === 0) {
+        return;
+      }
       const userProgressPayload = {
         version: 1,
         updatedAt: Date.now(),
@@ -2165,6 +2180,12 @@ export const googleDriveService = {
       const userSessions = authService.getAllSmartStudySessions(userId);
       const userRevealed = authService.getAllRevealedQuestionIds(userId);
       const userFlashcards = authService.getAllFlashcardProgress(userId);
+
+      // Escudo protector: nunca sobrescribir el archivo en la nube con un payload vacio
+      // si la sesion local todavia no se ha hidratado desde IndexedDB.
+      if (Object.keys(userSessions).length === 0 && Object.keys(userFlashcards).length === 0) {
+        return;
+      }
       const userProgressPayload = {
         version: 1,
         updatedAt: Date.now(),

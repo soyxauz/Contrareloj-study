@@ -140,6 +140,28 @@ export async function getSessionItem<T = any>(key: string): Promise<T | null> {
 }
 
 /**
+ * Recupera todos los elementos de sesión almacenados en IndexedDB para restauración integral.
+ */
+export async function getAllSessionItems(): Promise<{ key: string; value: any }[]> {
+  const db = await getDatabase();
+  if (!db) return [];
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SESSION_STORE, 'readonly');
+      const store = tx.objectStore(SESSION_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        resolve((req.result as { key: string; value: any }[]) || []);
+      };
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+/**
  * Elimina un elemento de sesión de IndexedDB al cerrar sesión explícitamente.
  */
 export async function removeSessionItem(key: string): Promise<void> {

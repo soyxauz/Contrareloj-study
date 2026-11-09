@@ -261,6 +261,9 @@ export const App: React.FC = () => {
 
     restoreCustomMateriasAsync(initialUserId).catch(() => {});
 
+    // Restauración universal e inmediata de sesiones de estudio y flashcards desde IndexedDB
+    authService.restoreAllSessionsFromIndexedDB().catch(() => {});
+
     // 2. Restauración de sesión persistente en paralelo si el usuario no estaba cargado
     authService.restorePersistentSession().then(async (restoredUser) => {
       if (isCancelled) return;
@@ -271,6 +274,10 @@ export const App: React.FC = () => {
         const cleanKits = secondKits.filter(k => !isCorruptedKit(k));
         if (cleanKits.length > 0) {
           setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits.map(stripAssetDataUrlsFromKit)));
+        }
+        authService.restoreAllSessionsFromIndexedDB().catch(() => {});
+        if (googleDriveService.isLinked()) {
+          googleDriveService.autoSyncOnStartup(restoredUser.id).catch(() => {});
         }
       }
       setTimeout(() => {

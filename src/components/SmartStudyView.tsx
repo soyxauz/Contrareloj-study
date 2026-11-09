@@ -223,18 +223,20 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
     }
   }
 
-  // 4. Si la pregunta es de tipo 'image-labeling', convertirla inmediatamente a matching conceptual o multiple-choice desprendiendo cualquier activo de imagen
-  if (q.type === 'image-labeling' || (q as any).imageHotspots) {
-    const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, ...restQ } = q as any;
-    if (imageHotspots && imageHotspots.length >= 2) {
+  // 4. Si la pregunta es de tipo 'image-labeling' o contiene etiquetas de diagrama, convertirla inmediatamente a matching conceptual o multiple-choice desprendiendo cualquier foto o activo de imagen
+  if (q.type === 'image-labeling' || (q as any).imageHotspots || (q as any).etiquetas_diagrama) {
+    const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, etiquetas_diagrama, ...restQ } = q as any;
+    const hotspots = imageHotspots || etiquetas_diagrama;
+    if (Array.isArray(hotspots) && hotspots.length >= 2) {
       return {
         ...restQ,
         type: 'matching',
-        question: diagramTitle ? `Empareja las fases o componentes del ${diagramTitle}:` : (restQ.question || 'Empareja los conceptos correspondientes:'),
-        matchingPairs: imageHotspots.map((h: any, i: number) => ({
-          term: h.label || `Componente ${i + 1}`,
-          definition: h.hint || `Paso o zona ${i + 1}`,
+        question: diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : (restQ.question || 'Empareja los conceptos correspondientes:'),
+        matchingPairs: hotspots.map((h: any, i: number) => ({
+          term: h.label || h.termino || `Elemento ${i + 1}`,
+          definition: h.hint || h.pista || h.definicion || `Paso ${i + 1}`,
         })),
+        sourceAsset: undefined,
       };
     }
     return {
@@ -242,6 +244,7 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
       type: 'multiple-choice',
       options: Array.isArray(restQ.options) && restQ.options.length >= 2 ? restQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
       correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
+      sourceAsset: undefined,
     };
   }
 
@@ -249,14 +252,14 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
 }
 
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
-  // Purga automatica de preguntas obsoletas de tipo 'image-labeling'
+  // Conversion automatica de preguntas obsoletas de tipo 'image-labeling' a formato conceptual
   useEffect(() => {
-    if (kit?.questions?.some(q => q.type === 'image-labeling')) {
-      const clean = kit.questions.filter(q => q.type !== 'image-labeling');
+    if (kit?.questions?.some(q => q.type === 'image-labeling' || (q as any).imageHotspots || (q as any).etiquetas_diagrama)) {
+      const converted = kit.questions.map(q => sanitizeQuestionStructure(q, kit.questions));
       if (onUpdateKit) {
         onUpdateKit({
           ...kit,
-          questions: clean,
+          questions: converted,
         });
       }
     }

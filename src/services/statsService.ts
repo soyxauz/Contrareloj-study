@@ -400,35 +400,61 @@ export function saveGlobalStatsSnapshot(stats: GlobalStats, userId: string | nul
   if (typeof window === 'undefined') return;
   try {
     const key = `${SNAPSHOT_KEY_PREFIX}${userId || 'guest'}`;
+    const prevSnap = getGlobalStatsSnapshot(userId);
+
+    // Proteccion contra arranque frio: si el snapshot previo ya tenia progreso positivo y el calculo actual es 0,
+    // jamas sobrescribir con ceros.
+    if (prevSnap && prevSnap.totalAnswered > 0 && stats.totalAnswered === 0) {
+      return;
+    }
 
     const booksMap: Record<string, BookSnapshotItem> = {};
+    if (prevSnap?.booksMap) {
+      for (const [kId, prevBook] of Object.entries(prevSnap.booksMap)) {
+        if (prevBook) {
+          booksMap[kId] = { ...prevBook };
+        }
+      }
+    }
+
     if (Array.isArray(stats.booksSummary)) {
       for (const b of stats.booksSummary) {
         if (b && b.kitId) {
+          const prevB = booksMap[b.kitId];
+          const maxLevel = Math.max(b.level || 1, prevB?.level || 1);
+          const levelVal: 1 | 2 | 3 = (maxLevel >= 3 ? 3 : maxLevel === 2 ? 2 : 1);
           booksMap[b.kitId] = {
-            level: b.level,
-            levelCorrectCount: b.levelCorrectCount,
-            smartStudyProgressPercent: b.smartStudyProgressPercent,
-            questionsAnswered: b.questionsAnswered,
-            accuracy: b.accuracy,
+            level: levelVal,
+            levelCorrectCount: Math.max(b.levelCorrectCount || 0, prevB?.levelCorrectCount || 0),
+            smartStudyProgressPercent: Math.max(b.smartStudyProgressPercent || 0, prevB?.smartStudyProgressPercent || 0),
+            questionsAnswered: Math.max(b.questionsAnswered || 0, prevB?.questionsAnswered || 0),
+            accuracy: b.questionsAnswered > 0 ? b.accuracy : (prevB?.accuracy || b.accuracy || 0),
           };
         }
       }
     }
 
+    const effectiveTotalAnswered = Math.max(stats.totalAnswered, prevSnap?.totalAnswered || 0);
+    const effectiveTotalCorrect = Math.max(stats.totalCorrect, prevSnap?.totalCorrect || 0);
+    const effectiveStreak = Math.max(stats.realStreakDays, prevSnap?.realStreakDays || 0);
+    const effectiveFlashcardsMastered = Math.max(stats.totalFlashcardsMastered, prevSnap?.totalFlashcardsMastered || 0);
+    const effectiveAccuracy = effectiveTotalAnswered > 0
+      ? Math.round((effectiveTotalCorrect / effectiveTotalAnswered) * 1000) / 10
+      : (prevSnap?.overallAccuracy || stats.overallAccuracy || 0);
+
     const snap: GlobalStatsSnapshot = {
-      totalBooks: stats.totalBooks,
-      totalQuestions: stats.totalQuestions,
-      totalAnswered: stats.totalAnswered,
-      totalCorrect: stats.totalCorrect,
-      overallAccuracy: stats.overallAccuracy,
-      totalFlashcards: stats.totalFlashcards,
-      totalFlashcardsMastered: stats.totalFlashcardsMastered,
-      totalAssets: stats.totalAssets,
-      totalWords: stats.totalWords,
-      totalErrorsReinforced: stats.totalErrorsReinforced,
-      realStreakDays: stats.realStreakDays,
-      activeBooksCount: stats.activeBooksCount,
+      totalBooks: Math.max(stats.totalBooks, prevSnap?.totalBooks || 0),
+      totalQuestions: Math.max(stats.totalQuestions, prevSnap?.totalQuestions || 0),
+      totalAnswered: effectiveTotalAnswered,
+      totalCorrect: effectiveTotalCorrect,
+      overallAccuracy: effectiveAccuracy,
+      totalFlashcards: Math.max(stats.totalFlashcards, prevSnap?.totalFlashcards || 0),
+      totalFlashcardsMastered: effectiveFlashcardsMastered,
+      totalAssets: Math.max(stats.totalAssets, prevSnap?.totalAssets || 0),
+      totalWords: Math.max(stats.totalWords, prevSnap?.totalWords || 0),
+      totalErrorsReinforced: Math.max(stats.totalErrorsReinforced, prevSnap?.totalErrorsReinforced || 0),
+      realStreakDays: effectiveStreak,
+      activeBooksCount: Math.max(stats.activeBooksCount, prevSnap?.activeBooksCount || 0),
       updatedAt: Date.now(),
       booksMap,
     };
@@ -516,17 +542,43 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
     }
     if (totalFlashcards === 0 && cachedSnap.totalFlashcards > 0) {
       totalFlashcards = cachedSnap.totalFlashcards;
+    }
+    if (totalFlashcardsMastered < cachedSnap.totalFlashcardsMastered) {
       totalFlashcardsMastered = cachedSnap.totalFlashcardsMastered;
     }
-    if (realStreakDays === 0 && cachedSnap.realStreakDays > 0) {
+    if (realStreakDays < cachedSnap.realStreakDays) {
       realStreakDays = cachedSnap.realStreakDays;
     }
-    if (totalAnswered === 0 && cachedSnap.totalAnswered > 0) {
+    if (totalAnswered < cachedSnap.totalAnswered && cachedSnap.totalAnswered > 0) {
       totalAnswered = cachedSnap.totalAnswered;
-      totalCorrect = cachedSnap.totalCorrect;
+      totalCorrect = Math.max(totalCorrect, cachedSnap.totalCorrect);
     }
     if (activeBooksCount === 0 && cachedSnap.activeBooksCount > 0) {
       activeBooksCount = cachedSnap.activeBooksCount;
+    }
+
+    // Hidratar libros individuales desde el snapshot si los libros locales aun no tienen progreso
+    if (cachedSnap.booksMap) {
+      for (const book of booksSummary) {
+        const snapB = cachedSnap.booksMap[book.kitId];
+        if (snapB) {
+          if (book.questionsAnswered < snapB.questionsAnswered) {
+            book.questionsAnswered = snapB.questionsAnswered;
+          }
+          if (book.level < snapB.level) {
+            book.level = snapB.level;
+          }
+          if (book.levelCorrectCount < snapB.levelCorrectCount) {
+            book.levelCorrectCount = snapB.levelCorrectCount;
+          }
+          if (book.smartStudyProgressPercent < snapB.smartStudyProgressPercent) {
+            book.smartStudyProgressPercent = snapB.smartStudyProgressPercent;
+          }
+          if (book.questionsAnswered === 0 && snapB.accuracy > 0) {
+            book.accuracy = snapB.accuracy;
+          }
+        }
+      }
     }
   }
 
@@ -550,8 +602,8 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
     booksSummary
   };
 
-  // Si tenemos estadísticas calculadas con reactivos o tarjetas válidas, refrescar el snapshot ultraligero
-  if (booksSummary.some(b => b.totalQuestions > 0 || b.flashcardsTotal > 0)) {
+  // Solo refrescar y persistir el snapshot cuando haya progreso real comprobable
+  if (totalAnswered > 0 || totalFlashcardsMastered > 0 || realStreakDays > 0) {
     saveGlobalStatsSnapshot(result, userId);
   }
 

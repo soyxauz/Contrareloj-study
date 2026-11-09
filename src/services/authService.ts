@@ -4,6 +4,7 @@ import type { AISettings } from './aiService';
 import {
   saveSessionItem,
   getSessionItem,
+  getAllSessionItems,
   removeSessionItem,
   requestPersistentStorage,
   safeLocalStorageSetItem,
@@ -477,6 +478,24 @@ export const authService = {
         }
         raw = localStorage.getItem(guestKey);
       }
+
+      // Fallback difuso: buscar cualquier clave de sesion que coincida con este kitId
+      if (!raw && typeof localStorage !== 'undefined') {
+        const suffix = `_${kitId}`;
+        for (const [cacheKey, cachedSession] of inMemorySessionCache.entries()) {
+          if (cacheKey.startsWith('thea_ss_mem_') && cacheKey.endsWith(suffix) && cachedSession) {
+            inMemorySessionCache.set(userKey, cachedSession);
+            return cachedSession;
+          }
+        }
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('thea_ss_mem_') && k.endsWith(suffix) && !isCorruptedStorageKey(k)) {
+            raw = localStorage.getItem(k);
+            if (raw) break;
+          }
+        }
+      }
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const sanitized = sanitizeSmartStudySession(parsed);
@@ -516,6 +535,64 @@ export const authService = {
       return null;
     } catch {
       return null;
+    }
+  },
+
+  /**
+   * Restaura todas las sesiones de Smart Study y progresos de Flashcards desde IndexedDB
+   * hacia la memoria y LocalStorage para garantizar que las metricas nunca bajen a 0 al recargar.
+   */
+  async restoreAllSessionsFromIndexedDB(): Promise<number> {
+    try {
+      const items = await getAllSessionItems();
+      if (!Array.isArray(items) || items.length === 0) return 0;
+
+      let restoredCount = 0;
+      for (const item of items) {
+        if (!item || !item.key || !item.value) continue;
+
+        if (item.key.startsWith('thea_ss_mem_')) {
+          const rawVal = typeof item.value === 'string' ? JSON.parse(item.value) : item.value;
+          const sanitized = sanitizeSmartStudySession(rawVal);
+          if (sanitized) {
+            inMemorySessionCache.set(item.key, sanitized);
+            if (typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
+              const cleanCurrentQ = sanitized.currentQuestion ? {
+                ...sanitized.currentQuestion,
+                sourceAsset: sanitized.currentQuestion.sourceAsset ? {
+                  id: sanitized.currentQuestion.sourceAsset.id,
+                  type: sanitized.currentQuestion.sourceAsset.type,
+                  caption: sanitized.currentQuestion.sourceAsset.caption,
+                  pageOrSlide: sanitized.currentQuestion.sourceAsset.pageOrSlide,
+                  contextNearby: sanitized.currentQuestion.sourceAsset.contextNearby,
+                } : undefined
+              } : undefined;
+              const compact = {
+                ...sanitized,
+                currentQuestion: cleanCurrentQ,
+                history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 15) : [],
+              };
+              safeLocalStorageSetItem(item.key, JSON.stringify(compact));
+            }
+            restoredCount++;
+          }
+        } else if (item.key.startsWith('thea_fc_mem_')) {
+          if (typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
+            const valStr = typeof item.value === 'string' ? item.value : JSON.stringify(item.value);
+            safeLocalStorageSetItem(item.key, valStr);
+          }
+          restoredCount++;
+        }
+      }
+
+      if (restoredCount > 0 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thea_session_saved', { detail: { restoredCount } }));
+        window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { restoredCount } }));
+      }
+
+      return restoredCount;
+    } catch {
+      return 0;
     }
   },
 
@@ -586,9 +663,21 @@ export const authService = {
    */
   getAllSmartStudySessions(userId: string | null): Record<string, SmartStudySessionState> {
     const result: Record<string, SmartStudySessionState> = {};
-    if (typeof localStorage === 'undefined') return result;
+    const targetUserId = userId || 'guest';
+    const prefix = `thea_ss_mem_${targetUserId}_`;
 
-    const prefix = `thea_ss_mem_${userId || 'guest'}_`;
+    // 1. Incorporar primero lo presente en inMemorySessionCache (hidratado desde IndexedDB)
+    for (const [k, session] of inMemorySessionCache.entries()) {
+      if (k.startsWith(prefix) && !isCorruptedStorageKey(k) && session) {
+        const rawKitId = k.substring(prefix.length);
+        const kitId = extractCleanKitId(rawKitId);
+        if (kitId) {
+          result[kitId] = session;
+        }
+      }
+    }
+
+    if (typeof localStorage === 'undefined') return result;
 
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -597,7 +686,7 @@ export const authService = {
       if (key.startsWith(prefix) && !isCorruptedStorageKey(key)) {
         const rawKitId = key.substring(prefix.length);
         const kitId = extractCleanKitId(rawKitId);
-        if (!kitId) continue;
+        if (!kitId || result[kitId]) continue;
         try {
           const raw = localStorage.getItem(key);
           if (raw) {
