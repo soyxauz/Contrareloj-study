@@ -145,36 +145,36 @@ async function restoreDriveStateFromIndexedDB(): Promise<void> {
 
     let changed = false;
     if (id && !localStorage.getItem(STORAGE_CLIENT_ID_KEY)) {
-      localStorage.setItem(STORAGE_CLIENT_ID_KEY, id);
+      safeLocalStorageSetItem(STORAGE_CLIENT_ID_KEY, id);
     }
     if (secret && !localStorage.getItem(STORAGE_CLIENT_SECRET_KEY)) {
-      localStorage.setItem(STORAGE_CLIENT_SECRET_KEY, secret);
+      safeLocalStorageSetItem(STORAGE_CLIENT_SECRET_KEY, secret);
     }
     if (prof && !localStorage.getItem(STORAGE_PROFILE_KEY)) {
-      localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(prof));
+      safeLocalStorageSetItem(STORAGE_PROFILE_KEY, JSON.stringify(prof));
       currentState.userEmail = prof.email || null;
       currentState.userName = prof.name || null;
       currentState.avatarUrl = prof.avatarUrl || null;
       changed = true;
     }
     if (token && !localStorage.getItem(STORAGE_TOKEN_KEY)) {
-      localStorage.setItem(STORAGE_TOKEN_KEY, token);
+      safeLocalStorageSetItem(STORAGE_TOKEN_KEY, token);
     }
     if (exp && !localStorage.getItem(STORAGE_TOKEN_EXP_KEY)) {
-      localStorage.setItem(STORAGE_TOKEN_EXP_KEY, exp);
+      safeLocalStorageSetItem(STORAGE_TOKEN_EXP_KEY, exp);
     }
     if (rToken && !localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY)) {
-      localStorage.setItem(STORAGE_REFRESH_TOKEN_KEY, rToken);
+      safeLocalStorageSetItem(STORAGE_REFRESH_TOKEN_KEY, rToken);
       currentState.hasRefreshToken = true;
       changed = true;
     }
     if (aType && !localStorage.getItem(STORAGE_AUTH_TYPE_KEY)) {
-      localStorage.setItem(STORAGE_AUTH_TYPE_KEY, aType);
+      safeLocalStorageSetItem(STORAGE_AUTH_TYPE_KEY, aType);
       currentState.authType = aType;
       changed = true;
     }
     if (lastSync && !localStorage.getItem(STORAGE_LAST_SYNC_KEY)) {
-      localStorage.setItem(STORAGE_LAST_SYNC_KEY, lastSync);
+      safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, lastSync);
       currentState.lastSyncTime = parseInt(lastSync, 10);
       changed = true;
     }
@@ -381,7 +381,7 @@ export const googleDriveService = {
   setClientId(clientId: string): void {
     const clean = clientId.trim();
     if (clean) {
-      localStorage.setItem(STORAGE_CLIENT_ID_KEY, clean);
+      safeLocalStorageSetItem(STORAGE_CLIENT_ID_KEY, clean);
       saveSessionItem(STORAGE_CLIENT_ID_KEY, clean).catch(() => {});
       updateState({ status: 'idle', errorMessage: null });
     } else {
@@ -413,7 +413,7 @@ export const googleDriveService = {
   setClientSecret(secret: string): void {
     const clean = secret.trim();
     if (clean) {
-      localStorage.setItem(STORAGE_CLIENT_SECRET_KEY, clean);
+      safeLocalStorageSetItem(STORAGE_CLIENT_SECRET_KEY, clean);
       saveSessionItem(STORAGE_CLIENT_SECRET_KEY, clean).catch(() => {});
     } else {
       localStorage.removeItem(STORAGE_CLIENT_SECRET_KEY);
@@ -449,7 +449,7 @@ export const googleDriveService = {
    * Establece el tipo de autenticación en uso ('serverless_refresh' o 'client_implicit').
    */
   setAuthType(type: 'serverless_refresh' | 'client_implicit'): void {
-    localStorage.setItem(STORAGE_AUTH_TYPE_KEY, type);
+    safeLocalStorageSetItem(STORAGE_AUTH_TYPE_KEY, type);
     saveSessionItem(STORAGE_AUTH_TYPE_KEY, type).catch(() => {});
     updateState({ authType: type });
   },
@@ -876,7 +876,7 @@ export const googleDriveService = {
       avatarUrl: data.picture,
     };
 
-    localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
+    safeLocalStorageSetItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
     saveSessionItem(STORAGE_PROFILE_KEY, profile).catch(() => {});
     updateState({
       userEmail: profile.email,
@@ -1662,7 +1662,7 @@ export const googleDriveService = {
       }
 
       const now = Date.now();
-      localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
       updateState({
         status: 'synced',
         lastSyncTime: now,
@@ -1846,7 +1846,7 @@ export const googleDriveService = {
       }
 
       const now = Date.now();
-      localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
       updateState({
         status: 'synced',
         lastSyncTime: now,
@@ -2017,7 +2017,7 @@ export const googleDriveService = {
       }
 
       const now = Date.now();
-      localStorage.setItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
       authService.markKitsSyncedWithDrive(userId, driveMergedKits.map(k => k.id));
       updateState({
         status: 'synced',

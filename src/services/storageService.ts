@@ -1,4 +1,5 @@
 import type { DocumentAsset, StudyKit, Flashcard } from '../types';
+import { isProtectedStorageKey } from '../utils/storageKeys';
 
 /**
  * Servicio de persistencia de activos pesados en IndexedDB.
@@ -946,24 +947,18 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       return true;
     } catch {}
 
-    // 2b. Si persiste la saturación, purgar datos legacy con imágenes base64 o que excedan 80KB
+    // 2. Si persiste la saturación, purgar kits legacy y datos que contengan base64 o excedan 50KB
     try {
       const oversizedKeys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k) continue;
-        if (
-          k.includes('token') ||
-          k.includes('user') ||
-          k.includes('session') ||
-          k.includes('theme') ||
-          k.includes('client_id') ||
-          k.includes('client_secret')
-        ) {
+        if (!k || isProtectedStorageKey(k)) continue;
+        if (k.startsWith('thea_user_kits_') || k === 'thea_guest_kits' || k === 'thea_study_kits_v2') {
+          oversizedKeys.push(k);
           continue;
         }
         const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 80000)) {
+        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 50000)) {
           oversizedKeys.push(k);
         }
       }
@@ -1010,24 +1005,18 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       return true;
     } catch {}
 
-    // 2b. Si persiste la saturación, purgar datos legacy con imágenes base64 o que excedan 80KB
+    // 2. Si persiste la saturación, purgar kits legacy y datos que contengan base64 o excedan 50KB
     try {
       const oversizedKeys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k) continue;
-        if (
-          k.includes('token') ||
-          k.includes('user') ||
-          k.includes('session') ||
-          k.includes('theme') ||
-          k.includes('client_id') ||
-          k.includes('client_secret')
-        ) {
+        if (!k || isProtectedStorageKey(k)) continue;
+        if (k.startsWith('thea_user_kits_') || k === 'thea_guest_kits' || k === 'thea_study_kits_v2') {
+          oversizedKeys.push(k);
           continue;
         }
         const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 80000)) {
+        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 50000)) {
           oversizedKeys.push(k);
         }
       }

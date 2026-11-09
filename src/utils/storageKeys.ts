@@ -42,9 +42,37 @@ export function isCorruptedStorageKey(key: string): boolean {
 }
 
 /**
+ * Determina si una clave de LocalStorage es vital para el sistema de sesión y configuración.
+ * Solo estas claves esenciales están protegidas contra purga de cuota.
+ */
+export function isProtectedStorageKey(k: string): boolean {
+  if (!k) return false;
+  return (
+    k === 'thea_auth_users' ||
+    k === 'thea_auth_session' ||
+    k === 'thea_gdrive_token' ||
+    k === 'thea_gdrive_token_exp' ||
+    k === 'thea_gdrive_refresh_token' ||
+    k === 'thea_gdrive_client_id' ||
+    k === 'thea_gdrive_client_secret' ||
+    k === 'thea_gdrive_profile' ||
+    k === 'thea_gdrive_auth_type' ||
+    k === 'thea_gdrive_last_sync' ||
+    k === 'thea_theme' ||
+    k === 'thea_current_kit_id' ||
+    k === 'thea_deleted_kit_ids' ||
+    k.startsWith('thea_ollama_') ||
+    k.startsWith('thea_groq_') ||
+    k.startsWith('thea_grok_') ||
+    k === 'contrareloj_gemini_api_key' ||
+    k === 'thea_ai_settings'
+  );
+}
+
+/**
  * Purga de LocalStorage cualquier dato residual o legacy de kits o imágenes en Base64
- * que exceda 100KB o contenga data:image/data:application/pdf.
- * Los activos completos residen de forma segura y permanente en IndexedDB y Google Drive,
+ * que exceda 50KB o contenga data:image/data:application/pdf.
+ * Los activos y kits completos residen de forma segura y permanente en IndexedDB y Google Drive,
  * por lo que LocalStorage solo debe almacenar índices y tokens de estado ultraligeros (<50KB).
  */
 export function purgeOversizedLegacyDataFromLocalStorage(): void {
@@ -53,20 +81,17 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (!k) continue;
-      // Proteger credenciales críticas y sesión
-      if (
-        k.includes('token') ||
-        k.includes('user') ||
-        k.includes('session') ||
-        k.includes('theme') ||
-        k.includes('client_id') ||
-        k.includes('client_secret')
-      ) {
+      if (!k || isProtectedStorageKey(k)) continue;
+
+      // 1. Purgar copias legacy de kits completos en LocalStorage (los kits residen en IndexedDB e índice ligero)
+      if (k.startsWith('thea_user_kits_') || k === 'thea_guest_kits' || k === 'thea_study_kits_v2') {
+        keysToRemove.push(k);
         continue;
       }
+
+      // 2. Purgar cualquier activo que contenga imágenes base64, PDFs o cadenas masivas
       const val = localStorage.getItem(k);
-      if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 100000)) {
+      if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 50000)) {
         keysToRemove.push(k);
       }
     }
