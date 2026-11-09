@@ -60,12 +60,21 @@ export function isProtectedStorageKey(k: string): boolean {
     k === 'thea_gdrive_last_sync' ||
     k === 'thea_theme' ||
     k === 'thea_current_kit_id' ||
+    k === 'thea_currentkit_id' ||
     k === 'thea_deleted_kit_ids' ||
     k.startsWith('thea_ollama_') ||
     k.startsWith('thea_groq_') ||
     k.startsWith('thea_grok_') ||
     k === 'contrareloj_gemini_api_key' ||
-    k === 'thea_ai_settings'
+    k === 'thea_ai_settings' ||
+    k.startsWith('thea_user_kits_index_') ||
+    k === 'thea_guest_kits_index' ||
+    k.startsWith('thea_global_stats_snap_') ||
+    k.startsWith('thea_ss_mem_') ||
+    k.startsWith('thea_fc_mem_') ||
+    k.startsWith('thea_revealed_q_') ||
+    k.startsWith('thea_last_drive_sync_') ||
+    k.startsWith('thea_custom_materias')
   );
 }
 
@@ -84,7 +93,11 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
       if (!k || isProtectedStorageKey(k)) continue;
 
       // 1. Purgar copias legacy de kits completos en LocalStorage (los kits residen en IndexedDB e índice ligero)
-      if (k.startsWith('thea_user_kits_') || k === 'thea_guest_kits' || k === 'thea_study_kits_v2') {
+      if (
+        (k.startsWith('thea_user_kits_') && !k.startsWith('thea_user_kits_index_')) ||
+        k === 'thea_guest_kits' ||
+        k === 'thea_study_kits_v2'
+      ) {
         keysToRemove.push(k);
         continue;
       }

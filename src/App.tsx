@@ -154,7 +154,8 @@ export const App: React.FC = () => {
 
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
   const [kits, setKits] = useState<StudyKit[]>(() => {
-    const initialKits = authService.getUserKits(currentUser ? currentUser.id : null).filter(k => !isCorruptedKit(k));
+    const initialUserId = authService.getCurrentUser()?.id || null;
+    const initialKits = authService.getUserKits(initialUserId).filter(k => !isCorruptedKit(k));
     const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
     if (savedCurrentId) {
       if (['bio-respiration', 'cs-algorithms', 'cs-algo'].includes(savedCurrentId)) {
@@ -548,7 +549,9 @@ export const App: React.FC = () => {
     if (isLoggingOutRef.current) return;
     if (!isHydratedRef.current || isStartupHydrationRef.current) return;
     try {
-      authService.saveUserKits(currentUser ? currentUser.id : null, kits);
+      if (kits && kits.length > 0) {
+        authService.saveUserKits(currentUser ? currentUser.id : null, kits);
+      }
     } catch (e) {
       console.error('Error al guardar Study Kits:', e);
     }
@@ -1092,7 +1095,7 @@ export const App: React.FC = () => {
             onUpdateKit={handleUpdateKit}
             onDeleteKitsBatch={handleDeleteKitsBatch}
             onChangeCategoryBatch={handleChangeCategoryBatch}
-            userId={currentUser?.id || null}
+            userId={currentUser?.id || authService.getCurrentUser()?.id || null}
             onOpenAISettings={handleOpenAIModal}
             onOpenAuth={handleOpenAuthModal}
           />
@@ -1103,7 +1106,7 @@ export const App: React.FC = () => {
               onKitCreated={handleKitCreated}
               initialTab={createInitialTab}
               onOpenAISettings={handleOpenAIModal}
-              userId={currentUser?.id || null}
+              userId={currentUser?.id || authService.getCurrentUser()?.id || null}
             />
           </React.Suspense>
         )}
@@ -1114,7 +1117,7 @@ export const App: React.FC = () => {
               <SmartStudyView
                 key={currentKit.id}
                 kit={currentKit}
-                userId={currentUser?.id || null}
+                userId={currentUser?.id || authService.getCurrentUser()?.id || null}
                 onUpdateKit={handleUpdateKit}
                 onNavigate={handleNavigate}
               />
@@ -1149,7 +1152,7 @@ export const App: React.FC = () => {
               <FlashcardsView
                 key={currentKit.id}
                 kit={currentKit}
-                userId={currentUser?.id || null}
+                userId={currentUser?.id || authService.getCurrentUser()?.id || null}
                 onUpdateKit={handleUpdateKit}
               />
             )}
@@ -1158,7 +1161,7 @@ export const App: React.FC = () => {
                 currentKit={currentKit}
                 kits={kits}
                 onSelectKit={handleSelectKit}
-                userId={currentUser?.id || null}
+                userId={currentUser?.id || authService.getCurrentUser()?.id || null}
                 onNavigateToSmartStudy={(kit) => {
                   handleSelectKit(kit);
                   handleSelectMode('smart-study', true);

@@ -1450,11 +1450,16 @@ export const googleDriveService = {
       );
       allKitsFiles.sort((a, _b) => (a.name === `thea_kits_${userId}.json` ? -1 : 1));
 
-      // Archivos de progreso: capturar todos los archivos de progreso existentes de cualquier máquina
+      // Archivos de progreso: capturar archivos de progreso dando prioridad máxima al del usuario actual
       const allProgressFiles = rootFiles.filter(f =>
-        f.name.startsWith('thea_progress_') || f.name === 'thea_progress.json'
+        f.name === `thea_progress_${userId}.json` || f.name === 'thea_progress.json'
       );
-      allProgressFiles.sort((a, _b) => (a.name === `thea_progress_${userId}.json` ? -1 : 1));
+      // El archivo específico del usuario se procesa al final para asegurar que sus novedades prevalezcan
+      allProgressFiles.sort((a, b) => {
+        if (a.name === `thea_progress_${userId}.json`) return 1;
+        if (b.name === `thea_progress_${userId}.json`) return -1;
+        return 0;
+      });
 
       // Archivos de materias: capturar todas las materias personalizadas
       const allMateriasFiles = rootFiles.filter(f =>
@@ -2219,8 +2224,13 @@ export const googleDriveService = {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
       const allProgressFiles = rootFiles.filter(f =>
-        f.name.startsWith('thea_progress_') || f.name === 'thea_progress.json'
+        f.name === `thea_progress_${userId}.json` || f.name === 'thea_progress.json'
       );
+      allProgressFiles.sort((a, b) => {
+        if (a.name === `thea_progress_${userId}.json`) return 1;
+        if (b.name === `thea_progress_${userId}.json`) return -1;
+        return 0;
+      });
 
       if (allProgressFiles.length === 0) return false;
 

@@ -953,7 +953,11 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k || isProtectedStorageKey(k)) continue;
-        if (k.startsWith('thea_user_kits_') || k === 'thea_guest_kits' || k === 'thea_study_kits_v2') {
+        if (
+          (k.startsWith('thea_user_kits_') && !k.startsWith('thea_user_kits_index_')) ||
+          k === 'thea_guest_kits' ||
+          k === 'thea_study_kits_v2'
+        ) {
           oversizedKeys.push(k);
           continue;
         }
@@ -1011,7 +1015,11 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k || isProtectedStorageKey(k)) continue;
-        if (k.startsWith('thea_user_kits_') || k === 'thea_guest_kits' || k === 'thea_study_kits_v2') {
+        if (
+          (k.startsWith('thea_user_kits_') && !k.startsWith('thea_user_kits_index_')) ||
+          k === 'thea_guest_kits' ||
+          k === 'thea_study_kits_v2'
+        ) {
           oversizedKeys.push(k);
           continue;
         }

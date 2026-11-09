@@ -148,7 +148,7 @@ if (typeof window !== 'undefined') {
  */
 export function getBookRealStats(kit: StudyKit, userId: string | null = null): BookStats {
   const session = authService.getSmartStudySession(userId, kit.id);
-  const cacheKey = `${userId || 'g'}_${kit.id}_${session?.level || 1}_${session?.history?.length || 0}_${kit.updatedAt || 0}`;
+  const cacheKey = `${userId || 'g'}_${kit.id}_${session?.level || 1}_${session?.levelCorrectCount || 0}_${session?.questionsAnsweredTotal || 0}_${session?.history?.length || 0}_${kit.updatedAt || 0}`;
   const hit = bookStatsFastCache.get(cacheKey);
   if (hit && Date.now() - hit.ts < 4000) {
     return hit.stats;

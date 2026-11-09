@@ -107,6 +107,8 @@ function saveStoredUsers(users: StoredUserRecord[]): void {
   }
 }
 
+const inMemorySessionCache = new Map<string, SmartStudySessionState>();
+
 /**
  * Valida y calibra la sesión de Smart Study para garantizar que siempre refleje el nivel real y exacto.
  * Invariante pedagógico de Smart Study:
@@ -433,28 +435,64 @@ export const authService = {
 
   /**
    * Obtiene la sesión de Smart Study guardada (memoria total en tiempo real).
-   * Cuenta con fallback transparente a la sesión de invitado si el usuario no tenía progreso previo en este kit.
+   * Cuenta con respaldo inmediato en caché de memoria y fallback transparente a sesión de invitado.
    */
   getSmartStudySession(userId: string | null, rawKitId: string): SmartStudySessionState | null {
     try {
       const kitId = extractCleanKitId(rawKitId);
       if (!kitId) return null;
       const userKey = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
+
+      if (inMemorySessionCache.has(userKey)) {
+        return inMemorySessionCache.get(userKey)!;
+      }
+
       let raw = localStorage.getItem(userKey);
       if (!raw && userId && userId !== 'guest') {
         const guestKey = `thea_ss_mem_guest_${kitId}`;
+        if (inMemorySessionCache.has(guestKey)) {
+          return inMemorySessionCache.get(guestKey)!;
+        }
         raw = localStorage.getItem(guestKey);
       }
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const sanitized = sanitizeSmartStudySession(parsed);
-      if (sanitized && (sanitized.level !== parsed.level || sanitized.levelCorrectCount !== parsed.levelCorrectCount)) {
-        localStorage.setItem(userKey, JSON.stringify(sanitized));
-        saveSessionItem(userKey, sanitized).catch(() => {});
+      if (sanitized) {
+        inMemorySessionCache.set(userKey, sanitized);
+        if (sanitized.level !== parsed.level || sanitized.levelCorrectCount !== parsed.levelCorrectCount) {
+          localStorage.setItem(userKey, JSON.stringify(sanitized));
+          saveSessionItem(userKey, sanitized).catch(() => {});
+        }
       }
       return sanitized;
     } catch (e) {
       console.error('Error al leer memoria de Smart Study', e);
+      return null;
+    }
+  },
+
+  /**
+   * Restaura la sesión de Smart Study de forma asíncrona desde IndexedDB
+   * si por alguna razón no se encontraba en memoria o LocalStorage.
+   */
+  async restoreSmartStudySessionAsync(userId: string | null, rawKitId: string): Promise<SmartStudySessionState | null> {
+    try {
+      const syncSession = this.getSmartStudySession(userId, rawKitId);
+      if (syncSession) return syncSession;
+      const kitId = extractCleanKitId(rawKitId);
+      if (!kitId) return null;
+      const userKey = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
+      const idbVal = await getSessionItem<SmartStudySessionState>(userKey);
+      if (idbVal) {
+        const sanitized = sanitizeSmartStudySession(idbVal);
+        if (sanitized) {
+          this.saveSmartStudySession(userId, kitId, sanitized);
+          return sanitized;
+        }
+      }
+      return null;
+    } catch {
       return null;
     }
   },
@@ -470,8 +508,23 @@ export const authService = {
       const sanitized = sanitizeSmartStudySession(state) || state;
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
       
+      inMemorySessionCache.set(key, sanitized);
+
+      // Desprender datos pesados binarios base64 de la pregunta activa para aligerar LocalStorage (<5KB)
+      const cleanCurrentQ = sanitized.currentQuestion ? {
+        ...sanitized.currentQuestion,
+        sourceAsset: sanitized.currentQuestion.sourceAsset ? {
+          id: sanitized.currentQuestion.sourceAsset.id,
+          type: sanitized.currentQuestion.sourceAsset.type,
+          caption: sanitized.currentQuestion.sourceAsset.caption,
+          pageOrSlide: sanitized.currentQuestion.sourceAsset.pageOrSlide,
+          contextNearby: sanitized.currentQuestion.sourceAsset.contextNearby,
+        } : undefined
+      } : undefined;
+
       const compactSession = {
         ...sanitized,
+        currentQuestion: cleanCurrentQ,
         history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 15).map(h => ({
           id: h.id,
           questionId: h.questionId,
@@ -660,7 +713,7 @@ export const authService = {
     });
 
     // Determinar cuál sesión tenía el contexto activo más reciente para cursor y estado de pregunta actual
-    const isIncomingMoreRecent = (sanitizedIncoming.lastUpdated || 0) >= (localSession.lastUpdated || 0);
+    const isIncomingMoreRecent = (sanitizedIncoming.lastUpdated || 0) > (localSession.lastUpdated || 0);
     const activeContext = isIncomingMoreRecent ? sanitizedIncoming : localSession;
 
     const mergedSession: SmartStudySessionState = {
@@ -742,6 +795,7 @@ export const authService = {
         }
       }
       for (const k of keysToRemove) {
+        inMemorySessionCache.delete(k);
         localStorage.removeItem(k);
         removeSessionItem(k).catch(() => {});
       }
@@ -771,6 +825,7 @@ export const authService = {
     try {
       const kitId = extractCleanKitId(rawKitId);
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
+      inMemorySessionCache.delete(key);
       localStorage.removeItem(key);
       removeSessionItem(key).catch(() => {});
     } catch (e) {
