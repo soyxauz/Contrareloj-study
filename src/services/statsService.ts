@@ -132,6 +132,17 @@ function countWordsFast(text: string): number {
 
 const bookStatsFastCache = new Map<string, { stats: BookStats; ts: number }>();
 
+export function clearBookStatsCache(): void {
+  bookStatsFastCache.clear();
+}
+
+if (typeof window !== 'undefined') {
+  const clearCache = () => bookStatsFastCache.clear();
+  window.addEventListener('thea_session_saved', clearCache);
+  window.addEventListener('thea_progress_synced', clearCache);
+  window.addEventListener('thea_flashcard_saved', clearCache);
+}
+
 /**
  * Calcula las estadísticas reales no inventadas de un libro o Study Kit específico.
  */

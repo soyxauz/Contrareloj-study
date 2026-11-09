@@ -1365,6 +1365,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // Referencia actualizada al último estado de sesión para persistencia garantizada al desmontar la vista
   const latestSessionRef = useRef<any>(null);
+  const autoSaveTimerRef = useRef<any>(null);
+
   latestSessionRef.current = {
     currentIndex,
     level,
@@ -1400,6 +1402,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   // Guardado garantizado al salir o desmontar de Smart Study a otra sección
   useEffect(() => {
     return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
       if (latestSessionRef.current && kit?.id) {
         authService.saveSmartStudySession(userId || null, kit.id, latestSessionRef.current);
         if (userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
@@ -1409,39 +1414,22 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     };
   }, [userId, kit?.id]);
 
-  // ── Auto-Save Session Memory (Guarda el instante exacto por kit y usuario) ──
+  // ── Auto-Save Session Memory (Con debounce suave de 600ms para evitar saturación de CPU y GC) ──
   useEffect(() => {
-    authService.saveSmartStudySession(userId || null, kit.id, {
-      currentIndex,
-      level,
-      activePracticeLevel,
-      currentQuestionId: currentQ?.id,
-      currentQuestion: currentQ,
-      shortAnswerInput,
-      levelCorrectCount: currentLevelCorrect,
-      levelCorrectCounts,
-      errorQueue,
-      isReinforcementMode,
-      selectedOption,
-      selectedMultiIndices,
-      matchingPairsMap,
-      matchingChecked,
-      placedChips,
-      dragDropChecked,
-      isAnswered,
-      isCurrentCorrect,
-      activeTab,
-      history: history.slice(0, 50),
-      historyFilter,
-      historyLevelFilter,
-      questionsAnsweredTotal,
-      totalErrorsReinforced,
-      socraticProfile,
-      revealedQuestionIds,
-      seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
-      lastUpdated: Date.now(),
-      shuffleSeed,
-    } as any);
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (kit?.id && latestSessionRef.current) {
+        authService.saveSmartStudySession(userId || null, kit.id, latestSessionRef.current);
+      }
+    }, 600);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
   }, [
     userId,
     kit.id,
@@ -1449,27 +1437,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     level,
     activePracticeLevel,
     currentQ?.id,
-    currentQ,
-    shortAnswerInput,
     currentLevelCorrect,
-    levelCorrectCounts,
-    errorQueue,
-    isReinforcementMode,
-    selectedOption,
-    selectedMultiIndices,
-    matchingPairsMap,
-    matchingChecked,
-    placedChips,
-    dragDropChecked,
     isAnswered,
     isCurrentCorrect,
     activeTab,
-    history,
-    historyFilter,
-    historyLevelFilter,
     questionsAnsweredTotal,
     totalErrorsReinforced,
-    socraticProfile,
     revealedQuestionIds,
     shuffleSeed,
   ]);

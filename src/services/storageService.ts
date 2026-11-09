@@ -12,7 +12,7 @@ const ASSET_STORE = 'assets';
 const SESSION_STORE = 'persistent_session';
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
-const MAX_ASSET_CACHE_SIZE = 10;
+const MAX_ASSET_CACHE_SIZE = 5;
 const assetMemoryCache = new Map<string, DocumentAsset>();
 
 function putInAssetMemoryCache(id: string, asset: DocumentAsset): void {

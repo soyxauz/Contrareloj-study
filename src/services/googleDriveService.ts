@@ -68,6 +68,7 @@ let currentState: DriveSyncState = {
 };
 
 let proactiveRefreshTimer: any = null;
+let cachedServerlessStatus: { available: boolean; hasClientId: boolean; hasClientSecret: boolean } | null = null;
 
 // Initialize cached state from storage
 try {
@@ -95,14 +96,12 @@ try {
     } else if (token && expStr) {
       const exp = parseInt(expStr, 10);
       if (Date.now() > exp - 60000) {
-        currentState.status = 'needs_reauth';
-        currentState.errorMessage = 'Tu sesión de Google Drive requiere reconexión.';
+        currentState.status = 'synced';
       } else {
         currentState.status = 'synced';
       }
     } else {
-      currentState.status = 'needs_reauth';
-      currentState.errorMessage = 'Tu sesión de Google Drive requiere reconexión.';
+      currentState.status = 'unlinked';
     }
   } else {
     currentState.status = 'unlinked';
@@ -186,6 +185,13 @@ async function restoreDriveStateFromIndexedDB(): Promise<void> {
       currentState.status = 'synced';
       currentState.errorMessage = null;
       notifyState();
+
+      const currentToken = localStorage.getItem(STORAGE_TOKEN_KEY);
+      const currentExpStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
+      const expTime = currentExpStr ? parseInt(currentExpStr, 10) : 0;
+      if (!currentToken || Date.now() > expTime - 60000) {
+        googleDriveService.attemptSilentTokenRefresh().catch(() => {});
+      }
     } else if (changed) {
       const currentToken = localStorage.getItem(STORAGE_TOKEN_KEY);
       const currentExpStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
@@ -204,6 +210,12 @@ async function restoreDriveStateFromIndexedDB(): Promise<void> {
 
 if (typeof window !== 'undefined') {
   restoreDriveStateFromIndexedDB();
+  ensureGsiLoaded().catch(() => {});
+  setTimeout(() => {
+    googleDriveService.checkServerlessStatus().then(status => {
+      cachedServerlessStatus = status;
+    }).catch(() => {});
+  }, 100);
   window.addEventListener('thea_materias_cloud_sync_request', (event: any) => {
     const detail = event?.detail;
     if (detail?.userId) {
@@ -453,22 +465,26 @@ export const googleDriveService = {
         const hasSecret = Boolean(data.hasClientSecret || hasLocalSecret);
         const isReady = Boolean(data.available && hasSecret);
         updateState({ isServerlessConfigured: isReady });
-        return {
+        const result = {
           available: Boolean(data.available),
           hasClientId: Boolean(data.hasClientId || this.hasClientId()),
           hasClientSecret: hasSecret,
         };
+        cachedServerlessStatus = result;
+        return result;
       }
     } catch {
-      // Backend serverless no alcanzable (ej. preview puramente estático)
+      // Backend serverless no alcanzable
     }
     const hasLocalSecret = Boolean(this.getClientSecret());
     updateState({ isServerlessConfigured: hasLocalSecret });
-    return {
+    const fallbackResult = {
       available: false,
       hasClientId: this.hasClientId(),
       hasClientSecret: hasLocalSecret,
     };
+    cachedServerlessStatus = fallbackResult;
+    return fallbackResult;
   },
 
   /**
@@ -712,16 +728,21 @@ export const googleDriveService = {
    * Flujo implícito popup directo con Google Identity Services (fallback cuando no hay backend configurado).
    */
   async requestGoogleAccessImplicit(clientId: string): Promise<string> {
-    await ensureGsiLoaded();
+    if (!(window as any).google?.accounts?.oauth2) {
+      await ensureGsiLoaded();
+    }
 
     return new Promise((resolve, reject) => {
+      let isResolved = false;
       try {
         const client = (window as any).google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
           prompt: '',
           callback: (response: any) => {
+            if (isResolved) return;
             if (response.error) {
+              isResolved = true;
               console.error('[GoogleDriveService] Error en popup OAuth:', response);
               updateState({ status: 'error', errorMessage: `Error de autenticación: ${response.error}` });
               reject(new Error(response.error));
@@ -729,16 +750,31 @@ export const googleDriveService = {
             }
 
             if (response.access_token) {
+              isResolved = true;
               const expiresIn = response.expires_in ? parseInt(response.expires_in, 10) : 3600;
               this.setAccessToken(response.access_token, expiresIn);
               this.setAuthType('client_implicit');
               resolve(response.access_token);
             } else {
+              isResolved = true;
               reject(new Error('No se recibió token de acceso de Google.'));
             }
           },
           error_callback: (err: any) => {
+            if (isResolved) return;
+            isResolved = true;
             console.error('[GoogleDriveService] Error callback GIS:', err);
+            const isPopupBlocked = err?.type === 'popup_failed_to_open' ||
+              err?.type === 'popup_closed_by_user' ||
+              err?.message?.includes('popup');
+            if (isPopupBlocked) {
+              updateState({
+                status: 'error',
+                errorMessage: 'El navegador bloqueó la ventana emergente o fue cerrada. Permite ventanas emergentes para este sitio.'
+              });
+              reject(new Error('POPUP_BLOCKED'));
+              return;
+            }
             updateState({ status: 'error', errorMessage: err?.message || 'Ventana de inicio de sesión cerrada o cancelada.' });
             reject(err);
           },
@@ -746,9 +782,12 @@ export const googleDriveService = {
 
         client.requestAccessToken();
       } catch (err: any) {
-        console.error('[GoogleDriveService] Excepción al invocar initTokenClient:', err);
-        updateState({ status: 'error', errorMessage: err?.message || 'Error al inicializar sesión con Google.' });
-        reject(err);
+        if (!isResolved) {
+          isResolved = true;
+          console.error('[GoogleDriveService] Excepción al invocar initTokenClient:', err);
+          updateState({ status: 'error', errorMessage: err?.message || 'Error al inicializar sesión con Google.' });
+          reject(err);
+        }
       }
     });
   },
@@ -765,23 +804,37 @@ export const googleDriveService = {
       throw new Error('CLIENT_ID_MISSING');
     }
 
-    await ensureGsiLoaded();
+    if (!(window as any).google?.accounts?.oauth2) {
+      await ensureGsiLoaded();
+    }
 
-    const serverlessStatus = await this.checkServerlessStatus();
+    const serverlessStatus = cachedServerlessStatus || {
+      available: true,
+      hasClientId: Boolean(clientId),
+      hasClientSecret: Boolean(this.getClientSecret())
+    };
     const canUseServerless = serverlessStatus.available && (serverlessStatus.hasClientSecret || Boolean(this.getClientSecret()));
 
     if (canUseServerless && (window as any).google?.accounts?.oauth2?.initCodeClient) {
       try {
         return await new Promise<string>((resolve, reject) => {
+          let isResolved = false;
           try {
             const codeClient = (window as any).google.accounts.oauth2.initCodeClient({
               client_id: clientId,
               scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
               ux_mode: 'popup',
               callback: async (response: any) => {
+                if (isResolved) return;
                 if (response.error) {
                   console.error('[GoogleDriveService] Error en code popup:', response);
-                  this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+                  if (response.error === 'popup_closed_by_user') {
+                    isResolved = true;
+                    reject(new Error('Ventana de inicio de sesión cerrada por el usuario.'));
+                    return;
+                  }
+                  isResolved = true;
+                  reject(new Error(response.error));
                   return;
                 }
 
@@ -809,30 +862,49 @@ export const googleDriveService = {
                       this.setRefreshToken(data.refresh_token);
                     }
                     this.setAuthType('serverless_refresh');
+                    isResolved = true;
                     resolve(data.access_token);
                   } catch (exchangeErr: any) {
-                    console.warn('[GoogleDriveService] Error en canje serverless, aplicando fallback implícito:', exchangeErr);
-                    this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+                    console.warn('[GoogleDriveService] Error en canje serverless:', exchangeErr);
+                    isResolved = true;
+                    reject(exchangeErr);
                   }
                 } else {
-                  this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+                  isResolved = true;
+                  reject(new Error('No se recibió código de autorización.'));
                 }
               },
               error_callback: (err: any) => {
-                console.warn('[GoogleDriveService] Error callback initCodeClient, aplicando fallback:', err);
+                if (isResolved) return;
+                isResolved = true;
+                console.warn('[GoogleDriveService] Error callback initCodeClient:', err);
+                const isPopupBlocked = err?.type === 'popup_failed_to_open' ||
+                  err?.type === 'popup_closed_by_user' ||
+                  err?.message?.includes('popup');
+                if (isPopupBlocked) {
+                  updateState({
+                    status: 'error',
+                    errorMessage: 'El navegador bloqueó la ventana emergente o fue cerrada. Permite ventanas emergentes para este sitio.'
+                  });
+                  reject(new Error('POPUP_BLOCKED'));
+                  return;
+                }
                 this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
               },
             });
 
             codeClient.requestCode();
           } catch (initErr) {
-            console.warn('[GoogleDriveService] Error al instanciar initCodeClient, aplicando fallback:', initErr);
-            this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+            console.warn('[GoogleDriveService] Error al instanciar initCodeClient:', initErr);
+            if (!isResolved) {
+              isResolved = true;
+              this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+            }
           }
         });
       } catch (codeErr) {
-        console.warn('[GoogleDriveService] Fallback final a flujo implícito:', codeErr);
-        return this.requestGoogleAccessImplicit(clientId);
+        console.warn('[GoogleDriveService] Error en flujo code:', codeErr);
+        throw codeErr;
       }
     }
 
@@ -878,6 +950,9 @@ export const googleDriveService = {
     updateState({ status: 'syncing', errorMessage: null });
     try {
       let token = this.getValidAccessToken();
+      if (!token && this.getRefreshToken()) {
+        token = await this.attemptSilentTokenRefresh();
+      }
       if (!token) {
         token = await this.requestGoogleAccess();
       }

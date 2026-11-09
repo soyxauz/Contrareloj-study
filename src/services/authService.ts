@@ -1,3 +1,4 @@
+import { extractCleanKitId, isCorruptedStorageKey } from '../utils/storageKeys';
 import type { User, StudyKit, SmartStudySessionState, PodcastSettings, FlashcardProgressState } from '../types';
 import type { AISettings } from './aiService';
 import {
@@ -434,10 +435,16 @@ export const authService = {
    * Obtiene la sesión de Smart Study guardada (memoria total en tiempo real).
    * Cuenta con fallback transparente a la sesión de invitado si el usuario no tenía progreso previo en este kit.
    */
-  getSmartStudySession(userId: string | null, kitId: string): SmartStudySessionState | null {
+  getSmartStudySession(userId: string | null, rawKitId: string): SmartStudySessionState | null {
     try {
+      const kitId = extractCleanKitId(rawKitId);
+      if (!kitId) return null;
       const userKey = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
-      const raw = localStorage.getItem(userKey);
+      let raw = localStorage.getItem(userKey);
+      if (!raw && userId && userId !== 'guest') {
+        const guestKey = `thea_ss_mem_guest_${kitId}`;
+        raw = localStorage.getItem(guestKey);
+      }
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const sanitized = sanitizeSmartStudySession(parsed);
@@ -456,21 +463,22 @@ export const authService = {
    * Guarda el instante exacto de la sesión de Smart Study en LocalStorage e IndexedDB,
    * emitiendo un evento en vivo para que HomeView y Google Drive sincronicen de inmediato.
    */
-  saveSmartStudySession(userId: string | null, kitId: string, state: SmartStudySessionState): void {
+  saveSmartStudySession(userId: string | null, rawKitId: string, state: SmartStudySessionState): void {
     try {
+      const kitId = extractCleanKitId(rawKitId);
+      if (!kitId) return;
       const sanitized = sanitizeSmartStudySession(state) || state;
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
       
-      // Guardar versión de historial completa y resiliente en LocalStorage (orden descendente: más reciente primero)
       const compactSession = {
         ...sanitized,
-        history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 50).map(h => ({
+        history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 15).map(h => ({
           id: h.id,
           questionId: h.questionId,
-          questionText: h.questionText || '',
-          userAnswer: h.userAnswer || '',
-          correctAnswer: h.correctAnswer || '',
-          explanation: h.explanation || '',
+          questionText: (h.questionText || '').slice(0, 120),
+          userAnswer: (h.userAnswer || '').slice(0, 80),
+          correctAnswer: (h.correctAnswer || '').slice(0, 80),
+          explanation: (h.explanation || '').slice(0, 120),
           topic: h.topic,
           difficulty: h.difficulty,
           type: h.type,
@@ -483,11 +491,13 @@ export const authService = {
       };
       safeLocalStorageSetItem(key, JSON.stringify(compactSession));
       
-      // Guardar el 100% del historial íntegro en IndexedDB (sin límite de tamaño)
       saveSessionItem(key, sanitized).catch(() => {});
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('thea_session_saved', {
+          detail: { userId, kitId, state: sanitized }
+        }));
+        window.dispatchEvent(new CustomEvent('thea_progress_synced', {
           detail: { userId, kitId, state: sanitized }
         }));
       }
@@ -509,8 +519,10 @@ export const authService = {
       const key = localStorage.key(i);
       if (!key) continue;
 
-      if (key.startsWith(prefix)) {
-        const kitId = key.substring(prefix.length);
+      if (key.startsWith(prefix) && !isCorruptedStorageKey(key)) {
+        const rawKitId = key.substring(prefix.length);
+        const kitId = extractCleanKitId(rawKitId);
+        if (!kitId) continue;
         try {
           const raw = localStorage.getItem(key);
           if (raw) {
@@ -533,8 +545,10 @@ export const authService = {
     const prefix = `thea_revealed_q_${userId || 'guest'}_`;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(prefix)) {
-        const kitId = key.substring(prefix.length);
+      if (key && key.startsWith(prefix) && !isCorruptedStorageKey(key)) {
+        const rawKitId = key.substring(prefix.length);
+        const kitId = extractCleanKitId(rawKitId);
+        if (!kitId) continue;
         try {
           const raw = localStorage.getItem(key);
           if (raw) {
@@ -753,8 +767,9 @@ export const authService = {
   /**
    * Limpia la memoria de un kit si el usuario decide reiniciar su progreso.
    */
-  clearSmartStudySession(userId: string | null, kitId: string): void {
+  clearSmartStudySession(userId: string | null, rawKitId: string): void {
     try {
+      const kitId = extractCleanKitId(rawKitId);
       const key = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
       localStorage.removeItem(key);
       removeSessionItem(key).catch(() => {});

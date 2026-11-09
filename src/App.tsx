@@ -13,6 +13,8 @@ import {
   stripAssetDataUrlsFromKit,
   cleanOrphanAssetsFromIndexedDB,
 } from './services/storageService';
+import { purgeImageCleanerCache } from './utils/imageCleaner';
+import { recoverAndPurgeCorruptedKeys } from './utils/storageKeys';
 import { revokeAllAzureAudioUrls } from './services/azureEdgeTtsService';
 import { revokeAllPodcastAudioUrls, savePodcastSettings } from './services/geminiAudioService';
 import { googleDriveService } from './services/googleDriveService';
@@ -192,14 +194,18 @@ export const App: React.FC = () => {
   useEffect(() => {
     let isCancelled = false;
 
+    // Purga y recuperacion de claves corruptas en LocalStorage
+    recoverAndPurgeCorruptedKeys();
+
     // 1. Recuperar kits y materias inmediatamente desde IndexedDB sin esperar la sesión
     const initialUserId = currentUser ? currentUser.id : authService.getCurrentUser()?.id || null;
     authService.restoreUserKitsAsync(initialUserId).then((recoveredKits) => {
       if (isCancelled) return;
       const cleanKits = recoveredKits.filter(k => !isCorruptedKit(k));
       if (cleanKits.length > 0) {
+        const cleanStrippedKits = cleanKits.map(stripAssetDataUrlsFromKit);
         setKits(prev => {
-          const merged = mergeKitsByUpdatedAt(prev, cleanKits);
+          const merged = mergeKitsByUpdatedAt(prev, cleanStrippedKits);
           isHydratedRef.current = true;
           const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
           if (savedCurrentId) {
@@ -218,21 +224,22 @@ export const App: React.FC = () => {
           const fullKit = cleanKits.find(k => k.id === targetId);
 
           if (fullKit) {
-            if (!prev) return fullKit;
-            const fullTime = fullKit.updatedAt || 0;
+            const stripped = stripAssetDataUrlsFromKit(fullKit);
+            if (!prev) return stripped;
+            const fullTime = stripped.updatedAt || 0;
             const prevTime = prev.updatedAt || 0;
             if (
               fullTime >= prevTime ||
-              (fullKit.questions?.length || 0) > (prev.questions?.length || 0) ||
-              (fullKit.flashcards?.length || 0) > (prev.flashcards?.length || 0) ||
-              (fullKit.archivedFlashcards?.length || 0) > (prev.archivedFlashcards?.length || 0)
+              (stripped.questions?.length || 0) > (prev.questions?.length || 0) ||
+              (stripped.flashcards?.length || 0) > (prev.flashcards?.length || 0) ||
+              (stripped.archivedFlashcards?.length || 0) > (prev.archivedFlashcards?.length || 0)
             ) {
-              return fullKit;
+              return stripped;
             }
           }
 
           if (!prev) {
-            const selected = fullKit || cleanKits[0];
+            const selected = fullKit ? stripAssetDataUrlsFromKit(fullKit) : cleanStrippedKits[0];
             if (selected) {
               localStorage.setItem(STORAGE_CURRENT_KIT_KEY, selected.id);
             }
@@ -262,7 +269,7 @@ export const App: React.FC = () => {
         if (isCancelled) return;
         const cleanKits = secondKits.filter(k => !isCorruptedKit(k));
         if (cleanKits.length > 0) {
-          setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits));
+          setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits.map(stripAssetDataUrlsFromKit)));
         }
       }
       setTimeout(() => {
@@ -417,10 +424,12 @@ export const App: React.FC = () => {
       revokeAllAzureAudioUrls();
       revokeAllPodcastAudioUrls();
 
-      // Si se sale de una vista que no requiere activos visuales, liberar caché RAM de activos
+      // Si se sale de una vista que no requiere activos visuales, liberar caché RAM de activos y cleaner
       if (!['images', 'study-guide', 'smart-study'].includes(mode)) {
         purgeAssetMemoryCache();
-        setKits(prev => prev.map(k => (k.id === currentKit?.id ? k : stripAssetDataUrlsFromKit(k))));
+        purgeImageCleanerCache();
+        setKits(prev => prev.map(stripAssetDataUrlsFromKit));
+        setCurrentKit(prev => (prev ? stripAssetDataUrlsFromKit(prev) : prev));
       }
     }
 
@@ -809,14 +818,27 @@ export const App: React.FC = () => {
 
   const handleReconnectDrive = async () => {
     try {
+      if (googleDriveService.getRefreshToken()) {
+        const silentToken = await googleDriveService.attemptSilentTokenRefresh();
+        if (silentToken) {
+          setDriveNeedsReauth(false);
+          const res = await googleDriveService.pullFromDrive(currentUser?.id || '');
+          if (res && res.length > 0) {
+            const clean = res.filter(k => !isCorruptedKit(k));
+            setKits(prev => mergeKitsByUpdatedAt(prev, clean.map(stripAssetDataUrlsFromKit)));
+          }
+          return;
+        }
+      }
       const res = await googleDriveService.loginAndSync();
       if (res.kits) {
         const clean = res.kits.filter(k => !isCorruptedKit(k));
         if (clean.length > 0) {
-          setKits(prev => mergeKitsByUpdatedAt(prev, clean));
-          if (!currentKit) setCurrentKit(clean[0]);
+          setKits(prev => mergeKitsByUpdatedAt(prev, clean.map(stripAssetDataUrlsFromKit)));
+          if (!currentKit) setCurrentKit(stripAssetDataUrlsFromKit(clean[0]));
         }
       }
+      setDriveNeedsReauth(false);
     } catch (err) {
       console.error('Error al reconectar Google Drive:', err);
     }
@@ -853,6 +875,7 @@ export const App: React.FC = () => {
 
     if (currentKit && currentKit.id !== kit.id) {
       purgeAssetMemoryCache();
+      purgeImageCleanerCache();
       revokeAllAzureAudioUrls();
       revokeAllPodcastAudioUrls();
     }

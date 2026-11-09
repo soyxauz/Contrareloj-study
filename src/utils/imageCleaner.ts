@@ -4,7 +4,27 @@
  * Convierte fondos negros (provenientes de alfa=0 en JPEG o letterboxing) a blanco puro.
  */
 
+const MAX_CLEAN_CACHE_SIZE = 5;
 const cleanCache = new Map<string, string>();
+
+function putInCleanCache(key: string, val: string): void {
+  if (cleanCache.has(key)) {
+    cleanCache.delete(key);
+  } else if (cleanCache.size >= MAX_CLEAN_CACHE_SIZE) {
+    const oldest = cleanCache.keys().next().value;
+    if (oldest !== undefined) {
+      cleanCache.delete(oldest);
+    }
+  }
+  cleanCache.set(key, val);
+}
+
+/**
+ * Libera de forma inmediata la memoria RAM ocupada por las imágenes procesadas en canvas.
+ */
+export function purgeImageCleanerCache(): void {
+  cleanCache.clear();
+}
 
 /**
  * Detecta si una imagen tiene fondo negro en los bordes y lo reemplaza por blanco puro.
@@ -15,9 +35,12 @@ export async function cleanImageBlackBackground(dataUrl: string): Promise<string
     return dataUrl;
   }
 
-  // Caché en memoria para respuesta a 0ms en renders subsecuentes
+  // Caché acotada LRU en memoria para respuesta a 0ms en renders subsecuentes
   if (cleanCache.has(dataUrl)) {
-    return cleanCache.get(dataUrl)!;
+    const cached = cleanCache.get(dataUrl)!;
+    cleanCache.delete(dataUrl);
+    cleanCache.set(dataUrl, cached);
+    return cached;
   }
 
   return new Promise((resolve) => {
@@ -34,7 +57,7 @@ export async function cleanImageBlackBackground(dataUrl: string): Promise<string
         const h = img.naturalHeight || img.height;
 
         if (w <= 0 || h <= 0) {
-          cleanCache.set(dataUrl, dataUrl);
+          putInCleanCache(dataUrl, dataUrl);
           return resolve(dataUrl);
         }
 
@@ -44,7 +67,7 @@ export async function cleanImageBlackBackground(dataUrl: string): Promise<string
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
-          cleanCache.set(dataUrl, dataUrl);
+          putInCleanCache(dataUrl, dataUrl);
           return resolve(dataUrl);
         }
 
@@ -153,26 +176,26 @@ export async function cleanImageBlackBackground(dataUrl: string): Promise<string
           }
 
           ctx.putImageData(imgData, 0, 0);
-          const cleanedUrl = canvas.toDataURL('image/jpeg', 0.92);
-          cleanCache.set(dataUrl, cleanedUrl);
+          const cleanedUrl = canvas.toDataURL('image/jpeg', 0.88);
+          putInCleanCache(dataUrl, cleanedUrl);
           canvas.width = 0;
           canvas.height = 0;
           return resolve(cleanedUrl);
         }
 
-        cleanCache.set(dataUrl, dataUrl);
+        putInCleanCache(dataUrl, dataUrl);
         canvas.width = 0;
         canvas.height = 0;
         resolve(dataUrl);
       } catch (err) {
         console.warn('[imageCleaner] Fallback sin alteración:', err);
-        cleanCache.set(dataUrl, dataUrl);
+        putInCleanCache(dataUrl, dataUrl);
         resolve(dataUrl);
       }
     };
 
     img.onerror = () => {
-      cleanCache.set(dataUrl, dataUrl);
+      putInCleanCache(dataUrl, dataUrl);
       resolve(dataUrl);
     };
 
