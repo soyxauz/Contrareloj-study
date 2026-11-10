@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { StudyKit, Question, StudyMode, DocumentAsset, ShortAnswerEvaluation, SmartStudyTypeFilters } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
-import { getAssetById } from '../services/storageService';
+import { getAssetById, safeLocalStorageSetItem } from '../services/storageService';
 import {
   CheckCircle2,
   XCircle,
@@ -231,14 +231,15 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
     Boolean((q as any).etiquetas_diagrama) ||
     Boolean((q as any).imageWordBank) ||
     Boolean((q as any).diagramTitle) ||
-    /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo terapéutico/i.test(q.question || '');
+    /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo|diabetes tipo 2|esquema de terapia/i.test(q.question || '');
 
   if (isDiagramOrLabeling) {
     const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, etiquetas_diagrama, ...restQ } = q as any;
     const hotspots = imageHotspots || etiquetas_diagrama;
     let cleanQuestionText = (restQ.question || '')
-      .replace(/Arrastra o selecciona un cuadro de texto del banco inferior y colócalo en el punto correspondiente del esquema:?/gi, '')
-      .replace(/Ubica las etapas del algoritmo terapéutico para la diabetes tipo 2 según la ADA\/EASD:?/gi, '¿Cuáles son las etapas escalonadas del algoritmo terapéutico para la diabetes tipo 2 según la ADA/EASD?')
+      .replace(/Arrastra o selecciona un cuadro de texto del banco inferior y col[oó]calo en el punto correspondiente del esquema:?/gi, '')
+      .replace(/Ubica las etapas del algoritmo terap[eé]utico para la diabetes tipo 2 seg[uú]n la ADA\/EASD:?/gi, '¿Cuáles son las etapas escalonadas del algoritmo terapéutico para la diabetes tipo 2 según la ADA/EASD?')
+      .replace(/Esquema de Terapia Escalonada DM2:?/gi, '')
       .trim();
 
     if (Array.isArray(hotspots) && hotspots.length >= 2) {
@@ -266,7 +267,19 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
   // 5. Desprender activos de páginas escaneadas de libros que no son diagramas puros
   if (q.sourceAsset) {
     const caption = (q.sourceAsset.caption || '').toLowerCase();
-    const isBookPageScan = caption.includes('capítulo') || caption.includes('capitulo') || caption.includes('página') || caption.includes('pagina') || caption.includes('texto') || caption.includes('documento') || caption.includes('sección') || (q.sourceAsset as any).type === 'page';
+    const isBookPageScan =
+      caption.includes('capítulo') ||
+      caption.includes('capitulo') ||
+      caption.includes('página') ||
+      caption.includes('pagina') ||
+      caption.includes('texto') ||
+      caption.includes('documento') ||
+      caption.includes('sección') ||
+      caption.includes('seccion') ||
+      caption.includes('metabolismo') ||
+      caption.includes('fármaco') ||
+      caption.includes('farmaco') ||
+      (q.sourceAsset as any).type === 'page';
     if (isBookPageScan) {
       return {
         ...q,
@@ -289,7 +302,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       Boolean((q as any).etiquetas_diagrama) ||
       Boolean((q as any).imageWordBank) ||
       Boolean((q as any).diagramTitle) ||
-      /cuadro de texto del banco|punto correspondiente del esquema/i.test(q.question || '')
+      /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo|diabetes tipo 2|esquema de terapia/i.test(q.question || '')
     );
     if (needsConversion) {
       const converted = kit.questions.map(q => sanitizeQuestionStructure(q, kit.questions));
@@ -513,7 +526,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         shortAnswer: key === 'shortAnswer' ? !prev.shortAnswer : prev.shortAnswer,
       };
       try {
-        localStorage.setItem(`thea_study_type_filters_${kit.id}`, JSON.stringify(next));
+        safeLocalStorageSetItem(`thea_study_type_filters_${kit.id}`, JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -1276,7 +1289,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         Boolean((currentQuestion as any).etiquetas_diagrama) ||
         Boolean((currentQuestion as any).imageWordBank) ||
         Boolean((currentQuestion as any).diagramTitle) ||
-        /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo terapéutico/i.test(currentQuestion.question || '');
+        /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo|diabetes tipo 2|esquema de terapia/i.test(currentQuestion.question || '') ||
+        Boolean(currentQuestion.sourceAsset && (
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('capítulo') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('capitulo') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('sección') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('seccion') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('metabolismo') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('fármaco') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('farmaco') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('página') ||
+          (currentQuestion.sourceAsset.caption || '').toLowerCase().includes('pagina') ||
+          (currentQuestion.sourceAsset as any).type === 'page'
+        ));
       if (isBad) {
         setCurrentQuestion(sanitizeQuestionStructure(currentQuestion, kit.questions));
       }
@@ -1310,8 +1335,26 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     // Descartar fotos de páginas escaneadas o capturas de texto de libros (no son diagramas conceptuales nítidos)
     const caption = (q.sourceAsset.caption || '').toLowerCase();
-    const isBookPageScan = caption.includes('capítulo') || caption.includes('capitulo') || caption.includes('página') || caption.includes('pagina') || caption.includes('texto') || caption.includes('documento') || caption.includes('sección') || (q.sourceAsset as any).type === 'page' || /p[aá]g|secci[oó]n|cap[ií]tulo|doc/i.test(caption);
+    const isBookPageScan =
+      caption.includes('capítulo') ||
+      caption.includes('capitulo') ||
+      caption.includes('página') ||
+      caption.includes('pagina') ||
+      caption.includes('texto') ||
+      caption.includes('documento') ||
+      caption.includes('sección') ||
+      caption.includes('seccion') ||
+      caption.includes('metabolismo') ||
+      caption.includes('fármaco') ||
+      caption.includes('farmaco') ||
+      (q.sourceAsset as any).type === 'page' ||
+      /p[aá]g|secci[oó]n|cap[ií]tulo|doc/i.test(caption);
     if (isBookPageScan) return false;
+
+    // Si la pregunta es sobre algoritmo o esquema de texto de libro, nunca adjuntar imagen de página
+    if (/cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo|diabetes tipo 2|esquema de terapia/i.test(q.question || '')) {
+      return false;
+    }
 
     const combined = ((q.question || '') + ' ' + (q.explanation || '')).toLowerCase();
     return /\b(según el esquema|en la figura|observa la imagen|en el gráfico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test(combined);

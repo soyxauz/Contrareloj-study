@@ -12,6 +12,7 @@ import {
   purgeAssetMemoryCache,
   stripAssetDataUrlsFromKit,
   cleanOrphanAssetsFromIndexedDB,
+  safeLocalStorageSetItem,
 } from './services/storageService';
 import { purgeImageCleanerCache } from './utils/imageCleaner';
 import { recoverAndPurgeCorruptedKeys } from './utils/storageKeys';
@@ -155,7 +156,7 @@ export const App: React.FC = () => {
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
   const [kits, setKits] = useState<StudyKit[]>(() => {
     const initialUserId = authService.getCurrentUser()?.id || null;
-    const initialKits = authService.getUserKits(initialUserId).filter(k => !isCorruptedKit(k));
+    const initialKits = authService.getUserKits(initialUserId).filter(k => !isCorruptedKit(k)).map(stripAssetDataUrlsFromKit);
     const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
     if (savedCurrentId) {
       if (['bio-respiration', 'cs-algorithms', 'cs-algo'].includes(savedCurrentId)) {
@@ -180,13 +181,13 @@ export const App: React.FC = () => {
         try { localStorage.removeItem(STORAGE_CURRENT_KIT_KEY); } catch {}
       } else {
         const found = kits.find(k => k.id === savedCurrentId && !isCorruptedKit(k));
-        if (found) return found;
+        if (found) return stripAssetDataUrlsFromKit(found);
       }
     }
     const cleanFirst = kits.find(k => !isCorruptedKit(k));
     if (cleanFirst) {
-      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, cleanFirst.id);
-      return cleanFirst;
+      safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, cleanFirst.id);
+      return stripAssetDataUrlsFromKit(cleanFirst);
     }
     return null;
   });
@@ -242,7 +243,7 @@ export const App: React.FC = () => {
           if (!prev) {
             const selected = fullKit ? stripAssetDataUrlsFromKit(fullKit) : cleanStrippedKits[0];
             if (selected) {
-              localStorage.setItem(STORAGE_CURRENT_KIT_KEY, selected.id);
+              safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, selected.id);
             }
             return selected;
           }
@@ -449,7 +450,6 @@ export const App: React.FC = () => {
         hydrateKitAssets(currentKit)
           .then(hydrated => {
             setCurrentKit(hydrated);
-            setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : stripAssetDataUrlsFromKit(k))));
           })
           .catch(() => {});
       }
@@ -505,7 +505,7 @@ export const App: React.FC = () => {
           const match = prevKits.find(k => k.id === state.kitId);
           if (match) {
             setCurrentKit(match);
-            localStorage.setItem(STORAGE_CURRENT_KIT_KEY, match.id);
+            safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, match.id);
           }
           return prevKits;
         });
@@ -547,7 +547,7 @@ export const App: React.FC = () => {
       forceExplanationImages: true,
       bypassPaywall: true,
     };
-    localStorage.setItem('thea_developersettings', JSON.stringify(permanentSettings));
+    safeLocalStorageSetItem('thea_developersettings', JSON.stringify(permanentSettings));
   }, []);
 
   // Sync Study Kits (protegido contra sobreescritura destructiva y bucles de guardado en arranque)
@@ -676,7 +676,7 @@ export const App: React.FC = () => {
   // Sync Current Kit ID to LocalStorage
   useEffect(() => {
     if (currentKit && !isCorruptedKit(currentKit)) {
-      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, currentKit.id);
+      safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, currentKit.id);
     } else if (!currentKit) {
       localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
     }
@@ -701,7 +701,6 @@ export const App: React.FC = () => {
 
             if (countAfter > countBefore) {
               setCurrentKit(hydrated);
-              setKits(prev => prev.map(k => (k.id === hydrated.id ? hydrated : stripAssetDataUrlsFromKit(k))));
             }
           })
           .catch(err => {
@@ -731,7 +730,7 @@ export const App: React.FC = () => {
       const clean = kits.find(k => !isCorruptedKit(k));
       if (clean) {
         setCurrentKit(clean);
-        localStorage.setItem(STORAGE_CURRENT_KIT_KEY, clean.id);
+        safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, clean.id);
       } else {
         setCurrentKit(null);
         localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
@@ -761,7 +760,7 @@ export const App: React.FC = () => {
     if (userAISettings && userHasAiKey) {
       saveAISettings(userAISettings);
       if (userAISettings.geminiApiKey?.trim()) {
-        localStorage.setItem('contrareloj_gemini_api_key', userAISettings.geminiApiKey.trim());
+        safeLocalStorageSetItem('contrareloj_gemini_api_key', userAISettings.geminiApiKey.trim());
       }
     } else if (currentHasAiKey) {
       authService.saveUserAISettings(user.id, currentSettings);
@@ -777,12 +776,13 @@ export const App: React.FC = () => {
     if (syncedKits && Array.isArray(syncedKits) && syncedKits.length > 0) {
       const cleanPulled = syncedKits.filter(k => !isCorruptedKit(k));
       if (cleanPulled.length > 0) {
-        setKits(prev => mergeKitsByUpdatedAt(prev, cleanPulled));
-        authService.saveUserKits(user.id, cleanPulled);
-        const firstPulled = cleanPulled[0] || null;
+        const strippedPulled = cleanPulled.map(stripAssetDataUrlsFromKit);
+        setKits(prev => mergeKitsByUpdatedAt(prev, strippedPulled));
+        authService.saveUserKits(user.id, strippedPulled);
+        const firstPulled = strippedPulled[0] || null;
         setCurrentKit(firstPulled);
         if (firstPulled) {
-          localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
+          safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
         }
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('thea_ai_settings_changed'));
@@ -793,12 +793,12 @@ export const App: React.FC = () => {
 
     // 3. Restaurar kits del usuario guardados localmente
     const userKits = authService.getUserKits(user.id);
-    const clean = userKits.filter(k => !isCorruptedKit(k));
+    const clean = userKits.filter(k => !isCorruptedKit(k)).map(stripAssetDataUrlsFromKit);
     setKits(clean);
     const first = clean[0] || null;
     setCurrentKit(first);
     if (first) {
-      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, first.id);
+      safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, first.id);
     } else {
       localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
     }
@@ -809,11 +809,12 @@ export const App: React.FC = () => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const cleanPulled = pulled.filter(k => !isCorruptedKit(k));
           if (cleanPulled.length > 0) {
-            setKits(prev => mergeKitsByUpdatedAt(prev, cleanPulled));
-            const firstPulled = cleanPulled[0] || null;
+            const strippedPulled = cleanPulled.map(stripAssetDataUrlsFromKit);
+            setKits(prev => mergeKitsByUpdatedAt(prev, strippedPulled));
+            const firstPulled = strippedPulled[0] || null;
             setCurrentKit(prev => prev || firstPulled);
             if (firstPulled) {
-              localStorage.setItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
+              safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, firstPulled.id);
             }
           }
         }
@@ -863,12 +864,12 @@ export const App: React.FC = () => {
       resetAISettingsToDefault();
       setCurrentUser(null);
       // Al cerrar sesión, cargar los kits limpios de fábrica para invitado en lugar de dejar la pantalla vacía
-      const guestKits = authService.getUserKits(null).filter(k => !isCorruptedKit(k));
+      const guestKits = authService.getUserKits(null).filter(k => !isCorruptedKit(k)).map(stripAssetDataUrlsFromKit);
       setKits(guestKits);
       const first = guestKits[0] || null;
       setCurrentKit(first);
       if (first) {
-        localStorage.setItem(STORAGE_CURRENT_KIT_KEY, first.id);
+        safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, first.id);
       } else {
         localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
       }
@@ -892,8 +893,9 @@ export const App: React.FC = () => {
 
     const fullKit = kits.find(k => k.id === kit.id);
     const bestKit = (fullKit && (fullKit.questions?.length || 0) > (kit.questions?.length || 0)) ? fullKit : kit;
-    setCurrentKit(bestKit);
-    localStorage.setItem(STORAGE_CURRENT_KIT_KEY, bestKit.id);
+    const strippedBest = stripAssetDataUrlsFromKit(bestKit);
+    setCurrentKit(strippedBest);
+    safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, bestKit.id);
 
     // Mover siempre el kit seleccionado al principio de la lista
     setKits(prev => {
@@ -918,10 +920,11 @@ export const App: React.FC = () => {
       ...newKit,
       updatedAt: Date.now(),
     };
-    const updated = [kitWithTime, ...kits.filter(k => k.id !== kitWithTime.id)];
+    const strippedKit = stripAssetDataUrlsFromKit(kitWithTime);
+    const updated = [strippedKit, ...kits.filter(k => k.id !== kitWithTime.id)];
     setKits(updated);
-    setCurrentKit(kitWithTime);
-    localStorage.setItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
+    setCurrentKit(strippedKit);
+    safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
     try {
       authService.saveUserKits(currentUser ? currentUser.id : null, updated);
       authService.saveUserKitsAsync(currentUser ? currentUser.id : null, updated).catch(() => {});
@@ -941,18 +944,19 @@ export const App: React.FC = () => {
       ...updatedKit,
       updatedAt: Date.now(),
     };
-    setCurrentKit(kitWithTime);
+    const strippedKit = stripAssetDataUrlsFromKit(kitWithTime);
+    setCurrentKit(strippedKit);
     try {
-      localStorage.setItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
+      safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
     } catch {}
 
     // Actualizar kit en la colección sin reordenar innecesariamente si ya es el kit activo
     let updated: StudyKit[];
     if (kits.length > 0 && kits[0].id === kitWithTime.id) {
-      updated = [kitWithTime, ...kits.slice(1)];
+      updated = [strippedKit, ...kits.slice(1)];
     } else {
       const rest = kits.filter(k => k.id !== kitWithTime.id);
-      updated = [kitWithTime, ...rest];
+      updated = [strippedKit, ...rest];
     }
     setKits(updated);
 

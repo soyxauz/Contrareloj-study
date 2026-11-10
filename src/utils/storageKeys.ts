@@ -70,10 +70,6 @@ export function isProtectedStorageKey(k: string): boolean {
     k.startsWith('thea_user_kits_index_') ||
     k === 'thea_guest_kits_index' ||
     k === 'thea_global_stats_snap_active' ||
-    k.startsWith('thea_global_stats_snap_') ||
-    k.startsWith('thea_ss_mem_') ||
-    k.startsWith('thea_fc_mem_') ||
-    k.startsWith('thea_revealed_q_') ||
     k.startsWith('thea_last_drive_sync_') ||
     k.startsWith('thea_custom_materias')
   );

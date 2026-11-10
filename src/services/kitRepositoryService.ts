@@ -10,6 +10,7 @@ import {
   getDeletedKitIds,
   notifyQuotaExceeded,
   safeLocalStorageSetItem,
+  stripAssetDataUrlsFromKit,
   type StudyKitIndexItem,
 } from './storageService';
 
@@ -131,7 +132,8 @@ export const kitRepositoryService = {
           if (Array.isArray(parsed) && parsed.length > 0) {
             const clean = parsed.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
             if (clean.length > 0) {
-              const hydrated = hydrateFlashcardsMastery(userId, clean);
+              const stripped = clean.map(stripAssetDataUrlsFromKit);
+              const hydrated = hydrateFlashcardsMastery(userId, stripped);
               inMemoryKitsCache.set(key, hydrated);
               return hydrated;
             }
@@ -356,15 +358,20 @@ export const kitRepositoryService = {
                     const isBadDiagram =
                       Boolean((q as any).imageHotspots) ||
                       Boolean((q as any).etiquetas_diagrama) ||
-                      /cuadro de texto del banco|punto correspondiente del esquema/i.test(q.question || '');
+                      Boolean((q as any).diagramTitle) ||
+                      /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo|diabetes tipo 2/i.test(q.question || '');
                     if (isBadDiagram) {
                       const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, etiquetas_diagrama, ...restQ } = q as any;
                       const hotspots = imageHotspots || etiquetas_diagrama;
+                      let cleanText = (restQ.question || '')
+                        .replace(/Arrastra o selecciona un cuadro de texto del banco inferior y col[oó]calo en el punto correspondiente del esquema:?/gi, '')
+                        .replace(/Ubica las etapas del algoritmo terap[eé]utico para la diabetes tipo 2 seg[uú]n la ADA\/EASD:?/gi, '¿Cuáles son las etapas escalonadas del algoritmo terapéutico para la diabetes tipo 2 según la ADA/EASD?')
+                        .trim();
                       if (Array.isArray(hotspots) && hotspots.length >= 2) {
                         return {
                           ...restQ,
                           type: 'matching',
-                          question: diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : 'Empareja los conceptos correspondientes:',
+                          question: cleanText || (diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : 'Empareja los conceptos correspondientes:'),
                           matchingPairs: hotspots.map((h: any, i: number) => ({
                             term: h.label || h.termino || `Elemento ${i + 1}`,
                             definition: h.hint || h.pista || h.definicion || `Fase o etapa ${i + 1}`,
@@ -375,10 +382,18 @@ export const kitRepositoryService = {
                       return {
                         ...restQ,
                         type: 'multiple-choice',
+                        question: cleanText || restQ.question || 'Selecciona la opción correcta:',
                         options: Array.isArray(restQ.options) && restQ.options.length >= 2 ? restQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
                         correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
                         sourceAsset: undefined,
                       };
+                    }
+                    if (q.sourceAsset) {
+                      const caption = (q.sourceAsset.caption || '').toLowerCase();
+                      const isBookScan = caption.includes('capítulo') || caption.includes('capitulo') || caption.includes('página') || caption.includes('pagina') || caption.includes('sección') || caption.includes('seccion') || (q.sourceAsset as any).type === 'page';
+                      if (isBookScan) {
+                        return { ...q, sourceAsset: undefined };
+                      }
                     }
                     return q;
                   })

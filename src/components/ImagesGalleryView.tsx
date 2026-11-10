@@ -77,12 +77,6 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       if (local?.dataUrl) {
         const updated = (kit.assets || assets).map(a => (a.id === assetId ? { ...a, dataUrl: local.dataUrl } : a));
         setAssets(updated);
-        if (onUpdateKit) {
-          onUpdateKit({
-            ...kit,
-            assets: updated,
-          });
-        }
         return;
       }
 
@@ -92,12 +86,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
         const downloaded = driveMap.get(assetId)!;
         const updated = (kit.assets || assets).map(a => (a.id === assetId ? { ...a, dataUrl: downloaded.dataUrl } : a));
         setAssets(updated);
-        if (onUpdateKit) {
-          onUpdateKit({
-            ...kit,
-            assets: updated,
-          });
-        }
+        return;
       }
     } catch (err) {
       console.warn(`[ImagesGalleryView] Error al cargar activo individual ${assetId}:`, err);
@@ -155,14 +144,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
         }
       }
 
-      // 3. Notificar al componente padre si se restauraron activos para actualizar currentKit
-      const anyRestored = updatedAssets.some((a, idx) => a.dataUrl && !currentList[idx]?.dataUrl);
-      if (anyRestored && onUpdateKit) {
-        onUpdateKit({
-          ...kit,
-          assets: updatedAssets,
-        });
-      }
+
     } catch (err) {
       console.warn('[ImagesGalleryView] Error al cargar activos faltantes:', err);
     } finally {

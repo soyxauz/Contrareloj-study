@@ -127,7 +127,6 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         .then(hydrated => {
           if (!isMounted) return;
           setCurrentKitState(hydrated);
-          if (onUpdateKit) onUpdateKit(hydrated);
         })
         .catch(() => {});
     }
@@ -137,7 +136,6 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         .then(hydrated => {
           if (!isMounted) return;
           setCurrentKitState(hydrated);
-          if (onUpdateKit) onUpdateKit(hydrated);
         })
         .catch(() => {});
     };

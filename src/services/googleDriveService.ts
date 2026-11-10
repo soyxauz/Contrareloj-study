@@ -1,7 +1,6 @@
 import type { StudyKit, DocumentAsset, User, PodcastSettings } from '../types';
 import { authService } from './authService';
 import {
-  getAllStoredAssets,
   getAllStoredAssetKeys,
   getAssetById,
   saveAssetsToIndexedDB,
@@ -651,8 +650,10 @@ export const googleDriveService = {
     const expTime = Date.now() + expiresInSec * 1000;
     inMemoryAccessToken = token;
     inMemoryAccessTokenExp = expTime;
-    safeLocalStorageSetItem(STORAGE_TOKEN_KEY, token);
-    safeLocalStorageSetItem(STORAGE_TOKEN_EXP_KEY, expTime.toString());
+    try {
+      safeLocalStorageSetItem(STORAGE_TOKEN_KEY, token);
+      safeLocalStorageSetItem(STORAGE_TOKEN_EXP_KEY, expTime.toString());
+    } catch {}
     saveSessionItem(STORAGE_TOKEN_KEY, token).catch(() => {});
     saveSessionItem(STORAGE_TOKEN_EXP_KEY, expTime.toString()).catch(() => {});
   },
@@ -1364,8 +1365,8 @@ export const googleDriveService = {
 
       if (driveAssetFiles.length === 0) return;
 
-      const localAssets = await getAllStoredAssets();
-      const localIds = new Set(localAssets.map(a => a.id));
+      const localAssetKeys = await getAllStoredAssetKeys();
+      const localIds = new Set(localAssetKeys);
       const assetsToDownload = driveAssetFiles.filter(f => {
         const rawId = f.name.replace(/\.[^/.]+$/, '');
         return !localIds.has(rawId);
@@ -2068,10 +2069,16 @@ export const googleDriveService = {
         for (const q of (newKit as any).smartStudyQuestions) collectAsset(q.sourceAsset);
       }
 
-      // Sumar activos almacenados en IndexedDB
-      const localStored = await getAllStoredAssets();
-      for (const a of localStored) {
-        collectAsset(a);
+      // Hidratar dataUrl desde IndexedDB solo para los activos de este kit que carezcan de el
+      for (const asset of kitAssets) {
+        if (asset.id && !asset.dataUrl) {
+          try {
+            const stored = await getAssetById(asset.id);
+            if (stored?.dataUrl) {
+              asset.dataUrl = stored.dataUrl;
+            }
+          } catch {}
+        }
       }
 
       // 3. Consultar una sola vez los archivos ya existentes en la carpeta assets/ de Drive

@@ -915,8 +915,11 @@ export function processContent(
       q.sourceChunkText = bestChunk.text;
       q.sourcePageOrSlide = bestChunk.pageOrSlide;
       if (bestChunk.assetIds && bestChunk.assetIds.length > 0) {
-        const matchingAsset = assets.find(a => bestChunk.assetIds!.includes(a.id));
-        if (matchingAsset) q.sourceAsset = matchingAsset;
+        const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
+        if (needsVisual) {
+          const matchingAsset = assets.find(a => bestChunk.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
+          if (matchingAsset) q.sourceAsset = matchingAsset;
+        }
       }
     }
   }
@@ -1039,22 +1042,22 @@ export async function processContentAsync(
         q.sourceChunkText = best.text;
         q.sourcePageOrSlide = best.pageOrSlide;
         if (best.assetIds && best.assetIds.length > 0) {
-          const matchingAsset = assets.find(a => best.assetIds!.includes(a.id));
-          if (matchingAsset) q.sourceAsset = matchingAsset;
+          const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
+          if (needsVisual) {
+            const matchingAsset = assets.find(a => best.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
+            if (matchingAsset) q.sourceAsset = matchingAsset;
+          }
         }
       }
     } else if (!q.sourceAsset && assets.length > 0) {
       const chunk = chunks.find(c => c.id === q.sourceChunkId);
       if (chunk && chunk.assetIds && chunk.assetIds.length > 0) {
-        const matchingAsset = assets.find(a => chunk.assetIds!.includes(a.id));
-        if (matchingAsset) q.sourceAsset = matchingAsset;
+        const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
+        if (needsVisual) {
+          const matchingAsset = assets.find(a => chunk.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
+          if (matchingAsset) q.sourceAsset = matchingAsset;
+        }
       }
-    }
-
-    // Asociacion precisa por pagina solo si existe un activo vinculado directamente a esa lamina/pagina
-    if (!q.sourceAsset && assets.length > 0 && q.sourcePageOrSlide) {
-      const pageAsset = assets.find(a => a.pageOrSlide === q.sourcePageOrSlide);
-      if (pageAsset) q.sourceAsset = pageAsset;
     }
   }
 

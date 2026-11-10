@@ -980,26 +980,29 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       return true;
     } catch {}
 
-    // 3. Purgar kits legacy y datos que contengan base64 o excedan 30KB
+    // 3. Purgar kits completos legacy y snapshots secundarios en LocalStorage (preservados 100% en IndexedDB)
     try {
-      const oversizedKeys: string[] = [];
+      const keysToEvict: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k || isProtectedStorageKey(k)) continue;
+        if (!k) continue;
         if (
           (k.startsWith('thea_user_kits_') && !k.startsWith('thea_user_kits_index_')) ||
           k === 'thea_guest_kits' ||
-          k === 'thea_study_kits_v2'
+          k === 'thea_study_kits_v2' ||
+          (k.startsWith('thea_global_stats_snap_') && k !== 'thea_global_stats_snap_active')
         ) {
-          oversizedKeys.push(k);
+          keysToEvict.push(k);
           continue;
         }
-        const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 30000)) {
-          oversizedKeys.push(k);
+        if (!isProtectedStorageKey(k)) {
+          const val = localStorage.getItem(k);
+          if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 20000)) {
+            keysToEvict.push(k);
+          }
         }
       }
-      oversizedKeys.forEach(k => {
+      keysToEvict.forEach(k => {
         try { localStorage.removeItem(k); } catch {}
       });
 
