@@ -273,6 +273,9 @@ function aiProxyPlugin(): Plugin {
                 'api.openai.com',
                 'api.anthropic.com',
                 'openrouter.ai',
+                'api.cerebras.ai',
+                'api.mistral.ai',
+                'api.deepseek.com',
               ]
               let host = ''
               try {

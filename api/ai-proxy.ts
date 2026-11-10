@@ -30,7 +30,12 @@ export default async function handler(req: any, res: any) {
       'api.groq.com',
       'api.x.ai',
       'grok.com',
-      'generativelanguage.googleapis.com'
+      'generativelanguage.googleapis.com',
+      'api.cerebras.ai',
+      'api.mistral.ai',
+      'openrouter.ai',
+      'api.openai.com',
+      'api.deepseek.com',
     ];
     let host = '';
     try {

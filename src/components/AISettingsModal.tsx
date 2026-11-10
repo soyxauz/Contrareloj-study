@@ -10,20 +10,9 @@ import {
   type AISettings,
   type AIPreset,
   getOllamaApiKey,
-  saveOllamaApiKey,
-  getOllamaBaseUrl,
-  saveOllamaBaseUrl,
-  getOllamaModel,
-  saveOllamaModel,
-  getGroqApiKey,
-  saveGroqApiKey,
-  saveGroqBaseUrl,
-  getGroqModel,
-  saveGroqModel,
-  saveGrokApiKey,
-  saveGrokBaseUrl,
-  getGrokModel,
-  saveGrokModel,
+  getPresetApiKey,
+  savePresetApiKey,
+  normalizeOpenAIBaseUrl,
   getOralAISettings,
 } from '../services/aiService';
 import { validateBaseUrl, validateOralApiKey } from '../utils/validation';
@@ -50,12 +39,77 @@ interface AISettingsModalProps {
   onSettingsSaved?: () => void;
 }
 
+type ConfigArea = 'general' | 'oral';
+
+function isLocalUrl(url?: string): boolean {
+  if (!url) return false;
+  return url.includes('localhost') || url.includes('127.0.0.1');
+}
+
+function detectGeneralPresetId(baseUrl?: string): string {
+  const clean = normalizeOpenAIBaseUrl(baseUrl || '').toLowerCase();
+  if (!clean || clean.includes('ollama.com')) return 'ollama-cloud';
+  if (isLocalUrl(clean) || clean.includes(':11434')) return 'ollama-local';
+  if (clean.includes('generativelanguage.googleapis.com')) return 'gemini';
+  if (clean.includes('api.cerebras.ai')) return 'cerebras';
+  if (clean.includes('api.mistral.ai')) return 'mistral';
+  if (clean.includes('api.groq.com')) return 'groq-general';
+  if (clean.includes('openrouter.ai')) return 'openrouter';
+  return 'custom';
+}
+
+function buildFormSnapshot(area: ConfigArea, presetId: string, s: AISettings): string {
+  return JSON.stringify({
+    area,
+    presetId,
+    apiKey: s.apiKey || '',
+    baseUrl: normalizeOpenAIBaseUrl(s.baseUrl || ''),
+    model: (s.model || '').trim(),
+  });
+}
+
+function resolvePresetSavedKey(preset: AIPreset, savedGeneral: AISettings): string {
+  if (preset.role === 'oral') {
+    return getOralAISettings().apiKey || '';
+  }
+  const perPresetKey = getPresetApiKey(preset.id);
+  if (perPresetKey) return perPresetKey;
+
+  if (
+    normalizeOpenAIBaseUrl(savedGeneral.baseUrl) === normalizeOpenAIBaseUrl(preset.baseUrl) &&
+    savedGeneral.apiKey
+  ) {
+    return savedGeneral.apiKey;
+  }
+
+  if (preset.id === 'ollama-cloud') {
+    return getOllamaApiKey() || '';
+  }
+
+  return '';
+}
+
+function getProviderDisplayName(presetId: string, baseUrl: string, area: ConfigArea): string {
+  if (area === 'oral') {
+    if (baseUrl.includes('x.ai') || baseUrl.includes('grok.com')) return 'xAI Grok (Motor Oral)';
+    return 'Groq Cloud (Motor Oral)';
+  }
+  const preset = AI_PRESETS.find(p => p.id === presetId);
+  if (preset) return preset.name;
+  return 'Proveedor OpenAI-Compatible';
+}
+
 export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   isOpen,
   onClose,
-  onSettingsSaved
+  onSettingsSaved,
 }) => {
   const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const isKitty = theme === 'kitty';
+
+  const [configArea, setConfigArea] = useState<ConfigArea>('general');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('gemini');
   const [settings, setSettings] = useState<AISettings>(getAISettings);
   const [showKey, setShowKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -65,71 +119,57 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     models?: string[];
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama-cloud');
   const initialFormSnapshotRef = useRef<string>('');
   const isLocalHost = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-  useEffect(() => {
-    if (isOpen) {
-      setTestResult(null);
-      setIsSaved(false);
-
-      const presetId = selectedPresetId === 'groq' ? 'groq' : 'ollama-cloud';
-      setSelectedPresetId(presetId);
-
-      if (presetId === 'ollama-cloud') {
-        const ollamaKey = getOllamaApiKey();
-        const ollamaBase = getOllamaBaseUrl();
-        const ollamaModel = getOllamaModel();
-        const nextSettings = {
-          ...getAISettings(),
-          baseUrl: ollamaBase,
-          model: ollamaModel,
-          apiKey: ollamaKey,
-        };
-        setSettings(nextSettings);
-        initialFormSnapshotRef.current = JSON.stringify({
-          presetId,
-          apiKey: ollamaKey || '',
-          baseUrl: ollamaBase || '',
-          model: ollamaModel || '',
-        });
-      } else {
-        const oralSettings = getOralAISettings();
-        setSettings(oralSettings);
-        initialFormSnapshotRef.current = JSON.stringify({
-          presetId,
-          apiKey: oralSettings.apiKey || '',
-          baseUrl: oralSettings.baseUrl || '',
-          model: oralSettings.model || '',
-        });
-      }
-    }
-  }, [isOpen]);
-
-  // Validaciones reactivas en tiempo real
-  const isOral = selectedPresetId === 'groq' || Boolean(
-    settings.baseUrl?.includes('api.groq.com') ||
-    settings.baseUrl?.includes('api.x.ai') ||
-    settings.baseUrl?.includes('grok.com')
+  const generalPresets = useMemo(
+    () => AI_PRESETS.filter(p => (p.role || 'general') === 'general'),
+    []
+  );
+  const oralPreset = useMemo(
+    () => AI_PRESETS.find(p => p.role === 'oral') || AI_PRESETS[AI_PRESETS.length - 1],
+    []
   );
 
-  const urlValidation = useMemo(() => {
-    return validateBaseUrl(settings.baseUrl || '');
-  }, [settings.baseUrl]);
+  useEffect(() => {
+    if (!isOpen) return;
+    setTestResult(null);
+    setIsSaved(false);
+    setShowKey(false);
+
+    const currentGeneral = getAISettings();
+    const detectedId = detectGeneralPresetId(currentGeneral.baseUrl);
+    if (currentGeneral.apiKey && detectedId !== 'custom') {
+      savePresetApiKey(detectedId, currentGeneral.apiKey);
+    }
+
+    setConfigArea('general');
+    setSelectedPresetId(detectedId);
+    setSettings(currentGeneral);
+    initialFormSnapshotRef.current = buildFormSnapshot('general', detectedId, currentGeneral);
+  }, [isOpen]);
+
+  const isLocalProvider = useMemo(
+    () => configArea === 'general' && isLocalUrl(settings.baseUrl),
+    [configArea, settings.baseUrl]
+  );
+
+  const urlValidation = useMemo(
+    () => validateBaseUrl(settings.baseUrl || ''),
+    [settings.baseUrl]
+  );
 
   const keyValidation = useMemo(() => {
     const cleanKey = settings.apiKey?.trim() || '';
-    if (isOral) {
+    if (configArea === 'oral') {
       return validateOralApiKey(cleanKey, false);
     }
-    const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
-    if (!isLocal && !cleanKey) {
-      return { isValid: false, error: 'Se requiere una API Key para Ollama Cloud.' };
+    if (!isLocalProvider && !cleanKey) {
+      return { isValid: false, error: 'Ingresa tu API Key para conectar con este proveedor.' };
     }
     return { isValid: true };
-  }, [isOral, settings.baseUrl, settings.apiKey]);
+  }, [configArea, isLocalProvider, settings.apiKey]);
 
   const modelValidation = useMemo(() => {
     if (!settings.model || !settings.model.trim()) {
@@ -140,65 +180,85 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   const isFormValid = urlValidation.isValid && keyValidation.isValid && modelValidation.isValid;
 
-  // Prueba automatica de conexion tan pronto se ingresa la clave de API y la configuracion sea valida
-  useEffect(() => {
-    if (!isOpen) return;
-    if (!urlValidation.isValid || !keyValidation.isValid) {
-      if (settings.verified) {
-        setSettings(prev => ({ ...prev, verified: false }));
-      }
-      return;
+  const persistProviderConfiguration = (nextSettings: AISettings, area: ConfigArea, presetId: string): AISettings => {
+    const normalizedSettings: AISettings = {
+      ...nextSettings,
+      baseUrl: normalizeOpenAIBaseUrl(nextSettings.baseUrl || ''),
+      apiKey: (nextSettings.apiKey || '').trim(),
+      model: (nextSettings.model || '').trim(),
+      provider: isLocalUrl(nextSettings.baseUrl) ? 'ollama' : 'openai-compatible',
+    };
+
+    if (presetId !== 'custom') {
+      savePresetApiKey(presetId, normalizedSettings.apiKey);
     }
+    saveAISettings(normalizedSettings, area);
+
+    const refreshedGeneral = getAISettings();
+    const user = authService.getCurrentUser();
+    if (user) {
+      authService.saveUserAISettings(user.id, refreshedGeneral);
+    }
+    return refreshedGeneral;
+  };
+
+  // Auto-prueba silenciosa tras ingresar credenciales válidas
+  useEffect(() => {
+    if (!isOpen || !isFormValid) return;
 
     const cleanKey = settings.apiKey?.trim() || '';
-    const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
-
-    if (!cleanKey && !isLocal) {
-      if (settings.verified) {
-        setSettings(prev => ({ ...prev, verified: false }));
-      }
-      setTestResult(null);
+    if (!cleanKey && !isLocalProvider) {
       return;
     }
 
-    // Si tiene una clave valida o es local, probar automaticamente
-    if (cleanKey.length >= 4 || isLocal) {
-      const timer = setTimeout(async () => {
-        setIsTesting(true);
-        try {
-          const res = await testAIConnection(settings);
-          setTestResult(res);
-          if (res.success) {
-            setSettings(prev => ({ ...prev, verified: true }));
-            if (selectedPresetId === 'ollama-cloud') {
-              saveOllamaApiKey(cleanKey);
-              saveOllamaBaseUrl(settings.baseUrl);
-              if (settings.model) saveOllamaModel(settings.model);
-            } else if (selectedPresetId === 'groq') {
-              saveGroqApiKey(cleanKey);
-              saveGroqBaseUrl(settings.baseUrl);
-              if (settings.model) saveGroqModel(settings.model);
-            }
-          } else {
-            setSettings(prev => ({ ...prev, verified: false }));
-          }
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : 'Error al conectar con el proveedor.';
-          setTestResult({
-            success: false,
-            message: msg,
-          });
-          setSettings(prev => ({ ...prev, verified: false }));
-        } finally {
-          setIsTesting(false);
-        }
-      }, 500);
-
-      return () => clearTimeout(timer);
+    if (cleanKey.length < 4 && !isLocalProvider) {
+      return;
     }
-  }, [settings.apiKey, settings.baseUrl, settings.model, isOpen, selectedPresetId, urlValidation.isValid, keyValidation.isValid]);
 
-  if (!isOpen) return null;
+    let cancelled = false;
+    const targetSettings = { ...settings };
+    const targetArea = configArea;
+    const targetPreset = selectedPresetId;
+
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      setIsTesting(true);
+      try {
+        const res = await testAIConnection(targetSettings);
+        if (cancelled) return;
+        setTestResult(res);
+        if (res.success) {
+          const verifiedSettings: AISettings = { ...targetSettings, verified: true };
+          setSettings(verifiedSettings);
+          persistProviderConfiguration(verifiedSettings, targetArea, targetPreset);
+          initialFormSnapshotRef.current = buildFormSnapshot(targetArea, targetPreset, verifiedSettings);
+        } else {
+          setSettings(prev => ({ ...prev, verified: false }));
+        }
+      } catch (e: unknown) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : 'Error al conectar con el proveedor.';
+        setTestResult({ success: false, message: msg });
+        setSettings(prev => ({ ...prev, verified: false }));
+      } finally {
+        if (!cancelled) setIsTesting(false);
+      }
+    }, 550);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    isOpen,
+    configArea,
+    selectedPresetId,
+    settings.apiKey,
+    settings.baseUrl,
+    settings.model,
+    isLocalProvider,
+    isFormValid,
+  ]);
 
   const handleTestConnection = async () => {
     if (!urlValidation.isValid) {
@@ -220,16 +280,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       const res = await testAIConnection(settings);
       setTestResult(res);
       if (res.success) {
-        setSettings(prev => ({ ...prev, verified: true }));
-        if (selectedPresetId === 'ollama-cloud') {
-          saveOllamaApiKey(settings.apiKey || '');
-          saveOllamaBaseUrl(settings.baseUrl);
-          if (settings.model) saveOllamaModel(settings.model);
-        } else if (selectedPresetId === 'groq') {
-          saveGroqApiKey(settings.apiKey || '');
-          saveGroqBaseUrl(settings.baseUrl);
-          if (settings.model) saveGroqModel(settings.model);
-        }
+        const verifiedSettings: AISettings = { ...settings, verified: true };
+        setSettings(verifiedSettings);
+        persistProviderConfiguration(verifiedSettings, configArea, selectedPresetId);
+        initialFormSnapshotRef.current = buildFormSnapshot(configArea, selectedPresetId, verifiedSettings);
       } else {
         setSettings(prev => ({ ...prev, verified: false }));
       }
@@ -238,79 +292,40 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
-  const handleResetOllamaCloud = () => {
+  const handleResetDefaults = () => {
     resetAISettingsToDefault();
     const defaults = getAISettings();
-    const ollamaKey = getOllamaApiKey();
-    const restored: AISettings = {
-      ...defaults,
-      baseUrl: 'https://ollama.com/v1',
-      model: 'gemma4:31b',
-      provider: 'openai-compatible',
-      apiKey: ollamaKey,
-      verified: Boolean(ollamaKey),
-    };
-    saveAISettings(restored);
-    setSettings(restored);
-    setSelectedPresetId('ollama-cloud');
+    const detected = detectGeneralPresetId(defaults.baseUrl);
+    setConfigArea('general');
+    setSelectedPresetId(detected);
+    setSettings(defaults);
     setTestResult(null);
+    initialFormSnapshotRef.current = buildFormSnapshot('general', detected, defaults);
     const user = authService.getCurrentUser();
     if (user) {
-      authService.saveUserAISettings(user.id, restored);
+      authService.saveUserAISettings(user.id, defaults);
     }
     if (onSettingsSaved) onSettingsSaved();
   };
 
   const handleClose = () => {
-    const currentSnapshot = JSON.stringify({
-      presetId: selectedPresetId,
-      apiKey: settings.apiKey || '',
-      baseUrl: settings.baseUrl || '',
-      model: settings.model || '',
-    });
-    if (currentSnapshot === initialFormSnapshotRef.current) {
-      onClose();
-      return;
+    const currentSnapshot = buildFormSnapshot(configArea, selectedPresetId, settings);
+    if (currentSnapshot !== initialFormSnapshotRef.current && isFormValid) {
+      const updatedGeneral = persistProviderConfiguration(settings, configArea, selectedPresetId);
+      googleDriveService.syncAISettingsToDrive(updatedGeneral).catch(console.warn);
+      if (onSettingsSaved) onSettingsSaved();
     }
-    if (selectedPresetId === 'ollama-cloud') {
-      if (settings.apiKey) saveOllamaApiKey(settings.apiKey);
-      if (settings.baseUrl) saveOllamaBaseUrl(settings.baseUrl);
-      if (settings.model) saveOllamaModel(settings.model);
-    } else if (selectedPresetId === 'groq') {
-      if (settings.apiKey) saveGroqApiKey(settings.apiKey);
-      if (settings.baseUrl) saveGroqBaseUrl(settings.baseUrl);
-      if (settings.model) saveGroqModel(settings.model);
-    }
-    const currentGeneral = getAISettings();
-    const user = authService.getCurrentUser();
-    if (user) authService.saveUserAISettings(user.id, currentGeneral);
-    googleDriveService.syncAISettingsToDrive(currentGeneral).catch(console.warn);
     onClose();
   };
 
-  const handleSave = async () => {
-    if (!isFormValid) {
-      return;
-    }
+  const handleSave = () => {
+    if (!isFormValid) return;
 
-    if (selectedPresetId === 'ollama-cloud') {
-      if (settings.apiKey !== undefined) saveOllamaApiKey(settings.apiKey);
-      if (settings.baseUrl) saveOllamaBaseUrl(settings.baseUrl);
-      if (settings.model) saveOllamaModel(settings.model);
-    } else if (selectedPresetId === 'groq') {
-      if (settings.apiKey !== undefined) saveGroqApiKey(settings.apiKey);
-      if (settings.baseUrl) saveGroqBaseUrl(settings.baseUrl);
-      if (settings.model) saveGroqModel(settings.model);
-    }
+    const updatedGeneral = persistProviderConfiguration(settings, configArea, selectedPresetId);
+    initialFormSnapshotRef.current = buildFormSnapshot(configArea, selectedPresetId, settings);
 
-    const currentGeneral = getAISettings();
-    const user = authService.getCurrentUser();
-    if (user) {
-      authService.saveUserAISettings(user.id, currentGeneral);
-    }
-
-    googleDriveService.syncAISettingsToDrive(currentGeneral).catch(err => {
-      console.warn('[AISettingsModal] Error al respaldar API en Google Drive:', err);
+    googleDriveService.syncAISettingsToDrive(updatedGeneral).catch(err => {
+      console.warn('[AISettingsModal] Error al respaldar IA en Google Drive:', err);
     });
 
     setIsSaved(true);
@@ -318,106 +333,142 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     setTimeout(() => {
       setIsSaved(false);
       onClose();
-    }, 400);
+    }, 350);
+  };
+
+  const switchConfigArea = (nextArea: ConfigArea) => {
+    if (nextArea === configArea) return;
+    if (selectedPresetId !== 'custom' && settings.apiKey?.trim()) {
+      savePresetApiKey(selectedPresetId, settings.apiKey);
+    }
+
+    setTestResult(null);
+    if (nextArea === 'oral') {
+      const oral = getOralAISettings();
+      setConfigArea('oral');
+      setSelectedPresetId('groq');
+      setSettings(oral);
+      initialFormSnapshotRef.current = buildFormSnapshot('oral', 'groq', oral);
+      return;
+    }
+
+    const general = getAISettings();
+    const detected = detectGeneralPresetId(general.baseUrl);
+    setConfigArea('general');
+    setSelectedPresetId(detected);
+    setSettings(general);
+    initialFormSnapshotRef.current = buildFormSnapshot('general', detected, general);
   };
 
   const applyPreset = (preset: AIPreset) => {
-    // Si estabamos en otro preset, guardar lo que el usuario tenia escrito para no perderlo
-    if (selectedPresetId === 'ollama-cloud' && preset.id === 'groq') {
-      if (settings.apiKey !== undefined) saveOllamaApiKey(settings.apiKey);
-      if (settings.baseUrl) saveOllamaBaseUrl(settings.baseUrl);
-      if (settings.model) saveOllamaModel(settings.model);
-    } else if (selectedPresetId === 'groq' && preset.id === 'ollama-cloud') {
-      if (settings.apiKey !== undefined) saveGroqApiKey(settings.apiKey);
-      if (settings.baseUrl) saveGroqBaseUrl(settings.baseUrl);
-      if (settings.model) saveGroqModel(settings.model);
+    if (selectedPresetId !== 'custom' && settings.apiKey !== undefined) {
+      savePresetApiKey(selectedPresetId, settings.apiKey);
     }
 
+    const savedGeneral = getAISettings();
+    const savedKey = resolvePresetSavedKey(preset, savedGeneral);
+    const sameBaseAsSaved =
+      preset.role !== 'oral' &&
+      normalizeOpenAIBaseUrl(savedGeneral.baseUrl) === normalizeOpenAIBaseUrl(preset.baseUrl);
+
+    const nextModel = sameBaseAsSaved && savedGeneral.model
+      ? savedGeneral.model
+      : preset.model;
+
+    setConfigArea(preset.role === 'oral' ? 'oral' : 'general');
     setSelectedPresetId(preset.id);
-
-    let providerKey = '';
-    let providerBaseUrl = preset.baseUrl;
-    let providerModel = preset.model;
-
-    if (preset.id === 'ollama-cloud') {
-      providerKey = getOllamaApiKey();
-      providerBaseUrl = getOllamaBaseUrl();
-      providerModel = getOllamaModel();
-    } else if (preset.id === 'groq') {
-      const oral = getOralAISettings();
-      providerKey = oral.apiKey;
-      providerBaseUrl = oral.baseUrl;
-      providerModel = oral.model;
-    }
-
     setSettings(prev => ({
       ...prev,
-      baseUrl: providerBaseUrl,
-      model: providerModel,
-      apiKey: providerKey,
-      verified: Boolean(providerKey && providerKey.trim().length > 0),
+      provider: preset.provider,
+      baseUrl: preset.baseUrl,
+      model: nextModel,
+      apiKey: savedKey,
+      verified: Boolean(savedKey.trim().length > 0 || isLocalUrl(preset.baseUrl)),
     }));
     setTestResult(null);
   };
 
   const activePreset = AI_PRESETS.find(p => p.id === selectedPresetId);
+  const providerDisplayName = getProviderDisplayName(selectedPresetId, settings.baseUrl || '', configArea);
+
+  const modelChoices = useMemo(() => {
+    const combined = [
+      ...(activePreset?.suggestedModels || []),
+      ...(testResult?.models || []),
+    ].map(m => m.trim()).filter(Boolean);
+    return Array.from(new Set(combined)).slice(0, 8);
+  }, [activePreset, testResult]);
 
   if (!isOpen || typeof document === 'undefined') return null;
 
+  const mutedText = isDark ? 'text-zinc-400' : isKitty ? 'text-pink-900/70' : 'text-slate-500';
+  const strongText = isDark ? 'text-white' : 'text-zinc-950';
+  const labelText = isDark ? 'text-zinc-300' : 'text-slate-700';
+  const inputSurface = isDark
+    ? 'bg-black/40 text-white placeholder:text-zinc-500'
+    : isKitty
+    ? 'bg-white text-zinc-950 placeholder:text-pink-300'
+    : 'bg-white text-zinc-950 placeholder:text-slate-400';
+  const inputBorder = (valid: boolean) => !valid
+    ? 'border-rose-500 focus:border-rose-500'
+    : isDark
+    ? 'border-white/10 focus:border-violet-400'
+    : isKitty
+    ? 'border-pink-200 focus:border-pink-500'
+    : 'border-slate-300 focus:border-violet-600';
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-modal-backdrop">
-      <div className={`border rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col animate-modal-card ${
-        theme === 'dark'
-          ? 'bg-[#0e0b16] border-white/10 text-white'
-          : theme === 'kitty'
+      <div className={`border rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl relative overflow-hidden max-h-[90vh] flex flex-col animate-modal-card ${
+        isDark
+          ? 'bg-[#0e0b16] border-white/10 text-white shadow-[0_24px_60px_-12px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.1)]'
+          : isKitty
           ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
-          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-300/60'
       }`}>
 
-        {/* Modal Header */}
-        <div className={`flex items-center justify-between mb-5 pb-3 border-b shrink-0 ${
-          theme === 'dark' ? 'border-white/[0.06]' : theme === 'kitty' ? 'border-pink-100' : 'border-slate-100'
+        {/* Header */}
+        <div className={`flex items-center justify-between mb-4 pb-3 border-b shrink-0 ${
+          isDark ? 'border-white/[0.07]' : isKitty ? 'border-pink-100' : 'border-slate-200'
         }`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
-              theme === 'kitty'
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+              isKitty
                 ? 'bg-pink-100 border-pink-200 text-pink-600'
-                : theme === 'light'
-                ? 'bg-rose-50 border-rose-200 text-rose-600'
-                : 'bg-white/[0.04] border-white/10 text-zinc-300'
+                : !isDark
+                ? 'bg-violet-50 border-violet-200 text-violet-600'
+                : 'bg-white/[0.04] border-white/10 text-zinc-200'
             }`}>
               <Bot className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className={`text-base sm:text-lg font-bold tracking-tight ${
-                  theme === 'dark' ? 'text-white' : 'text-zinc-950'
-                }`}>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className={`text-base sm:text-lg font-bold tracking-tight ${strongText}`}>
                   Motor de Inteligencia Artificial
                 </h2>
                 <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
-                  theme === 'dark'
-                    ? 'bg-white/[0.05] text-zinc-300 border-white/10'
-                    : theme === 'kitty'
+                  isDark
+                    ? 'bg-white/[0.05] text-zinc-200 border-white/10'
+                    : isKitty
                     ? 'bg-pink-50 text-pink-800 border-pink-200'
                     : 'bg-slate-100 text-slate-800 border-slate-200'
                 }`}>
-                  {settings.baseUrl?.includes('ollama.com') ? 'Ollama Cloud' : settings.baseUrl?.includes('localhost') ? 'Ollama Local' : 'IA Configurada'}
+                  {providerDisplayName}
                 </span>
               </div>
-              <p className={`text-xs ${theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}`}>
-                {settings.baseUrl?.includes('ollama.com')
-                  ? 'Servicio oficial de Ollama en la nube con API Key de ollama.com/settings/keys'
-                  : 'Configuración de motor de IA para generación inteligente de kits y exámenes'}
+              <p className={`text-xs truncate ${mutedText}`}>
+                Elige un proveedor gratuito con mayor límite diario o ejecuta Ollama Local sin límite de tokens
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={handleClose}
-            className={`p-2 rounded-xl transition-colors cursor-pointer active:scale-95 ${
-              theme === 'dark'
-                ? 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
+            aria-label="Cerrar configuración de IA"
+            className={`p-2 rounded-xl transition-[background-color,color,transform] duration-150 cursor-pointer active:scale-95 ${
+              isDark
+                ? 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
                 : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100'
             }`}
           >
@@ -425,139 +476,226 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           </button>
         </div>
 
+        {/* Area Tabs */}
+        <div className={`grid grid-cols-2 gap-2 p-1 rounded-2xl border mb-4 shrink-0 ${
+          isDark
+            ? 'bg-white/[0.03] border-white/[0.08]'
+            : isKitty
+            ? 'bg-pink-50/70 border-pink-200/70'
+            : 'bg-slate-100 border-slate-200'
+        }`}>
+          <button
+            type="button"
+            onClick={() => switchConfigArea('general')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-[transform,background-color,color,box-shadow] duration-150 cursor-pointer active:scale-[0.985] flex items-center justify-center gap-2 ${
+              configArea === 'general'
+                ? isDark
+                  ? 'bg-white text-zinc-950 shadow-sm'
+                  : isKitty
+                  ? 'bg-pink-600 text-white shadow-sm'
+                  : 'bg-white text-zinc-950 shadow-sm'
+                : `${mutedText} hover:opacity-90`
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            <span>Motor General (Kits, Podcast y Study)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => switchConfigArea('oral')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-[transform,background-color,color,box-shadow] duration-150 cursor-pointer active:scale-[0.985] flex items-center justify-center gap-2 ${
+              configArea === 'oral'
+                ? isDark
+                  ? 'bg-white text-zinc-950 shadow-sm'
+                  : isKitty
+                  ? 'bg-pink-600 text-white shadow-sm'
+                  : 'bg-white text-zinc-950 shadow-sm'
+                : `${mutedText} hover:opacity-90`
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span>Motor Oral y Respaldo 402</span>
+          </button>
+        </div>
+
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto modal-smooth-scroll overscroll-contain space-y-5 pr-1">
-          {/* Master AI Status - Siempre Activo */}
-          <div className="p-3.5 rounded-2xl bg-thea-surfaceLight border border-thea-border flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Cpu className="w-5 h-5 text-emerald-400" />
-              <div>
-                <span className="font-bold text-xs sm:text-sm text-white block">
-                  Generación de Preguntas por IA Activa
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  Evaluaciones 100% pedagógicas y ancladas generadas localmente por Ollama
-                </span>
-              </div>
+        <div className="flex-1 overflow-y-auto modal-smooth-scroll overscroll-contain space-y-4 pr-1">
+          {/* Explicacion clara sobre limites / tokens */}
+          <div className={`p-3.5 rounded-2xl border text-xs flex flex-col gap-1.5 ${
+            isDark
+              ? 'bg-white/[0.03] border-white/[0.08] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+              : isKitty
+              ? 'bg-pink-50/70 border-pink-200 text-zinc-800'
+              : 'bg-slate-50 border-slate-200 text-slate-700'
+          }`}>
+            <div className={`flex items-center gap-1.5 font-bold ${strongText}`}>
+              <Settings className="w-4 h-4 shrink-0 text-violet-400" />
+              <span>
+                {configArea === 'general'
+                  ? 'Por qué Ollama Cloud pide créditos (HTTP 402) y cómo tener mayor cuota gratis:'
+                  : 'Motor Oral exclusivo + Respaldo automático ante HTTP 402:'}
+              </span>
             </div>
-
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold shrink-0">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Siempre Activo</span>
-            </div>
-          </div>
-
-          {/* Asignacion Fija de Motores por Area */}
-          <div className="p-3.5 rounded-2xl bg-violet-950/40 border border-violet-500/30 text-xs text-slate-300 flex flex-col gap-1.5 shadow-sm">
-            <div className="flex items-center gap-1.5 font-bold text-violet-300">
-              <Settings className="w-4 h-4 text-slate-300 shrink-0" />
-              <span>Asignacion fija y obligatoria de motores:</span>
-            </div>
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              <strong className="text-white">Ollama Cloud</strong> procesa siempre todo el estudio general (kits, Chat Tutor, Smart Study y examenes). <strong className="text-white">Motor Oral (Grok / Groq)</strong> procesa exclusivamente la Leccion Oral y Conversacion con voz. La seleccion de cada tarjeta es unicamente para ver y configurar su API Key.
-            </p>
+            {configArea === 'general' ? (
+              <p className={`text-[11px] leading-relaxed ${mutedText}`}>
+                <strong className={strongText}>Ollama en tu PC</strong> es 100% ilimitado porque usa tu propio hardware, pero <strong className={strongText}>Ollama Cloud (ollama.com)</strong> cobra créditos tras agotar la cuota gratuita (error <code className="font-mono">HTTP 402</code>). Elige abajo proveedores con cuotas gratuitas mucho más altas sin tarjeta (<strong className={strongText}>Google Gemini</strong>, <strong className={strongText}>Cerebras</strong>, <strong className={strongText}>Mistral</strong>, <strong className={strongText}>Groq</strong> o <strong className={strongText}>Ollama Local</strong>).
+              </p>
+            ) : (
+              <p className={`text-[11px] leading-relaxed ${mutedText}`}>
+                Este motor impulsa la Lección Oral y la Conversación de voz en tiempo real. Además, si tienes una clave <code className="font-mono">gsk_...</code> de Groq configurada aquí y tu proveedor principal devuelve <code className="font-mono">HTTP 402</code>, Thea+ conmutará automáticamente a Groq para no interrumpir tu estudio.
+              </p>
+            )}
           </div>
 
           {/* Provider Presets */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                Selecciona el motor que deseas configurar:
-              </label>
-              <span className={`text-[10px] flex items-center gap-1 font-semibold ${isLocalHost ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                <ShieldCheck className="w-3 h-3" />
-                {isLocalHost ? 'Servidor Local Detectado' : 'Version Web'}
-              </span>
-            </div>
+          {configArea === 'general' ? (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className={`text-[11px] font-bold uppercase tracking-wider ${labelText}`}>
+                  Proveedores compatibles para Motor General:
+                </label>
+                <span className={`text-[10px] flex items-center gap-1 font-semibold ${isLocalHost ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                  <ShieldCheck className="w-3 h-3" />
+                  {isLocalHost ? 'Proxy Local Vite Activo' : 'Proxy Serverless CORS'}
+                </span>
+              </div>
 
-            <div className="grid grid-cols-1 gap-2.5">
-              {AI_PRESETS.map(preset => {
-                const isSelected = selectedPresetId === preset.id;
-                const isOllama = preset.id === 'ollama-cloud';
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => applyPreset(preset)}
-                    className={`p-3.5 rounded-2xl border text-left relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition-colors duration-150 cursor-pointer active:scale-[0.985] ${
-                      isSelected
-                        ? 'border-violet-500 bg-violet-950/50 text-white ring-2 ring-violet-500/50 shadow-lg shadow-violet-950/40'
-                        : 'border-thea-border bg-thea-surfaceLight text-slate-400 hover:text-white hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs sm:text-sm font-bold text-white block">
-                          {preset.name}
-                        </span>
-                        <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border shrink-0 ${
-                          isOllama
-                            ? 'bg-violet-500/20 text-violet-300 border-violet-500/30'
-                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        }`}>
-                          {preset.badge}
-                        </span>
-                        {isSelected && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shrink-0">
-                            Editando esta clave
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {generalPresets.map(preset => {
+                  const isSelected = selectedPresetId === preset.id;
+                  const savedPresetKey = getPresetApiKey(preset.id);
+                  const isConfigured = Boolean(savedPresetKey) || preset.id === 'ollama-local';
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyPreset(preset)}
+                      className={`p-3 rounded-2xl border text-left flex flex-col justify-between gap-2 transition-[transform,background-color,border-color,color] duration-150 cursor-pointer active:scale-[0.985] ${
+                        isSelected
+                          ? isDark
+                            ? 'border-violet-400/75 bg-violet-500/15 text-white ring-1 ring-violet-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
+                            : isKitty
+                            ? 'border-pink-500 bg-pink-50 text-zinc-950 ring-1 ring-pink-300 shadow-sm'
+                            : 'border-violet-600 bg-violet-50 text-zinc-950 ring-1 ring-violet-200 shadow-sm'
+                          : isDark
+                          ? 'border-white/10 bg-white/[0.025] text-zinc-300 hover:bg-white/[0.05] hover:border-white/20'
+                          : isKitty
+                          ? 'border-pink-200/80 bg-white text-zinc-800 hover:bg-pink-50/50 hover:border-pink-300'
+                          : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:bg-slate-100/80 hover:border-slate-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1.5 mb-1">
+                          <span className={`text-xs font-bold tracking-tight ${strongText}`}>
+                            {preset.name}
                           </span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                            preset.freeTier
+                              ? isDark
+                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : isDark
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {preset.badge}
+                          </span>
+                        </div>
+                        <p className={`text-[11px] leading-snug ${mutedText}`}>
+                          {preset.description}
+                        </p>
+                      </div>
+
+                      <div className={`pt-2 border-t flex items-center justify-between gap-2 text-[10px] ${
+                        isDark ? 'border-white/[0.06]' : isKitty ? 'border-pink-100' : 'border-slate-200/80'
+                      }`}>
+                        <span className={`truncate font-medium ${isDark ? 'text-violet-300' : 'text-violet-700'}`}>
+                          {preset.limitSummary || preset.model}
+                        </span>
+                        {isConfigured && preset.id !== 'ollama-local' && (
+                          <span className="text-emerald-400 font-semibold shrink-0">Clave lista</span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-300 leading-snug">
-                        {preset.description}
-                      </p>
-                    </div>
-                    <div className="flex sm:flex-col items-end sm:items-end justify-between sm:justify-center gap-1.5 shrink-0">
-                      <span className="text-xs text-violet-300 font-mono font-medium bg-violet-900/40 px-2.5 py-1 rounded-lg border border-violet-500/30">
-                        Modelo: {preset.id === 'ollama-cloud' ? getOllamaModel() : (getGroqApiKey().startsWith('gsk_') ? getGroqModel() : getGrokModel())}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {isOllama ? 'Aplica a todo el estudio general' : 'Aplica solo a Leccion Oral'}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <button
+                type="button"
+                onClick={() => applyPreset(oralPreset)}
+                className={`w-full p-3.5 rounded-2xl border text-left flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 transition-[transform,background-color,border-color] duration-150 cursor-pointer active:scale-[0.985] ${
+                  isDark
+                    ? 'border-violet-400/70 bg-violet-500/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+                    : isKitty
+                    ? 'border-pink-400 bg-pink-50 text-zinc-950'
+                    : 'border-violet-500 bg-violet-50 text-zinc-950'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs sm:text-sm font-bold ${strongText}`}>{oralPreset.name}</span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      {oralPreset.badge}
+                    </span>
+                  </div>
+                  <p className={`text-[11px] ${mutedText}`}>{oralPreset.description}</p>
+                </div>
+                <span className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border shrink-0 ${
+                  isDark ? 'bg-black/30 border-white/10 text-violet-300' : 'bg-white border-slate-200 text-violet-700'
+                }`}>
+                  {oralPreset.limitSummary}
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* Form Fields */}
-          <div className="space-y-3.5 bg-thea-surfaceLight/60 border border-thea-border/80 rounded-2xl p-4">
-            <div className="flex items-center justify-between pb-2 border-b border-thea-border/60">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>Configurando credenciales de:</span>
-                <span className="text-violet-400 font-extrabold">
-                  {selectedPresetId === 'groq' ? 'Motor Oral (xAI Grok / Groq Cloud)' : 'Ollama Cloud (Motor General)'}
-                </span>
+          <div className={`space-y-3.5 border rounded-2xl p-4 ${
+            isDark
+              ? 'bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+              : isKitty
+              ? 'bg-pink-50/40 border-pink-200/80'
+              : 'bg-slate-50/70 border-slate-200'
+          }`}>
+            <div className={`flex items-center justify-between pb-2 border-b ${
+              isDark ? 'border-white/[0.07]' : isKitty ? 'border-pink-100' : 'border-slate-200'
+            }`}>
+              <span className={`text-xs font-bold flex items-center gap-1.5 ${strongText}`}>
+                <span>Configurando:</span>
+                <span className={isDark ? 'text-violet-300' : 'text-violet-700'}>{providerDisplayName}</span>
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                {selectedPresetId === 'groq' ? 'Leccion Oral y Conversacion' : 'Predeterminado para todo'}
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                isDark
+                  ? 'bg-white/[0.05] text-zinc-300 border-white/10'
+                  : isKitty
+                  ? 'bg-white text-pink-800 border-pink-200'
+                  : 'bg-white text-slate-700 border-slate-200'
+              }`}>
+                {configArea === 'oral' ? 'Lección Oral y Voz' : 'Kits, Smart Study y Podcasts'}
               </span>
             </div>
+
             {/* Base URL */}
             <div>
-              <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                URL Base del Endpoint API:
+              <label className={`text-[11px] font-semibold block mb-1 ${labelText}`}>
+                URL Base del Endpoint OpenAI-Compatible:
               </label>
               <input
                 type="text"
                 value={settings.baseUrl}
                 onChange={e => {
                   const newUrl = e.target.value;
-                  setSettings(prev => ({ ...prev, baseUrl: newUrl }));
-                  if (selectedPresetId === 'ollama-cloud') {
-                    saveOllamaBaseUrl(newUrl);
-                  } else if (selectedPresetId === 'groq') {
-                    saveGroqBaseUrl(newUrl);
-                    saveGrokBaseUrl(newUrl);
+                  setSettings(prev => ({ ...prev, baseUrl: newUrl, verified: false }));
+                  setTestResult(null);
+                  if (configArea === 'general') {
+                    setSelectedPresetId(detectGeneralPresetId(newUrl));
                   }
                 }}
-                placeholder={selectedPresetId === 'groq' ? (settings.apiKey?.startsWith('gsk_') ? 'https://api.groq.com/openai/v1' : 'https://api.x.ai/v1') : 'https://ollama.com/v1'}
-                className={`w-full px-3 py-2 rounded-xl bg-thea-bg border text-white text-xs font-mono focus:outline-none transition-colors ${
-                  !urlValidation.isValid
-                    ? 'border-rose-500 focus:border-rose-500'
-                    : 'border-thea-border focus:border-violet-500'
-                }`}
+                placeholder={activePreset?.baseUrl || 'https://generativelanguage.googleapis.com/v1beta/openai'}
+                className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(urlValidation.isValid)}`}
               />
               {!urlValidation.isValid && (
                 <p className="mt-1.5 text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-fadeIn">
@@ -569,41 +707,21 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
             {/* API Key */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-semibold text-slate-300 block">
+              <div className="flex items-center justify-between mb-1 gap-2">
+                <label className={`text-[11px] font-semibold block ${labelText}`}>
                   API Key / Token de Acceso:
                 </label>
-                {settings.baseUrl?.includes('ollama.com') && (
+                {activePreset?.keyUrl && (
                   <a
-                    href="https://ollama.com/settings/keys"
+                    href={activePreset.keyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-violet-400 hover:text-violet-300 flex items-center gap-0.5 text-[10px] underline"
+                    className={`flex items-center gap-1 text-[10px] underline font-medium ${
+                      isDark ? 'text-violet-300 hover:text-violet-200' : 'text-violet-700 hover:text-violet-800'
+                    }`}
                   >
-                    <span>ollama.com/settings/keys</span>
-                    <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
-                )}
-                {(settings.baseUrl?.includes('x.ai') || settings.baseUrl?.includes('grok.com') || settings.apiKey?.startsWith('grok_') || settings.apiKey?.startsWith('xai-')) && (
-                  <a
-                    href="https://grok.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-violet-400 hover:text-violet-300 flex items-center gap-0.5 text-[10px] underline"
-                  >
-                    <span>grok.com / console.x.ai</span>
-                    <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
-                )}
-                {settings.baseUrl?.includes('api.groq.com') && (
-                  <a
-                    href="https://console.groq.com/keys"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-violet-400 hover:text-violet-300 flex items-center gap-0.5 text-[10px] underline"
-                  >
-                    <span>console.groq.com/keys</span>
-                    <ExternalLink className="w-2.5 h-2.5" />
+                    <span>Obtener clave en {activePreset.keyUrl.replace(/^https?:\/\//, '')}</span>
+                    <ExternalLink className="w-2.5 h-2.5 shrink-0" />
                   </a>
                 )}
               </div>
@@ -613,59 +731,27 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   value={settings.apiKey}
                   onChange={e => {
                     const newKey = e.target.value;
-                    const isOllama = selectedPresetId === 'ollama-cloud' || settings.baseUrl?.includes('ollama.com');
-                    const isOralSelected = selectedPresetId === 'groq' || settings.baseUrl?.includes('api.groq.com') || settings.baseUrl?.includes('api.x.ai') || settings.baseUrl?.includes('grok.com');
-
-                    if (isOllama) {
-                      saveOllamaApiKey(newKey);
-                    } else if (isOralSelected) {
-                      if (newKey.startsWith('gsk_')) {
-                        saveGroqApiKey(newKey);
-                        saveGroqBaseUrl('https://api.groq.com/openai/v1');
-                        saveGroqModel('openai/gpt-oss-120b');
-                      } else {
-                        saveGrokApiKey(newKey);
-                        saveGroqApiKey(newKey);
-                        saveGrokBaseUrl('https://api.x.ai/v1');
-                        saveGrokModel('grok-2-mini');
-                      }
+                    if (selectedPresetId !== 'custom') {
+                      savePresetApiKey(selectedPresetId, newKey);
                     }
-
-                    const targetBaseUrl = isOralSelected
-                      ? (newKey.startsWith('gsk_') ? 'https://api.groq.com/openai/v1' : 'https://api.x.ai/v1')
-                      : settings.baseUrl;
-
-                    const targetModel = isOralSelected
-                      ? (newKey.startsWith('gsk_') ? 'openai/gpt-oss-120b' : 'grok-2-mini')
-                      : settings.model;
-
-                    const updated: AISettings = {
-                      ...settings,
-                      baseUrl: targetBaseUrl,
-                      model: targetModel,
+                    setTestResult(null);
+                    setSettings(prev => ({
+                      ...prev,
                       apiKey: newKey,
-                      ...(isOllama ? { ollamaApiKey: newKey } : {}),
-                      ...(isOralSelected ? { groqApiKey: newKey, grokApiKey: newKey } : {}),
-                      verified: newKey.trim().length > 0 ? true : false,
-                    };
-                    setSettings(updated);
-                    saveAISettings(updated);
-                    const user = authService.getCurrentUser();
-                    if (user) {
-                      authService.saveUserAISettings(user.id, updated);
-                    }
+                      verified: isLocalUrl(prev.baseUrl) ? true : false,
+                      ...(configArea === 'oral'
+                        ? { groqApiKey: newKey, grokApiKey: newKey }
+                        : {}),
+                    }));
                   }}
                   placeholder={activePreset?.keyPlaceholder || 'Ingresa tu API Key'}
-                  className={`w-full px-3 py-2 pr-10 rounded-xl bg-thea-bg border text-white text-xs font-mono focus:outline-none transition-colors ${
-                    !keyValidation.isValid
-                      ? 'border-rose-500 focus:border-rose-500'
-                      : 'border-thea-border focus:border-violet-500'
-                  }`}
+                  className={`w-full px-3 py-2 pr-10 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(keyValidation.isValid)}`}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  onClick={() => setShowKey(prev => !prev)}
+                  aria-label={showKey ? 'Ocultar clave API' : 'Mostrar clave API'}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer transition-colors ${mutedText} hover:opacity-100`}
                 >
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -679,24 +765,29 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               ) : (
                 <div className="mt-1.5 text-[11px]">
                   {isTesting ? (
-                    <span className="text-violet-300 flex items-center gap-1.5 font-medium animate-pulse">
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-400 shrink-0" />
-                      Probando automáticamente clave de API (200 OK)...
+                    <span className="text-violet-400 flex items-center gap-1.5 font-medium">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      Probando conexión con el proveedor...
                     </span>
-                  ) : settings.verified ? (
+                  ) : testResult?.success ? (
                     <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      API verificada y activa (200 OK). ¡Todo desbloqueado y a todo color!
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      Conexión verificada correctamente (200 OK).
                     </span>
-                  ) : settings.apiKey && settings.apiKey.trim().length > 0 ? (
-                    <span className="text-amber-400 flex items-center gap-1 font-medium">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      Clave ingresada no verificada. Espera la prueba automática o presiona &quot;Probar Conexión&quot;.
+                  ) : isLocalProvider ? (
+                    <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      Ollama Local no requiere clave API en localhost.
+                    </span>
+                  ) : settings.verified && settings.apiKey ? (
+                    <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      Clave lista. Haz clic en &quot;Guardar y Aplicar&quot; para confirmar cambios.
                     </span>
                   ) : (
                     <span className="text-amber-400 flex items-center gap-1 font-medium">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      Sin clave API: Ingresa tu clave para que se pruebe automáticamente.
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      Clave ingresada sin verificar aún; puedes probar conexión o guardar directo.
                     </span>
                   )}
                 </div>
@@ -705,7 +796,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
             {/* Model Name */}
             <div>
-              <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+              <label className={`text-[11px] font-semibold block mb-1 ${labelText}`}>
                 Nombre del Modelo (LLM):
               </label>
               <input
@@ -714,18 +805,9 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 onChange={e => {
                   const newModel = e.target.value;
                   setSettings(prev => ({ ...prev, model: newModel }));
-                  if (selectedPresetId === 'ollama-cloud') {
-                    saveOllamaModel(newModel);
-                  } else if (selectedPresetId === 'groq') {
-                    saveGroqModel(newModel);
-                  }
                 }}
-                placeholder={selectedPresetId === 'groq' ? 'openai/gpt-oss-120b' : 'gemma4:31b'}
-                className={`w-full px-3 py-2 rounded-xl bg-thea-bg border text-white text-xs font-mono focus:outline-none transition-colors ${
-                  !modelValidation.isValid
-                    ? 'border-rose-500 focus:border-rose-500'
-                    : 'border-thea-border focus:border-violet-500'
-                }`}
+                placeholder={activePreset?.model || 'gemini-2.5-flash'}
+                className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(modelValidation.isValid)}`}
               />
               {!modelValidation.isValid && (
                 <p className="mt-1.5 text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-fadeIn">
@@ -734,19 +816,22 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 </p>
               )}
 
-              {/* Detected models chips if test succeeded */}
-              {testResult?.models && testResult.models.length > 0 && (
+              {modelChoices.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[10px] text-slate-400">Detectados en tu servidor:</span>
-                  {testResult.models.slice(0, 6).map(m => (
+                  <span className={`text-[10px] ${mutedText}`}>Modelos recomendados / detectados:</span>
+                  {modelChoices.map(m => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => setSettings(prev => ({ ...prev, model: m }))}
-                      className={`text-[10px] px-2 py-0.5 rounded-md border transition-all ${
+                      className={`text-[10px] px-2 py-0.5 rounded-md border font-mono cursor-pointer active:scale-95 transition-[transform,background-color,border-color,color] duration-150 ${
                         settings.model === m
-                          ? 'bg-violet-600 text-white border-violet-500 font-bold'
-                          : 'bg-thea-surfaceLight text-slate-300 border-thea-border hover:border-violet-400'
+                          ? isKitty
+                            ? 'bg-pink-600 text-white border-pink-600 font-bold'
+                            : 'bg-violet-600 text-white border-violet-500 font-bold'
+                          : isDark
+                          ? 'bg-white/[0.04] text-zinc-300 border-white/10 hover:border-violet-400'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-violet-400'
                       }`}
                     >
                       {m}
@@ -762,8 +847,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             <div
               className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 animate-fadeIn ${
                 testResult.success
-                  ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300'
-                  : 'bg-rose-950/40 border border-rose-500/40 text-rose-300'
+                  ? isDark
+                    ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300'
+                    : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                  : isDark
+                  ? 'bg-rose-950/40 border border-rose-500/40 text-rose-300'
+                  : 'bg-rose-50 border border-rose-200 text-rose-800'
               }`}
             >
               {testResult.success ? (
@@ -774,8 +863,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <div className="leading-relaxed">
                 <span className="font-bold block mb-0.5">
                   {testResult.success
-                    ? `Conexión Exitosa con ${selectedPresetId === 'groq' ? 'Groq Cloud (Motor Oral)' : 'Ollama Cloud (Motor General)'}`
-                    : `Fallo de Conexión con ${selectedPresetId === 'groq' ? 'Groq Cloud' : 'Ollama Cloud'}`}
+                    ? `Conexión Exitosa con ${providerDisplayName}`
+                    : `Fallo de Conexión con ${providerDisplayName}`}
                 </span>
                 <span>{testResult.message}</span>
               </div>
@@ -783,14 +872,20 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           )}
         </div>
 
-        {/* Modal Actions */}
-        <div className="flex items-center justify-between gap-3 pt-4 mt-3 border-t border-white/[0.06] shrink-0">
+        {/* Footer Actions */}
+        <div className={`flex flex-wrap items-center justify-between gap-2.5 pt-4 mt-3 border-t shrink-0 ${
+          isDark ? 'border-white/[0.07]' : isKitty ? 'border-pink-100' : 'border-slate-200'
+        }`}>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleTestConnection}
               disabled={isTesting || !isFormValid}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold text-zinc-300 hover:text-white transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-[transform,background-color,color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95 ${
+                isDark
+                  ? 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white'
+                  : 'border-slate-200 bg-slate-100 hover:bg-slate-200/70 text-slate-800'
+              }`}
             >
               {isTesting ? (
                 <>
@@ -807,11 +902,15 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
             <button
               type="button"
-              onClick={handleResetOllamaCloud}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold text-zinc-300 hover:text-white transition-colors duration-150 cursor-pointer active:scale-95"
-              title="Restablecer a valores oficiales de Ollama Cloud (https://ollama.com/v1, gemma4:31b)"
+              onClick={handleResetDefaults}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-[transform,background-color,color] duration-150 cursor-pointer active:scale-95 ${
+                isDark
+                  ? 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white'
+                  : 'border-slate-200 bg-slate-100 hover:bg-slate-200/70 text-slate-800'
+              }`}
+              title="Restablecer configuración predeterminada de IA"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+              <RefreshCw className="w-3.5 h-3.5 opacity-70" />
               <span>Restablecer</span>
             </button>
           </div>
@@ -820,11 +919,17 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={!isFormValid}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs sm:text-sm shadow-lg transition-transform duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition-[transform,background-color] duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95 ${
+              isDark
+                ? 'bg-white hover:bg-zinc-200 text-zinc-950'
+                : isKitty
+                ? 'bg-pink-600 hover:bg-pink-700 text-white'
+                : 'bg-zinc-950 hover:bg-zinc-800 text-white'
+            }`}
           >
             {isSaved ? (
               <>
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                 <span>Guardado</span>
               </>
             ) : (

@@ -26,37 +26,136 @@ export interface AIPreset {
   id: 'ollama' | 'custom' | string;
   name: string;
   provider: 'ollama' | 'openai-compatible' | 'custom';
+  role?: 'general' | 'oral';
   baseUrl: string;
   model: string;
   keyPlaceholder: string;
   keyUrl?: string;
   description: string;
+  limitSummary?: string;
+  suggestedModels?: string[];
   badge: string;
   freeTier: boolean;
 }
 
 export const AI_PRESETS: AIPreset[] = [
   {
+    id: 'gemini',
+    name: 'Google Gemini',
+    provider: 'openai-compatible',
+    role: 'general',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-2.5-flash',
+    keyPlaceholder: 'AIzaSy... (clave gratuita de Google AI Studio)',
+    keyUrl: 'https://aistudio.google.com/apikey',
+    description: 'Gran contexto (1M tokens) y cuota gratuita renovada a diario para documentos extensos y podcasts.',
+    limitSummary: 'Gratis sin tarjeta: 250K tokens/min • 500 req/día • 1M contexto',
+    suggestedModels: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'],
+    badge: '1M Contexto Gratis',
+    freeTier: true,
+  },
+  {
+    id: 'cerebras',
+    name: 'Cerebras Cloud',
+    provider: 'openai-compatible',
+    role: 'general',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    model: 'gpt-oss-120b',
+    keyPlaceholder: 'csk-... (clave gratuita de cloud.cerebras.ai)',
+    keyUrl: 'https://cloud.cerebras.ai',
+    description: 'Cuota diaria muy amplia y velocidad extrema (~2,000-3,000 tok/s) para generar kits y preguntas.',
+    limitSummary: 'Gratis sin tarjeta: 1,000,000 tokens/día • ~30 RPM',
+    suggestedModels: ['gpt-oss-120b', 'qwen-3.8-27b'],
+    badge: '1M Tokens/Día',
+    freeTier: true,
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral AI',
+    provider: 'openai-compatible',
+    role: 'general',
+    baseUrl: 'https://api.mistral.ai/v1',
+    model: 'mistral-small-latest',
+    keyPlaceholder: 'Clave gratuita de console.mistral.ai/api-keys',
+    keyUrl: 'https://console.mistral.ai/api-keys',
+    description: 'Plan Experiment gratuito sin tarjeta con buena capacidad por minuto para español y JSON estructurado.',
+    limitSummary: 'Gratis sin tarjeta: ~500K tokens/min • 256K contexto',
+    suggestedModels: ['mistral-small-latest', 'mistral-medium-latest'],
+    badge: '500K TPM Gratis',
+    freeTier: true,
+  },
+  {
+    id: 'groq-general',
+    name: 'Groq Cloud (General)',
+    provider: 'openai-compatible',
+    role: 'general',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'llama-3.3-70b-versatile',
+    keyPlaceholder: 'gsk_... (clave gratuita de console.groq.com/keys)',
+    keyUrl: 'https://console.groq.com/keys',
+    description: 'Inferencia LPU gratuita muy veloz; usa modelos ligeros como 8b-instant para hasta 14,400 req/día.',
+    limitSummary: 'Gratis sin tarjeta: hasta 14.4K req/día (8B) o 1K req/día (70B)',
+    suggestedModels: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b'],
+    badge: 'Hasta 14.4K RPD',
+    freeTier: true,
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter (:free)',
+    provider: 'openai-compatible',
+    role: 'general',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'meta-llama/llama-3.3-70b-instruct:free',
+    keyPlaceholder: 'sk-or-v1-... (clave de openrouter.ai/keys)',
+    keyUrl: 'https://openrouter.ai/keys',
+    description: 'Acceso unificado a modelos gratuitos :free diarios (Llama, DeepSeek, Qwen, Gemma).',
+    limitSummary: 'Modelos :free diarios (20 RPM • sin tarjeta)',
+    suggestedModels: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'],
+    badge: 'Multi-Modelo',
+    freeTier: true,
+  },
+  {
+    id: 'ollama-local',
+    name: 'Ollama Local (Tu PC)',
+    provider: 'ollama',
+    role: 'general',
+    baseUrl: 'http://localhost:11434/v1',
+    model: 'gemma4:31b',
+    keyPlaceholder: 'No requiere clave en localhost',
+    keyUrl: 'https://ollama.com/download',
+    description: '100% gratis e ilimitado ejecutando modelos directamente en tu computadora sin cuotas externas.',
+    limitSummary: 'Tokens 100% ilimitados en hardware local (http://localhost:11434)',
+    suggestedModels: ['gemma4:31b', 'qwen3:8b', 'llama3.2:latest'],
+    badge: '100% Ilimitado',
+    freeTier: true,
+  },
+  {
     id: 'ollama-cloud',
     name: 'Ollama Cloud',
     provider: 'openai-compatible',
+    role: 'general',
     baseUrl: 'https://ollama.com/v1',
     model: 'gemma4:31b',
     keyPlaceholder: 'Pega tu clave de API de https://ollama.com/settings/keys',
     keyUrl: 'https://ollama.com/settings/keys',
-    description: 'Motor general predeterminado para generacion de kits, Chat Tutor, Smart Study, flashcards y examenes.',
-    badge: 'Motor General',
-    freeTier: true,
+    description: 'Servicio de Ollama en la nube (funciona con saldo/créditos activos en ollama.com/plans).',
+    limitSummary: 'Limitado a los créditos de uso de tu cuenta en ollama.com/plans',
+    suggestedModels: ['gemma4:31b', 'gpt-oss:120b'],
+    badge: 'Créditos Nube',
+    freeTier: false,
   },
   {
     id: 'groq',
-    name: 'Groq Cloud (Motor de Voz)',
+    name: 'Groq / xAI Grok (Motor Oral)',
     provider: 'openai-compatible',
+    role: 'oral',
     baseUrl: 'https://api.groq.com/openai/v1',
     model: 'openai/gpt-oss-120b',
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
     description: 'Motor oral de voz ultra acelerado para Lección Oral, Whisper y Conversación interactiva.',
+    limitSummary: 'Dedicado a Lección Oral y respaldo ante HTTP 402 en estudio general',
+    suggestedModels: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'grok-2-mini'],
     badge: 'Motor de Voz Exclusivo',
     freeTier: true,
   },
@@ -292,10 +391,38 @@ export function saveGroqModel(model: string): void {
   });
 }
 
-/** Retorna la configuracion general de IA (SIEMPRE Ollama para kits, chat tutor, smart study, flashcards y examenes) */
+export function normalizeOpenAIBaseUrl(url: string): string {
+  return (url || '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/i, '');
+}
+
+export function getPresetApiKey(presetId: string): string {
+  if (typeof localStorage === 'undefined' || !presetId) return '';
+  try {
+    return localStorage.getItem(`thea_preset_key_${presetId}`) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function savePresetApiKey(presetId: string, key: string): void {
+  if (typeof localStorage === 'undefined' || !presetId) return;
+  const clean = key.trim();
+  try {
+    if (clean) {
+      safeLocalStorageSetItem(`thea_preset_key_${presetId}`, clean);
+    } else {
+      localStorage.removeItem(`thea_preset_key_${presetId}`);
+    }
+  } catch {}
+}
+
+/** Retorna la configuracion general de IA (admite Gemini, Cerebras, Mistral, Groq, OpenRouter, Ollama Local/Cloud o URL compatible) */
 export function getAISettings(): AISettings {
   const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
   const ollamaKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_api_key') || '' : '';
+  const directGeneralBase = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_base_url') : null;
+  const directGeneralKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_api_key') : null;
+  const directGeneralModel = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_model') : null;
 
   let parsed: any = {};
   if (saved) {
@@ -304,29 +431,46 @@ export function getAISettings(): AISettings {
     } catch {}
   }
 
-  // 1. Resolver configuracion general (OLLAMA - Motor General predeterminado para todo)
-  let ollamaBaseUrl =
+  // 1. Resolver configuracion general respetando cualquier proveedor elegido por el usuario
+  const legacySavedBase =
+    parsed.baseUrl &&
+    typeof parsed.baseUrl === 'string' &&
+    !parsed.baseUrl.includes('api.x.ai') &&
+    !parsed.baseUrl.includes('grok.com') &&
+    (!parsed.baseUrl.includes('api.groq.com') || Boolean(directGeneralBase))
+      ? parsed.baseUrl
+      : '';
+
+  const generalBaseRaw =
+    (directGeneralBase && directGeneralBase.trim()) ||
+    legacySavedBase ||
     (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_base_url') : null) ||
     parsed.ollamaBaseUrl ||
-    (parsed.baseUrl && !parsed.baseUrl.includes('api.groq.com') && !parsed.baseUrl.includes('api.x.ai') ? parsed.baseUrl : 'https://ollama.com/v1');
+    'https://ollama.com/v1';
 
-  if (ollamaBaseUrl.includes('11434') || ollamaBaseUrl.includes('localhost') || ollamaBaseUrl.includes('127.0.0.1')) {
-    // Si apunta a localhost, se respeta la configuracion local de Ollama
-  } else if (!ollamaBaseUrl.includes('ollama.com')) {
-    ollamaBaseUrl = 'https://ollama.com/v1';
-  }
+  const generalBaseUrl = normalizeOpenAIBaseUrl(generalBaseRaw) || 'https://ollama.com/v1';
 
-  const effectiveOllamaKey =
-    ollamaKey ||
-    parsed.ollamaApiKey ||
-    (parsed.apiKey && !parsed.apiKey.startsWith('gsk_') && !parsed.apiKey.startsWith('grok_') ? parsed.apiKey : '');
+  const isLegacyGroq = generalBaseUrl.includes('api.groq.com');
+  const legacyGeneralKey =
+    parsed.apiKey && !parsed.apiKey.startsWith('grok_') && !parsed.apiKey.startsWith('xai-') && (!parsed.apiKey.startsWith('gsk_') || isLegacyGroq)
+      ? parsed.apiKey
+      : '';
 
-  const ollamaModel =
+  const effectiveGeneralKey = (
+    (directGeneralKey !== null ? directGeneralKey : '') ||
+    legacyGeneralKey ||
+    (generalBaseUrl.includes('ollama.com') ? (ollamaKey || parsed.ollamaApiKey || '') : '')
+  ).trim();
+
+  const generalModel = (
+    (directGeneralModel && directGeneralModel.trim()) ||
+    (parsed.model && typeof parsed.model === 'string' ? parsed.model.trim() : '') ||
     (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_model') : null) ||
     parsed.ollamaModel ||
-    (parsed.model && !parsed.model.includes('gpt-oss') && !parsed.model.includes('llama-3.3') ? parsed.model : 'gemma4:31b');
+    'gemma4:31b'
+  ).trim();
 
-  // 2. Resolver configuracion oral (GROQ / GROK - Motor Oral exclusivo para Leccion y Conversacion Oral)
+  // 2. Resolver configuracion oral (GROQ / GROK - Motor Oral para Leccion y Conversacion Oral)
   let groqStorageKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_groq_api_key') : null;
   if (groqStorageKey && isRevokedGroqKey(groqStorageKey)) {
     localStorage.removeItem('thea_groq_api_key');
@@ -356,22 +500,30 @@ export function getAISettings(): AISettings {
     (isGrok ? parsed.grokModel : parsed.groqModel) ||
     (isGrok ? 'grok-2-mini' : 'openai/gpt-oss-120b');
 
-  const isLocal = Boolean(ollamaBaseUrl.includes('localhost') || ollamaBaseUrl.includes('127.0.0.1'));
-  const hasKey = Boolean(effectiveOllamaKey && effectiveOllamaKey.trim().length > 0);
+  const isLocal = Boolean(generalBaseUrl.includes('localhost') || generalBaseUrl.includes('127.0.0.1'));
+  const hasKey = Boolean(effectiveGeneralKey.length > 0);
+  const effectiveOllamaBase = generalBaseUrl.includes('ollama.com') || isLocal
+    ? generalBaseUrl
+    : (parsed.ollamaBaseUrl || 'https://ollama.com/v1');
+  const effectiveOllamaKey = generalBaseUrl.includes('ollama.com')
+    ? effectiveGeneralKey
+    : (ollamaKey || parsed.ollamaApiKey || '');
+  const effectiveOllamaModel = generalBaseUrl.includes('ollama.com') || isLocal
+    ? generalModel
+    : (parsed.ollamaModel || 'gemma4:31b');
 
   return {
     ...DEFAULT_AI_SETTINGS,
-    enabled: true,
-    provider: 'openai-compatible',
-    // El motor activo para todo lo general es SIEMPRE Ollama
-    baseUrl: ollamaBaseUrl,
-    apiKey: effectiveOllamaKey,
-    model: ollamaModel,
+    enabled: parsed.enabled !== undefined ? Boolean(parsed.enabled) : true,
+    provider: isLocal ? 'ollama' : 'openai-compatible',
+    baseUrl: generalBaseUrl,
+    apiKey: effectiveGeneralKey,
+    model: generalModel,
     timeoutMs: parsed.timeoutMs || 45000,
     verified: hasKey || isLocal ? true : Boolean(parsed.verified),
-    ollamaBaseUrl,
+    ollamaBaseUrl: effectiveOllamaBase,
     ollamaApiKey: effectiveOllamaKey,
-    ollamaModel,
+    ollamaModel: effectiveOllamaModel,
     groqBaseUrl,
     groqApiKey: effectiveOralKey,
     groqModel,
@@ -417,73 +569,131 @@ export function getOralAISettings(): AISettings {
   };
 }
 
-export function saveAISettings(settings: AISettings): void {
+export function saveAISettings(
+  settings: AISettings,
+  targetRole: 'general' | 'oral' | 'auto' = 'auto'
+): void {
   const cleanSettings = { ...settings };
-  const isOralEndpoint = Boolean(
-    cleanSettings.baseUrl?.includes('api.groq.com') ||
-    cleanSettings.baseUrl?.includes('api.x.ai') ||
-    cleanSettings.baseUrl?.includes('grok.com')
-  );
+  const incomingBase = normalizeOpenAIBaseUrl(cleanSettings.baseUrl || '');
+  const incomingKey = cleanSettings.apiKey?.trim() || '';
+  const incomingModel = cleanSettings.model?.trim() || '';
 
-  let effectiveOllamaKey = cleanSettings.ollamaApiKey || '';
+  const existingSavedRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+  let existingParsed: any = {};
+  if (existingSavedRaw) {
+    try {
+      existingParsed = JSON.parse(existingSavedRaw) || {};
+    } catch {}
+  }
+
+  let effectiveGeneralBase =
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_base_url') : null) ||
+    existingParsed.baseUrl ||
+    cleanSettings.ollamaBaseUrl ||
+    'https://ollama.com/v1';
+  let effectiveGeneralKey =
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_api_key') : null) ??
+    existingParsed.apiKey ??
+    cleanSettings.ollamaApiKey ??
+    '';
+  let effectiveGeneralModel =
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_model') : null) ||
+    existingParsed.model ||
+    cleanSettings.ollamaModel ||
+    'gemma4:31b';
+
+  let effectiveOllamaKey =
+    cleanSettings.ollamaApiKey ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_api_key') : '') ||
+    '';
+  let effectiveOllamaBase =
+    cleanSettings.ollamaBaseUrl ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_base_url') : '') ||
+    'https://ollama.com/v1';
+  let effectiveOllamaModel =
+    cleanSettings.ollamaModel ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_model') : '') ||
+    'gemma4:31b';
+
   let effectiveOralKey = cleanSettings.grokApiKey || cleanSettings.groqApiKey || '';
-  let effectiveOllamaBase = cleanSettings.ollamaBaseUrl || '';
   let effectiveOralBase = cleanSettings.grokBaseUrl || cleanSettings.groqBaseUrl || '';
-  let effectiveOllamaModel = cleanSettings.ollamaModel || '';
   let effectiveOralModel = cleanSettings.grokModel || cleanSettings.groqModel || '';
 
   if (typeof localStorage !== 'undefined') {
-    if (!effectiveOllamaKey) effectiveOllamaKey = localStorage.getItem('thea_ollama_api_key') || '';
     if (!effectiveOralKey) effectiveOralKey = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key') || '';
-    if (!effectiveOllamaBase) effectiveOllamaBase = localStorage.getItem('thea_ollama_base_url') || '';
     if (!effectiveOralBase) effectiveOralBase = localStorage.getItem('thea_grok_base_url') || localStorage.getItem('thea_groq_base_url') || '';
-    if (!effectiveOllamaModel) effectiveOllamaModel = localStorage.getItem('thea_ollama_model') || '';
     if (!effectiveOralModel) effectiveOralModel = localStorage.getItem('thea_grok_model') || localStorage.getItem('thea_groq_model') || '';
   }
 
-  const incomingKey = cleanSettings.apiKey?.trim() || '';
-  const isIncomingGrok = incomingKey.startsWith('grok_') || incomingKey.startsWith('xai-');
-  const isIncomingGroq = incomingKey.startsWith('gsk_');
+  const isAutoOral =
+    targetRole === 'auto' &&
+    Boolean(
+      incomingBase.includes('api.x.ai') ||
+      incomingBase.includes('grok.com') ||
+      incomingKey.startsWith('grok_') ||
+      incomingKey.startsWith('xai-')
+    );
 
-  if (isOralEndpoint || isIncomingGrok || isIncomingGroq) {
+  if (targetRole === 'oral' || isAutoOral) {
     if (incomingKey) effectiveOralKey = incomingKey;
-    if (cleanSettings.baseUrl) effectiveOralBase = cleanSettings.baseUrl.trim();
-    if (cleanSettings.model) effectiveOralModel = cleanSettings.model.trim();
+    if (incomingBase) effectiveOralBase = incomingBase;
+    if (incomingModel) effectiveOralModel = incomingModel;
   } else {
-    if (incomingKey && !isIncomingGrok && !isIncomingGroq) effectiveOllamaKey = incomingKey;
-    if (cleanSettings.baseUrl) effectiveOllamaBase = cleanSettings.baseUrl.trim();
-    if (cleanSettings.model) effectiveOllamaModel = cleanSettings.model.trim();
+    if (incomingBase) effectiveGeneralBase = incomingBase;
+    effectiveGeneralKey = incomingKey;
+    if (incomingModel) effectiveGeneralModel = incomingModel;
+
+    if (effectiveGeneralBase.includes('ollama.com') || effectiveGeneralBase.includes('11434') || effectiveGeneralBase.includes('localhost')) {
+      effectiveOllamaBase = effectiveGeneralBase;
+      effectiveOllamaKey = effectiveGeneralKey;
+      effectiveOllamaModel = effectiveGeneralModel;
+    }
   }
 
   if (typeof localStorage !== 'undefined') {
-    if (effectiveOllamaKey) safeLocalStorageSetItem('thea_ollama_api_key', effectiveOllamaKey);
+    safeLocalStorageSetItem('thea_general_base_url', normalizeOpenAIBaseUrl(effectiveGeneralBase) || 'https://ollama.com/v1');
+    if (effectiveGeneralKey) {
+      safeLocalStorageSetItem('thea_general_api_key', effectiveGeneralKey);
+    } else {
+      localStorage.removeItem('thea_general_api_key');
+    }
+    safeLocalStorageSetItem('thea_general_model', effectiveGeneralModel || 'gemma4:31b');
+
+    if (effectiveOllamaKey) {
+      safeLocalStorageSetItem('thea_ollama_api_key', effectiveOllamaKey);
+    }
+    if (effectiveOllamaBase) {
+      safeLocalStorageSetItem('thea_ollama_base_url', normalizeOpenAIBaseUrl(effectiveOllamaBase));
+    }
+    if (effectiveOllamaModel) {
+      safeLocalStorageSetItem('thea_ollama_model', effectiveOllamaModel);
+    }
+
     if (effectiveOralKey) {
       safeLocalStorageSetItem('thea_groq_api_key', effectiveOralKey);
       safeLocalStorageSetItem('thea_grok_api_key', effectiveOralKey);
     }
-    if (effectiveOllamaBase) safeLocalStorageSetItem('thea_ollama_base_url', effectiveOllamaBase);
     if (effectiveOralBase) {
       safeLocalStorageSetItem('thea_groq_base_url', effectiveOralBase);
       safeLocalStorageSetItem('thea_grok_base_url', effectiveOralBase);
     }
-    if (effectiveOllamaModel) safeLocalStorageSetItem('thea_ollama_model', effectiveOllamaModel);
     if (effectiveOralModel) {
       safeLocalStorageSetItem('thea_groq_model', effectiveOralModel);
       safeLocalStorageSetItem('thea_grok_model', effectiveOralModel);
     }
   }
 
-  const isLocal = Boolean(effectiveOllamaBase?.includes('localhost') || effectiveOllamaBase?.includes('127.0.0.1'));
+  const normalizedGeneralBase = normalizeOpenAIBaseUrl(effectiveGeneralBase) || 'https://ollama.com/v1';
+  const isLocal = Boolean(normalizedGeneralBase.includes('localhost') || normalizedGeneralBase.includes('127.0.0.1'));
 
-  // Guardar en thea_ai_settings con Ollama como motor predeterminado obligatorio
   const generalSettings: AISettings = {
-    enabled: true,
-    provider: 'openai-compatible',
-    baseUrl: effectiveOllamaBase || 'https://ollama.com/v1',
-    apiKey: effectiveOllamaKey || '',
-    model: effectiveOllamaModel || 'gemma4:31b',
+    enabled: cleanSettings.enabled !== undefined ? cleanSettings.enabled : true,
+    provider: isLocal ? 'ollama' : 'openai-compatible',
+    baseUrl: normalizedGeneralBase,
+    apiKey: effectiveGeneralKey,
+    model: effectiveGeneralModel || 'gemma4:31b',
     timeoutMs: cleanSettings.timeoutMs || 45000,
-    verified: isLocal ? true : Boolean(effectiveOllamaKey),
+    verified: isLocal ? true : Boolean(effectiveGeneralKey),
     ollamaBaseUrl: effectiveOllamaBase || 'https://ollama.com/v1',
     ollamaApiKey: effectiveOllamaKey || '',
     ollamaModel: effectiveOllamaModel || 'gemma4:31b',
@@ -503,6 +713,11 @@ export function saveAISettings(settings: AISettings): void {
 }
 
 export function resetAISettingsToDefault(): void {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('thea_general_base_url');
+    localStorage.removeItem('thea_general_api_key');
+    localStorage.removeItem('thea_general_model');
+  }
   safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(DEFAULT_AI_SETTINGS));
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('thea_ai_settings_changed'));
@@ -843,9 +1058,13 @@ export async function testAIConnection(override?: AISettings): Promise<{
       const data = await res.json();
       let modelList: string[] = [];
       if (Array.isArray(data.data)) {
-        modelList = data.data.map((m: { id?: string; name?: string }) => m.id || m.name || '');
+        modelList = data.data.map((m: { id?: string; name?: string }) =>
+          String(m.id || m.name || '').replace(/^models\//, '')
+        );
       } else if (Array.isArray(data.models)) {
-        modelList = data.models.map((m: { name?: string; id?: string }) => m.name || m.id || '');
+        modelList = data.models.map((m: { name?: string; id?: string }) =>
+          String(m.name || m.id || '').replace(/^models\//, '')
+        );
       }
       return {
         success: true,
@@ -853,11 +1072,11 @@ export async function testAIConnection(override?: AISettings): Promise<{
         models: modelList.filter(Boolean),
       };
     } else {
-      // Soporte específico para Grok (claves de grok.com / xAI con failover automático a Ollama)
+      // Soporte específico para Grok (claves de grok.com / xAI)
       if (settings.apiKey?.startsWith('grok_') || settings.apiKey?.startsWith('xai-')) {
         return {
           success: true,
-          message: 'Clave de Grok vinculada con éxito. Motor oral activo con respaldo continuo en Ollama.',
+          message: 'Clave de Grok vinculada con éxito. Motor oral activo.',
           models: ['grok-2-mini'],
         };
       }
@@ -870,6 +1089,13 @@ export async function testAIConnection(override?: AISettings): Promise<{
         // text fallback
       }
 
+      if (res.status === 402) {
+        return {
+          success: false,
+          message:
+            'Créditos agotados en este proveedor (HTTP 402). Agrega saldo en ollama.com/plans o elige Google Gemini, Cerebras, Mistral o Groq en la lista superior.',
+        };
+      }
       if (res.status === 401) {
         return {
           success: false,
@@ -915,6 +1141,23 @@ export async function testAIConnection(override?: AISettings): Promise<{
   }
 }
 
+function compactMessagesForTokenCap(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  maxUserChars = 22000
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  return messages.map((m) => {
+    if (m.role !== 'user' || !m.content || m.content.length <= maxUserChars) {
+      return m;
+    }
+    const head = Math.floor(maxUserChars * 0.65);
+    const tail = maxUserChars - head;
+    return {
+      ...m,
+      content: `${m.content.slice(0, head)}\n\n[... contenido intermedio condensado para límite de tokens ...]\n\n${m.content.slice(-tail)}`,
+    };
+  });
+}
+
 /** Ejecuta una llamada de chat completion con timeout y fallback seguro */
 export async function queryAICompletion(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
@@ -927,12 +1170,12 @@ export async function queryAICompletion(
     throw new Error('La integración de IA está desactivada en la configuración.');
   }
 
-  const cleanBase = settings.baseUrl.replace(/\/+$/, '');
+  const cleanBase = normalizeOpenAIBaseUrl(settings.baseUrl);
   const isLocal = cleanBase.includes('localhost') || cleanBase.includes('127.0.0.1');
   const isGitHubPages = typeof window !== 'undefined' && window.location.hostname.includes('github.io');
   if (isGitHubPages && cleanBase.includes('ollama.com')) {
     throw new Error(
-      'En GitHub Pages, los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Despliega en Vercel o Netlify (para activar la función serverless /api/ai-proxy incluida) o selecciona Google Gemini / Groq.'
+      'En GitHub Pages, los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Despliega en Vercel o Netlify (para activar la función serverless /api/ai-proxy incluida) o selecciona Google Gemini / Cerebras / Groq.'
     );
   }
 
@@ -940,13 +1183,18 @@ export async function queryAICompletion(
 
   if (!isLocal && !hasPersonalKey) {
     throw new Error(
-      'Para generar contenido con IA necesitas configurar tu API Key personal. Abre "Configurar IA" para ingresar tu clave (Groq, Gemini, DeepSeek o local).'
+      'Para generar contenido con IA necesitas configurar tu API Key personal. Abre "Configurar IA" para ingresar tu clave (Gemini, Cerebras, Mistral, Groq u Ollama local).'
     );
   }
 
   const targetBase = cleanBase;
   const targetModel = settings.model || DEFAULT_AI_SETTINGS.model;
   const targetKey = settings.apiKey.trim();
+  const isStrictContextProvider =
+    cleanBase.includes('api.groq.com') || cleanBase.includes('api.cerebras.ai');
+  const effectiveMessages = isStrictContextProvider
+    ? compactMessagesForTokenCap(messages, 22000)
+    : messages;
 
   const url = `${targetBase}/chat/completions`;
 
@@ -962,7 +1210,7 @@ export async function queryAICompletion(
 
   const body: Record<string, unknown> = {
     model: targetModel,
-    messages,
+    messages: effectiveMessages,
     temperature: options?.temperature !== undefined ? options.temperature : 0.3,
   };
 
@@ -986,13 +1234,17 @@ export async function queryAICompletion(
       body
     );
 
-    // Failover automático en Groq: si el modelo principal da 429 o 5xx, reintenta con el modelo ligero
+    // Failover automático en Groq: si el modelo principal da 429, 413 o 5xx, reintenta con el modelo ligero
     if (
-      (response.status === 429 || response.status >= 500) &&
+      (response.status === 429 || response.status === 413 || response.status >= 500) &&
       cleanBase.includes('api.groq.com') &&
       targetModel !== GROQ_FALLBACK_MODEL
     ) {
-      const retryBody = { ...body, model: GROQ_FALLBACK_MODEL };
+      const retryBody = {
+        ...body,
+        model: GROQ_FALLBACK_MODEL,
+        messages: compactMessagesForTokenCap(effectiveMessages, 14000),
+      };
       response = await fetchWithProxyFallback(
         url,
         {
@@ -1003,6 +1255,49 @@ export async function queryAICompletion(
         },
         retryBody
       );
+    }
+
+    // Failover automático cuando Ollama Cloud devuelve HTTP 402 (sin créditos): usar Groq si está disponible
+    if (response.status === 402 && cleanBase.includes('ollama.com') && !override) {
+      const groqFallback = getOralAISettings();
+      const canFallbackToGroq = Boolean(
+        groqFallback.baseUrl?.includes('api.groq.com') &&
+        groqFallback.apiKey &&
+        groqFallback.apiKey.startsWith('gsk_') &&
+        !isRevokedGroqKey(groqFallback.apiKey)
+      );
+      if (canFallbackToGroq) {
+        console.warn('[aiService] Ollama Cloud HTTP 402 (sin créditos): activando respaldo automático en Groq...');
+        const groqUrl = `${normalizeOpenAIBaseUrl(groqFallback.baseUrl)}/chat/completions`;
+        const groqHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${groqFallback.apiKey.trim()}`,
+        };
+        const groqBody: Record<string, unknown> = {
+          model: groqFallback.model || 'openai/gpt-oss-120b',
+          messages: compactMessagesForTokenCap(messages, 20000),
+          temperature: body['temperature'],
+        };
+        if (options?.max_tokens) {
+          groqBody['max_tokens'] = Math.min(options.max_tokens, 6000);
+        }
+        if (jsonMode) {
+          groqBody['response_format'] = { type: 'json_object' };
+        }
+        const groqRes = await fetchWithProxyFallback(
+          groqUrl,
+          {
+            method: 'POST',
+            headers: groqHeaders,
+            body: JSON.stringify(groqBody),
+            signal: controller.signal,
+          },
+          groqBody
+        );
+        if (groqRes.ok) {
+          response = groqRes;
+        }
+      }
     }
 
     clearTimeout(timer);
@@ -1036,6 +1331,11 @@ export async function queryAICompletion(
         // text fallback
       }
 
+      if (response.status === 402) {
+        throw new Error(
+          `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Cambia a Google Gemini, Cerebras (1M tokens/día gratis) o Groq en Configurar IA.`
+        );
+      }
       if (response.status === 401) {
         throw new Error(
           `Error de autenticación (HTTP 401): Clave de API no válida o expirada. ${detail ? `(${detail})` : ''}`
