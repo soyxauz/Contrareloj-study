@@ -115,19 +115,8 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
         const val = localStorage.getItem(k);
         if (val) {
           if (!isCurrentKit && (val.length > 6000 || val.includes('data:image/') || val.includes('data:application/pdf'))) {
-            // Respaldar en IndexedDB de forma segura antes de desalojar de LocalStorage
-            try {
-              const req = indexedDB.open('TheaPlusDB');
-              req.onsuccess = () => {
-                try {
-                  const db = req.result;
-                  if (db.objectStoreNames.contains('sessions')) {
-                    const tx = db.transaction('sessions', 'readwrite');
-                    tx.objectStore('sessions').put({ key: k, value: JSON.parse(val), updatedAt: Date.now() });
-                  }
-                } catch {}
-              };
-            } catch {}
+            // Respaldar en IndexedDB ('TheaStorageDB' -> 'persistent_session') antes de desalojar de LocalStorage
+            backupSessionToStorageDB(k, val);
             keysToRemove.push(k);
             continue;
           }
@@ -187,22 +176,100 @@ export function recoverAndPurgeCorruptedKeys(): void {
         const targetUserId = userMatch ? userMatch[1] : 'guest';
         const canonicalKey = `${prefix}${targetUserId}_${cleanKitId}`;
 
-        // Guardar asíncronamente en IndexedDB sin saturar LocalStorage
-        try {
-          const req = indexedDB.open('TheaPlusDB');
-          req.onsuccess = () => {
-            try {
-              const db = req.result;
-              if (db.objectStoreNames.contains('sessions')) {
-                const tx = db.transaction('sessions', 'readwrite');
-                let parsedVal = val;
-                try { parsedVal = JSON.parse(val); } catch {}
-                tx.objectStore('sessions').put({ key: canonicalKey, value: parsedVal, updatedAt: Date.now() });
-              }
-            } catch {}
-          };
-        } catch {}
+        // Respaldar en IndexedDB ('TheaStorageDB') solo si no existe un progreso canónico más reciente
+        backupSessionToStorageDB(canonicalKey, val);
       } catch {}
     }
+
+    // Purgar también claves corruptas residuales dentro de IndexedDB ('TheaStorageDB' / 'persistent_session')
+    purgeCorruptedKeysFromStorageDB();
   } catch {}
+}
+
+function getSessionFreshnessRank(val: any): number {
+  if (!val || typeof val !== 'object') return 0;
+  return Math.max(Number(val.lastUpdated) || 0, Number(val.resetAt) || 0);
+}
+
+function openTheaStorageDB(onReady: (db: IDBDatabase) => void): void {
+  if (typeof indexedDB === 'undefined') return;
+  try {
+    const req = indexedDB.open('TheaStorageDB', 2);
+    req.onupgradeneeded = () => {
+      try {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('assets')) {
+          db.createObjectStore('assets', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('persistent_session')) {
+          db.createObjectStore('persistent_session', { keyPath: 'key' });
+        }
+      } catch {}
+    };
+    req.onsuccess = () => {
+      try {
+        onReady(req.result);
+      } catch {}
+    };
+  } catch {}
+}
+
+function backupSessionToStorageDB(targetKey: string, rawVal: string | any): void {
+  openTheaStorageDB((db) => {
+    if (!db.objectStoreNames.contains('persistent_session')) return;
+    let parsedVal = rawVal;
+    if (typeof rawVal === 'string') {
+      try { parsedVal = JSON.parse(rawVal); } catch {}
+    }
+    const tx = db.transaction('persistent_session', 'readwrite');
+    const store = tx.objectStore('persistent_session');
+    const getReq = store.get(targetKey);
+    getReq.onsuccess = () => {
+      try {
+        const existing = getReq.result?.value;
+        if (existing && getSessionFreshnessRank(existing) > getSessionFreshnessRank(parsedVal)) {
+          return;
+        }
+        store.put({ key: targetKey, value: parsedVal, updatedAt: Date.now() });
+      } catch {}
+    };
+  });
+}
+
+function purgeCorruptedKeysFromStorageDB(): void {
+  openTheaStorageDB((db) => {
+    if (!db.objectStoreNames.contains('persistent_session')) return;
+    const tx = db.transaction('persistent_session', 'readwrite');
+    const store = tx.objectStore('persistent_session');
+    const getAllReq = store.getAll();
+    getAllReq.onsuccess = () => {
+      try {
+        const items = getAllReq.result as Array<{ key: string; value: any }>;
+        if (!Array.isArray(items)) return;
+        const validByKey = new Map<string, any>();
+        for (const item of items) {
+          if (item?.key && !isCorruptedStorageKey(item.key)) {
+            validByKey.set(item.key, item.value);
+          }
+        }
+        for (const item of items) {
+          if (!item?.key || !isCorruptedStorageKey(item.key)) continue;
+          const cleanKitId = extractCleanKitId(item.key);
+          if (cleanKitId && item.value) {
+            let prefix = 'thea_ss_mem_';
+            if (item.key.startsWith('thea_fc_mem_')) prefix = 'thea_fc_mem_';
+            else if (item.key.startsWith('thea_revealed_q_')) prefix = 'thea_revealed_q_';
+            const userMatch = item.key.match(/(usr_g_\d+|usr_\d+_[a-zA-Z0-9]+|usr_[a-zA-Z0-9_-]+|guest)/);
+            const canonicalKey = `${prefix}${userMatch ? userMatch[1] : 'guest'}_${cleanKitId}`;
+            const existingCanonical = validByKey.get(canonicalKey);
+            if (!existingCanonical || getSessionFreshnessRank(item.value) > getSessionFreshnessRank(existingCanonical)) {
+              validByKey.set(canonicalKey, item.value);
+              store.put({ key: canonicalKey, value: item.value, updatedAt: Date.now() });
+            }
+          }
+          store.delete(item.key);
+        }
+      } catch {}
+    };
+  });
 }

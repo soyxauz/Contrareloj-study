@@ -1573,6 +1573,24 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const sessionTimestampRef = useRef<number>(savedSession?.lastUpdated || 0);
   const hasMountedSaveCycleRef = useRef(false);
   const hasPendingLocalChangeRef = useRef(false);
+  const hasUnflushedDriveSyncRef = useRef(false);
+  const lastSavedSignatureRef = useRef<string>('');
+  const currentSessionSignature = [
+    kit.id,
+    currentIndex,
+    level,
+    activePracticeLevel,
+    currentQ?.id || '',
+    isAnswered ? '1' : '0',
+    isCurrentCorrect === null ? 'n' : String(isCurrentCorrect),
+    levelCorrectCount,
+    questionsAnsweredTotal,
+    errorQueue.length,
+    isReinforcementMode ? '1' : '0',
+    answeredQuestionIdsRef.current.size,
+    activeTab,
+    revealedQuestionIds.length,
+  ].join('|');
 
   latestSessionRef.current = {
     currentIndex,
@@ -1614,24 +1632,38 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
-      if (hasPendingLocalChangeRef.current && latestSessionRef.current && kit?.id) {
+      const snapshot = latestSessionRef.current;
+      const hasValidQuestion = Boolean(
+        snapshot?.currentQuestionId && snapshot.currentQuestionId !== 'thea-placeholder-loading'
+      );
+      if (hasPendingLocalChangeRef.current && snapshot && kit?.id && hasValidQuestion) {
         hasPendingLocalChangeRef.current = false;
-        authService.saveSmartStudySession(userId || null, kit.id, latestSessionRef.current);
-        if (userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
-          googleDriveService.flushProgressSync(userId);
-        }
+        authService.saveSmartStudySession(userId || null, kit.id, snapshot);
+      }
+      if (hasUnflushedDriveSyncRef.current && userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
+        hasUnflushedDriveSyncRef.current = false;
+        googleDriveService.flushProgressSync(userId);
       }
     };
   }, [userId, kit?.id]);
 
   // ── Auto-Save Session Memory (Con debounce suave de 600ms para evitar saturación de CPU y GC) ──
   useEffect(() => {
-    if (!hasMountedSaveCycleRef.current) {
-      hasMountedSaveCycleRef.current = true;
+    if (!kit?.questions || kit.questions.length === 0 || !currentQ || currentQ.id === 'thea-placeholder-loading') {
       return;
     }
+    if (!hasMountedSaveCycleRef.current) {
+      hasMountedSaveCycleRef.current = true;
+      lastSavedSignatureRef.current = currentSessionSignature;
+      return;
+    }
+    if (currentSessionSignature === lastSavedSignatureRef.current) {
+      return;
+    }
+    lastSavedSignatureRef.current = currentSessionSignature;
     sessionTimestampRef.current = Date.now();
     hasPendingLocalChangeRef.current = true;
+    hasUnflushedDriveSyncRef.current = true;
     if (latestSessionRef.current) {
       latestSessionRef.current.lastUpdated = sessionTimestampRef.current;
     }
@@ -1639,7 +1671,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       clearTimeout(autoSaveTimerRef.current);
     }
     autoSaveTimerRef.current = setTimeout(() => {
-      if (kit?.id && latestSessionRef.current) {
+      if (kit?.id && latestSessionRef.current && latestSessionRef.current.currentQuestionId !== 'thea-placeholder-loading') {
+        hasPendingLocalChangeRef.current = false;
         authService.saveSmartStudySession(userId || null, kit.id, latestSessionRef.current);
       }
     }, 600);
@@ -2315,6 +2348,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       setCurrentQuestion(nextQ);
       lastQId.current = nextQ.id;
 
+      const nextSavedAt = Date.now();
+      sessionTimestampRef.current = nextSavedAt;
+      hasPendingLocalChangeRef.current = false;
+      hasUnflushedDriveSyncRef.current = true;
+
       const nextSession: any = {
         ...(latestSessionRef.current || {}),
         currentIndex: currentIndex + 1,
@@ -2339,7 +2377,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         questionsAnsweredTotal,
         totalErrorsReinforced,
         answeredQuestionIds: Array.from(answeredQuestionIdsRef.current),
-        lastUpdated: Date.now(),
+        lastUpdated: nextSavedAt,
       };
       latestSessionRef.current = nextSession;
       authService.saveSmartStudySession(userId || null, kit.id, nextSession);

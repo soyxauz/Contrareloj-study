@@ -111,6 +111,44 @@ function saveStoredUsers(users: StoredUserRecord[]): void {
 
 const inMemorySessionCache = new Map<string, SmartStudySessionState>();
 
+function getSessionProgressRank(s: SmartStudySessionState): number {
+  const ansCount = Array.isArray((s as any).answeredQuestionIds) ? (s as any).answeredQuestionIds.length : 0;
+  const histCount = Array.isArray(s.history) ? s.history.length : 0;
+  return (s.level || 1) * 1000 + (s.levelCorrectCount || 0) * 10 + ansCount + histCount + (s.currentIndex || 0);
+}
+
+/**
+ * Compara dos instantáneas de sesión para determinar si `candidate` debe prevalecer sobre `baseline`.
+ * Evita que copias antiguas de IndexedDB o caché en memoria sobreescriban progreso local más reciente.
+ */
+function isSessionNewerOrBetter(
+  candidate: SmartStudySessionState,
+  baseline: SmartStudySessionState | null | undefined
+): boolean {
+  if (!baseline) return true;
+  const candReset = (candidate as any).resetAt || 0;
+  const baseReset = (baseline as any).resetAt || 0;
+  const candUpdated = candidate.lastUpdated || 0;
+  const baseUpdated = baseline.lastUpdated || 0;
+
+  if (candReset > baseReset && candReset >= baseUpdated) return true;
+  if (baseReset > candReset && baseReset >= candUpdated) return false;
+  if (candUpdated !== baseUpdated) return candUpdated > baseUpdated;
+
+  return getSessionProgressRank(candidate) > getSessionProgressRank(baseline);
+}
+
+function readLocalStorageSmartStudySession(key: string): SmartStudySessionState | null {
+  if (typeof localStorage === 'undefined' || !key || isCorruptedStorageKey(key)) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return sanitizeSmartStudySession(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Valida y calibra la sesión de Smart Study para garantizar que siempre refleje el nivel real y exacto.
  * Invariante pedagógico de Smart Study:
@@ -470,45 +508,58 @@ export const authService = {
       if (!kitId) return null;
       const userKey = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
 
-      if (inMemorySessionCache.has(userKey)) {
-        return inMemorySessionCache.get(userKey)!;
+      const cachedUser = inMemorySessionCache.get(userKey) || null;
+      const lsUser = readLocalStorageSmartStudySession(userKey);
+      let best: SmartStudySessionState | null = cachedUser;
+      if (lsUser && isSessionNewerOrBetter(lsUser, best)) {
+        inMemorySessionCache.set(userKey, lsUser);
+        best = lsUser;
       }
 
-      let raw = localStorage.getItem(userKey);
-      if (!raw && userId && userId !== 'guest') {
+      if (!best && userId && userId !== 'guest') {
         const guestKey = `thea_ss_mem_guest_${kitId}`;
-        if (inMemorySessionCache.has(guestKey)) {
-          return inMemorySessionCache.get(guestKey)!;
+        const cachedGuest = inMemorySessionCache.get(guestKey) || null;
+        const lsGuest = readLocalStorageSmartStudySession(guestKey);
+        let guestBest = cachedGuest;
+        if (lsGuest && isSessionNewerOrBetter(lsGuest, guestBest)) {
+          inMemorySessionCache.set(guestKey, lsGuest);
+          guestBest = lsGuest;
         }
-        raw = localStorage.getItem(guestKey);
+        best = guestBest;
       }
 
-      // Fallback difuso: buscar cualquier clave de sesion que coincida con este kitId
-      if (!raw && typeof localStorage !== 'undefined') {
+      // Fallback difuso: buscar la sesión válida más reciente que coincida con el sufijo del kit
+      if (!best && typeof localStorage !== 'undefined') {
         const suffix = `_${kitId}`;
         for (const [cacheKey, cachedSession] of inMemorySessionCache.entries()) {
-          if (cacheKey.startsWith('thea_ss_mem_') && cacheKey.endsWith(suffix) && cachedSession) {
-            inMemorySessionCache.set(userKey, cachedSession);
-            return cachedSession;
+          if (
+            cacheKey.startsWith('thea_ss_mem_') &&
+            cacheKey.endsWith(suffix) &&
+            !isCorruptedStorageKey(cacheKey) &&
+            cachedSession &&
+            isSessionNewerOrBetter(cachedSession, best)
+          ) {
+            best = sanitizeSmartStudySession(cachedSession) || cachedSession;
           }
         }
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
           if (k && k.startsWith('thea_ss_mem_') && k.endsWith(suffix) && !isCorruptedStorageKey(k)) {
-            raw = localStorage.getItem(k);
-            if (raw) break;
+            const candidate = readLocalStorageSmartStudySession(k);
+            if (candidate && isSessionNewerOrBetter(candidate, best)) {
+              best = candidate;
+            }
           }
         }
+        if (best) {
+          inMemorySessionCache.set(userKey, best);
+        }
       }
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      const sanitized = sanitizeSmartStudySession(parsed);
+
+      if (!best) return null;
+      const sanitized = sanitizeSmartStudySession(best);
       if (sanitized) {
         inMemorySessionCache.set(userKey, sanitized);
-        if (sanitized.level !== parsed.level || sanitized.levelCorrectCount !== parsed.levelCorrectCount) {
-          safeLocalStorageSetItem(userKey, JSON.stringify(sanitized));
-          saveSessionItem(userKey, sanitized).catch(() => {});
-        }
       }
       return sanitized;
     } catch (e) {
@@ -555,40 +606,57 @@ export const authService = {
       for (const item of items) {
         if (!item || !item.key || !item.value) continue;
 
+        // Purgar cualquier clave corrupta residual en IndexedDB sin restaurarla jamás
+        if (isCorruptedStorageKey(item.key)) {
+          removeSessionItem(item.key).catch(() => {});
+          continue;
+        }
+
         if (item.key.startsWith('thea_ss_mem_')) {
           const rawVal = typeof item.value === 'string' ? JSON.parse(item.value) : item.value;
           const sanitized = sanitizeSmartStudySession(rawVal);
           if (sanitized) {
-            inMemorySessionCache.set(item.key, sanitized);
-            const activeKitId = typeof localStorage !== 'undefined'
-              ? (localStorage.getItem('thea_current_kit_id') || localStorage.getItem('thea_currentkit_id') || '')
-              : '';
-            const isActive = Boolean(activeKitId && item.key.includes(activeKitId));
-            if (isActive && typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
-              const cleanCurrentQ = sanitized.currentQuestion ? {
-                ...sanitized.currentQuestion,
-                sourceAsset: sanitized.currentQuestion.sourceAsset ? {
-                  id: sanitized.currentQuestion.sourceAsset.id,
-                  type: sanitized.currentQuestion.sourceAsset.type,
-                  caption: sanitized.currentQuestion.sourceAsset.caption,
-                  pageOrSlide: sanitized.currentQuestion.sourceAsset.pageOrSlide,
-                  contextNearby: sanitized.currentQuestion.sourceAsset.contextNearby,
-                } : undefined
-              } : undefined;
-              const compact = {
-                ...sanitized,
-                currentQuestion: cleanCurrentQ,
-                history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 15) : [],
-              };
-              safeLocalStorageSetItem(item.key, JSON.stringify(compact));
+            const existingMem = inMemorySessionCache.get(item.key) || null;
+            const existingLs = readLocalStorageSmartStudySession(item.key);
+            const currentBest = (existingLs && isSessionNewerOrBetter(existingLs, existingMem))
+              ? existingLs
+              : (existingMem || existingLs);
+
+            if (currentBest && !isSessionNewerOrBetter(sanitized, currentBest)) {
+              inMemorySessionCache.set(item.key, currentBest);
+              saveSessionItem(item.key, currentBest).catch(() => {});
+            } else {
+              inMemorySessionCache.set(item.key, sanitized);
+              const activeKitId = typeof localStorage !== 'undefined'
+                ? (localStorage.getItem('thea_current_kit_id') || localStorage.getItem('thea_currentkit_id') || '')
+                : '';
+              const isActive = Boolean(activeKitId && item.key.endsWith(`_${activeKitId}`));
+              if (isActive && typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
+                const cleanCurrentQ = sanitized.currentQuestion ? {
+                  ...sanitized.currentQuestion,
+                  sourceAsset: sanitized.currentQuestion.sourceAsset ? {
+                    id: sanitized.currentQuestion.sourceAsset.id,
+                    type: sanitized.currentQuestion.sourceAsset.type,
+                    caption: sanitized.currentQuestion.sourceAsset.caption,
+                    pageOrSlide: sanitized.currentQuestion.sourceAsset.pageOrSlide,
+                    contextNearby: sanitized.currentQuestion.sourceAsset.contextNearby,
+                  } : undefined
+                } : undefined;
+                const compact = {
+                  ...sanitized,
+                  currentQuestion: cleanCurrentQ,
+                  history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 15) : [],
+                };
+                safeLocalStorageSetItem(item.key, JSON.stringify(compact));
+              }
+              restoredCount++;
             }
-            restoredCount++;
           }
         } else if (item.key.startsWith('thea_fc_mem_')) {
           const activeKitId = typeof localStorage !== 'undefined'
             ? (localStorage.getItem('thea_current_kit_id') || localStorage.getItem('thea_currentkit_id') || '')
             : '';
-          const isActive = Boolean(activeKitId && item.key.includes(activeKitId));
+          const isActive = Boolean(activeKitId && item.key.endsWith(`_${activeKitId}`));
           if (isActive && typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
             const valStr = typeof item.value === 'string' ? item.value : JSON.stringify(item.value);
             safeLocalStorageSetItem(item.key, valStr);
@@ -598,7 +666,6 @@ export const authService = {
       }
 
       if (restoredCount > 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('thea_session_saved', { detail: { restoredCount } }));
         window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { restoredCount } }));
       }
 
@@ -681,12 +748,12 @@ export const authService = {
     const targetUserId = userId || 'guest';
     const prefix = `thea_ss_mem_${targetUserId}_`;
 
-    // 1. Incorporar primero lo presente en inMemorySessionCache (hidratado desde IndexedDB)
+    // 1. Incorporar lo presente en inMemorySessionCache ignorando claves corruptas o anidadas
     for (const [k, session] of inMemorySessionCache.entries()) {
       if (k.startsWith(prefix) && !isCorruptedStorageKey(k) && session) {
         const rawKitId = k.substring(prefix.length);
         const kitId = extractCleanKitId(rawKitId);
-        if (kitId) {
+        if (kitId && rawKitId === kitId && isSessionNewerOrBetter(session, result[kitId])) {
           result[kitId] = session;
         }
       }
@@ -694,6 +761,7 @@ export const authService = {
 
     if (typeof localStorage === 'undefined') return result;
 
+    // 2. Conciliar con LocalStorage preservando siempre la instantánea más reciente
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key) continue;
@@ -701,14 +769,12 @@ export const authService = {
       if (key.startsWith(prefix) && !isCorruptedStorageKey(key)) {
         const rawKitId = key.substring(prefix.length);
         const kitId = extractCleanKitId(rawKitId);
-        if (!kitId || result[kitId]) continue;
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const sanitized = sanitizeSmartStudySession(JSON.parse(raw));
-            if (sanitized) result[kitId] = sanitized;
-          }
-        } catch {}
+        if (!kitId || rawKitId !== kitId) continue;
+        const sanitized = readLocalStorageSmartStudySession(key);
+        if (sanitized && isSessionNewerOrBetter(sanitized, result[kitId])) {
+          result[kitId] = sanitized;
+          inMemorySessionCache.set(key, sanitized);
+        }
       }
     }
     return result;
@@ -716,7 +782,7 @@ export const authService = {
 
   /**
    * Obtiene TODAS las sesiones de Smart Study combinando RAM, LocalStorage e IndexedDB,
-   * evitando perder avance de kits inactivos que hayan sido desalojados de LocalStorage.
+   * evitando perder avance de kits inactivos y protegiendo la sesión más reciente contra copias obsoletas.
    */
   async getAllSmartStudySessionsAsync(userId: string | null): Promise<Record<string, SmartStudySessionState>> {
     const result = this.getAllSmartStudySessions(userId);
@@ -725,13 +791,20 @@ export const authService = {
     try {
       const idbMap = await getSessionItemsByPrefix<SmartStudySessionState>(prefix);
       for (const [rawKitId, rawSession] of Object.entries(idbMap)) {
+        const fullKey = `${prefix}${rawKitId}`;
+        if (isCorruptedStorageKey(fullKey)) {
+          removeSessionItem(fullKey).catch(() => {});
+          continue;
+        }
         const kitId = extractCleanKitId(rawKitId);
-        if (!kitId || !rawSession) continue;
+        if (!kitId || rawKitId !== kitId || !rawSession) continue;
         const sanitized = sanitizeSmartStudySession(rawSession);
         if (!sanitized) continue;
-        inMemorySessionCache.set(`${prefix}${kitId}`, sanitized);
-        const existing = result[kitId];
-        if (!existing || (sanitized.lastUpdated || 0) > (existing.lastUpdated || 0) || (sanitized.resetAt || 0) > (existing.resetAt || 0)) {
+
+        const canonicalKey = `${prefix}${kitId}`;
+        const existing = result[kitId] || inMemorySessionCache.get(canonicalKey) || readLocalStorageSmartStudySession(canonicalKey);
+        if (!existing || isSessionNewerOrBetter(sanitized, existing)) {
+          inMemorySessionCache.set(canonicalKey, sanitized);
           result[kitId] = sanitized;
         }
       }
@@ -903,8 +976,36 @@ export const authService = {
       return 0;
     });
 
-    // Determinar cuál sesión tenía el contexto activo más reciente para cursor y estado de pregunta actual
-    const isIncomingMoreRecent = incomingLastUpdated > localLastUpdated && !localClearlyNewer;
+    const mergedAnsweredIds = Array.from(new Set([
+      ...((localSession as any).answeredQuestionIds || []),
+      ...((sanitizedIncoming as any).answeredQuestionIds || []),
+      ...mergedHistory.map((h: any) => h.questionId).filter(Boolean)
+    ]));
+    const mergedAnsweredSet = new Set(mergedAnsweredIds);
+
+    // Determinar cuál sesión tenía el contexto activo más reciente para cursor y estado de pregunta actual,
+    // protegiendo contra cursores obsoletos o rebotes que apunten a una pregunta ya superada localmente.
+    let isIncomingMoreRecent = incomingLastUpdated > localLastUpdated && !localClearlyNewer;
+    if (isIncomingMoreRecent && localResetAt === incomingResetAt) {
+      const localProgress = getSessionProgressRank(localSession);
+      const incomingProgress = getSessionProgressRank(sanitizedIncoming);
+      const incomingQId = sanitizedIncoming.currentQuestionId || sanitizedIncoming.currentQuestion?.id;
+      const localQId = localSession.currentQuestionId || localSession.currentQuestion?.id;
+      const incomingPointsToAlreadyAnswered = Boolean(
+        incomingQId &&
+        mergedAnsweredSet.has(incomingQId) &&
+        !sanitizedIncoming.isAnswered &&
+        localQId &&
+        !mergedAnsweredSet.has(localQId)
+      );
+      if (
+        incomingPointsToAlreadyAnswered ||
+        (!incomingClearlyNewer && localProgress > incomingProgress)
+      ) {
+        isIncomingMoreRecent = false;
+      }
+    }
+
     const activeContext = isIncomingMoreRecent ? sanitizedIncoming : localSession;
     const latestResetAt = Math.max(localResetAt, incomingResetAt);
 
@@ -918,11 +1019,7 @@ export const authService = {
         3: finalLevel === 3 ? mergedL3 : 0,
       },
       revealedQuestionIds: mergedRevealed,
-      answeredQuestionIds: Array.from(new Set([
-        ...((localSession as any).answeredQuestionIds || []),
-        ...((sanitizedIncoming as any).answeredQuestionIds || []),
-        ...mergedHistory.map((h: any) => h.questionId).filter(Boolean)
-      ])),
+      answeredQuestionIds: mergedAnsweredIds,
       history: mergedHistory.slice(0, 50),
       questionsAnsweredTotal: Math.max(
         localSession.questionsAnsweredTotal || 0,
@@ -943,15 +1040,18 @@ export const authService = {
   saveAllSmartStudySessions(userId: string | null, sessions: Record<string, SmartStudySessionState>, revealedQuestions?: Record<string, string[]>): void {
     if (!sessions || typeof sessions !== 'object') return;
 
-    for (const [kitId, session] of Object.entries(sessions)) {
-      if (session && typeof session === 'object') {
+    for (const [rawKitId, session] of Object.entries(sessions)) {
+      if (isCorruptedStorageKey(`thea_ss_mem_${userId || 'guest'}_${rawKitId}`)) continue;
+      const kitId = extractCleanKitId(rawKitId);
+      if (kitId && session && typeof session === 'object') {
         this.mergeSmartStudySession(userId, kitId, session);
       }
     }
 
     if (revealedQuestions && typeof revealedQuestions === 'object') {
-      for (const [kitId, ids] of Object.entries(revealedQuestions)) {
-        if (Array.isArray(ids)) {
+      for (const [rawKitId, ids] of Object.entries(revealedQuestions)) {
+        const kitId = extractCleanKitId(rawKitId);
+        if (kitId && Array.isArray(ids)) {
           const current = this.getRevealedQuestionIds(userId, kitId);
           const union = Array.from(new Set([...current, ...ids]));
           const key = `thea_revealed_q_${userId || 'guest'}_${kitId}`;
