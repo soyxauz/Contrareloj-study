@@ -40,96 +40,6 @@ export interface AIPreset {
 
 export const AI_PRESETS: AIPreset[] = [
   {
-    id: 'gemini',
-    name: 'Google Gemini',
-    provider: 'openai-compatible',
-    role: 'general',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    model: 'gemini-2.5-flash',
-    keyPlaceholder: 'AIzaSy... (clave gratuita de Google AI Studio)',
-    keyUrl: 'https://aistudio.google.com/apikey',
-    description: 'Gran contexto (1M tokens) y cuota gratuita renovada a diario para documentos extensos y podcasts.',
-    limitSummary: 'Gratis sin tarjeta: 250K tokens/min • 500 req/día • 1M contexto',
-    suggestedModels: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'],
-    badge: '1M Contexto Gratis',
-    freeTier: true,
-  },
-  {
-    id: 'cerebras',
-    name: 'Cerebras Cloud',
-    provider: 'openai-compatible',
-    role: 'general',
-    baseUrl: 'https://api.cerebras.ai/v1',
-    model: 'gpt-oss-120b',
-    keyPlaceholder: 'csk-... (clave gratuita de cloud.cerebras.ai)',
-    keyUrl: 'https://cloud.cerebras.ai',
-    description: 'Cuota diaria muy amplia y velocidad extrema (~2,000-3,000 tok/s) para generar kits y preguntas.',
-    limitSummary: 'Gratis sin tarjeta: 1,000,000 tokens/día • ~30 RPM',
-    suggestedModels: ['gpt-oss-120b', 'qwen-3.8-27b'],
-    badge: '1M Tokens/Día',
-    freeTier: true,
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral AI',
-    provider: 'openai-compatible',
-    role: 'general',
-    baseUrl: 'https://api.mistral.ai/v1',
-    model: 'mistral-small-latest',
-    keyPlaceholder: 'Clave gratuita de console.mistral.ai/api-keys',
-    keyUrl: 'https://console.mistral.ai/api-keys',
-    description: 'Plan Experiment gratuito sin tarjeta con buena capacidad por minuto para español y JSON estructurado.',
-    limitSummary: 'Gratis sin tarjeta: ~500K tokens/min • 256K contexto',
-    suggestedModels: ['mistral-small-latest', 'mistral-medium-latest'],
-    badge: '500K TPM Gratis',
-    freeTier: true,
-  },
-  {
-    id: 'groq-general',
-    name: 'Groq Cloud (General)',
-    provider: 'openai-compatible',
-    role: 'general',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    model: 'llama-3.3-70b-versatile',
-    keyPlaceholder: 'gsk_... (clave gratuita de console.groq.com/keys)',
-    keyUrl: 'https://console.groq.com/keys',
-    description: 'Inferencia LPU gratuita muy veloz; usa modelos ligeros como 8b-instant para hasta 14,400 req/día.',
-    limitSummary: 'Gratis sin tarjeta: hasta 14.4K req/día (8B) o 1K req/día (70B)',
-    suggestedModels: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b'],
-    badge: 'Hasta 14.4K RPD',
-    freeTier: true,
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter (:free)',
-    provider: 'openai-compatible',
-    role: 'general',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'meta-llama/llama-3.3-70b-instruct:free',
-    keyPlaceholder: 'sk-or-v1-... (clave de openrouter.ai/keys)',
-    keyUrl: 'https://openrouter.ai/keys',
-    description: 'Acceso unificado a modelos gratuitos :free diarios (Llama, DeepSeek, Qwen, Gemma).',
-    limitSummary: 'Modelos :free diarios (20 RPM • sin tarjeta)',
-    suggestedModels: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'],
-    badge: 'Multi-Modelo',
-    freeTier: true,
-  },
-  {
-    id: 'ollama-local',
-    name: 'Ollama Local (Tu PC)',
-    provider: 'ollama',
-    role: 'general',
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'gemma4:31b',
-    keyPlaceholder: 'No requiere clave en localhost',
-    keyUrl: 'https://ollama.com/download',
-    description: '100% gratis e ilimitado ejecutando modelos directamente en tu computadora sin cuotas externas.',
-    limitSummary: 'Tokens 100% ilimitados en hardware local (http://localhost:11434)',
-    suggestedModels: ['gemma4:31b', 'qwen3:8b', 'llama3.2:latest'],
-    badge: '100% Ilimitado',
-    freeTier: true,
-  },
-  {
     id: 'ollama-cloud',
     name: 'Ollama Cloud',
     provider: 'openai-compatible',
@@ -138,15 +48,14 @@ export const AI_PRESETS: AIPreset[] = [
     model: 'gemma4:31b',
     keyPlaceholder: 'Pega tu clave de API de https://ollama.com/settings/keys',
     keyUrl: 'https://ollama.com/settings/keys',
-    description: 'Servicio de Ollama en la nube (funciona con saldo/créditos activos en ollama.com/plans).',
-    limitSummary: 'Limitado a los créditos de uso de tu cuenta en ollama.com/plans',
+    description: 'Motor general predeterminado para generacion de kits, Chat Tutor, Smart Study, flashcards y examenes.',
     suggestedModels: ['gemma4:31b', 'gpt-oss:120b'],
-    badge: 'Créditos Nube',
-    freeTier: false,
+    badge: 'Motor General',
+    freeTier: true,
   },
   {
     id: 'groq',
-    name: 'Groq / xAI Grok (Motor Oral)',
+    name: 'Groq Cloud (Motor de Voz)',
     provider: 'openai-compatible',
     role: 'oral',
     baseUrl: 'https://api.groq.com/openai/v1',
@@ -154,7 +63,6 @@ export const AI_PRESETS: AIPreset[] = [
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
     description: 'Motor oral de voz ultra acelerado para Lección Oral, Whisper y Conversación interactiva.',
-    limitSummary: 'Dedicado a Lección Oral y respaldo ante HTTP 402 en estudio general',
     suggestedModels: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'grok-2-mini'],
     badge: 'Motor de Voz Exclusivo',
     freeTier: true,
@@ -167,6 +75,10 @@ const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 /** Detecta claves conocidas expiradas o revocadas de Groq */
 export const isRevokedGroqKey = (k?: string | null): boolean =>
   !k || k === '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';
+
+export const DEFAULT_OLLAMA_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_OLLAMA_API_KEY)
+  ? String((import.meta as any).env.VITE_OLLAMA_API_KEY).trim()
+  : '';
 
 export const DEFAULT_GROQ_KEY: string = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GROQ_API_KEY)
   ? String((import.meta as any).env.VITE_GROQ_API_KEY).trim()
@@ -196,12 +108,12 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
   provider: 'openai-compatible',
   baseUrl: 'https://ollama.com/v1',
-  apiKey: '',
+  apiKey: DEFAULT_OLLAMA_KEY,
   model: 'gemma4:31b',
   timeoutMs: 45000,
-  verified: false,
+  verified: Boolean(DEFAULT_OLLAMA_KEY),
   ollamaBaseUrl: 'https://ollama.com/v1',
-  ollamaApiKey: '',
+  ollamaApiKey: DEFAULT_OLLAMA_KEY,
   ollamaModel: 'gemma4:31b',
   groqBaseUrl: 'https://api.groq.com/openai/v1',
   groqApiKey: DEFAULT_GROQ_KEY,
@@ -416,8 +328,86 @@ export function savePresetApiKey(presetId: string, key: string): void {
   } catch {}
 }
 
-/** Retorna la configuracion general de IA (admite Gemini, Cerebras, Mistral, Groq, OpenRouter, Ollama Local/Cloud o URL compatible) */
+function syncEnvOllamaKeyIfUpdated(): void {
+  if (typeof localStorage === 'undefined' || !DEFAULT_OLLAMA_KEY) return;
+  const envFingerprint = `ollama_${DEFAULT_OLLAMA_KEY.slice(0, 8)}_${DEFAULT_OLLAMA_KEY.slice(-4)}_${DEFAULT_OLLAMA_KEY.length}`;
+  try {
+    if (localStorage.getItem('thea_ollama_env_applied') === envFingerprint) {
+      return;
+    }
+
+    safeLocalStorageSetItem('thea_ollama_env_applied', envFingerprint);
+    safeLocalStorageSetItem('thea_ollama_api_key', DEFAULT_OLLAMA_KEY);
+    safeLocalStorageSetItem('thea_ollama_base_url', 'https://ollama.com/v1');
+    safeLocalStorageSetItem('thea_general_base_url', 'https://ollama.com/v1');
+    safeLocalStorageSetItem('thea_general_api_key', DEFAULT_OLLAMA_KEY);
+    safeLocalStorageSetItem('thea_preset_key_ollama-cloud', DEFAULT_OLLAMA_KEY);
+
+    const savedRaw = localStorage.getItem(STORAGE_KEY);
+    if (savedRaw) {
+      try {
+        const parsed = JSON.parse(savedRaw);
+        if (parsed && typeof parsed === 'object') {
+          parsed.baseUrl = 'https://ollama.com/v1';
+          parsed.apiKey = DEFAULT_OLLAMA_KEY;
+          parsed.ollamaBaseUrl = 'https://ollama.com/v1';
+          parsed.ollamaApiKey = DEFAULT_OLLAMA_KEY;
+          parsed.verified = true;
+          safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+      } catch {}
+    }
+
+    const sessionId = localStorage.getItem('thea_auth_session');
+    if (sessionId) {
+      const userAiKeyStorage = `thea_user_ai_settings_${sessionId}`;
+      const userAiRaw = localStorage.getItem(userAiKeyStorage);
+      if (userAiRaw) {
+        try {
+          const parsedUserAi = JSON.parse(userAiRaw);
+          if (parsedUserAi && typeof parsedUserAi === 'object') {
+            parsedUserAi.baseUrl = 'https://ollama.com/v1';
+            parsedUserAi.apiKey = DEFAULT_OLLAMA_KEY;
+            parsedUserAi.ollamaBaseUrl = 'https://ollama.com/v1';
+            parsedUserAi.ollamaApiKey = DEFAULT_OLLAMA_KEY;
+            parsedUserAi.verified = true;
+            safeLocalStorageSetItem(userAiKeyStorage, JSON.stringify(parsedUserAi));
+          }
+        } catch {}
+      }
+
+      const authUsersRaw = localStorage.getItem('thea_auth_users');
+      if (authUsersRaw) {
+        try {
+          const users = JSON.parse(authUsersRaw);
+          if (Array.isArray(users)) {
+            const idx = users.findIndex((u: any) => u && u.id === sessionId);
+            if (idx >= 0) {
+              const prevAi = users[idx].aiSettings || {};
+              users[idx].aiSettings = {
+                ...prevAi,
+                baseUrl: 'https://ollama.com/v1',
+                apiKey: DEFAULT_OLLAMA_KEY,
+                ollamaBaseUrl: 'https://ollama.com/v1',
+                ollamaApiKey: DEFAULT_OLLAMA_KEY,
+                verified: true,
+              };
+              safeLocalStorageSetItem('thea_auth_users', JSON.stringify(users));
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
+  syncEnvOllamaKeyIfUpdated();
+}
+
+/** Retorna la configuracion general de IA (Ollama Cloud) y la configuracion oral (Groq/Grok) */
 export function getAISettings(): AISettings {
+  syncEnvOllamaKeyIfUpdated();
   const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
   const ollamaKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_api_key') || '' : '';
   const directGeneralBase = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_base_url') : null;
@@ -459,7 +449,7 @@ export function getAISettings(): AISettings {
   const effectiveGeneralKey = (
     (directGeneralKey !== null ? directGeneralKey : '') ||
     legacyGeneralKey ||
-    (generalBaseUrl.includes('ollama.com') ? (ollamaKey || parsed.ollamaApiKey || '') : '')
+    (generalBaseUrl.includes('ollama.com') ? (ollamaKey || parsed.ollamaApiKey || DEFAULT_OLLAMA_KEY) : '')
   ).trim();
 
   const generalModel = (
@@ -715,7 +705,12 @@ export function saveAISettings(
 export function resetAISettingsToDefault(): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('thea_general_base_url');
-    localStorage.removeItem('thea_general_api_key');
+    if (DEFAULT_OLLAMA_KEY) {
+      safeLocalStorageSetItem('thea_general_api_key', DEFAULT_OLLAMA_KEY);
+      safeLocalStorageSetItem('thea_ollama_api_key', DEFAULT_OLLAMA_KEY);
+    } else {
+      localStorage.removeItem('thea_general_api_key');
+    }
     localStorage.removeItem('thea_general_model');
   }
   safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(DEFAULT_AI_SETTINGS));
@@ -797,6 +792,7 @@ export function saveGrokModel(model: string): void {
 }
 
 export function getOllamaApiKey(): string {
+  syncEnvOllamaKeyIfUpdated();
   if (typeof localStorage !== 'undefined') {
     const direct = localStorage.getItem('thea_ollama_api_key');
     if (direct && direct.trim().length > 0) return direct.trim();
@@ -808,7 +804,7 @@ export function getOllamaApiKey(): string {
   if (current.apiKey && current.baseUrl?.includes('ollama.com') && !current.apiKey.startsWith('gsk_') && !current.apiKey.startsWith('grok_')) {
     return current.apiKey.trim();
   }
-  return '';
+  return DEFAULT_OLLAMA_KEY;
 }
 
 export function saveOllamaApiKey(key: string): void {
@@ -983,7 +979,7 @@ export async function testAIConnection(override?: AISettings): Promise<{
   if (isGitHubPages && cleanBase.includes('ollama.com')) {
     return {
       success: false,
-      message: 'En GitHub Pages (alojamiento estático sin funciones serverless), los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Para usar Ollama Cloud en la web pública, despliega tu repositorio en Vercel o Netlify (que admiten la función serverless /api/ai-proxy ya incluida en el proyecto) o usa el preajuste de Google Gemini / Groq.',
+      message: 'En GitHub Pages (alojamiento estático sin funciones serverless), los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Para usar Ollama Cloud en la web pública, despliega tu repositorio en Vercel o Netlify (que admiten la función serverless /api/ai-proxy ya incluida en el proyecto). En localhost:5173 funciona al 100%.',
     };
   }
 
@@ -992,7 +988,7 @@ export async function testAIConnection(override?: AISettings): Promise<{
   if (!isLocal && !hasKey) {
     return {
       success: false,
-      message: 'Ingresa tu clave de API personal (Groq, Gemini, DeepSeek u OpenAI) para probar la conexión.',
+      message: 'Ingresa tu clave de API personal (Ollama Cloud o Groq) para probar la conexión.',
     };
   }
 
@@ -1093,7 +1089,7 @@ export async function testAIConnection(override?: AISettings): Promise<{
         return {
           success: false,
           message:
-            'Créditos agotados en este proveedor (HTTP 402). Agrega saldo en ollama.com/plans o elige Google Gemini, Cerebras, Mistral o Groq en la lista superior.',
+            'Créditos agotados en Ollama Cloud (HTTP 402). Agrega saldo en ollama.com/plans o pega otra clave de API en Configurar IA.',
         };
       }
       if (res.status === 401) {
@@ -1131,7 +1127,7 @@ export async function testAIConnection(override?: AISettings): Promise<{
     if (msg.includes('Failed to fetch') || msg.includes('CORS') || msg.includes('NetworkError')) {
       return {
         success: false,
-        message: `Error de política de seguridad (CORS): El proveedor en ${cleanBase} no admite conexiones directas desde navegadores web sin un servidor backend. En GitHub Pages te recomendamos usar Google Gemini o Groq (con soporte CORS para navegador). En localhost:5173 tu Ollama Cloud funciona al 100%.`,
+        message: `Error de política de seguridad (CORS): El proveedor en ${cleanBase} no admite conexiones directas desde navegadores web sin un servidor backend. En localhost:5173 Ollama Cloud funciona al 100% vía proxy local.`,
       };
     }
     return {
@@ -1175,7 +1171,7 @@ export async function queryAICompletion(
   const isGitHubPages = typeof window !== 'undefined' && window.location.hostname.includes('github.io');
   if (isGitHubPages && cleanBase.includes('ollama.com')) {
     throw new Error(
-      'En GitHub Pages, los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Despliega en Vercel o Netlify (para activar la función serverless /api/ai-proxy incluida) o selecciona Google Gemini / Cerebras / Groq.'
+      'En GitHub Pages, los navegadores bloquean llamadas directas a Ollama Cloud por seguridad CORS. Despliega en Vercel o Netlify (para activar la función serverless /api/ai-proxy incluida).'
     );
   }
 
@@ -1183,7 +1179,7 @@ export async function queryAICompletion(
 
   if (!isLocal && !hasPersonalKey) {
     throw new Error(
-      'Para generar contenido con IA necesitas configurar tu API Key personal. Abre "Configurar IA" para ingresar tu clave (Gemini, Cerebras, Mistral, Groq u Ollama local).'
+      'Para generar contenido con IA necesitas configurar tu API Key personal en "Configurar IA" (Ollama Cloud).'
     );
   }
 
@@ -1333,7 +1329,7 @@ export async function queryAICompletion(
 
       if (response.status === 402) {
         throw new Error(
-          `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Cambia a Google Gemini, Cerebras (1M tokens/día gratis) o Groq en Configurar IA.`
+          `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Agrega saldo en ollama.com/plans o actualiza tu API Key en Configurar IA.`
         );
       }
       if (response.status === 401) {
