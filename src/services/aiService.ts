@@ -1356,18 +1356,193 @@ async function runFetchAttemptWithTimeout(
   }
 }
 
-/** Ejecuta una llamada de chat completion con timeout por intento y fallback seguro */
+type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+interface QueryCompletionOptions {
+  temperature?: number;
+  max_tokens?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  onRetryWait?: (waitMs: number, status: number, attempt: number) => void;
+}
+
+function stitchContinuationText(prefix: string, suffix: string): string {
+  if (!suffix) return prefix;
+  if (!prefix) return suffix;
+
+  const cleanSuffix = suffix.replace(/^[\r\n]+(?=[a-záéíóúñ.,;:!?])/i, '');
+  const maxOverlap = Math.min(48, prefix.length, cleanSuffix.length);
+  for (let len = maxOverlap; len >= 3; len--) {
+    if (prefix.slice(-len) === cleanSuffix.slice(0, len)) {
+      return prefix + cleanSuffix.slice(len);
+    }
+  }
+  return prefix + cleanSuffix;
+}
+
+async function executeGroqAwareCompletion(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  effectiveMessages: ChatMessage[],
+  perAttemptTimeoutMs: number,
+  cleanBase: string,
+  targetModel: string,
+  targetKey: string,
+  jsonMode: boolean,
+  override?: AISettings,
+  options?: QueryCompletionOptions
+): Promise<{ rawContent: string; finishReason: string }> {
+  let response = await runFetchAttemptWithTimeout(url, headers, body, perAttemptTimeoutMs);
+
+  // Si Groq rechaza strict response_format (p. ej. json_validate_failed por LaTeX/saltos), reintentar dejando que safeParseAIJSON parsee el JSON
+  if (response.status === 400 && jsonMode && cleanBase.includes('api.groq.com')) {
+    const relaxedBody: Record<string, unknown> = { ...body };
+    delete relaxedBody['response_format'];
+    response = await runFetchAttemptWithTimeout(url, headers, relaxedBody, perAttemptTimeoutMs);
+  }
+
+  // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (8K TPM) o espera real de 429
+  if (cleanBase.includes('api.groq.com')) {
+    for (let retryIdx = 0; retryIdx < 2 && (response.status === 413 || response.status === 429); retryIdx++) {
+      const failedStatus = response.status;
+      if (failedStatus === 429) {
+        let waitMs = 2600;
+        try {
+          const cloned = response.clone();
+          const errText = await cloned.text();
+          waitMs = parseGroqRetryWaitMs(errText);
+        } catch {
+          waitMs = 2600;
+        }
+        options?.onRetryWait?.(waitMs, failedStatus, retryIdx + 1);
+        await new Promise(r => setTimeout(r, waitMs));
+      }
+
+      const compactLimit = retryIdx === 0 ? 14000 : 8000;
+      const clampedMaxTokens =
+        failedStatus === 413 && retryIdx > 0 && typeof body['max_tokens'] === 'number'
+          ? Math.min(body['max_tokens'] as number, 3072)
+          : body['max_tokens'];
+
+      const sameModelRetryBody: Record<string, unknown> = {
+        ...body,
+        model: targetModel,
+        ...(clampedMaxTokens ? { max_tokens: clampedMaxTokens } : {}),
+        ...(failedStatus === 413
+          ? { messages: compactMessagesForTokenCap(effectiveMessages, compactLimit) }
+          : {}),
+      };
+
+      response = await runFetchAttemptWithTimeout(url, headers, sameModelRetryBody, perAttemptTimeoutMs);
+    }
+  }
+
+  // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
+  if (
+    response.status >= 500 &&
+    cleanBase.includes('api.groq.com') &&
+    targetModel === 'openai/gpt-oss-120b'
+  ) {
+    const retryBody = {
+      ...body,
+      model: GROQ_FALLBACK_MODEL,
+    };
+    response = await runFetchAttemptWithTimeout(url, headers, retryBody, perAttemptTimeoutMs);
+  }
+
+  // Failover automático cuando Ollama Cloud devuelve HTTP 402 (sin créditos): usar Groq si está disponible
+  if (response.status === 402 && cleanBase.includes('ollama.com') && !override) {
+    const groqFallback = getOralAISettings();
+    const canFallbackToGroq = Boolean(
+      groqFallback.baseUrl?.includes('api.groq.com') &&
+      groqFallback.apiKey &&
+      groqFallback.apiKey.startsWith('gsk_') &&
+      !isRevokedGroqKey(groqFallback.apiKey)
+    );
+    if (canFallbackToGroq) {
+      console.warn('[aiService] Ollama Cloud HTTP 402 (sin créditos): activando respaldo automático en Groq...');
+      const groqUrl = `${normalizeOpenAIBaseUrl(groqFallback.baseUrl)}/chat/completions`;
+      const groqHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${groqFallback.apiKey.trim()}`,
+      };
+      const groqBody: Record<string, unknown> = {
+        model: groqFallback.model || 'openai/gpt-oss-120b',
+        messages: compactMessagesForTokenCap(effectiveMessages, 20000),
+        temperature: body['temperature'],
+      };
+      if (options?.max_tokens) {
+        groqBody['max_tokens'] = Math.min(options.max_tokens, 6000);
+      }
+      if (jsonMode) {
+        groqBody['response_format'] = { type: 'json_object' };
+      }
+      const groqRes = await runFetchAttemptWithTimeout(groqUrl, groqHeaders, groqBody, perAttemptTimeoutMs);
+      if (groqRes.ok) {
+        response = groqRes;
+      }
+    }
+  }
+
+  if (!response.ok) {
+    const isOralExplicit = Boolean(override && override.groqApiKey && override.apiKey === override.groqApiKey);
+    if (isOralExplicit && response.status === 401 && cleanBase.includes('api.groq.com') && targetKey !== DEFAULT_GROQ_KEY && DEFAULT_GROQ_KEY) {
+      console.warn('[aiService] Groq oral 401 detectado, auto-recuperando con DEFAULT_GROQ_KEY...');
+      if (typeof localStorage !== 'undefined') {
+        safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
+      }
+      const retryHeaders = { ...headers, Authorization: `Bearer ${DEFAULT_GROQ_KEY}` };
+      response = await runFetchAttemptWithTimeout(url, retryHeaders, body, perAttemptTimeoutMs);
+    }
+  }
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const errJson = await response.json();
+      detail = errJson.error?.message || errJson.message || '';
+    } catch {
+      // text fallback
+    }
+
+    if (response.status === 402) {
+      throw new Error(
+        `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Agrega saldo en ollama.com/plans o actualiza tu API Key en Configurar IA.`
+      );
+    }
+    if (response.status === 401) {
+      throw new Error(
+        `Error de autenticación (HTTP 401): Clave de API no válida o expirada. ${detail ? `(${detail})` : ''}`
+      );
+    }
+    if (response.status === 429) {
+      throw new Error(
+        `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada. ${detail ? `(${detail})` : ''}`
+      );
+    }
+    throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
+  }
+
+  const json = await response.json();
+  const choice = json.choices?.[0];
+  const rawContent =
+    choice?.message?.content ||
+    choice?.message?.reasoning ||
+    choice?.text ||
+    '';
+  return {
+    rawContent,
+    finishReason: String(choice?.finish_reason || 'stop'),
+  };
+}
+
+/** Ejecuta una llamada de chat completion con timeout por intento, auto-continuación ante truncamiento y fallback seguro */
 export async function queryAICompletion(
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  messages: ChatMessage[],
   jsonMode: boolean = false,
   override?: AISettings,
-  options?: {
-    temperature?: number;
-    max_tokens?: number;
-    frequency_penalty?: number;
-    presence_penalty?: number;
-    onRetryWait?: (waitMs: number, status: number, attempt: number) => void;
-  }
+  options?: QueryCompletionOptions
 ): Promise<string> {
   const settings = override || getAISettings();
   if (!settings.enabled) {
@@ -1431,151 +1606,83 @@ export async function queryAICompletion(
     body['response_format'] = { type: 'json_object' };
   }
 
-  let response = await runFetchAttemptWithTimeout(url, headers, body, perAttemptTimeoutMs);
+  const firstAttempt = await executeGroqAwareCompletion(
+    url,
+    headers,
+    body,
+    effectiveMessages,
+    perAttemptTimeoutMs,
+    cleanBase,
+    targetModel,
+    targetKey,
+    jsonMode,
+    override,
+    options
+  );
 
-  // Si Groq rechaza strict response_format (p. ej. json_validate_failed por LaTeX/saltos), reintentar dejando que safeParseAIJSON parsee el JSON
-  if (response.status === 400 && jsonMode && cleanBase.includes('api.groq.com')) {
-    const relaxedBody: Record<string, unknown> = { ...body };
-    delete relaxedBody['response_format'];
-    response = await runFetchAttemptWithTimeout(url, headers, relaxedBody, perAttemptTimeoutMs);
-  }
-
-  // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (8K TPM) o espera real de 429
-  if (cleanBase.includes('api.groq.com')) {
-    for (let retryIdx = 0; retryIdx < 2 && (response.status === 413 || response.status === 429); retryIdx++) {
-      const failedStatus = response.status;
-      if (failedStatus === 429) {
-        let waitMs = 2600;
-        try {
-          const cloned = response.clone();
-          const errText = await cloned.text();
-          waitMs = parseGroqRetryWaitMs(errText);
-        } catch {
-          waitMs = 2600;
-        }
-        options?.onRetryWait?.(waitMs, failedStatus, retryIdx + 1);
-        await new Promise(r => setTimeout(r, waitMs));
-      }
-
-      const compactLimit = retryIdx === 0 ? 14000 : 8000;
-      const clampedMaxTokens =
-        retryIdx > 0 && typeof body['max_tokens'] === 'number'
-          ? Math.min(body['max_tokens'] as number, 3072)
-          : body['max_tokens'];
-
-      const sameModelRetryBody: Record<string, unknown> = {
-        ...body,
-        model: targetModel,
-        ...(clampedMaxTokens ? { max_tokens: clampedMaxTokens } : {}),
-        ...(failedStatus === 413
-          ? { messages: compactMessagesForTokenCap(effectiveMessages, compactLimit) }
-          : {}),
-      };
-
-      response = await runFetchAttemptWithTimeout(url, headers, sameModelRetryBody, perAttemptTimeoutMs);
-    }
-  }
-
-  // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
-  if (
-    response.status >= 500 &&
-    cleanBase.includes('api.groq.com') &&
-    targetModel === 'openai/gpt-oss-120b'
-  ) {
-    const retryBody = {
-      ...body,
-      model: GROQ_FALLBACK_MODEL,
-    };
-    response = await runFetchAttemptWithTimeout(url, headers, retryBody, perAttemptTimeoutMs);
-  }
-
-  // Failover automático cuando Ollama Cloud devuelve HTTP 402 (sin créditos): usar Groq si está disponible
-  if (response.status === 402 && cleanBase.includes('ollama.com') && !override) {
-    const groqFallback = getOralAISettings();
-    const canFallbackToGroq = Boolean(
-      groqFallback.baseUrl?.includes('api.groq.com') &&
-      groqFallback.apiKey &&
-      groqFallback.apiKey.startsWith('gsk_') &&
-      !isRevokedGroqKey(groqFallback.apiKey)
-    );
-    if (canFallbackToGroq) {
-      console.warn('[aiService] Ollama Cloud HTTP 402 (sin créditos): activando respaldo automático en Groq...');
-      const groqUrl = `${normalizeOpenAIBaseUrl(groqFallback.baseUrl)}/chat/completions`;
-      const groqHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${groqFallback.apiKey.trim()}`,
-      };
-      const groqBody: Record<string, unknown> = {
-        model: groqFallback.model || 'openai/gpt-oss-120b',
-        messages: compactMessagesForTokenCap(messages, 20000),
-        temperature: body['temperature'],
-      };
-      if (options?.max_tokens) {
-        groqBody['max_tokens'] = Math.min(options.max_tokens, 6000);
-      }
-      if (jsonMode) {
-        groqBody['response_format'] = { type: 'json_object' };
-      }
-      const groqRes = await runFetchAttemptWithTimeout(groqUrl, groqHeaders, groqBody, perAttemptTimeoutMs);
-      if (groqRes.ok) {
-        response = groqRes;
-      }
-    }
-  }
-
-  if (!response.ok) {
-    const isOralExplicit = Boolean(override && override.groqApiKey && override.apiKey === override.groqApiKey);
-    if (isOralExplicit && response.status === 401 && cleanBase.includes('api.groq.com') && targetKey !== DEFAULT_GROQ_KEY && DEFAULT_GROQ_KEY) {
-      console.warn('[aiService] Groq oral 401 detectado, auto-recuperando con DEFAULT_GROQ_KEY...');
-      if (typeof localStorage !== 'undefined') {
-        safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
-      }
-      const retryHeaders = { ...headers, Authorization: `Bearer ${DEFAULT_GROQ_KEY}` };
-      response = await runFetchAttemptWithTimeout(url, retryHeaders, body, perAttemptTimeoutMs);
-    }
-  }
-
-  if (!response.ok) {
-    let detail = '';
-    try {
-      const errJson = await response.json();
-      detail = errJson.error?.message || errJson.message || '';
-    } catch {
-      // text fallback
-    }
-
-    if (response.status === 402) {
-      throw new Error(
-        `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Agrega saldo en ollama.com/plans o actualiza tu API Key en Configurar IA.`
-      );
-    }
-    if (response.status === 401) {
-      throw new Error(
-        `Error de autenticación (HTTP 401): Clave de API no válida o expirada. ${detail ? `(${detail})` : ''}`
-      );
-    }
-    if (response.status === 429) {
-      throw new Error(
-        `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada. ${detail ? `(${detail})` : ''}`
-      );
-    }
-    throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
-  }
-
-  const json = await response.json();
-  const rawContent =
-    json.choices?.[0]?.message?.content ||
-    json.choices?.[0]?.message?.reasoning ||
-    json.choices?.[0]?.text;
-  if (!rawContent) {
+  if (!firstAttempt.rawContent) {
     throw new Error('Respuesta de IA vacía recibida del proveedor.');
   }
 
   if (jsonMode) {
-    return rawContent;
+    return firstAttempt.rawContent;
   }
 
-  const withoutThink = rawContent.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim() || rawContent;
+  let accumulated = firstAttempt.rawContent;
+  let finishReason = firstAttempt.finishReason;
+
+  // Continuar automáticamente hasta completar si el modelo cortó por max_tokens (finish_reason === 'length')
+  for (let contIdx = 0; contIdx < 2 && finishReason === 'length'; contIdx++) {
+    const systemSeed = effectiveMessages.find(m => m.role === 'system');
+    const isSmallCtxModel = /allam/i.test(targetModel);
+    const tailSnippet = accumulated.slice(isSmallCtxModel ? -2500 : -7000);
+    const contMessages: ChatMessage[] = [
+      ...(systemSeed ? [{ role: 'system' as const, content: systemSeed.content }] : []),
+      {
+        role: 'assistant',
+        content: tailSnippet,
+      },
+      {
+        role: 'user',
+        content:
+          'Tu respuesta anterior quedó cortada por límite de longitud. Continúa EXACTAMENTE desde el último carácter donde quedó (incluyendo cualquier letra o cierre ** pendiente), termina la sección actual y cierra el contenido por completo. PROHIBIDO repetir lo ya redactado.',
+      },
+    ];
+
+    const contBody: Record<string, unknown> = {
+      ...body,
+      messages: contMessages,
+      ...(typeof body['max_tokens'] === 'number'
+        ? { max_tokens: Math.min(body['max_tokens'] as number, isSmallCtxModel ? 2000 : 6144) }
+        : {}),
+    };
+
+    try {
+      const nextAttempt = await executeGroqAwareCompletion(
+        url,
+        headers,
+        contBody,
+        contMessages,
+        perAttemptTimeoutMs,
+        cleanBase,
+        targetModel,
+        targetKey,
+        false,
+        override,
+        options
+      );
+      if (!nextAttempt.rawContent || nextAttempt.rawContent.trim().length === 0) {
+        break;
+      }
+      accumulated = stitchContinuationText(accumulated, nextAttempt.rawContent);
+      finishReason = nextAttempt.finishReason;
+    } catch (contErr) {
+      console.warn('[aiService] Error al continuar respuesta truncada:', contErr);
+      break;
+    }
+  }
+
+  const withoutThink = accumulated.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim() || accumulated;
   return sanitizeRepetitionLoops(withoutThink);
 }
 
@@ -2998,7 +3105,7 @@ export async function generateAIStudyGuide(
   const cleanBase = normalizeOpenAIBaseUrl(settings.baseUrl || '');
   const isGroqTier = cleanBase.includes('api.groq.com');
   const isCompactModel = isGroqTier && /allam/i.test(settings.model || '');
-  const groqInputBudget = isCompactModel ? 7000 : 10500;
+  const groqInputBudget = isCompactModel ? 4500 : 10500;
   const effectiveStudyInput = isGroqTier
     ? buildBalancedStudyExcerpt(cleanInput, groqInputBudget)
     : cleanInput;
@@ -3013,9 +3120,7 @@ export async function generateAIStudyGuide(
   ): Promise<string> => {
     onProgress?.(label, percent);
     const maxTokens = isCompactModel
-      ? Math.min(desiredMaxTokens, 2600)
-      : isGroqTier
-      ? Math.min(desiredMaxTokens, 4200)
+      ? Math.min(desiredMaxTokens, 2400)
       : desiredMaxTokens;
     try {
       return await queryAICompletion(
@@ -3083,7 +3188,7 @@ Genera la Guía de Estudio Esencial completa en español (Markdown) incluyendo t
       40,
       systemPrompt,
       userPrompt,
-      4096
+      6144
     );
     if (!res.trim() && errors.length > 0) {
       throw new Error(`No se pudo generar la Guía Esencial. ${errors[0]}`);
@@ -3125,7 +3230,7 @@ Redacta la Fase 1 de la Guía de Estudio Completa en español (Markdown). Cubre 
       25,
       phase1System,
       phase1User,
-      6144
+      8192
     );
 
     const phase2System = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
@@ -3156,7 +3261,7 @@ Redacta la Fase 2 (Tablas comparativas Markdown obligatorias, perlas de examen y
       70,
       phase2System,
       phase2User,
-      6144
+      8192
     );
 
     const parts2x = [part1.trim(), part2.trim()].filter(p => p.length > 50);
@@ -3199,7 +3304,7 @@ Redacta el Módulo 1 con máxima amplitud, rigor y tabla taxonómica Markdown en
     15,
     p1System,
     p1User,
-    6144
+    8192
   );
 
   const p2System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
@@ -3229,7 +3334,7 @@ Redacta el Módulo 2 con desarrollo exhaustivo diapositiva por diapositiva y tab
     45,
     p2System,
     p2User,
-    8192
+    10240
   );
 
   const p3System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
@@ -3260,7 +3365,7 @@ Redacta el Módulo 3 completo en español (Markdown) asegurando grandes tablas m
     80,
     p3System,
     p3User,
-    8192
+    10240
   );
 
   const sections = [mod1.trim(), mod2.trim(), mod3.trim()].filter(s => s.length > 50);
