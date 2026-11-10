@@ -15,7 +15,7 @@ export const PODCAST_FORMAT_OPTIONS: PodcastFormatOption[] = [
   {
     id: 'detailed',
     title: 'Información detallada',
-    description: 'Una animada conversación entre dos presentadores que analizan y conectan temas de tus fuentes.',
+    description: 'Diálogo profundo que conecta y explica todos los conceptos clave de tus fuentes.',
     badge: 'Recomendado',
     icon: BookOpen,
     accentColor: 'amber',
@@ -23,7 +23,7 @@ export const PODCAST_FORMAT_OPTIONS: PodcastFormatOption[] = [
   {
     id: 'brief',
     title: 'Breve',
-    description: 'Un resumen breve que sirve para que captes rápidamente las ideas principales de tus fuentes.',
+    description: 'Síntesis directa y ágil para captar lo esencial en pocos minutos.',
     badge: 'Rápido',
     icon: Zap,
     accentColor: 'blue',
@@ -31,7 +31,7 @@ export const PODCAST_FORMAT_OPTIONS: PodcastFormatOption[] = [
   {
     id: 'critique',
     title: 'Crítica',
-    description: 'Una revisión experta de tus fuentes, con comentarios constructivos para ayudarte a mejorar tu material.',
+    description: 'Evaluación analítica de tus apuntes con observaciones y matices expertos.',
     badge: 'Evaluación',
     icon: Award,
     accentColor: 'rose',
@@ -39,7 +39,7 @@ export const PODCAST_FORMAT_OPTIONS: PodcastFormatOption[] = [
   {
     id: 'debate',
     title: 'Debate',
-    description: 'Un debate reflexivo entre dos presentadores que arroja luz sobre diferentes perspectivas de tus fuentes.',
+    description: 'Contraste dinámico de posturas entre ambos presentadores sobre el material.',
     badge: 'Perspectivas',
     icon: MessageSquare,
     accentColor: 'violet',
@@ -57,19 +57,19 @@ export const PODCAST_DURATION_OPTIONS: PodcastDurationOption[] = [
   {
     id: 'short',
     title: 'Corto',
-    subtitle: '-2 minutos',
-    detail: '6 a 8 turnos rápidos (~200 palabras), ideal para un repaso ultra rápido.',
+    subtitle: '-2 min',
+    detail: '6–8 turnos ágiles (~200 palabras).',
   },
   {
     id: 'normal',
     title: 'Normal',
-    subtitle: '4 a 6 minutos',
-    detail: '14 a 18 turnos equilibrados (~700 palabras), análisis completo del tema.',
+    subtitle: '4–6 min',
+    detail: '14–18 turnos equilibrados (~700 palabras).',
   },
   {
     id: 'long',
     title: 'Largo',
-    subtitle: '10 a 30 minutos',
-    detail: 'Explicación exhaustiva y profunda (10 a 30 min, hasta 43 min máx). Desglose paso a paso sin bajar de 10 min.',
+    subtitle: '10–30 min',
+    detail: 'Desglose exhaustivo de todo el tema.',
   },
 ];
