@@ -45,6 +45,46 @@ const replaceLooseSymbols = (str: string): string => {
     .replace(/\\in\b/g, '∈');
 };
 
+const cleanPlainGapText = (str: string): string =>
+  replaceLooseSymbols(
+    str.replace(/(^|\s)\*\*(?=[^\s*])|(?<=[^\s*])\*\*(?=\s|[.,;:!?)]|$)/g, '$1')
+  );
+
+const isPlainProseLine = (trimmed: string): boolean =>
+  trimmed.length > 0 &&
+  !trimmed.includes('|') &&
+  !/^(#{1,6}\s|>|```|\$\$|\\\[|[-*•+]\s|\d+\.\s|[-*_]{3,}$)/.test(trimmed);
+
+function balanceMultilineEmphasis(str: string): string {
+  const lines = str.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!isPlainProseLine(trimmed)) continue;
+    const countI = (trimmed.match(/\*\*/g) || []).length;
+    if (countI % 2 === 0) continue;
+
+    // Buscar únicamente la siguiente línea de prosa (permitiendo a lo sumo 1 línea en blanco entre párrafo partido)
+    for (let k = i + 1, blanks = 0; k < lines.length; k++) {
+      const candTrim = lines[k].trim();
+      if (!candTrim) {
+        blanks++;
+        if (blanks > 1) break;
+        continue;
+      }
+      if (!isPlainProseLine(candTrim)) break;
+      const countK = (candTrim.match(/\*\*/g) || []).length;
+      if (countK % 2 === 1) {
+        lines[i] = `${lines[i].trimEnd()}**`;
+        lines[k] = `**${lines[k].trimStart()}`;
+        i = k;
+        break;
+      }
+      break;
+    }
+  }
+  return lines.join('\n');
+}
+
 /**
  * Parsea y renderiza texto con formato enriquecido eliminando la sintaxis cruda de Markdown (** y #)
  * y renderizando expresiones LaTeX/KaTeX completas (fórmulas, flujos lógicos con flechas y definiciones).
@@ -66,9 +106,9 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
     let match: RegExpExecArray | null;
 
     while ((match = tokenRegex.exec(str)) !== null) {
-      // Texto previo sin formato (reemplazando símbolos matemáticos sueltos si hubiese)
+      // Texto previo sin formato (reemplazando símbolos matemáticos sueltos y limpiando ** huérfanos)
       if (match.index > lastIndex) {
-        parts.push(replaceLooseSymbols(str.substring(lastIndex, match.index)));
+        parts.push(cleanPlainGapText(str.substring(lastIndex, match.index)));
       }
 
       const token = match[0];
@@ -190,18 +230,20 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
     }
 
     if (lastIndex < str.length) {
-      parts.push(replaceLooseSymbols(str.substring(lastIndex)));
+      parts.push(cleanPlainGapText(str.substring(lastIndex)));
     }
 
-    return parts.length > 0 ? parts : [replaceLooseSymbols(str)];
+    return parts.length > 0 ? parts : [cleanPlainGapText(str)];
   };
 
   if (inlineOnly) {
     return <span className={className}>{renderInline(text)}</span>;
   }
 
-  // Normalizar bloques ```markdown / ```md / ```latex accidentalmente envueltos para renderizar sus tablas y fórmulas
-  const normalizedInputText = text.replace(/```(?:markdown|md|latex)\s*\n([\s\S]*?)```/gi, '$1');
+  // Normalizar bloques ```markdown / ```md / ```latex y distribuir énfasis multi-línea (**...\n...**) por línea
+  const normalizedInputText = balanceMultilineEmphasis(
+    text.replace(/```(?:markdown|md|latex)\s*\n([\s\S]*?)```/gi, '$1')
+  );
 
   // Parseo estructurado por bloques (código, tablas, matemáticas multi-línea, encabezados, citas, listas, párrafos)
   const lines = normalizedInputText.split('\n');

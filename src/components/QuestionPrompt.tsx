@@ -15,15 +15,27 @@ export interface QuestionPromptProps {
  * garantizando que la parte importante sea negrita (font-extrabold / text-white)
  * y la contextual sea legible pero no negrita ni delgada (font-medium / text-slate-200).
  */
+function wrapMultilineBold(fragment: string): string {
+  return fragment
+    .split('\n')
+    .map((line) => {
+      const t = line.trim();
+      if (!t) return '';
+      if (/^\*\*[\s\S]+\*\*$/.test(t)) return t;
+      return `**${t}**`;
+    })
+    .join('\n');
+}
+
 function getEmphasizedQuestionMarkdown(text: string, topic?: string): string {
   if (!text) return '';
   // Sanitizar marcadores de plantilla residuales ({0}, {1}) para que nunca se muestren como código crudo
   const sanitized = text.replace(/\{(\d+)\}/g, (_m, num) => `[Espacio ${Number(num) + 1}]`);
   const trimmed = sanitized.trim();
 
-  // 1. Si el texto ya tiene negritas explícitas en Markdown (**...** o __...__), respetarlas
+  // 1. Si el texto ya tiene negritas explícitas en Markdown (**...** o __...__), balancearlas por línea si cruzan saltos de línea
   if (/\*\*[\s\S]+?\*\*|__[\s\S]+?__/.test(trimmed)) {
-    return trimmed;
+    return trimmed.replace(/\*\*([\s\S]+?)\*\*/g, (_m, inner) => wrapMultilineBold(inner));
   }
 
   // 2. Prefijos con dos puntos (ej: "Caso Clínico:", "Aplicación Intermedia:", "Análisis Relacional:")
@@ -46,7 +58,7 @@ function getEmphasizedQuestionMarkdown(text: string, topic?: string): string {
     const questionPart = trimmed.slice(qMarkIndex).trim();
     const separator = rawContext.includes('\n') ? '\n\n' : ' ';
     const context = rawContext.trim();
-    return `${context}${separator}**${questionPart}**`;
+    return `${context}${separator}${wrapMultilineBold(questionPart)}`;
   }
 
   // 5. Coincidencia con el tema o concepto evaluado si fue provisto

@@ -1998,6 +1998,20 @@ export function shuffleOptionsWithEqualProbability(
   return { options: shuffled, correctIndex: targetSlot };
 }
 
+/** Normaliza contexto y pregunta evitando duplicar dos preguntas seguidas cuando el contexto ya incluye interrogación */
+function combineCaseContextAndQuestion(contexto: string, pregunta: string, isCase: boolean): string {
+  const cleanQ = (pregunta || '').trim();
+  const cleanCtx = (contexto || '').trim();
+  if (!cleanCtx || !isCase || cleanQ.includes(cleanCtx.slice(0, 20))) {
+    return cleanQ;
+  }
+  const ctxWithoutTrailingQ = cleanCtx.replace(/\s*¿[^¿?]{8,}\?\s*$/g, '').trim();
+  if (!ctxWithoutTrailingQ || cleanQ.includes(ctxWithoutTrailingQ.slice(0, 20))) {
+    return cleanQ;
+  }
+  return `${ctxWithoutTrailingQ}\n\n${cleanQ}`;
+}
+
 /**
  * Limita la extensión de un enunciado respetando la regla pedagógica de concisión:
  * - Predominio general (~75%-80%): Preguntas cortas y directas de máximo 28 palabras (1-2 líneas).
@@ -2289,20 +2303,17 @@ Genera el JSON completo respetando la estructura exigida:`;
         finalCorrectIndex = balanced.correctIndex;
       }
 
-      let fullQuestion = String(p.pregunta || '').trim();
+      const rawPregunta = String(p.pregunta || '').trim();
       const contexto = String(p.contexto_o_enunciado || '').trim();
       const isCase = Boolean(
         p.longitud_enunciado === 'extenso_caso' ||
         p.longitud_enunciado === 'medio_largo' ||
         p.es_caso ||
         p.es_caso_o_escenario ||
-        /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${fullQuestion}`)
+        /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${rawPregunta}`)
       );
 
-      // Solo concatenar contexto si se trata explícitamente de un caso práctico extenso justificado
-      if (contexto && isCase && !fullQuestion.includes(contexto.slice(0, 20))) {
-        fullQuestion = `${contexto}\n\n${fullQuestion}`;
-      }
+      let fullQuestion = combineCaseContextAndQuestion(contexto, rawPregunta, isCase);
 
       // Normalización pedagógica para preguntas drag-drop
       if (qType === 'drag-drop') {
@@ -4016,12 +4027,10 @@ Genera la pregunta socrática reformulada en formato JSON:`;
   const optionsArrayFinal = balanced.options;
   const correctIndex = balanced.correctIndex;
 
-  let fullQuestion = String(parsed.pregunta || '').trim();
+  const rawPregunta = String(parsed.pregunta || '').trim();
   const contexto = String(parsed.contexto_o_enunciado || '').trim();
-  const isCase = /\b(caso|supuesto|paciente|clínic|escenario)\b/i.test(`${contexto} ${fullQuestion}`);
-  if (contexto && isCase && !fullQuestion.includes(contexto.slice(0, 20))) {
-    fullQuestion = `${contexto}\n\n${fullQuestion}`;
-  }
+  const isCase = /\b(caso|supuesto|paciente|clínic|escenario)\b/i.test(`${contexto} ${rawPregunta}`);
+  let fullQuestion = combineCaseContextAndQuestion(contexto, rawPregunta, isCase);
   fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
   const query = String(
@@ -4313,18 +4322,15 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       finalCorrectIndex = balanced.correctIndex;
     }
 
-    let fullQuestion = String(p.pregunta || '').trim();
+    const rawPregunta = String(p.pregunta || '').trim();
     const contexto = String(p.contexto_o_enunciado || '').trim();
     const isCase = Boolean(
       p.longitud_enunciado === 'extenso_caso' ||
       p.longitud_enunciado === 'medio_largo' ||
-      /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${fullQuestion}`)
+      /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${rawPregunta}`)
     );
 
-    // Solo concatenar contexto si se trata explícitamente de un caso práctico
-    if (contexto && isCase && !fullQuestion.includes(contexto.slice(0, 20))) {
-      fullQuestion = `${contexto}\n\n${fullQuestion}`;
-    }
+    let fullQuestion = combineCaseContextAndQuestion(contexto, rawPregunta, isCase);
 
     // Normalización pedagógica para preguntas drag-drop
     if (qType === 'drag-drop') {
