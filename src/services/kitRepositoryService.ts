@@ -350,7 +350,38 @@ export const kitRepositoryService = {
             ...k,
             updatedAt: k.updatedAt || Date.now(),
             questions: Array.isArray(k.questions)
-              ? k.questions.filter(q => q && q.type !== 'image-labeling')
+              ? k.questions
+                  .filter(q => q && q.type !== 'image-labeling')
+                  .map(q => {
+                    const isBadDiagram =
+                      Boolean((q as any).imageHotspots) ||
+                      Boolean((q as any).etiquetas_diagrama) ||
+                      /cuadro de texto del banco|punto correspondiente del esquema/i.test(q.question || '');
+                    if (isBadDiagram) {
+                      const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, etiquetas_diagrama, ...restQ } = q as any;
+                      const hotspots = imageHotspots || etiquetas_diagrama;
+                      if (Array.isArray(hotspots) && hotspots.length >= 2) {
+                        return {
+                          ...restQ,
+                          type: 'matching',
+                          question: diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : 'Empareja los conceptos correspondientes:',
+                          matchingPairs: hotspots.map((h: any, i: number) => ({
+                            term: h.label || h.termino || `Elemento ${i + 1}`,
+                            definition: h.hint || h.pista || h.definicion || `Fase o etapa ${i + 1}`,
+                          })),
+                          sourceAsset: undefined,
+                        };
+                      }
+                      return {
+                        ...restQ,
+                        type: 'multiple-choice',
+                        options: Array.isArray(restQ.options) && restQ.options.length >= 2 ? restQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+                        correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
+                        sourceAsset: undefined,
+                      };
+                    }
+                    return q;
+                  })
               : [],
           }))
       : [];

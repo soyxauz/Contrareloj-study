@@ -432,8 +432,8 @@ export const App: React.FC = () => {
       revokeAllAzureAudioUrls();
       revokeAllPodcastAudioUrls();
 
-      // Si se sale de una vista que no requiere activos visuales, liberar caché RAM de activos y cleaner
-      if (!['images', 'study-guide', 'smart-study'].includes(mode)) {
+      // Si se sale de ImagesGalleryView, liberar inmediatamente todos los activos pesados de la RAM
+      if (mode !== 'images') {
         purgeAssetMemoryCache();
         purgeImageCleanerCache();
         setKits(prev => prev.map(stripAssetDataUrlsFromKit));
@@ -441,10 +441,9 @@ export const App: React.FC = () => {
       }
     }
 
-    if (['images', 'study-guide', 'smart-study'].includes(mode) && currentKit) {
-      const hasMissing =
-        currentKit.assets?.some(a => !a.dataUrl) ||
-        currentKit.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
+    // Hidratar activos completos únicamente cuando el usuario entra explícitamente a la Galería de Imágenes
+    if (mode === 'images' && currentKit) {
+      const hasMissing = currentKit.assets?.some(a => !a.dataUrl);
 
       if (hasMissing) {
         hydrateKitAssets(currentKit)
@@ -683,8 +682,9 @@ export const App: React.FC = () => {
     }
   }, [currentKit]);
 
-  // Hidratar activos desde IndexedDB si algun dataUrl fue aligerado de LocalStorage o descargado desde Drive
+  // Hidratar activos desde IndexedDB únicamente cuando la vista activa es la Galería de Imágenes
   useEffect(() => {
+    if (currentMode !== 'images') return;
     const checkAndHydrate = (kitToHydrate: StudyKit | null) => {
       if (!kitToHydrate) return;
       const hasStrippedAssets =

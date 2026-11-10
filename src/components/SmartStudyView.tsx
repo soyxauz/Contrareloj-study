@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { StudyKit, Question, StudyMode, DocumentAsset, ShortAnswerEvaluation, SmartStudyTypeFilters } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
+import { getAssetById } from '../services/storageService';
 import {
   CheckCircle2,
   XCircle,
@@ -223,18 +224,31 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
     }
   }
 
-  // 4. Si la pregunta es de tipo 'image-labeling' o contiene etiquetas de diagrama, convertirla inmediatamente a matching conceptual o multiple-choice desprendiendo cualquier foto o activo de imagen
-  if (q.type === 'image-labeling' || (q as any).imageHotspots || (q as any).etiquetas_diagrama) {
+  // 4. Si la pregunta es de tipo 'image-labeling', contiene etiquetas o instrucciones de arrastrar cuadros, convertirla inmediatamente a matching conceptual o multiple-choice desprendiendo cualquier foto o activo de imagen
+  const isDiagramOrLabeling =
+    q.type === 'image-labeling' ||
+    Boolean((q as any).imageHotspots) ||
+    Boolean((q as any).etiquetas_diagrama) ||
+    Boolean((q as any).imageWordBank) ||
+    Boolean((q as any).diagramTitle) ||
+    /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo terapéutico/i.test(q.question || '');
+
+  if (isDiagramOrLabeling) {
     const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, etiquetas_diagrama, ...restQ } = q as any;
     const hotspots = imageHotspots || etiquetas_diagrama;
+    let cleanQuestionText = (restQ.question || '')
+      .replace(/Arrastra o selecciona un cuadro de texto del banco inferior y colócalo en el punto correspondiente del esquema:?/gi, '')
+      .replace(/Ubica las etapas del algoritmo terapéutico para la diabetes tipo 2 según la ADA\/EASD:?/gi, '¿Cuáles son las etapas escalonadas del algoritmo terapéutico para la diabetes tipo 2 según la ADA/EASD?')
+      .trim();
+
     if (Array.isArray(hotspots) && hotspots.length >= 2) {
       return {
         ...restQ,
         type: 'matching',
-        question: diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : (restQ.question || 'Empareja los conceptos correspondientes:'),
+        question: cleanQuestionText || (diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : 'Empareja los conceptos correspondientes:'),
         matchingPairs: hotspots.map((h: any, i: number) => ({
           term: h.label || h.termino || `Elemento ${i + 1}`,
-          definition: h.hint || h.pista || h.definicion || `Paso ${i + 1}`,
+          definition: h.hint || h.pista || h.definicion || `Fase o etapa ${i + 1}`,
         })),
         sourceAsset: undefined,
       };
@@ -242,10 +256,23 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
     return {
       ...restQ,
       type: 'multiple-choice',
+      question: cleanQuestionText || restQ.question || 'Selecciona la opción correcta:',
       options: Array.isArray(restQ.options) && restQ.options.length >= 2 ? restQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
       correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
       sourceAsset: undefined,
     };
+  }
+
+  // 5. Desprender activos de páginas escaneadas de libros que no son diagramas puros
+  if (q.sourceAsset) {
+    const caption = (q.sourceAsset.caption || '').toLowerCase();
+    const isBookPageScan = caption.includes('capítulo') || caption.includes('capitulo') || caption.includes('página') || caption.includes('pagina') || caption.includes('texto') || caption.includes('documento') || caption.includes('sección') || (q.sourceAsset as any).type === 'page';
+    if (isBookPageScan) {
+      return {
+        ...q,
+        sourceAsset: undefined,
+      };
+    }
   }
 
   return q;
@@ -254,7 +281,15 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
   // Conversion automatica de preguntas obsoletas de tipo 'image-labeling' a formato conceptual
   useEffect(() => {
-    if (kit?.questions?.some(q => q.type === 'image-labeling' || (q as any).imageHotspots || (q as any).etiquetas_diagrama)) {
+    const needsConversion = kit?.questions?.some(q =>
+      q.type === 'image-labeling' ||
+      Boolean((q as any).imageHotspots) ||
+      Boolean((q as any).etiquetas_diagrama) ||
+      Boolean((q as any).imageWordBank) ||
+      Boolean((q as any).diagramTitle) ||
+      /cuadro de texto del banco|punto correspondiente del esquema/i.test(q.question || '')
+    );
+    if (needsConversion) {
       const converted = kit.questions.map(q => sanitizeQuestionStructure(q, kit.questions));
       if (onUpdateKit) {
         onUpdateKit({
@@ -1173,21 +1208,46 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
   }, [kit.questions, currentQuestion?.id, activePracticeLevel, level]);
 
-  // Si la pregunta actual restaurada o cargada era de tipo image-labeling, cambiar de inmediato a pregunta valida
+  // Si la pregunta actual restaurada o cargada era de tipo image-labeling o esquema con etiquetas, sanitizar de inmediato
   useEffect(() => {
-    if (currentQuestion && currentQuestion.type === 'image-labeling') {
-      const valid = (kit.questions || []).find(q => q.type !== 'image-labeling');
-      if (valid) {
-        setCurrentQuestion(sanitizeQuestionStructure(valid, kit.questions));
+    if (currentQuestion) {
+      const isBad =
+        currentQuestion.type === 'image-labeling' ||
+        Boolean((currentQuestion as any).imageHotspots) ||
+        Boolean((currentQuestion as any).etiquetas_diagrama) ||
+        Boolean((currentQuestion as any).imageWordBank) ||
+        Boolean((currentQuestion as any).diagramTitle) ||
+        /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo terapéutico/i.test(currentQuestion.question || '');
+      if (isBad) {
+        setCurrentQuestion(sanitizeQuestionStructure(currentQuestion, kit.questions));
       }
     }
   }, [currentQuestion?.id, currentQuestion?.type, kit.questions]);
 
   const currentQ: Question = currentQuestion;
 
+  // Carga bajo demanda ultra-ligera de imagen especifica si la pregunta actual la requiere (cero consumo de RAM en kits)
+  const [activeAssetDataUrl, setActiveAssetDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+    if (currentQ?.sourceAsset?.id && !currentQ.sourceAsset.dataUrl) {
+      getAssetById(currentQ.sourceAsset.id).then(a => {
+        if (!isCancelled && a?.dataUrl) {
+          setActiveAssetDataUrl(a.dataUrl);
+        }
+      }).catch(() => {});
+    } else {
+      setActiveAssetDataUrl(currentQ?.sourceAsset?.dataUrl || null);
+    }
+    return () => { isCancelled = true; };
+  }, [currentQ?.id, currentQ?.sourceAsset?.id, currentQ?.sourceAsset?.dataUrl]);
+
   // Regla estricta para adjuntar imágenes a las preguntas individuales
   const isImageStrictlyNecessary = (q: Question): boolean => {
-    if (!q || !q.sourceAsset || !q.sourceAsset.dataUrl) return false;
+    if (!q || !q.sourceAsset) return false;
+    const hasData = Boolean(activeAssetDataUrl || q.sourceAsset.dataUrl || q.sourceAsset.id);
+    if (!hasData) return false;
     const combined = ((q.question || '') + ' ' + (q.explanation || '')).toLowerCase();
     return /\b(según el esquema|en la figura|observa la imagen|en el gráfico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test(combined);
   };
@@ -2404,7 +2464,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           ) : (
             <button
               onClick={handleAdvanceToNextLevel}
-              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold text-base shadow-xl shadow-rose-950/40 transition-all transform hover:-translate-y-0.5 cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold text-base shadow-xl shadow-rose-950/40 transition-transform duration-160 hover:-translate-y-0.5 cursor-pointer active:scale-95"
             >
               <span>Avanzar al Nivel {level + 1}</span>
               <ArrowRight className="w-5 h-5" />
@@ -2513,7 +2573,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] flex-wrap gap-3">
             <button
               onClick={() => setActiveTab('practice')}
-              className="active-press px-4 sm:px-5 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md hover:bg-zinc-200"
+              className="active-press px-4 sm:px-5 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs sm:text-sm flex items-center gap-2 transition-colors duration-150 cursor-pointer shadow-md hover:bg-zinc-200"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Volver a la Pregunta</span>
@@ -2556,7 +2616,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </span>
               <button
                 onClick={() => setHistoryFilter('all')}
-                className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all border tabular-nums ${
+                className={`active-press px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors duration-150 border tabular-nums ${
                   historyFilter === 'all'
                     ? 'bg-white/[0.12] text-white border-white/25 shadow-sm'
                     : 'bg-white/[0.03] text-slate-400 border-white/[0.08] hover:text-white hover:bg-white/[0.06]'
@@ -2566,7 +2626,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </button>
               <button
                 onClick={() => setHistoryFilter('correct')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors duration-150 ${
                   historyFilter === 'correct'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-thea-surfaceLight text-slate-400 hover:text-white'
@@ -2576,7 +2636,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </button>
               <button
                 onClick={() => setHistoryFilter('incorrect')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors duration-150 ${
                   historyFilter === 'incorrect'
                     ? 'bg-rose-600 text-white shadow-sm'
                     : 'bg-thea-surfaceLight text-slate-400 hover:text-white'
@@ -2802,7 +2862,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             {/* Pill Progress Bar: Nivel {level}: {pct}% */}
             <div className="flex-1 max-w-xl h-7 sm:h-8 rounded-full bg-white/[0.04] border border-white/[0.08] p-1 flex items-center relative overflow-hidden shadow-inner">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-rose-700 via-rose-600 to-rose-500 transition-all duration-300 ease-out shadow-sm"
+                className="h-full rounded-full bg-gradient-to-r from-rose-700 via-rose-600 to-rose-500 transition-[width] duration-300 ease-out shadow-sm"
                 style={{ width: `${Math.max(6, Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100)))}%` }}
               />
               <span className="absolute left-4 text-xs font-semibold text-white tracking-wide select-none drop-shadow-sm tabular-nums">
@@ -2904,14 +2964,14 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   </button>
                 </div>
               </div>
-              {currentQ.sourceAsset.dataUrl && (
+              {(activeAssetDataUrl || currentQ.sourceAsset.dataUrl) && (
                 <div
-                  onClick={() => setZoomAsset(currentQ.sourceAsset || null)}
+                  onClick={() => setZoomAsset(currentQ.sourceAsset ? { ...currentQ.sourceAsset, dataUrl: activeAssetDataUrl || currentQ.sourceAsset.dataUrl } : null)}
                   className="rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center p-2 mb-2 max-h-72 cursor-pointer hover:border-violet-500/60 transition-colors group relative"
                   title="Clic para ampliar y hacer zoom interactivo"
                 >
                   <img
-                    src={currentQ.sourceAsset.dataUrl}
+                    src={activeAssetDataUrl || currentQ.sourceAsset.dataUrl}
                     alt={currentQ.sourceAsset.caption || 'Activo del documento'}
                     className="max-h-64 object-contain rounded-lg group-hover:scale-[1.02] transition-transform duration-200"
                   />
@@ -3167,7 +3227,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             type="button"
             onClick={handleNext}
             disabled={isAdvancing}
-            className={`active-press w-full sm:w-auto justify-center px-8 py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-all flex items-center gap-2.5 cursor-pointer min-h-[46px] ${
+            className={`active-press w-full sm:w-auto justify-center px-8 py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-colors duration-150 flex items-center gap-2.5 cursor-pointer min-h-[46px] ${
               isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
             } ${
               currentLevelCorrect >= levelTarget

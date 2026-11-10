@@ -68,6 +68,11 @@ let currentState: DriveSyncState = {
   hasRefreshToken: false,
 };
 
+// Memoria reactiva en RAM para tokens OAuth (inmune a cuotas y límites de LocalStorage)
+let inMemoryAccessToken: string | null = null;
+let inMemoryAccessTokenExp: number = 0;
+let inMemoryRefreshToken: string | null = null;
+
 let proactiveRefreshTimer: any = null;
 let cachedServerlessStatus: { available: boolean; hasClientId: boolean; hasClientSecret: boolean } | null = null;
 
@@ -79,6 +84,10 @@ try {
   const expStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
   const refreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
   const authType = localStorage.getItem(STORAGE_AUTH_TYPE_KEY) as 'serverless_refresh' | 'client_implicit' | null;
+
+  if (token) inMemoryAccessToken = token;
+  if (expStr) inMemoryAccessTokenExp = parseInt(expStr, 10);
+  if (refreshToken) inMemoryRefreshToken = refreshToken;
 
   if (lastSync) {
     currentState.lastSyncTime = parseInt(lastSync, 10);
@@ -157,14 +166,21 @@ async function restoreDriveStateFromIndexedDB(): Promise<void> {
       currentState.avatarUrl = prof.avatarUrl || null;
       changed = true;
     }
-    if (token && !localStorage.getItem(STORAGE_TOKEN_KEY)) {
-      safeLocalStorageSetItem(STORAGE_TOKEN_KEY, token);
+    if (token) {
+      inMemoryAccessToken = token;
+      if (exp) inMemoryAccessTokenExp = parseInt(exp, 10);
+      if (!localStorage.getItem(STORAGE_TOKEN_KEY)) {
+        safeLocalStorageSetItem(STORAGE_TOKEN_KEY, token);
+      }
     }
     if (exp && !localStorage.getItem(STORAGE_TOKEN_EXP_KEY)) {
       safeLocalStorageSetItem(STORAGE_TOKEN_EXP_KEY, exp);
     }
-    if (rToken && !localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY)) {
-      safeLocalStorageSetItem(STORAGE_REFRESH_TOKEN_KEY, rToken);
+    if (rToken) {
+      inMemoryRefreshToken = rToken;
+      if (!localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY)) {
+        safeLocalStorageSetItem(STORAGE_REFRESH_TOKEN_KEY, rToken);
+      }
       currentState.hasRefreshToken = true;
       changed = true;
     }
@@ -423,23 +439,35 @@ export const googleDriveService = {
   },
 
   /**
-   * Recupera el refresh token permanente si está almacenado en el navegador.
+   * Recupera el refresh token permanente desde memoria RAM, LocalStorage o IndexedDB.
    */
   getRefreshToken(): string | null {
-    return localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+    if (inMemoryRefreshToken) return inMemoryRefreshToken;
+    try {
+      const val = localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+      if (val) {
+        inMemoryRefreshToken = val;
+        return val;
+      }
+    } catch {}
+    return null;
   },
 
   /**
-   * Guarda el refresh token en LocalStorage e IndexedDB para asegurar persistencia por meses.
+   * Guarda el refresh token en memoria reactiva, LocalStorage e IndexedDB para asegurar persistencia por meses.
    */
   setRefreshToken(token: string): void {
     const clean = token.trim();
     if (clean) {
+      inMemoryRefreshToken = clean;
       safeLocalStorageSetItem(STORAGE_REFRESH_TOKEN_KEY, clean);
       saveSessionItem(STORAGE_REFRESH_TOKEN_KEY, clean).catch(() => {});
       updateState({ hasRefreshToken: true, authType: 'serverless_refresh' });
     } else {
-      localStorage.removeItem(STORAGE_REFRESH_TOKEN_KEY);
+      inMemoryRefreshToken = null;
+      try {
+        localStorage.removeItem(STORAGE_REFRESH_TOKEN_KEY);
+      } catch {}
       removeSessionItem(STORAGE_REFRESH_TOKEN_KEY).catch(() => {});
       updateState({ hasRefreshToken: false });
     }
@@ -497,22 +525,31 @@ export const googleDriveService = {
 
   /**
    * Recupera el token de acceso OAuth activo si aún no ha expirado.
+   * Prioridad 1: Memoria RAM inmediata (0 ms, inmune a saturación de almacenamiento).
+   * Prioridad 2: LocalStorage con rescate a memoria RAM.
    */
   getValidAccessToken(): string | null {
+    const now = Date.now();
+    if (inMemoryAccessToken && inMemoryAccessTokenExp > now + 60000) {
+      return inMemoryAccessToken;
+    }
+
     try {
       const token = localStorage.getItem(STORAGE_TOKEN_KEY);
       const expStr = localStorage.getItem(STORAGE_TOKEN_EXP_KEY);
-      if (!token || !expStr) return null;
-
-      const exp = parseInt(expStr, 10);
-      // Renovar 60 segundos antes de expirar
-      if (Date.now() > exp - 60000) {
-        return null;
+      if (token && expStr) {
+        const exp = parseInt(expStr, 10);
+        if (exp > now + 60000) {
+          inMemoryAccessToken = token;
+          inMemoryAccessTokenExp = exp;
+          return token;
+        }
       }
-      return token;
     } catch {
-      return null;
+      // Ignorar fallo de lectura en LocalStorage
     }
+
+    return null;
   },
 
   /**
@@ -608,10 +645,12 @@ export const googleDriveService = {
   },
 
   /**
-   * Guarda el token de acceso con su tiempo de expiración tanto en LocalStorage como en IndexedDB.
+   * Guarda el token de acceso con su tiempo de expiración en memoria RAM, LocalStorage e IndexedDB.
    */
   setAccessToken(token: string, expiresInSec: number = 3600): void {
     const expTime = Date.now() + expiresInSec * 1000;
+    inMemoryAccessToken = token;
+    inMemoryAccessTokenExp = expTime;
     safeLocalStorageSetItem(STORAGE_TOKEN_KEY, token);
     safeLocalStorageSetItem(STORAGE_TOKEN_EXP_KEY, expTime.toString());
     saveSessionItem(STORAGE_TOKEN_KEY, token).catch(() => {});
@@ -622,8 +661,12 @@ export const googleDriveService = {
    * Limpia el token de acceso local cuando Google reporta que expiró o fue revocado (401).
    */
   clearAccessToken(): void {
-    localStorage.removeItem(STORAGE_TOKEN_KEY);
-    localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
+    inMemoryAccessToken = null;
+    inMemoryAccessTokenExp = 0;
+    try {
+      localStorage.removeItem(STORAGE_TOKEN_KEY);
+      localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
+    } catch {}
     removeSessionItem(STORAGE_TOKEN_KEY).catch(() => {});
     removeSessionItem(STORAGE_TOKEN_EXP_KEY).catch(() => {});
   },
@@ -632,8 +675,8 @@ export const googleDriveService = {
    * Desconecta la cuenta de Google y remueve los tokens locales e IndexedDB.
    */
   disconnect(): void {
-    const token = localStorage.getItem(STORAGE_TOKEN_KEY);
-    const refreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+    const token = inMemoryAccessToken || (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_TOKEN_KEY) : null);
+    const refreshToken = inMemoryRefreshToken || (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY) : null);
     if ((window as any).google?.accounts?.oauth2?.revoke) {
       try {
         if (token) (window as any).google.accounts.oauth2.revoke(token, () => {});
@@ -642,12 +685,17 @@ export const googleDriveService = {
         // Ignorar fallo de revocación
       }
     }
-    localStorage.removeItem(STORAGE_TOKEN_KEY);
-    localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
-    localStorage.removeItem(STORAGE_REFRESH_TOKEN_KEY);
-    localStorage.removeItem(STORAGE_AUTH_TYPE_KEY);
-    localStorage.removeItem(STORAGE_PROFILE_KEY);
-    localStorage.removeItem(STORAGE_LAST_SYNC_KEY);
+    inMemoryAccessToken = null;
+    inMemoryAccessTokenExp = 0;
+    inMemoryRefreshToken = null;
+    try {
+      localStorage.removeItem(STORAGE_TOKEN_KEY);
+      localStorage.removeItem(STORAGE_TOKEN_EXP_KEY);
+      localStorage.removeItem(STORAGE_REFRESH_TOKEN_KEY);
+      localStorage.removeItem(STORAGE_AUTH_TYPE_KEY);
+      localStorage.removeItem(STORAGE_PROFILE_KEY);
+      localStorage.removeItem(STORAGE_LAST_SYNC_KEY);
+    } catch {}
 
     removeSessionItem(STORAGE_TOKEN_KEY).catch(() => {});
     removeSessionItem(STORAGE_TOKEN_EXP_KEY).catch(() => {});
@@ -670,6 +718,26 @@ export const googleDriveService = {
       hasRefreshToken: false,
       authType: undefined,
     });
+  },
+
+  /**
+   * Pre-carga el script de Google Identity Services en segundo plano.
+   */
+  async preloadGsi(): Promise<void> {
+    return ensureGsiLoaded().catch(() => {});
+  },
+
+  /**
+   * Dispara directamente la solicitud de autorización de Google de forma síncrona
+   * dentro del manejador de eventos del usuario (evitando que el navegador lo marque como popup bloqueado).
+   */
+  async launchDirectAuthPopup(): Promise<string> {
+    const clientId = this.getClientId();
+    if (!clientId) throw new Error('CLIENT_ID_MISSING');
+    if (!(window as any).google?.accounts?.oauth2) {
+      await ensureGsiLoaded();
+    }
+    return this.requestGoogleAccessImplicit(clientId);
   },
 
   /**

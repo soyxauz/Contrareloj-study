@@ -63,7 +63,7 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
                   if (draggedChip) onPlaceChip(draggedChip, slotIdx);
                 }}
                 onClick={() => placed && onRemovePlacedChip(slotIdx)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 mx-1.5 rounded-xl border text-sm transition-all duration-150 ease-out cursor-pointer ${slotBorder}`}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 mx-1.5 rounded-xl border text-sm transition-colors duration-150 cursor-pointer ${slotBorder}`}
               >
                 <span>{placed || `[ Espacio ${slotIdx + 1} ]`}</span>
                 {placed && !isAnswered && <X className="w-3 h-3 text-slate-400 hover:text-white" />}
@@ -91,10 +91,10 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
                 onDragStart={() => onSetDraggedChip(chip)}
                 onDragEnd={() => onSetDraggedChip(null)}
                 onClick={() => onPlaceChip(chip)}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-colors duration-150 active:scale-[0.985] cursor-pointer ${
                   isUsed
                     ? 'opacity-30 border-thea-border bg-thea-surfaceLight text-slate-600 line-through'
-                    : 'border-thea-border bg-thea-surfaceLight text-slate-200 hover:border-violet-500 hover:text-white hover:bg-violet-950/40 active:scale-95'
+                    : 'border-thea-border bg-thea-surfaceLight text-slate-200 hover:border-violet-500 hover:text-white hover:bg-violet-950/40'
                 }`}
               >
                 {chip}
@@ -106,7 +106,7 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
 
       {/* ── Oración completa con las palabras correctas (Exclusivo para este tipo de preguntas) ── */}
       {(dragDropChecked || isAnswered) && (
-        <div className={`p-4 sm:p-5 rounded-2xl border shadow-lg transition-all animate-fadeIn ${
+        <div className={`p-4 sm:p-5 rounded-2xl border shadow-lg animate-fadeIn ${
           theme === 'kitty'
             ? 'bg-pink-50/90 border-pink-200 text-pink-950 shadow-pink-100/50'
             : theme === 'light'
@@ -160,7 +160,7 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
           type="button"
           disabled={placedChips.some(c => c === null) || placedChips.length < effectiveBlanksCorrect.length}
           onClick={onCheckDragDrop}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-all cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-transform duration-160 ease-out active:scale-[0.985] cursor-pointer"
         >
           Comprobar Respuestas
         </button>

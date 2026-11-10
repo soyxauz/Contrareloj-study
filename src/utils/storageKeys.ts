@@ -146,11 +146,17 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
         const raw = localStorage.getItem(key);
         if (!raw) continue;
         const parsed = JSON.parse(raw);
-        if (parsed.currentQuestion?.sourceAsset?.dataUrl) {
-          delete parsed.currentQuestion.sourceAsset.dataUrl;
+        if (parsed.currentQuestion?.sourceAsset) {
+          delete parsed.currentQuestion.sourceAsset;
+        }
+        if (Array.isArray(parsed.errorQueue)) {
+          parsed.errorQueue = parsed.errorQueue.map((q: any) => {
+            if (q?.sourceAsset) delete q.sourceAsset;
+            return q;
+          });
         }
         if (Array.isArray(parsed.history)) {
-          parsed.history = parsed.history.slice(0, 15).map((h: any) => ({
+          parsed.history = parsed.history.slice(0, 10).map((h: any) => ({
             id: h.id,
             questionId: h.questionId,
             questionText: typeof h.questionText === 'string' ? h.questionText.slice(0, 120) : '',

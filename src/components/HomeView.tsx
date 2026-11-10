@@ -788,7 +788,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                 <button
                   type="button"
                   onClick={onOpenAuth}
-                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-200 hover:text-white hover:bg-thea-surfaceLight font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-200 hover:text-white hover:bg-thea-surfaceLight font-semibold text-xs sm:text-sm transition-colors duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
                   <LogIn className="w-4 h-4" />
                   <span>Iniciar Sesión</span>
@@ -797,7 +797,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
               <button
                 type="button"
                 onClick={() => onNavigate('create')}
-                className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-violet-900/20 transition-colors duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 <span>Crear nuevo Study Kit</span>
@@ -856,7 +856,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   }}
                   className={`animate-stagger-item study-kit-card ${
                     theme === 'dark' ? 'glass-specular' : theme === 'kitty' ? 'shadow-sm shadow-pink-100/50' : 'shadow-sm'
-                  } group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-xl active:scale-[0.985] ${
+                  } group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] ${
                     isSelectionMode && isKitSelected
                       ? 'ring-2 ring-white/50 border-white shadow-2xl'
                       : isActive
@@ -875,7 +875,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   {/* Marca de agua ilustrativa interactiva con animación hover pop-up y rotación dinámica */}
                   <div
                     style={{ color: mTheme.hex }}
-                    className={`absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-all duration-300 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 ${
+                    className={`absolute -bottom-2.5 -right-2.5 pointer-events-none select-none z-0 origin-bottom-right transition-transform duration-200 ease-out rotate-[13deg] translate-y-3.5 translate-x-1 ${
                       theme === 'dark' ? 'opacity-40 group-hover:opacity-90' : 'opacity-15 group-hover:opacity-30'
                     } group-hover:rotate-0 group-hover:-translate-y-1.5 group-hover:translate-x-0`}
                   >
@@ -891,7 +891,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                             e.stopPropagation();
                             toggleKitSelection(kit.id);
                           }}
-                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 mt-0.5 ${
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors duration-150 cursor-pointer shrink-0 mt-0.5 ${
                             isKitSelected
                               ? 'bg-white text-zinc-950 border-white shadow-md'
                               : theme === 'dark'
@@ -1064,7 +1064,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             {/* Create New Kit Card con feedback táctil elástico y respiración amplia */}
             <button
               onClick={() => onNavigate('create')}
-              className={`group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed transition-all duration-200 ease-out hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-2xl active:scale-[0.985] min-h-[220px] cursor-pointer ${
+              className={`group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] min-h-[220px] cursor-pointer ${
                 theme === 'dark'
                   ? 'border-white/15 hover:border-white/35 bg-white/[0.02] hover:bg-white/[0.05] glass-specular'
                   : theme === 'kitty'
@@ -1072,7 +1072,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 shadow-sm'
               }`}
             >
-              <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center mb-3 transition-all duration-200 ${
+              <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center mb-3 transition-transform duration-160 ${
                 theme === 'dark'
                   ? 'bg-white/[0.06] group-hover:bg-white/[0.12] group-hover:scale-110 border-white/10'
                   : theme === 'kitty'
@@ -1106,7 +1106,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               key={action.id}
               onClick={() => setSelectedActionForKit(action)}
-              className="group relative flex flex-col items-center text-center p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-thea-surface border border-thea-border hover:border-violet-500/40 hover:bg-thea-surfaceLight transition-all duration-200 hover:scale-[1.02]"
+              className="group relative flex flex-col items-center text-center p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-thea-surface border border-thea-border hover:border-violet-500/40 hover:bg-thea-surfaceLight transition-transform duration-160 hover:scale-[1.02]"
             >
               <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center text-white mb-2 shadow-sm group-hover:scale-105 transition-transform duration-200`}>
                 {action.icon}
@@ -1180,7 +1180,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   onNavigate('create');
                   setSelectedActionForKit(null);
                 }}
-                className={`w-full p-3 rounded-xl border border-dashed flex items-center justify-between text-xs sm:text-sm font-semibold transition-all group cursor-pointer ${
+                className={`w-full p-3 rounded-xl border border-dashed flex items-center justify-between text-xs sm:text-sm font-semibold transition-colors duration-150 group cursor-pointer ${
                   theme === 'dark'
                     ? 'border-violet-500/40 hover:border-violet-500 bg-violet-950/20 hover:bg-violet-950/40 text-violet-300'
                     : theme === 'kitty'
@@ -1224,7 +1224,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                             onNavigate(selectedActionForKit.id);
                             setSelectedActionForKit(null);
                           }}
-                          className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all group cursor-pointer ${
+                          className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-colors duration-150 group cursor-pointer ${
                             isCurrent
                               ? theme === 'kitty'
                                 ? 'border-pink-400 bg-pink-50/70 ring-1 ring-pink-400/30'

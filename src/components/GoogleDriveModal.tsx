@@ -47,7 +47,37 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     return unsubscribe;
   }, []);
 
+  // Pre-cargar el cliente de Google Identity Services de forma preventiva para que los popups nunca se demoren
+  useEffect(() => {
+    if (isOpen) {
+      googleDriveService.preloadGsi().catch(() => {});
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleDirectPopupAuth = async () => {
+    setIsProcessing(true);
+    setNoticeMessage(null);
+    try {
+      await googleDriveService.launchDirectAuthPopup();
+      const res = await googleDriveService.loginAndSync(undefined, true);
+      if (res.user && onAuthSuccess) {
+        onAuthSuccess(res.user);
+      }
+      if (res.kits && onKitsSynced) {
+        onKitsSynced(res.kits);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('thea_ai_settings_changed'));
+      }
+      setNoticeMessage('Conexión con Google Drive establecida y datos sincronizados.');
+    } catch {
+      // El error ya fue capturado y actualizado en googleDriveService
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleConnect = async () => {
     setIsProcessing(true);
@@ -142,7 +172,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className={`active-press absolute top-4 sm:top-5 right-4 sm:right-5 p-2 rounded-xl border transition-all cursor-pointer z-10 ${
+          className={`active-press absolute top-4 sm:top-5 right-4 sm:right-5 p-2 rounded-xl border transition-colors duration-150 active:scale-[0.985] cursor-pointer z-10 ${
             theme === 'dark'
               ? 'text-slate-400 hover:text-white hover:bg-white/[0.06] border-transparent hover:border-white/10'
               : 'text-slate-500 hover:text-zinc-950 hover:bg-slate-100 border-transparent hover:border-slate-200'
@@ -172,27 +202,51 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
             </p>
           </div>
 
-        {/* Error or Notice Banners */}
-        {syncState.errorMessage && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span className="flex-1">{syncState.errorMessage}</span>
-          </div>
-        )}
+        {/* Banner de Notificación Único y Atómico (cero duplicidad o contradicciones) */}
+        {(() => {
+          if (syncState.errorMessage) {
+            const isPopupBlocked = /popup|bloque|failed to open popup/i.test(syncState.errorMessage);
+            return (
+              <div className="mb-4 p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs flex flex-col gap-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                  <span className="flex-1 leading-relaxed">{syncState.errorMessage}</span>
+                </div>
+                {isPopupBlocked && (
+                  <button
+                    type="button"
+                    onClick={handleDirectPopupAuth}
+                    disabled={isProcessing}
+                    className="active-press w-full py-2 px-3 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer disabled:opacity-50"
+                  >
+                    <FolderSync className="w-3.5 h-3.5" />
+                    <span>Abrir ventana de Google directamente</span>
+                  </button>
+                )}
+              </div>
+            );
+          }
 
-        {!syncState.errorMessage && noticeMessage && !/fail|error|popup|bloque/i.test(noticeMessage) && (
-          <div className="mb-4 p-3 rounded-xl bg-white/[0.04] border border-white/15 text-zinc-200 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-            <span className="flex-1">{noticeMessage}</span>
-          </div>
-        )}
+          if (isExpired) {
+            return (
+              <div className="mb-4 p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span className="flex-1">Tu sesión de Google Drive ha expirado. Haz clic en &quot;Reconectar y Sincronizar&quot; para renovar el acceso.</span>
+              </div>
+            );
+          }
 
-        {isExpired && !syncState.errorMessage && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
-            <span className="flex-1">Tu sesión de Google Drive ha expirado. Haz clic en &quot;Reconectar y Sincronizar&quot; para renovar el acceso.</span>
-          </div>
-        )}
+          if (noticeMessage && !/fail|error|popup|bloque/i.test(noticeMessage)) {
+            return (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span className="flex-1">{noticeMessage}</span>
+              </div>
+            );
+          }
+
+          return null;
+        })()}
 
         {/* Connection State Card */}
         {isConnected ? (

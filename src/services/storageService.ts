@@ -941,6 +941,9 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
 
     if (!isQuota) {
       console.warn(`[StorageService] Error inesperado guardando clave '${key}':`, err);
+      try {
+        saveSessionItem(key, value).catch(() => {});
+      } catch {}
       return false;
     }
 
@@ -969,14 +972,15 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
           keysToRemove.push(k);
         }
       }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
+      keysToRemove.forEach(k => {
+        try { localStorage.removeItem(k); } catch {}
+      });
 
-      // Reintentar guardado tras limpiar temporales
       localStorage.setItem(key, value);
       return true;
     } catch {}
 
-    // 2. Si persiste la saturación, purgar kits legacy y datos que contengan base64 o excedan 50KB
+    // 3. Purgar kits legacy y datos que contengan base64 o excedan 30KB
     try {
       const oversizedKeys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -991,7 +995,7 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
           continue;
         }
         const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 50000)) {
+        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 30000)) {
           oversizedKeys.push(k);
         }
       }
@@ -1003,7 +1007,7 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       return true;
     } catch {}
 
-    // 2. Podar historiales de sesiones de Smart Study antiguas en LocalStorage
+    // 4. Podar historiales de sesiones de Smart Study antiguas en LocalStorage
     try {
       const sessionKeys: { key: string; updatedAt: number }[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -1026,8 +1030,8 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
           const raw = localStorage.getItem(item.key);
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed.history) && parsed.history.length > 5) {
-              parsed.history = parsed.history.slice(0, 5);
+            if (Array.isArray(parsed.history) && parsed.history.length > 3) {
+              parsed.history = parsed.history.slice(0, 3);
               localStorage.setItem(item.key, JSON.stringify(parsed));
             }
           }
@@ -1038,43 +1042,15 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
       return true;
     } catch {}
 
-    // 2. Si persiste la saturación, purgar kits legacy y datos que contengan base64 o excedan 50KB
-    try {
-      const oversizedKeys: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k || isProtectedStorageKey(k)) continue;
-        if (
-          (k.startsWith('thea_user_kits_') && !k.startsWith('thea_user_kits_index_')) ||
-          k === 'thea_guest_kits' ||
-          k === 'thea_study_kits_v2'
-        ) {
-          oversizedKeys.push(k);
-          continue;
-        }
-        const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 50000)) {
-          oversizedKeys.push(k);
-        }
-      }
-      oversizedKeys.forEach(k => {
-        try { localStorage.removeItem(k); } catch {}
-      });
-
-      localStorage.setItem(key, value);
-      return true;
-    } catch {}
-
-    // 3. Fallback definitivo: Guardar íntegro en IndexedDB
+    // 5. Fallback definitivo: Guardar íntegro en IndexedDB sin fallar jamás
     try {
       const parsedVal = JSON.parse(value);
       saveSessionItem(key, parsedVal).catch(() => {});
-      console.info(`[StorageService] Clave '${key}' preservada de forma íntegra en IndexedDB como salvaguarda.`);
-      return true;
     } catch {
       saveSessionItem(key, value).catch(() => {});
-      return true;
     }
+    console.info(`[StorageService] Clave '${key}' preservada en IndexedDB como salvaguarda ante cuota completa.`);
+    return true;
   }
 }
 

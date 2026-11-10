@@ -81,7 +81,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
                 type="button"
                 disabled={isAnswered}
                 onClick={() => onTermClick(pair.term)}
-                className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-150 ease-out flex items-center justify-between gap-3 cursor-pointer ${borderStyles}`}
+                className={`w-full text-left p-3.5 rounded-2xl border transition-colors duration-150 active:scale-[0.985] flex items-center justify-between gap-3 cursor-pointer ${borderStyles}`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="w-7 h-7 rounded-xl bg-violet-600/30 border border-violet-500/40 text-violet-200 font-extrabold text-xs flex items-center justify-center shrink-0">
@@ -156,7 +156,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
                 type="button"
                 disabled={isAnswered}
                 onClick={() => onDefClick(def)}
-                className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-150 ease-out flex items-start justify-between gap-3 cursor-pointer ${borderStyles}`}
+                className={`w-full text-left p-3.5 rounded-2xl border transition-colors duration-150 active:scale-[0.985] flex items-start justify-between gap-3 cursor-pointer ${borderStyles}`}
               >
                 <div className="flex items-start gap-3 min-w-0">
                   <span className="w-7 h-7 rounded-xl bg-purple-600/30 border border-purple-500/40 text-purple-200 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">
@@ -198,7 +198,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
           type="button"
           disabled={Object.keys(matchingPairsMap).length < (matchingPairs.length || 4)}
           onClick={onCheckMatching}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-all cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-transform duration-160 ease-out active:scale-[0.985] cursor-pointer"
         >
           Comprobar Emparejamientos ({Object.keys(matchingPairsMap).length}/{matchingPairs.length || 4})
         </button>
