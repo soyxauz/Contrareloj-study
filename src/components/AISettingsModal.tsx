@@ -9,12 +9,7 @@ import {
   AI_PRESETS,
   type AISettings,
   type AIPreset,
-  getOllamaApiKey,
-  saveOllamaApiKey,
-  getOllamaBaseUrl,
-  saveOllamaBaseUrl,
-  getOllamaModel,
-  saveOllamaModel,
+  savePresetApiKey,
   getGroqApiKey,
   saveGroqApiKey,
   saveGroqBaseUrl,
@@ -51,19 +46,14 @@ interface AISettingsModalProps {
   onSettingsSaved?: () => void;
 }
 
-function loadOllamaPresetState(): AISettings {
-  const base = getOllamaBaseUrl();
-  const key = getOllamaApiKey();
-  const model = getOllamaModel();
+function loadGeneralState(): AISettings {
+  const current = getAISettings();
   return {
-    ...getAISettings(),
-    baseUrl: base,
-    model,
-    apiKey: key,
-    ollamaBaseUrl: base,
-    ollamaApiKey: key,
-    ollamaModel: model,
-    verified: Boolean(key && key.trim().length > 0),
+    ...current,
+    baseUrl: normalizeOpenAIBaseUrl(current.baseUrl || '') || 'https://api.groq.com/openai/v1',
+    model: (current.model || '').trim() || 'openai/gpt-oss-120b',
+    apiKey: (current.apiKey || '').trim(),
+    verified: Boolean(current.apiKey && current.apiKey.trim().length > 0),
   };
 }
 
@@ -94,7 +84,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     models?: string[];
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama-cloud');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('groq-general');
   const initialFormSnapshotRef = useRef<string>('');
   const isLocalHost = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -105,18 +95,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     setIsSaved(false);
     setShowKey(false);
 
-    const presetId = 'ollama-cloud';
+    const presetId = 'groq-general';
     setSelectedPresetId(presetId);
-    const nextSettings = loadOllamaPresetState();
+    const nextSettings = loadGeneralState();
     setSettings(nextSettings);
     initialFormSnapshotRef.current = buildSnapshot(presetId, nextSettings);
   }, [isOpen]);
 
-  const isOral = selectedPresetId === 'groq' || Boolean(
-    settings.baseUrl?.includes('api.groq.com') ||
-    settings.baseUrl?.includes('api.x.ai') ||
-    settings.baseUrl?.includes('grok.com')
-  );
+  const isOral = selectedPresetId === 'groq';
 
   const urlValidation = useMemo(() => {
     return validateBaseUrl(settings.baseUrl || '');
@@ -124,12 +110,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   const keyValidation = useMemo(() => {
     const cleanKey = settings.apiKey?.trim() || '';
-    if (isOral) {
+    if (isOral || settings.baseUrl?.includes('api.groq.com')) {
       return validateOralApiKey(cleanKey, false);
     }
     const isLocal = Boolean(settings.baseUrl?.includes('localhost') || settings.baseUrl?.includes('127.0.0.1'));
     if (!isLocal && !cleanKey) {
-      return { isValid: false, error: 'Se requiere una API Key para Ollama Cloud.' };
+      return { isValid: false, error: 'Se requiere una API Key para conectar con el motor de IA.' };
     }
     return { isValid: true };
   }, [isOral, settings.baseUrl, settings.apiKey]);
@@ -145,8 +131,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   const persistSelectedPreset = (targetSettings: AISettings, presetId: string) => {
     const cleanKey = (targetSettings.apiKey || '').trim();
-    const cleanUrl = normalizeOpenAIBaseUrl(targetSettings.baseUrl || '') || 'https://ollama.com/v1';
-    const cleanModel = (targetSettings.model || '').trim() || 'gemma4:31b';
+    const cleanUrl = normalizeOpenAIBaseUrl(targetSettings.baseUrl || '') || 'https://api.groq.com/openai/v1';
+    const cleanModel = (targetSettings.model || '').trim() || 'openai/gpt-oss-120b';
 
     if (presetId === 'groq') {
       if (cleanKey.startsWith('gsk_')) {
@@ -161,18 +147,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       }
       saveAISettings({ ...targetSettings, baseUrl: cleanUrl, apiKey: cleanKey, model: cleanModel }, 'oral');
     } else {
-      saveOllamaApiKey(cleanKey);
-      saveOllamaBaseUrl(cleanUrl);
-      saveOllamaModel(cleanModel);
+      savePresetApiKey('groq-general', cleanKey);
       saveAISettings(
         {
           ...targetSettings,
           baseUrl: cleanUrl,
           apiKey: cleanKey,
           model: cleanModel,
-          ollamaBaseUrl: cleanUrl,
-          ollamaApiKey: cleanKey,
-          ollamaModel: cleanModel,
+          provider: cleanUrl.includes('localhost') || cleanUrl.includes('127.0.0.1') ? 'ollama' : 'openai-compatible',
         },
         'general'
       );
@@ -255,26 +237,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
-  const handleResetOllamaCloud = () => {
+  const handleResetDefaults = () => {
     resetAISettingsToDefault();
-    const defaults = getAISettings();
-    const ollamaKey = getOllamaApiKey();
-    const restored: AISettings = {
-      ...defaults,
-      baseUrl: 'https://ollama.com/v1',
-      model: 'gemma4:31b',
-      provider: 'openai-compatible',
-      apiKey: ollamaKey,
-      ollamaBaseUrl: 'https://ollama.com/v1',
-      ollamaApiKey: ollamaKey,
-      ollamaModel: 'gemma4:31b',
-      verified: Boolean(ollamaKey),
-    };
-    saveAISettings(restored, 'general');
+    const restored = loadGeneralState();
     setSettings(restored);
-    setSelectedPresetId('ollama-cloud');
+    setSelectedPresetId('groq-general');
     setTestResult(null);
-    initialFormSnapshotRef.current = buildSnapshot('ollama-cloud', restored);
+    initialFormSnapshotRef.current = buildSnapshot('groq-general', restored);
     const user = authService.getCurrentUser();
     if (user) {
       authService.saveUserAISettings(user.id, restored);
@@ -332,14 +301,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
     setSelectedPresetId(preset.id);
 
-    if (preset.id === 'ollama-cloud') {
-      const nextOllama = loadOllamaPresetState();
-      setSettings(nextOllama);
-      initialFormSnapshotRef.current = buildSnapshot('ollama-cloud', nextOllama);
-    } else {
+    if (preset.id === 'groq') {
       const oral = getOralAISettings();
       setSettings(oral);
       initialFormSnapshotRef.current = buildSnapshot('groq', oral);
+    } else {
+      const nextGeneral = loadGeneralState();
+      setSettings(nextGeneral);
+      initialFormSnapshotRef.current = buildSnapshot('groq-general', nextGeneral);
     }
     setTestResult(null);
   };
@@ -375,6 +344,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     : isKitty
     ? 'border-pink-200 focus:border-pink-500'
     : 'border-slate-300 focus:border-violet-600';
+
+  const savedGeneralSnapshot = getAISettings();
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 animate-modal-backdrop">
@@ -412,11 +383,11 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                     ? 'bg-pink-50 text-pink-800 border-pink-200'
                     : 'bg-slate-100 text-slate-800 border-slate-200'
                 }`}>
-                  {selectedPresetId === 'groq' ? 'Motor Oral' : 'Ollama Cloud'}
+                  {isOral ? 'Groq Voz' : 'Groq Cloud'}
                 </span>
               </div>
               <p className={`text-xs ${mutedText}`}>
-                Servicio oficial de Ollama en la nube con API Key de ollama.com/settings/keys
+                Inferencia ultra rápida en Groq Cloud con API Key de console.groq.com/keys
               </p>
             </div>
           </div>
@@ -446,7 +417,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   Generación de Preguntas por IA Activa
                 </span>
                 <span className={`text-[11px] ${mutedText}`}>
-                  Evaluaciones pedagógicas, podcasts y Smart Study impulsados por Ollama Cloud
+                  Evaluaciones pedagógicas, podcasts y Smart Study impulsados por Groq Cloud
                 </span>
               </div>
             </div>
@@ -467,14 +438,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           }`}>
             <div className={`flex items-center gap-1.5 font-bold ${isDark ? 'text-violet-300' : 'text-violet-700'}`}>
               <Settings className="w-4 h-4 shrink-0" />
-              <span>Asignación fija de motores:</span>
+              <span>Asignación dedicada por clave de Groq:</span>
             </div>
             <p className={`text-[11px] leading-relaxed ${isDark ? 'text-zinc-300' : 'text-slate-600'}`}>
-              <strong className={strongText}>Ollama Cloud</strong> procesa todo el estudio general (kits, Chat Tutor, Smart Study, Podcasts y exámenes). <strong className={strongText}>Motor Oral (Groq / xAI Grok)</strong> procesa exclusivamente la Lección Oral y Conversación con voz.
+              <strong className={strongText}>Groq Cloud (Motor General)</strong> procesa todo el estudio general (kits, Chat Tutor, Smart Study, Podcasts y exámenes). <strong className={strongText}>Groq Cloud (Motor de Voz)</strong> conserva su clave independiente exclusivamente para Lección Oral y Conversación.
             </p>
           </div>
 
-          {/* Provider Presets (solo Ollama Cloud + Motor Oral Groq) */}
+          {/* Provider Presets (Groq General + Groq Voz) */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className={`text-[11px] font-bold uppercase tracking-wider block ${labelText}`}>
@@ -489,7 +460,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             <div className="grid grid-cols-1 gap-2.5">
               {AI_PRESETS.map(preset => {
                 const isSelected = selectedPresetId === preset.id;
-                const isOllama = preset.id === 'ollama-cloud';
+                const isGeneral = preset.id === 'groq-general';
+                const badgeModel = isGeneral
+                  ? savedGeneralSnapshot.model || preset.model
+                  : (getGroqApiKey().startsWith('gsk_') ? getGroqModel() : getGrokModel());
                 return (
                   <button
                     key={preset.id}
@@ -515,7 +489,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                           {preset.name}
                         </span>
                         <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border shrink-0 ${
-                          isOllama
+                          isGeneral
                             ? isDark
                               ? 'bg-violet-500/20 text-violet-300 border-violet-500/30'
                               : 'bg-violet-100 text-violet-800 border-violet-200'
@@ -545,10 +519,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                           ? 'text-violet-300 bg-violet-900/40 border-violet-500/30'
                           : 'text-violet-800 bg-white border-violet-200'
                       }`}>
-                        Modelo: {isOllama ? getOllamaModel() : (getGroqApiKey().startsWith('gsk_') ? getGroqModel() : getGrokModel())}
+                        Modelo: {badgeModel}
                       </span>
                       <span className={`text-[10px] font-medium ${mutedText}`}>
-                        {isOllama ? 'Aplica a todo el estudio general' : 'Aplica solo a Lección Oral'}
+                        {isGeneral ? 'Aplica a todo el estudio general' : 'Aplica solo a Lección Oral'}
                       </span>
                     </div>
                   </button>
@@ -565,7 +539,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <span className={`text-xs font-bold flex items-center gap-1.5 ${strongText}`}>
                 <span>Configurando credenciales de:</span>
                 <span className={isDark ? 'text-violet-400 font-extrabold' : 'text-violet-700 font-extrabold'}>
-                  {selectedPresetId === 'groq' ? 'Motor Oral (Groq / xAI Grok)' : 'Ollama Cloud (Motor General)'}
+                  {isOral ? 'Groq Cloud (Motor Oral)' : 'Groq Cloud (Motor General)'}
                 </span>
               </span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
@@ -573,7 +547,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   ? 'bg-white/[0.05] text-zinc-300 border-white/10'
                   : 'bg-white text-slate-700 border-slate-200'
               }`}>
-                {selectedPresetId === 'groq' ? 'Lección Oral y Conversación' : 'Predeterminado para todo'}
+                {isOral ? 'Lección Oral y Voz' : 'Kits, Study, Podcast y Tutor'}
               </span>
             </div>
 
@@ -590,7 +564,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   setTestResult(null);
                   setSettings(prev => ({ ...prev, baseUrl: newUrl }));
                 }}
-                placeholder={selectedPresetId === 'groq' ? (settings.apiKey?.startsWith('gsk_') ? 'https://api.groq.com/openai/v1' : 'https://api.x.ai/v1') : 'https://ollama.com/v1'}
+                placeholder="https://api.groq.com/openai/v1"
                 className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(urlValidation.isValid)}`}
               />
               {!urlValidation.isValid && (
@@ -628,22 +602,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   onChange={e => {
                     const newKey = e.target.value;
                     setTestResult(null);
-                    setSettings(prev => {
-                      const targetBaseUrl = selectedPresetId === 'groq'
-                        ? (newKey.startsWith('gsk_') ? 'https://api.groq.com/openai/v1' : prev.baseUrl)
-                        : prev.baseUrl;
-                      return {
-                        ...prev,
-                        baseUrl: targetBaseUrl,
-                        apiKey: newKey,
-                        verified: newKey.trim().length > 0,
-                        ...(selectedPresetId === 'ollama-cloud'
-                          ? { ollamaApiKey: newKey }
-                          : { groqApiKey: newKey, grokApiKey: newKey }),
-                      };
-                    });
+                    setSettings(prev => ({
+                      ...prev,
+                      apiKey: newKey,
+                      verified: newKey.trim().length > 0,
+                      ...(isOral ? { groqApiKey: newKey, grokApiKey: newKey } : {}),
+                    }));
                   }}
-                  placeholder={activePreset?.keyPlaceholder || 'Ingresa tu API Key'}
+                  placeholder={activePreset?.keyPlaceholder || 'gsk_...'}
                   className={`w-full px-3 py-2 pr-10 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(keyValidation.isValid)}`}
                 />
                 <button
@@ -666,7 +632,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   {isTesting ? (
                     <span className="text-violet-400 flex items-center gap-1.5 font-medium animate-pulse">
                       <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-                      Probando conexión con el proveedor...
+                      Probando conexión con Groq Cloud...
                     </span>
                   ) : settings.verified && settings.apiKey ? (
                     <span className="text-emerald-400 flex items-center gap-1 font-medium">
@@ -695,7 +661,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   const newModel = e.target.value;
                   setSettings(prev => ({ ...prev, model: newModel }));
                 }}
-                placeholder={selectedPresetId === 'groq' ? 'openai/gpt-oss-120b' : 'gemma4:31b'}
+                placeholder="openai/gpt-oss-120b"
                 className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(modelValidation.isValid)}`}
               />
               {!modelValidation.isValid && (
@@ -752,8 +718,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <div className="leading-relaxed">
                 <span className="font-bold block mb-0.5">
                   {testResult.success
-                    ? `Conexión Exitosa con ${selectedPresetId === 'groq' ? 'Groq Cloud (Motor Oral)' : 'Ollama Cloud (Motor General)'}`
-                    : `Fallo de Conexión con ${selectedPresetId === 'groq' ? 'Groq Cloud' : 'Ollama Cloud'}`}
+                    ? `Conexión Exitosa con ${isOral ? 'Groq Cloud (Motor Oral)' : 'Groq Cloud (Motor General)'}`
+                    : `Fallo de Conexión con Groq Cloud`}
                 </span>
                 <span>{testResult.message}</span>
               </div>
@@ -791,13 +757,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
             <button
               type="button"
-              onClick={handleResetOllamaCloud}
+              onClick={handleResetDefaults}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-[transform,background-color,color] duration-150 cursor-pointer active:scale-95 ${
                 isDark
                   ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-zinc-300 hover:text-white'
                   : 'border-slate-200 bg-slate-100 hover:bg-slate-200/70 text-slate-800'
               }`}
-              title="Restablecer a valores oficiales de Ollama Cloud (https://ollama.com/v1, gemma4:31b)"
+              title="Restablecer a valores oficiales de Groq Cloud (https://api.groq.com/openai/v1, openai/gpt-oss-120b)"
             >
               <RefreshCw className="w-3.5 h-3.5 opacity-70" />
               <span>Restablecer</span>
