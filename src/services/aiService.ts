@@ -20,6 +20,7 @@ export interface AISettings {
   ollamaApiKey?: string;
   ollamaBaseUrl?: string;
   ollamaModel?: string;
+  updatedAt?: number;
 }
 
 export interface AIPreset {
@@ -49,7 +50,7 @@ export const AI_PRESETS: AIPreset[] = [
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
     description: 'Motor general predeterminado para generación de kits, Chat Tutor, Smart Study, Podcasts, flashcards y exámenes.',
-    suggestedModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
+    suggestedModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'allam-2-7b'],
     badge: 'Motor General',
     freeTier: true,
   },
@@ -63,7 +64,7 @@ export const AI_PRESETS: AIPreset[] = [
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
     description: 'Motor oral exclusivo para Lección Oral, Whisper y Conversación interactiva.',
-    suggestedModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
+    suggestedModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'allam-2-7b'],
     badge: 'Motor de Voz Exclusivo',
     freeTier: true,
   },
@@ -508,6 +509,7 @@ export function getAISettings(): AISettings {
     model: generalModel,
     timeoutMs: parsed.timeoutMs || 45000,
     verified: hasKey || isLocal ? true : Boolean(parsed.verified),
+    updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : undefined,
     ollamaBaseUrl: effectiveOllamaBase,
     ollamaApiKey: effectiveOllamaKey,
     ollamaModel: effectiveOllamaModel,
@@ -678,6 +680,7 @@ export function saveAISettings(
     model: effectiveGeneralModel || 'openai/gpt-oss-120b',
     timeoutMs: cleanSettings.timeoutMs || 45000,
     verified: isLocal ? true : Boolean(effectiveGeneralKey),
+    updatedAt: typeof cleanSettings.updatedAt === 'number' ? cleanSettings.updatedAt : Date.now(),
     ollamaBaseUrl: effectiveOllamaBase || 'https://ollama.com/v1',
     ollamaApiKey: effectiveOllamaKey || '',
     ollamaModel: effectiveOllamaModel || 'gemma4:31b',
@@ -1050,10 +1053,13 @@ export async function testAIConnection(override?: AISettings): Promise<{
           String(m.name || m.id || '').replace(/^models\//, '')
         );
       }
+      const chatModels = modelList
+        .filter(Boolean)
+        .filter(id => !/whisper|prompt-guard|safeguard|orpheus|tts|embed/i.test(id));
       return {
         success: true,
-        message: `Conexión establecida con éxito (${modelList.length} modelos detectados en el servidor).`,
-        models: modelList.filter(Boolean),
+        message: `Conexión establecida con éxito (${chatModels.length} modelos detectados en el servidor).`,
+        models: chatModels.length > 0 ? chatModels : modelList.filter(Boolean),
       };
     } else {
       // Soporte específico para Grok (claves de grok.com / xAI)
@@ -1125,6 +1131,144 @@ export async function testAIConnection(override?: AISettings): Promise<{
   }
 }
 
+const isWordChunkToken = (w: string): boolean => /[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]/.test(w);
+const normalizeLoopToken = (w: string): string =>
+  w.toLowerCase().replace(/^[.,;:!?¿¡()[\]{}"']+|[.,;:!?¿¡()[\]{}"']+$/g, '');
+
+function collapseWordsLoop(words: string[]): string[] {
+  const out: string[] = [];
+  let i = 0;
+
+  while (i < words.length) {
+    let matched = false;
+
+    for (let k = 2; k <= 8; k++) {
+      if (i + k * 3 > words.length) continue;
+      const base = words.slice(i, i + k);
+      if (!base.some(isWordChunkToken)) continue;
+      const baseNorm = base.map(normalizeLoopToken);
+      if (baseNorm.some(t => !t)) continue;
+
+      let count = 1;
+      while (i + (count + 1) * k <= words.length) {
+        let same = true;
+        for (let j = 0; j < k; j++) {
+          if (normalizeLoopToken(words[i + count * k + j]) !== baseNorm[j]) {
+            same = false;
+            break;
+          }
+        }
+        if (!same) break;
+        count++;
+      }
+
+      if (count >= 3) {
+        const overlapsPrevEnd =
+          count >= 4 &&
+          out.length > 0 &&
+          normalizeLoopToken(out[out.length - 1]) === baseNorm[k - 1];
+
+        if (!overlapsPrevEnd) {
+          out.push(...base);
+        }
+
+        i += count * k;
+
+        // Si el loop se cortó al final dejando un fragmento parcial o truncado a mitad de palabra (ej. "de la presió"), omitir ese remanente
+        if (i < words.length && words.length - i <= k) {
+          let tailMatchesPrefix = true;
+          const tailLen = words.length - i;
+          for (let t = 0; t < tailLen; t++) {
+            const tailTok = normalizeLoopToken(words[i + t]);
+            const isFinalTruncated = t === tailLen - 1 && tailTok.length >= 1 && baseNorm[t].startsWith(tailTok);
+            if (tailTok !== baseNorm[t] && !isFinalTruncated) {
+              tailMatchesPrefix = false;
+              break;
+            }
+          }
+          if (tailMatchesPrefix) {
+            i = words.length;
+          }
+        }
+
+        matched = true;
+        break;
+      }
+    }
+
+    if (matched) continue;
+
+    // Colapsar palabra única repetida 4 o más veces seguidas (ej. "presión presión presión presión")
+    const tokNorm = normalizeLoopToken(words[i]);
+    if (tokNorm && isWordChunkToken(words[i]) && i + 4 <= words.length) {
+      let singleCount = 1;
+      while (i + singleCount < words.length && normalizeLoopToken(words[i + singleCount]) === tokNorm) {
+        singleCount++;
+      }
+      if (singleCount >= 4) {
+        out.push(words[i]);
+        i += singleCount;
+        continue;
+      }
+    }
+
+    out.push(words[i]);
+    i++;
+  }
+
+  return out;
+}
+
+/**
+ * Detecta y limpia bucles degenerativos de repetición n-gram o de líneas idénticas
+ * generados por modelos LLM en textos extensos (p. ej. "de la presión de la presión...").
+ */
+export function sanitizeRepetitionLoops(text: string): string {
+  if (!text || text.length < 32) return text;
+
+  const lines = text.split('\n');
+  const dedupedLines: string[] = [];
+  let prevLongNorm = '';
+  let prevLongCount = 0;
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    const isSeparatorRow = /^\|?[\s:-]+\|$/.test(trimmed) || /^[-*_]{3,}$/.test(trimmed);
+
+    if (trimmed.length >= 12 && !isSeparatorRow) {
+      if (trimmed === prevLongNorm) {
+        prevLongCount++;
+        if (prevLongCount >= 2) {
+          continue;
+        }
+      } else {
+        prevLongNorm = trimmed;
+        prevLongCount = 1;
+      }
+    } else {
+      prevLongNorm = '';
+      prevLongCount = 0;
+    }
+
+    if (trimmed.length < 24 || isSeparatorRow || trimmed.startsWith('```')) {
+      dedupedLines.push(rawLine);
+      continue;
+    }
+
+    const indent = rawLine.slice(0, rawLine.length - rawLine.trimStart().length);
+    const words = trimmed.split(/\s+/);
+    if (words.length < 6) {
+      dedupedLines.push(rawLine);
+      continue;
+    }
+
+    const cleanedWords = collapseWordsLoop(words);
+    dedupedLines.push(indent + cleanedWords.join(' '));
+  }
+
+  return dedupedLines.join('\n');
+}
+
 function compactMessagesForTokenCap(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   maxUserChars = 22000
@@ -1147,7 +1291,7 @@ export async function queryAICompletion(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   jsonMode: boolean = false,
   override?: AISettings,
-  options?: { temperature?: number; max_tokens?: number }
+  options?: { temperature?: number; max_tokens?: number; frequency_penalty?: number; presence_penalty?: number }
 ): Promise<string> {
   const settings = override || getAISettings();
   if (!settings.enabled) {
@@ -1198,6 +1342,18 @@ export async function queryAICompletion(
     body['max_tokens'] = options.max_tokens;
   }
 
+  if (options?.frequency_penalty !== undefined) {
+    body['frequency_penalty'] = options.frequency_penalty;
+  } else if (!jsonMode && cleanBase.includes('api.groq.com')) {
+    body['frequency_penalty'] = 0.3;
+  }
+
+  if (options?.presence_penalty !== undefined) {
+    body['presence_penalty'] = options.presence_penalty;
+  } else if (!jsonMode && cleanBase.includes('api.groq.com')) {
+    body['presence_penalty'] = 0.1;
+  }
+
   if (jsonMode) {
     body['response_format'] = { type: 'json_object' };
   }
@@ -1230,18 +1386,51 @@ export async function queryAICompletion(
       );
     }
 
-    // Failover automático en Groq: si el modelo principal da 429, 413 o 5xx, reintenta con el modelo ligero
+    // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (8K TPM) o pausa breve de 429
     if (
-      (response.status === 429 || response.status === 413 || response.status >= 500) &&
+      (response.status === 413 || response.status === 429) &&
+      cleanBase.includes('api.groq.com')
+    ) {
+      if (response.status === 429) {
+        try {
+          const cloned = response.clone();
+          const errText = await cloned.text();
+          const waitMatch = errText.match(/try again in\s+(\d+(?:\.\d+)?)s/i);
+          const waitMs = waitMatch ? Math.min(Math.ceil(Number(waitMatch[1]) * 1000) + 250, 4500) : 1800;
+          await new Promise(r => setTimeout(r, waitMs));
+        } catch {
+          await new Promise(r => setTimeout(r, 1800));
+        }
+      }
+
+      const sameModelRetryBody: Record<string, unknown> = {
+        ...body,
+        model: targetModel,
+        ...(response.status === 413
+          ? { messages: compactMessagesForTokenCap(effectiveMessages, 15000) }
+          : {}),
+      };
+      response = await fetchWithProxyFallback(
+        url,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(sameModelRetryBody),
+          signal: controller.signal,
+        },
+        sameModelRetryBody
+      );
+    }
+
+    // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
+    if (
+      response.status >= 500 &&
       cleanBase.includes('api.groq.com') &&
-      targetModel !== GROQ_FALLBACK_MODEL
+      targetModel === 'openai/gpt-oss-120b'
     ) {
       const retryBody = {
         ...body,
         model: GROQ_FALLBACK_MODEL,
-        ...(response.status === 413
-          ? { messages: compactMessagesForTokenCap(effectiveMessages, 18000) }
-          : {}),
       };
       response = await fetchWithProxyFallback(
         url,
@@ -1357,7 +1546,7 @@ export async function queryAICompletion(
       throw new Error('Respuesta de IA vacía recibida del proveedor.');
     }
 
-    return content;
+    return !jsonMode ? sanitizeRepetitionLoops(content) : content;
   } catch (err: unknown) {
     clearTimeout(timer);
     throw err;
@@ -2715,6 +2904,8 @@ export function stripExecutiveSummaryPreamble(markdownText: string): string {
   // 3. Quitar introducciones meta-analíticas redundantes iniciales antes del primer ##
   cleaned = cleaned.replace(/^(#\s+[^\n]+\n+)(?:(?:El presente tratado|Este documento analiza|En esta gu[íi]a de estudio)[^\n]+\n+)+/gi, '$1\n');
 
+  cleaned = sanitizeRepetitionLoops(cleaned);
+
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -2777,7 +2968,7 @@ Genera la Guía de Estudio Esencial en español (Markdown):`;
         ],
         false,
         undefined,
-        { max_tokens: 4096 }
+        { max_tokens: 4096, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
       );
       onProgress?.('Guía Esencial completada.', 100);
       return stripExecutiveSummaryPreamble(res?.trim() || '');
@@ -2825,7 +3016,7 @@ Redacta la Fase 1 de la Guía de Estudio Completa en español (Markdown). Cubre 
         ],
         false,
         undefined,
-        { max_tokens: 6144 }
+        { max_tokens: 6144, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
       );
     } catch (e) {
       console.warn('[StudyGuide AI] Error en Fase 1 de guía completa:', e);
@@ -2864,7 +3055,7 @@ Redacta la Fase 2 (Tablas comparativas, perlas de examen y mnemotecnias) en espa
         ],
         false,
         undefined,
-        { max_tokens: 6144 }
+        { max_tokens: 6144, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
       );
     } catch (e) {
       console.warn('[StudyGuide AI] Error en Fase 2 de guía completa:', e);
@@ -2912,7 +3103,7 @@ Redacta el Módulo 1 con máxima amplitud y rigor en español (Markdown):`;
       ],
       false,
       undefined,
-      { max_tokens: 6144 }
+      { max_tokens: 6144, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
     );
   } catch (e) {
     console.warn('[StudyGuide AI] Error en Módulo 1 ultra:', e);
@@ -2950,7 +3141,7 @@ Redacta el Módulo 2 con desarrollo exhaustivo diapositiva por diapositiva en es
       ],
       false,
       undefined,
-      { max_tokens: 8192 }
+      { max_tokens: 8192, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
     );
   } catch (e) {
     console.warn('[StudyGuide AI] Error en Módulo 2 ultra:', e);
@@ -2989,7 +3180,7 @@ Redacta el Módulo 3 (Grandes tablas matriciales, casos prácticos, perlas y mne
       ],
       false,
       undefined,
-      { max_tokens: 8192 }
+      { max_tokens: 8192, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
     );
   } catch (e) {
     console.warn('[StudyGuide AI] Error en Módulo 3 ultra:', e);

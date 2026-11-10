@@ -1991,13 +1991,15 @@ export const googleDriveService = {
             );
             if (uHasAiKey && u.aiSettings) {
               u.aiSettings.verified = true;
-              authService.saveUserAISettings(u.id, u.aiSettings);
               const currentSettings = getAISettings();
               const currHasKey = Boolean(
                 (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
                 (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0)
               );
-              if (!currHasKey) {
+              const remoteTs = typeof u.aiSettings.updatedAt === 'number' ? u.aiSettings.updatedAt : 0;
+              const localTs = typeof currentSettings.updatedAt === 'number' ? currentSettings.updatedAt : 0;
+              if (!currHasKey || remoteTs > localTs) {
+                authService.saveUserAISettings(u.id, u.aiSettings);
                 saveAISettings(u.aiSettings);
               }
             }
@@ -2087,7 +2089,10 @@ export const googleDriveService = {
             (localAISettings.groqApiKey && localAISettings.groqApiKey.trim().length > 0)
           );
 
-          if (remoteHasKey) {
+          const remoteTs = typeof effectiveRemoteAI.updatedAt === 'number' ? effectiveRemoteAI.updatedAt : 0;
+          const localTs = typeof localAISettings.updatedAt === 'number' ? localAISettings.updatedAt : 0;
+
+          if (remoteHasKey && (!localHasKey || remoteTs > localTs)) {
             const merged: AISettings = {
               ...effectiveRemoteAI,
               verified: true,

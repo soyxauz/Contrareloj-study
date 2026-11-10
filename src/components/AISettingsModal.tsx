@@ -86,8 +86,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('groq-general');
   const initialFormSnapshotRef = useRef<string>('');
+  const latestSettingsRef = useRef<AISettings>(settings);
   const isLocalHost = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  useEffect(() => {
+    latestSettingsRef.current = settings;
+  }, [settings]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -154,6 +159,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           baseUrl: cleanUrl,
           apiKey: cleanKey,
           model: cleanModel,
+          updatedAt: Date.now(),
           provider: cleanUrl.includes('localhost') || cleanUrl.includes('127.0.0.1') ? 'ollama' : 'openai-compatible',
         },
         'general'
@@ -171,21 +177,31 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     if (cleanKey.length < 4 && !isLocal) return;
 
     let cancelled = false;
-    const targetSettings = { ...settings };
+    const testedApiKey = settings.apiKey;
+    const testedBaseUrl = settings.baseUrl;
     const targetPreset = selectedPresetId;
 
     const timer = setTimeout(async () => {
       if (cancelled) return;
       setIsTesting(true);
       try {
-        const res = await testAIConnection(targetSettings);
+        const snapshotAtRun = latestSettingsRef.current;
+        const res = await testAIConnection({
+          ...snapshotAtRun,
+          apiKey: testedApiKey,
+          baseUrl: testedBaseUrl,
+        });
         if (cancelled) return;
         setTestResult(res);
         if (res.success) {
-          const verifiedSettings = { ...targetSettings, verified: true };
-          setSettings(verifiedSettings);
+          const currentLatest = latestSettingsRef.current;
+          const verifiedSettings: AISettings = { ...currentLatest, verified: true };
+          setSettings(prev => ({ ...prev, verified: true }));
           persistSelectedPreset(verifiedSettings, targetPreset);
-          initialFormSnapshotRef.current = buildSnapshot(targetPreset, verifiedSettings);
+          // Solo actualizar el snapshot base si la selección del usuario no cambió respecto al inicio
+          if (buildSnapshot(targetPreset, verifiedSettings) === initialFormSnapshotRef.current) {
+            initialFormSnapshotRef.current = buildSnapshot(targetPreset, verifiedSettings);
+          }
         } else {
           setSettings(prev => ({ ...prev, verified: false }));
         }
@@ -203,7 +219,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [settings.apiKey, settings.baseUrl, settings.model, isOpen, selectedPresetId, isFormValid]);
+  }, [settings.apiKey, settings.baseUrl, isOpen, selectedPresetId, isFormValid]);
 
   const handleTestConnection = async () => {
     if (!urlValidation.isValid) {
@@ -318,7 +334,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     const merged = [
       ...(activePreset?.suggestedModels || []),
       ...(testResult?.models || []),
-    ].map(m => m.trim()).filter(Boolean);
+    ]
+      .map(m => m.trim())
+      .filter(Boolean)
+      .filter(m => !/whisper|prompt-guard|safeguard|orpheus|tts|embed/i.test(m));
     return Array.from(new Set(merged)).slice(0, 6);
   }, [activePreset, testResult]);
 
@@ -461,7 +480,9 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               {AI_PRESETS.map(preset => {
                 const isSelected = selectedPresetId === preset.id;
                 const isGeneral = preset.id === 'groq-general';
-                const badgeModel = isGeneral
+                const badgeModel = isSelected
+                  ? (settings.model?.trim() || preset.model)
+                  : isGeneral
                   ? savedGeneralSnapshot.model || preset.model
                   : (getGroqApiKey().startsWith('gsk_') ? getGroqModel() : getGrokModel());
                 return (
