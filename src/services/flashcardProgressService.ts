@@ -14,6 +14,28 @@ const flashcardIdbTimers = new Map<string, any>();
 const pendingFlashcardIdbPayloads = new Map<string, FlashcardProgressState>();
 const inMemoryFlashcardCache = new Map<string, FlashcardProgressState>();
 
+function areFlashcardStatesEquivalent(
+  a: FlashcardProgressState | null | undefined,
+  b: FlashcardProgressState | null | undefined
+): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if ((a.currentIdx || 0) !== (b.currentIdx || 0)) return false;
+  if ((a.resetAt || 0) !== (b.resetAt || 0)) return false;
+  if ((a.cards?.length || 0) !== (b.cards?.length || 0)) return false;
+  if ((a.archivedCards?.length || 0) !== (b.archivedCards?.length || 0)) return false;
+
+  const mapA = a.masteryMap || {};
+  const mapB = b.masteryMap || {};
+  const keysA = Object.keys(mapA);
+  const keysB = Object.keys(mapB);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (mapA[k] !== mapB[k]) return false;
+  }
+  return true;
+}
+
 export const flashcardProgressService = {
   /**
    * Obtiene el progreso de flashcards guardado para el usuario y kit especificos (persistencia inmediata y total).
@@ -99,7 +121,13 @@ export const flashcardProgressService = {
    * Guarda de forma atomica el progreso de flashcards en LocalStorage e IndexedDB en tiempo real.
    * Normaliza claves de tarjetas (id, term y term en minusculas) para que ninguna modificacion se pierda.
    */
-  saveFlashcardProgress(userId: string | null, kitId: string, state: FlashcardProgressState): void {
+  saveFlashcardProgress(
+    userId: string | null,
+    kitId: string,
+    state: FlashcardProgressState,
+    options?: { source?: 'local' | 'remote_sync' | 'idb_restore' }
+  ): void {
+    const source = options?.source || 'local';
     if (!kitId || !state) return;
     try {
       const userKey = `thea_fc_mem_${userId || 'guest'}_${kitId}`;
@@ -156,8 +184,8 @@ export const flashcardProgressService = {
         archivedCards: state.archivedCards,
       };
 
-      // 3. Sincronizar inmediatamente el kit en kitRepositoryService si vienen tarjetas
-      if (state.cards && Array.isArray(state.cards) && state.cards.length > 0) {
+      // 3. Sincronizar inmediatamente el kit en kitRepositoryService si hubo cambio local y vienen tarjetas
+      if (source === 'local' && state.cards && Array.isArray(state.cards) && state.cards.length > 0) {
         try {
           kitRepositoryService.updateKitFlashcards(userId, kitId, state.cards, state.archivedCards);
         } catch (err) {
@@ -165,10 +193,10 @@ export const flashcardProgressService = {
         }
       }
 
-      // Notificar de inmediato al bus de eventos para activar la sincronizacion con Drive sin demoras
+      // Notificar al bus de eventos indicando el origen real para evitar re-subidas al aplicar sync remoto
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('thea_flashcard_saved', {
-          detail: { userId, kitId, state: minimalStorageState }
+          detail: { userId, kitId, state: minimalStorageState, source }
         }));
       }
 
@@ -272,14 +300,22 @@ export const flashcardProgressService = {
    * Guarda o actualiza un lote completo de progresos de flashcards por marca temporal (updatedAt)
    * y respetando reinicios explícitos (resetAt).
    */
-  saveAllFlashcardProgress(userId: string | null, progressMap: Record<string, FlashcardProgressState>): void {
-    if (!progressMap || typeof progressMap !== 'object') return;
+  saveAllFlashcardProgress(
+    userId: string | null,
+    progressMap: Record<string, FlashcardProgressState>,
+    options?: { source?: 'local' | 'remote_sync' }
+  ): boolean {
+    if (!progressMap || typeof progressMap !== 'object') return false;
+    const source = options?.source || 'remote_sync';
+    let anyChanged = false;
+
     for (const [kitId, incomingState] of Object.entries(progressMap)) {
       if (!kitId || !incomingState || !incomingState.masteryMap) continue;
 
       const currentState = this.getFlashcardProgress(userId, kitId);
       if (!currentState) {
-        this.saveFlashcardProgress(userId, kitId, incomingState);
+        this.saveFlashcardProgress(userId, kitId, incomingState, { source });
+        anyChanged = true;
         continue;
       }
 
@@ -290,7 +326,10 @@ export const flashcardProgressService = {
 
       // Si uno de los dos dispositivos hizo un reset explícito más reciente, prevalece ese estado limpio
       if (incResetAt > curResetAt && incResetAt >= curUpdated) {
-        this.saveFlashcardProgress(userId, kitId, incomingState);
+        if (!areFlashcardStatesEquivalent(currentState, incomingState)) {
+          this.saveFlashcardProgress(userId, kitId, incomingState, { source });
+          anyChanged = true;
+        }
         continue;
       }
       if (curResetAt > incResetAt && curResetAt >= incUpdated) {
@@ -331,12 +370,16 @@ export const flashcardProgressService = {
         ...(Math.max(curResetAt, incResetAt) > 0 ? { resetAt: Math.max(curResetAt, incResetAt) } : {}),
       };
 
-      this.saveFlashcardProgress(userId, kitId, merged);
+      if (!areFlashcardStatesEquivalent(currentState, merged)) {
+        this.saveFlashcardProgress(userId, kitId, merged, { source });
+        anyChanged = true;
+      }
     }
 
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('thea_flashcard_saved', { detail: { userId } }));
+    if (anyChanged && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId, source } }));
     }
+    return anyChanged;
   },
 
   /**

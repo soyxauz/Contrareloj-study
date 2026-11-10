@@ -898,9 +898,11 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   const handlePrevCard = () => {
     setIsFlipped(false);
     const len = cardsRef.current?.length || cards.length || 1;
+    if (len <= 1) return;
     setCurrentIdx(prev => {
       const safePrev = typeof prev === 'number' && !isNaN(prev) ? prev : 0;
       const next = (safePrev - 1 + len) % len;
+      if (next === safePrev) return safePrev;
       currentIdxRef.current = next;
       authService.saveFlashcardProgress(userId, kit.id, {
         version: 1,
@@ -918,9 +920,11 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
   const handleNextCard = () => {
     setIsFlipped(false);
     const len = cardsRef.current?.length || cards.length || 1;
+    if (len <= 1) return;
     setCurrentIdx(prev => {
       const safePrev = typeof prev === 'number' && !isNaN(prev) ? prev : 0;
       const next = (safePrev + 1) % len;
+      if (next === safePrev) return safePrev;
       currentIdxRef.current = next;
       authService.saveFlashcardProgress(userId, kit.id, {
         version: 1,

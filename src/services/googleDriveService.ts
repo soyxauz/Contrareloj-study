@@ -1,4 +1,4 @@
-import type { StudyKit, DocumentAsset, User, PodcastSettings } from '../types';
+import type { StudyKit, DocumentAsset, User, PodcastSettings, SmartStudySessionState, FlashcardProgressState } from '../types';
 import { authService } from './authService';
 import { flashcardProgressService } from './flashcardProgressService';
 import {
@@ -11,6 +11,7 @@ import {
   removeSessionItem,
   isCorruptedKit,
   mergeKitsByUpdatedAt,
+  getDeletedKitTombstones,
   restoreDeletedKitTombstonesAsync,
   mergeDeletedKitTombstones,
   isKitDeletedByTombstone,
@@ -291,6 +292,173 @@ let pendingProgressPushUserId: string | null = null;
 let isPullFromDriveInFlight = false;
 let inFlightPullPromise: Promise<StudyKit[] | null> | null = null;
 let lastRemoteCheckTime = 0;
+let latestUploadedServerModifiedMs = 0;
+
+const lastSyncedProgressDigests = new Map<string, string>();
+const lastSyncedKitsDigests = new Map<string, string>();
+let lastSyncedAIDigest: string | null = null;
+let lastSyncedPodcastDigest: string | null = null;
+
+function recordUploadServerModifiedTime(modifiedTime?: string): void {
+  if (!modifiedTime) return;
+  const ts = Date.parse(modifiedTime);
+  if (Number.isFinite(ts) && ts > latestUploadedServerModifiedMs) {
+    latestUploadedServerModifiedMs = ts;
+  }
+}
+
+function getDigestStorageKey(kind: 'progress' | 'kits', userId: string): string {
+  return `thea_drive_${kind}_digest_${userId}`;
+}
+
+function getStoredSyncDigest(kind: 'progress' | 'kits', userId: string): string | null {
+  if (!userId) return null;
+  const cache = kind === 'progress' ? lastSyncedProgressDigests : lastSyncedKitsDigests;
+  const cached = cache.get(userId);
+  if (cached) return cached;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const val = localStorage.getItem(getDigestStorageKey(kind, userId));
+      if (val) {
+        cache.set(userId, val);
+        return val;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function setStoredSyncDigest(kind: 'progress' | 'kits', userId: string, digest: string): void {
+  if (!userId || !digest) return;
+  const cache = kind === 'progress' ? lastSyncedProgressDigests : lastSyncedKitsDigests;
+  cache.set(userId, digest);
+  try {
+    safeLocalStorageSetItem(getDigestStorageKey(kind, userId), digest);
+  } catch {}
+}
+
+function computeProgressDigest(
+  sessions: Record<string, SmartStudySessionState>,
+  revealedQuestions: Record<string, string[]>,
+  flashcards: Record<string, FlashcardProgressState>,
+  theme: string
+): string {
+  const sessParts = Object.keys(sessions || {})
+    .sort()
+    .map((kitId) => {
+      const s = sessions[kitId];
+      if (!s) return `${kitId}:null`;
+      const qId = s.currentQuestionId || s.currentQuestion?.id || '';
+      const counts = s.levelCorrectCounts || { 1: 0, 2: 0, 3: 0 };
+      const errIds = Array.isArray(s.errorQueue) ? s.errorQueue.map(q => q?.id || '').join(',') : '';
+      const ansIds = Array.isArray((s as any).answeredQuestionIds) ? (s as any).answeredQuestionIds.join(',') : '';
+      const revIds = Array.isArray(s.revealedQuestionIds) ? s.revealedQuestionIds.join(',') : '';
+      const histLen = Array.isArray(s.history) ? s.history.length : 0;
+      const latestHistId = histLen > 0 ? (s.history[0]?.id || '') : '';
+      return [
+        kitId,
+        s.level,
+        s.activePracticeLevel ?? s.level,
+        s.levelCorrectCount,
+        `${counts[1] || 0}/${counts[2] || 0}/${counts[3] || 0}`,
+        s.currentIndex,
+        qId,
+        s.isAnswered ? 1 : 0,
+        s.isCurrentCorrect ?? 'n',
+        s.selectedOption ?? 'n',
+        s.isReinforcementMode ? 1 : 0,
+        s.questionsAnsweredTotal || 0,
+        s.totalErrorsReinforced || 0,
+        errIds,
+        ansIds,
+        revIds,
+        histLen,
+        latestHistId,
+        s.resetAt || 0,
+      ].join(':');
+    });
+
+  const revParts = Object.keys(revealedQuestions || {})
+    .sort()
+    .map((kitId) => `${kitId}:${(revealedQuestions[kitId] || []).slice().sort().join(',')}`);
+
+  const fcParts = Object.keys(flashcards || {})
+    .sort()
+    .map((kitId) => {
+      const fc = flashcards[kitId];
+      if (!fc) return `${kitId}:null`;
+      const mapEntries = Object.entries(fc.masteryMap || {})
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}=${v}`)
+        .join(',');
+      return [
+        kitId,
+        fc.currentIdx || 0,
+        fc.resetAt || 0,
+        fc.cards?.length || 0,
+        fc.archivedCards?.length || 0,
+        mapEntries,
+      ].join(':');
+    });
+
+  return `${theme}|S[${sessParts.join(';')}]|R[${revParts.join(';')}]|F[${fcParts.join(';')}]`;
+}
+
+function computeKitsDigest(kits: StudyKit[], tombstones?: Record<string, number>): string {
+  const activeTombstones = tombstones || getDeletedKitTombstones();
+  const kitParts = [...(kits || [])]
+    .filter(Boolean)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((k) => {
+      const fcStates = Array.isArray(k.flashcards)
+        ? k.flashcards.map(f => `${f.id || f.term}:${f.mastery || 'to-learn'}`).join(',')
+        : '';
+      return [
+        k.id,
+        k.updatedAt || 0,
+        k.title || '',
+        k.category || '',
+        k.questions?.length || 0,
+        k.flashcards?.length || 0,
+        k.archivedFlashcards?.length || 0,
+        fcStates,
+        k.studyGuideMarkdown?.length || 0,
+        k.podcast?.dialogue?.length || 0,
+        k.assets?.length || 0,
+      ].join(':');
+    });
+
+  const tombParts = Object.entries(activeTombstones || {})
+    .filter(([id]) => !RETIRED_TEST_KIT_IDS.includes(id))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, ts]) => `${id}=${ts}`);
+
+  return `K[${kitParts.join(';')}]|T[${tombParts.join(',')}]`;
+}
+
+function computeAISettingsDigest(settings: AISettings): string {
+  return JSON.stringify({
+    provider: settings.provider || '',
+    baseUrl: settings.baseUrl || '',
+    model: settings.model || '',
+    apiKey: settings.apiKey || '',
+    geminiApiKey: settings.geminiApiKey || '',
+    grokApiKey: settings.grokApiKey || '',
+    groqApiKey: settings.groqApiKey || '',
+    verified: Boolean(settings.verified),
+  });
+}
+
+function computePodcastSettingsDigest(settings: PodcastSettings): string {
+  return JSON.stringify({
+    voiceEngine: settings.voiceEngine || '',
+    playbackSpeed: settings.playbackSpeed || 1,
+    sofiaVoice: settings.sofiaVoice || '',
+    mateoVoice: settings.mateoVoice || '',
+    geminiApiKey: settings.geminiApiKey || '',
+    orientation: settings.orientation || '',
+  });
+}
 
 function getWatermarkStorageKey(userId: string): string {
   return `thea_drive_remote_watermark_${userId}`;
@@ -386,16 +554,20 @@ function applyRemoteProgressPayloads(userId: string, progressList: any[]): boole
   for (const prog of progressList) {
     if (!prog || typeof prog !== 'object') continue;
     if (prog.sessions && typeof prog.sessions === 'object' && Object.keys(prog.sessions).length > 0) {
-      authService.saveAllSmartStudySessions(userId, prog.sessions, prog.revealedQuestions);
-      anyIntegrated = true;
+      if (authService.saveAllSmartStudySessions(userId, prog.sessions, prog.revealedQuestions, { source: 'remote_sync' })) {
+        anyIntegrated = true;
+      }
     }
     if (prog.flashcards && typeof prog.flashcards === 'object' && Object.keys(prog.flashcards).length > 0) {
-      authService.saveAllFlashcardProgress(userId, prog.flashcards);
-      anyIntegrated = true;
+      if (authService.saveAllFlashcardProgress(userId, prog.flashcards, { source: 'remote_sync' })) {
+        anyIntegrated = true;
+      }
     }
     if (prog.theme && (prog.theme === 'dark' || prog.theme === 'light' || prog.theme === 'kitty')) {
-      setStoredTheme(prog.theme, false);
-      anyIntegrated = true;
+      if (getStoredTheme() !== prog.theme) {
+        setStoredTheme(prog.theme, false);
+        anyIntegrated = true;
+      }
     }
   }
   return anyIntegrated;
@@ -775,14 +947,14 @@ export const googleDriveService = {
   },
 
   /**
-   * Verifica de forma ligera (1 sola consulta de metadatos modifiedTime) si otro dispositivo subió cambios a Drive.
-   * Si hay novedades en kits, progreso, eliminaciones o materias, descarga y fusiona de inmediato.
+   * Verifica de forma silenciosa y ligera (1 consulta de metadatos modifiedTime) si otro dispositivo subió cambios a Drive.
+   * No muestra el indicador "Sincronizando" salvo si de verdad existen cambios remotos que descargar.
    */
   async syncRemoteChangesIfNeeded(userId: string, forceCheck: boolean = false): Promise<StudyKit[] | null> {
     if (!userId || userId === 'guest') return null;
 
     const now = Date.now();
-    if (!forceCheck && now - lastRemoteCheckTime < 4000) {
+    if (!forceCheck && now - lastRemoteCheckTime < 30000) {
       return null;
     }
     lastRemoteCheckTime = now;
@@ -805,7 +977,11 @@ export const googleDriveService = {
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
-      const remoteMaxMs = getMaxModifiedTimeMs(rootFiles);
+      const relevantRemoteFiles = rootFiles.filter(f =>
+        f.name.endsWith('.json') &&
+        (f.name.startsWith('thea_') || f.name === DELETED_KITS_DRIVE_FILE)
+      );
+      const remoteMaxMs = getMaxModifiedTimeMs(relevantRemoteFiles);
       const localWatermark = getRemoteWatermark(userId);
       const localKits = authService.getUserKits(userId);
       const localSessions = await authService.getAllSmartStudySessionsAsync(userId);
@@ -814,10 +990,16 @@ export const googleDriveService = {
         Object.values(localSessions).some(s => Array.isArray(s.history) && s.history.length > 0) ||
         Object.keys(localFlashcards).length > 0;
 
-      const hasRemoteFiles = rootFiles.some(f => f.name.endsWith('.json'));
+      const hasRemoteProgressFiles = relevantRemoteFiles.some(
+        f => f.name.startsWith('thea_progress_') || f.name === 'thea_progress.json'
+      );
+      const hasRemoteKitsFiles = relevantRemoteFiles.some(
+        f => f.name.startsWith('thea_kits_') || f.name.startsWith('thea_study_kits')
+      );
+      const hasRemoteFiles = relevantRemoteFiles.length > 0;
       const needsPull =
-        localKits.length === 0 ||
-        !hasLocalProgress ||
+        (localKits.length === 0 && hasRemoteKitsFiles) ||
+        (!hasLocalProgress && hasRemoteProgressFiles) ||
         (remoteMaxMs > 0 && remoteMaxMs > localWatermark) ||
         (hasRemoteFiles && localWatermark === 0);
 
@@ -825,11 +1007,17 @@ export const googleDriveService = {
         return await this.pullFromDrive(userId);
       }
 
-      updateState({
-        status: 'synced',
-        filesSyncedCount: rootFiles.length,
-        errorMessage: null,
-      });
+      if (
+        currentState.status !== 'synced' ||
+        currentState.filesSyncedCount !== rootFiles.length ||
+        currentState.errorMessage !== null
+      ) {
+        updateState({
+          status: 'synced',
+          filesSyncedCount: rootFiles.length,
+          errorMessage: null,
+        });
+      }
       return null;
     } catch (err: any) {
       const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
@@ -1324,8 +1512,8 @@ export const googleDriveService = {
     const jsonStr = JSON.stringify(jsonData);
 
     if (existing) {
-      // Actualizar archivo existente
-      const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`;
+      // Actualizar archivo existente pidiendo modifiedTime exacto del servidor de Drive
+      const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media&fields=id,modifiedTime`;
       const res = await fetch(updateUrl, {
         method: 'PATCH',
         headers: {
@@ -1342,6 +1530,10 @@ export const googleDriveService = {
         }
         throw new Error(`Error al actualizar ${fileName} en Drive (${res.status})`);
       }
+      try {
+        const resData = await res.json();
+        recordUploadServerModifiedTime(resData?.modifiedTime);
+      } catch {}
       return existing.id;
     }
 
@@ -1365,7 +1557,7 @@ export const googleDriveService = {
       jsonStr +
       closeDelimiter;
 
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -1379,6 +1571,7 @@ export const googleDriveService = {
     }
 
     const data = await res.json();
+    recordUploadServerModifiedTime(data?.modifiedTime);
     return data.id;
   },
 
@@ -1840,15 +2033,18 @@ export const googleDriveService = {
           await authService.saveUserKitsAsync(userId, mergedKits);
           authService.markKitsSyncedWithDrive(userId, mergedKits.map(k => k.id));
 
-          // Si el dispositivo local aportó kits nuevos que no estaban aún en Drive, subir la consolidación
-          const remoteIds = new Set(remoteKitsAccumulated.map(k => k.id));
-          const localHasExtraKits = localKits.some(k => !remoteIds.has(k.id) || (k.updatedAt || 0) > (remoteKitsAccumulated.find(r => r.id === k.id)?.updatedAt || 0));
+          // Si el dispositivo local aportó kits nuevos o cambios más recientes (>1s), subir la consolidación
+          const remoteById = new Map(remoteKitsAccumulated.map(r => [r.id, r]));
+          const localHasExtraKits = localKits.some(k => {
+            const remoteKit = remoteById.get(k.id);
+            return !remoteKit || (k.updatedAt || 0) > ((remoteKit.updatedAt || 0) + 1000);
+          });
           const localHasExtraTombstones = Object.keys(mergedTombstones).some(id =>
             !RETIRED_TEST_KIT_IDS.includes(id) && (!remoteTombMap || (mergedTombstones[id] > (remoteTombMap[id] || 0)))
           );
           if (localHasExtraKits || localHasExtraTombstones) {
             setTimeout(() => {
-              this.pushToDrive(userId, mergedKits).catch(() => {});
+              this.pushToDrive(userId, mergedKits, { force: true }).catch(() => {});
             }, 800);
           }
         }
@@ -1891,6 +2087,7 @@ export const googleDriveService = {
               verified: true,
             };
             saveAISettings(merged);
+            lastSyncedAIDigest = computeAISettingsDigest(merged);
             if (effectiveRemoteAI.geminiApiKey?.trim()) {
               safeLocalStorageSetItem('contrareloj_gemini_api_key', effectiveRemoteAI.geminiApiKey.trim());
               savePodcastSettings({ geminiApiKey: effectiveRemoteAI.geminiApiKey.trim() });
@@ -1915,6 +2112,7 @@ export const googleDriveService = {
         // 8. Procesar ajustes de Podcast
         if (remotePodcastSettings && typeof remotePodcastSettings === 'object') {
           savePodcastSettings(remotePodcastSettings);
+          lastSyncedPodcastDigest = computePodcastSettingsDigest(getPodcastSettings());
           if (userId) {
             authService.saveUserPodcastSettings(userId, remotePodcastSettings);
           }
@@ -1954,9 +2152,19 @@ export const googleDriveService = {
           }
         }
 
+        const unifiedAfterPull = await readUnifiedProgressAsync(userId);
+        const postPullProgressDigest = computeProgressDigest(
+          unifiedAfterPull.sessions,
+          unifiedAfterPull.revealedQuestions,
+          unifiedAfterPull.flashcards,
+          getStoredTheme()
+        );
+        setStoredSyncDigest('progress', userId, postPullProgressDigest);
+        setStoredSyncDigest('kits', userId, computeKitsDigest(mergedKits, mergedTombstones));
+
         const now = Date.now();
         const remoteMaxMs = getMaxModifiedTimeMs(rootFiles);
-        setRemoteWatermark(userId, Math.max(remoteMaxMs, now));
+        setRemoteWatermark(userId, Math.max(remoteMaxMs, latestUploadedServerModifiedMs, now));
         safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
         saveSessionItem(STORAGE_LAST_SYNC_KEY, now.toString()).catch(() => {});
         try {
@@ -2008,7 +2216,7 @@ export const googleDriveService = {
    * Sube los datos locales actualizados a Google Drive en segundo plano con fusión previa bidireccional
    * de tombstones, progreso, kits y materias para no pisar jamás cambios de otros dispositivos.
    */
-  async pushToDrive(userId: string, kits: StudyKit[]): Promise<void> {
+  async pushToDrive(userId: string, kits: StudyKit[], options?: { force?: boolean }): Promise<void> {
     if (!userId || userId === 'guest') {
       console.warn('[GoogleDriveService] Intento de escritura en la nube sin sesión de usuario activa bloqueado.');
       return;
@@ -2041,6 +2249,11 @@ export const googleDriveService = {
 
     if (cleanKits.length === 0 && !hasExplicitUserDeletions) {
       console.warn('[GoogleDriveService] Intento de subir kits corruptos a la nube bloqueado.');
+      return;
+    }
+
+    const prePushKitsDigest = computeKitsDigest(cleanKits, localTombstonesPre);
+    if (!options?.force && prePushKitsDigest === getStoredSyncDigest('kits', userId)) {
       return;
     }
 
@@ -2218,10 +2431,21 @@ export const googleDriveService = {
       );
       if (hasAiKey) {
         await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', currentAISettings);
+        lastSyncedAIDigest = computeAISettingsDigest(currentAISettings);
+      }
+
+      lastSyncedPodcastDigest = computePodcastSettingsDigest(currentPodcastSettings);
+      setStoredSyncDigest('kits', userId, computeKitsDigest(driveMergedKits, mergedTombstones));
+      if (hasAnyProgressToUpload) {
+        setStoredSyncDigest(
+          'progress',
+          userId,
+          computeProgressDigest(userSessions, userRevealed, userFlashcards, getStoredTheme())
+        );
       }
 
       const now = Date.now();
-      setRemoteWatermark(userId, now);
+      setRemoteWatermark(userId, Math.max(getRemoteWatermark(userId), latestUploadedServerModifiedMs, now));
       safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
       saveSessionItem(STORAGE_LAST_SYNC_KEY, now.toString()).catch(() => {});
       updateState({
@@ -2431,8 +2655,9 @@ export const googleDriveService = {
         }
       }
 
+      setStoredSyncDigest('kits', userId, computeKitsDigest(driveMergedKits, mergedTombstones));
       const now = Date.now();
-      setRemoteWatermark(userId, now);
+      setRemoteWatermark(userId, Math.max(getRemoteWatermark(userId), latestUploadedServerModifiedMs, now));
       safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
       saveSessionItem(STORAGE_LAST_SYNC_KEY, now.toString()).catch(() => {});
       authService.markKitsSyncedWithDrive(userId, driveMergedKits.map(k => k.id));
@@ -2468,9 +2693,15 @@ export const googleDriveService = {
   },
 
   /**
-   * Sube inmediatamente la configuración de IA y API propia a Google Drive.
+   * Sube inmediatamente la configuración de IA y API propia a Google Drive solo si hubo cambios reales.
    */
   async syncAISettingsToDrive(overrideSettings?: AISettings): Promise<boolean> {
+    const aiSettings = overrideSettings || getAISettings();
+    const digest = computeAISettingsDigest(aiSettings);
+    if (lastSyncedAIDigest && digest === lastSyncedAIDigest) {
+      return true;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
@@ -2488,8 +2719,8 @@ export const googleDriveService = {
 
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
-      const aiSettings = overrideSettings || getAISettings();
       await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', aiSettings);
+      lastSyncedAIDigest = digest;
       return true;
     } catch (e: any) {
       console.warn('[GoogleDriveService] Error sincronizando ajustes de IA con Drive:', e);
@@ -2510,9 +2741,15 @@ export const googleDriveService = {
   },
 
   /**
-   * Sube inmediatamente la configuración de Podcast a Google Drive (voces, motor, velocidad y clave Gemini).
+   * Sube inmediatamente la configuración de Podcast a Google Drive solo si hubo cambios reales.
    */
   async syncPodcastSettingsToDrive(overrideSettings?: PodcastSettings): Promise<boolean> {
+    const podcastSettings = overrideSettings || getPodcastSettings();
+    const digest = computePodcastSettingsDigest(podcastSettings);
+    if (lastSyncedPodcastDigest && digest === lastSyncedPodcastDigest) {
+      return true;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
@@ -2530,8 +2767,8 @@ export const googleDriveService = {
 
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
-      const podcastSettings = overrideSettings || getPodcastSettings();
       await this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', podcastSettings);
+      lastSyncedPodcastDigest = digest;
       return true;
     } catch (e: any) {
       console.warn('[GoogleDriveService] Error sincronizando ajustes de podcast con Drive:', e);
@@ -2552,8 +2789,8 @@ export const googleDriveService = {
   },
 
   /**
-   * Sincroniza el progreso de estudio hacia Google Drive con fusión previa (merge-before-write)
-   * y lectura completa de IndexedDB + LocalStorage para jamás pisar el avance de otros dispositivos.
+   * Sincroniza el progreso de estudio hacia Google Drive únicamente si difiere del último estado sincronizado,
+   * fusionando cambios remotos más recientes antes de subir.
    */
   async pushProgressToDrive(userId: string): Promise<void> {
     if (!userId || userId === 'guest') {
@@ -2563,6 +2800,29 @@ export const googleDriveService = {
     // Mutex estricto: evita colisiones simultáneas en Google Drive para el mismo archivo (error 503 / 429)
     if (isPushProgressInFlight) {
       pendingProgressPushUserId = userId;
+      return;
+    }
+
+    // Verificar primero localmente si realmente existe una diferencia respecto al último estado sincronizado
+    const initialUnified = await readUnifiedProgressAsync(userId);
+    const {
+      sessions: initialSessions,
+      revealedQuestions: initialRevealed,
+      flashcards: initialFlashcards,
+    } = initialUnified;
+
+    if (
+      Object.keys(initialSessions).length === 0 &&
+      Object.keys(initialFlashcards).length === 0 &&
+      Object.keys(initialRevealed).length === 0
+    ) {
+      return;
+    }
+
+    const currentTheme = getStoredTheme();
+    const initialDigest = computeProgressDigest(initialSessions, initialRevealed, initialFlashcards, currentTheme);
+    const prevSyncedDigest = getStoredSyncDigest('progress', userId);
+    if (prevSyncedDigest && initialDigest === prevSyncedDigest) {
       return;
     }
 
@@ -2578,30 +2838,49 @@ export const googleDriveService = {
     try {
       await yieldIfScrolling();
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const localWatermark = getRemoteWatermark(userId);
 
-      // 1. Descargar y fusionar progreso remoto antes de reescribir (si otro dispositivo avanzó, no lo aplastamos)
+      // 1. Descargar y fusionar progreso remoto solo si existe un archivo más reciente que nuestra marca temporal
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
       const allProgressFiles = sortProgressFilesChronologically(rootFiles, userId);
-      if (allProgressFiles.length > 0) {
+      const newerRemoteFiles = localWatermark === 0
+        ? allProgressFiles
+        : allProgressFiles.filter(f => !f.modifiedTime || Date.parse(f.modifiedTime) > localWatermark);
+
+      let userSessions = initialSessions;
+      let userRevealed = initialRevealed;
+      let userFlashcards = initialFlashcards;
+      let finalTheme = currentTheme;
+      let finalDigest = initialDigest;
+
+      if (newerRemoteFiles.length > 0) {
         const remoteProgressLists = await Promise.all(
-          allProgressFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))
+          newerRemoteFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))
         );
         const validRemote = remoteProgressLists.filter(p => p && typeof p === 'object');
-        if (validRemote.length > 0) {
-          applyRemoteProgressPayloads(userId, validRemote);
+        if (validRemote.length > 0 && applyRemoteProgressPayloads(userId, validRemote)) {
+          const refreshed = await readUnifiedProgressAsync(userId);
+          userSessions = refreshed.sessions;
+          userRevealed = refreshed.revealedQuestions;
+          userFlashcards = refreshed.flashcards;
+          finalTheme = getStoredTheme();
+          finalDigest = computeProgressDigest(userSessions, userRevealed, userFlashcards, finalTheme);
         }
       }
 
-      // 2. Leer estado consolidado completo desde RAM + LocalStorage + IndexedDB
-      const { sessions: userSessions, revealedQuestions: userRevealed, flashcards: userFlashcards } =
-        await readUnifiedProgressAsync(userId);
-
-      // Escudo protector: nunca subir payload vacío si aún no hay sesiones ni flashcards
       if (
         Object.keys(userSessions).length === 0 &&
         Object.keys(userFlashcards).length === 0 &&
         Object.keys(userRevealed).length === 0
       ) {
+        updateState({ status: 'synced', errorMessage: null });
+        return;
+      }
+
+      // Evitar escritura redundante si la fusión resultó idéntica al último estado ya confirmado en Drive
+      if (prevSyncedDigest && finalDigest === prevSyncedDigest) {
+        const remoteMaxMs = getMaxModifiedTimeMs(rootFiles);
+        setRemoteWatermark(userId, Math.max(localWatermark, remoteMaxMs));
         updateState({ status: 'synced', errorMessage: null });
         return;
       }
@@ -2614,12 +2893,13 @@ export const googleDriveService = {
         sessions: userSessions,
         revealedQuestions: userRevealed,
         flashcards: userFlashcards,
-        theme: getStoredTheme(),
+        theme: finalTheme,
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
       await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);
 
-      setRemoteWatermark(userId, now);
+      setStoredSyncDigest('progress', userId, finalDigest);
+      setRemoteWatermark(userId, Math.max(getRemoteWatermark(userId), latestUploadedServerModifiedMs, now));
       safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
       updateState({
         status: 'synced',
@@ -2741,7 +3021,7 @@ export const googleDriveService = {
       };
 
       await this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, uploadPayload);
-      setRemoteWatermark(userId, now);
+      setRemoteWatermark(userId, Math.max(getRemoteWatermark(userId), latestUploadedServerModifiedMs, now));
       updateState({ status: 'synced', lastSyncTime: now, errorMessage: null });
       console.log('[GoogleDriveService] Materias y colores sincronizados con Google Drive inmediatamente.');
     } catch (e: any) {
@@ -2758,30 +3038,44 @@ export const googleDriveService = {
   },
 
   /**
-   * Programa la sincronización automática de kits hacia Google Drive con debounce corto (1.5s por defecto).
+   * Programa la sincronización automática de kits hacia Google Drive únicamente si su contenido difiere del último estado sincronizado.
    */
-  scheduleAutoSync(userId: string, kits: StudyKit[], delayMs: number = 1500): void {
+  scheduleAutoSync(userId: string, kits: StudyKit[], delayMs: number = 0): void {
     if (!userId || userId === 'guest') return;
+    const nextDigest = computeKitsDigest(kits);
+    if (nextDigest === getStoredSyncDigest('kits', userId)) {
+      if (globalDriveDebounceTimer) {
+        clearTimeout(globalDriveDebounceTimer);
+        globalDriveDebounceTimer = null;
+      }
+      globalDrivePendingKits = null;
+      globalDrivePendingUserId = null;
+      hasPendingAutoSync = false;
+      return;
+    }
+
     globalDrivePendingKits = kits;
     globalDrivePendingUserId = userId;
     hasPendingAutoSync = true;
     if (globalDriveDebounceTimer) clearTimeout(globalDriveDebounceTimer);
+    const waitMs = delayMs <= 0 ? 30 : delayMs;
     globalDriveDebounceTimer = setTimeout(() => {
       this.flushAutoSync(userId, kits);
-    }, delayMs);
+    }, waitMs);
   },
 
   /**
-   * Programa la sincronización inmediata de progreso (respuestas, flashcards, reinicios) con debounce corto (1.5s).
+   * Programa la sincronización de progreso hacia Google Drive únicamente ante cambios locales reales.
    */
-  scheduleProgressSync(userId: string, delayMs: number = 1500): void {
+  scheduleProgressSync(userId: string, delayMs: number = 0): void {
     if (!userId || userId === 'guest') return;
     globalProgressPendingUserId = userId;
     hasPendingProgressSync = true;
     if (globalProgressDebounceTimer) clearTimeout(globalProgressDebounceTimer);
+    const waitMs = delayMs <= 0 ? 40 : delayMs;
     globalProgressDebounceTimer = setTimeout(() => {
       this.flushProgressSync(userId);
-    }, delayMs);
+    }, waitMs);
   },
 
   flushProgressSync(userId?: string): void {
@@ -2790,7 +3084,7 @@ export const googleDriveService = {
       globalProgressDebounceTimer = null;
     }
     const targetUserId = userId || globalProgressPendingUserId || authService.getCurrentUser()?.id;
-    const shouldPush = Boolean(userId) || hasPendingProgressSync;
+    const shouldPush = hasPendingProgressSync;
     globalProgressPendingUserId = null;
     hasPendingProgressSync = false;
 
@@ -2805,7 +3099,7 @@ export const googleDriveService = {
       clearTimeout(globalDriveDebounceTimer);
       globalDriveDebounceTimer = null;
     }
-    const hadPending = hasPendingAutoSync || Boolean(userId && kits);
+    const hadPending = hasPendingAutoSync;
     const targetUserId = userId || globalDrivePendingUserId || authService.getCurrentUser()?.id;
     const targetKits = kits || globalDrivePendingKits;
     globalDrivePendingKits = null;

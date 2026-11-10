@@ -301,12 +301,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       Boolean((q as any).imageHotspots) ||
       Boolean((q as any).etiquetas_diagrama) ||
       Boolean((q as any).imageWordBank) ||
-      Boolean((q as any).diagramTitle) ||
-      /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo|diabetes tipo 2|esquema de terapia/i.test(q.question || '')
+      Boolean((q as any).diagramTitle)
     );
     if (needsConversion) {
       const converted = kit.questions.map(q => sanitizeQuestionStructure(q, kit.questions));
-      if (onUpdateKit) {
+      const changed = converted.some((q, idx) => {
+        const orig = kit.questions[idx];
+        return q.type !== orig.type || q.question !== orig.question;
+      });
+      if (changed && onUpdateKit) {
         onUpdateKit({
           ...kit,
           questions: converted,
@@ -1588,7 +1591,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     errorQueue.length,
     isReinforcementMode ? '1' : '0',
     answeredQuestionIdsRef.current.size,
-    activeTab,
     revealedQuestionIds.length,
   ].join('|');
 
@@ -1692,7 +1694,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     currentLevelCorrect,
     isAnswered,
     isCurrentCorrect,
-    activeTab,
     questionsAnsweredTotal,
     totalErrorsReinforced,
     revealedQuestionIds,
@@ -2523,7 +2524,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       latestSessionRef.current = resetSession;
       authService.saveSmartStudySession(userId || null, kit.id, resetSession);
       if (userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
-        googleDriveService.scheduleProgressSync(userId, 500);
+        googleDriveService.scheduleProgressSync(userId, 0);
       }
     }
   };

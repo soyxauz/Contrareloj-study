@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '../services/themeService';
 import {
@@ -66,6 +66,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('ollama-cloud');
+  const initialFormSnapshotRef = useRef<string>('');
   const isLocalHost = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
@@ -81,15 +82,28 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         const ollamaKey = getOllamaApiKey();
         const ollamaBase = getOllamaBaseUrl();
         const ollamaModel = getOllamaModel();
-        setSettings({
+        const nextSettings = {
           ...getAISettings(),
           baseUrl: ollamaBase,
           model: ollamaModel,
           apiKey: ollamaKey,
+        };
+        setSettings(nextSettings);
+        initialFormSnapshotRef.current = JSON.stringify({
+          presetId,
+          apiKey: ollamaKey || '',
+          baseUrl: ollamaBase || '',
+          model: ollamaModel || '',
         });
       } else {
         const oralSettings = getOralAISettings();
         setSettings(oralSettings);
+        initialFormSnapshotRef.current = JSON.stringify({
+          presetId,
+          apiKey: oralSettings.apiKey || '',
+          baseUrl: oralSettings.baseUrl || '',
+          model: oralSettings.model || '',
+        });
       }
     }
   }, [isOpen]);
@@ -248,6 +262,16 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   };
 
   const handleClose = () => {
+    const currentSnapshot = JSON.stringify({
+      presetId: selectedPresetId,
+      apiKey: settings.apiKey || '',
+      baseUrl: settings.baseUrl || '',
+      model: settings.model || '',
+    });
+    if (currentSnapshot === initialFormSnapshotRef.current) {
+      onClose();
+      return;
+    }
     if (selectedPresetId === 'ollama-cloud') {
       if (settings.apiKey) saveOllamaApiKey(settings.apiKey);
       if (settings.baseUrl) saveOllamaBaseUrl(settings.baseUrl);

@@ -232,6 +232,62 @@ export function sanitizeSmartStudySession(session: SmartStudySessionState | null
   };
 }
 
+function normalizeOrderedIds(ids: unknown): string {
+  return Array.isArray(ids) ? ids.filter(Boolean).join(',') : '';
+}
+
+function areSmartStudySessionsEquivalent(
+  a: SmartStudySessionState | null | undefined,
+  b: SmartStudySessionState | null | undefined
+): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  const qIdA = a.currentQuestionId || a.currentQuestion?.id || '';
+  const qIdB = b.currentQuestionId || b.currentQuestion?.id || '';
+  if (
+    a.level !== b.level ||
+    a.activePracticeLevel !== b.activePracticeLevel ||
+    a.levelCorrectCount !== b.levelCorrectCount ||
+    a.currentIndex !== b.currentIndex ||
+    qIdA !== qIdB ||
+    Boolean(a.isAnswered) !== Boolean(b.isAnswered) ||
+    (a.isCurrentCorrect ?? null) !== (b.isCurrentCorrect ?? null) ||
+    (a.selectedOption ?? null) !== (b.selectedOption ?? null) ||
+    Boolean(a.isReinforcementMode) !== Boolean(b.isReinforcementMode) ||
+    (a.questionsAnsweredTotal || 0) !== (b.questionsAnsweredTotal || 0) ||
+    (a.totalErrorsReinforced || 0) !== (b.totalErrorsReinforced || 0) ||
+    (a.resetAt || 0) !== (b.resetAt || 0)
+  ) {
+    return false;
+  }
+  const countsA = a.levelCorrectCounts || { 1: 0, 2: 0, 3: 0 };
+  const countsB = b.levelCorrectCounts || { 1: 0, 2: 0, 3: 0 };
+  if (
+    (countsA[1] || 0) !== (countsB[1] || 0) ||
+    (countsA[2] || 0) !== (countsB[2] || 0) ||
+    (countsA[3] || 0) !== (countsB[3] || 0)
+  ) {
+    return false;
+  }
+  const errA = Array.isArray(a.errorQueue) ? a.errorQueue.map(q => q?.id || '').join(',') : '';
+  const errB = Array.isArray(b.errorQueue) ? b.errorQueue.map(q => q?.id || '').join(',') : '';
+  if (errA !== errB) return false;
+
+  if (
+    normalizeOrderedIds((a as any).answeredQuestionIds) !== normalizeOrderedIds((b as any).answeredQuestionIds) ||
+    normalizeOrderedIds(a.revealedQuestionIds) !== normalizeOrderedIds(b.revealedQuestionIds)
+  ) {
+    return false;
+  }
+
+  const histA = Array.isArray(a.history) ? a.history : [];
+  const histB = Array.isArray(b.history) ? b.history : [];
+  if (histA.length !== histB.length) return false;
+  if (histA.length > 0 && (histA[0]?.id || '') !== (histB[0]?.id || '')) return false;
+
+  return true;
+}
+
 export const authService = {
   /**
    * Obtiene el usuario actual logueado o null si está en modo invitado.
@@ -583,7 +639,7 @@ export const authService = {
       if (idbVal) {
         const sanitized = sanitizeSmartStudySession(idbVal);
         if (sanitized) {
-          this.saveSmartStudySession(userId, kitId, sanitized);
+          this.saveSmartStudySession(userId, kitId, sanitized, { source: 'idb_restore' });
           return sanitized;
         }
       }
@@ -677,9 +733,15 @@ export const authService = {
 
   /**
    * Guarda el instante exacto de la sesión de Smart Study en LocalStorage e IndexedDB,
-   * emitiendo un evento en vivo para que HomeView y Google Drive sincronicen de inmediato.
+   * emitiendo un evento en vivo para que HomeView y Google Drive sincronicen cuando corresponde.
    */
-  saveSmartStudySession(userId: string | null, rawKitId: string, state: SmartStudySessionState): void {
+  saveSmartStudySession(
+    userId: string | null,
+    rawKitId: string,
+    state: SmartStudySessionState,
+    options?: { source?: 'local' | 'remote_sync' | 'idb_restore' }
+  ): void {
+    const source = options?.source || 'local';
     try {
       const kitId = extractCleanKitId(rawKitId);
       if (!kitId) return;
@@ -729,10 +791,10 @@ export const authService = {
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('thea_session_saved', {
-          detail: { userId, kitId, state: sanitized }
+          detail: { userId, kitId, state: sanitized, source }
         }));
         window.dispatchEvent(new CustomEvent('thea_progress_synced', {
-          detail: { userId, kitId, state: sanitized }
+          detail: { userId, kitId, state: sanitized, source }
         }));
       }
     } catch (e) {
@@ -875,8 +937,12 @@ export const authService = {
   },
 
   /** Guarda o actualiza un lote completo de progresos de flashcards. */
-  saveAllFlashcardProgress(userId: string | null, progressMap: Record<string, FlashcardProgressState>): void {
-    flashcardProgressService.saveAllFlashcardProgress(userId, progressMap);
+  saveAllFlashcardProgress(
+    userId: string | null,
+    progressMap: Record<string, FlashcardProgressState>,
+    options?: { source?: 'local' | 'remote_sync' }
+  ): boolean {
+    return flashcardProgressService.saveAllFlashcardProgress(userId, progressMap, options);
   },
 
   /** Elimina el progreso de flashcards de un kit. */
@@ -887,16 +953,23 @@ export const authService = {
   /**
    * Fusiona una sesión entrante (ej. descargada de Google Drive) con la sesión local
    * sincronizando el progreso exacto sin subir ni bajar arbitrariamente el nivel real.
+   * Devuelve true solo si hubo cambios reales respecto al estado local previo.
    */
-  mergeSmartStudySession(userId: string | null, kitId: string, incomingSession: SmartStudySessionState): void {
-    if (!incomingSession) return;
+  mergeSmartStudySession(
+    userId: string | null,
+    kitId: string,
+    incomingSession: SmartStudySessionState,
+    options?: { source?: 'local' | 'remote_sync' }
+  ): boolean {
+    const source = options?.source || 'remote_sync';
+    if (!incomingSession) return false;
     const sanitizedIncoming = sanitizeSmartStudySession(incomingSession);
-    if (!sanitizedIncoming) return;
+    if (!sanitizedIncoming) return false;
 
     const rawCurrent = this.getSmartStudySession(userId, kitId);
     if (!rawCurrent) {
-      this.saveSmartStudySession(userId, kitId, sanitizedIncoming);
-      return;
+      this.saveSmartStudySession(userId, kitId, sanitizedIncoming, { source });
+      return true;
     }
 
     const localSession = sanitizeSmartStudySession(rawCurrent) || rawCurrent;
@@ -907,11 +980,12 @@ export const authService = {
 
     // Respetar reinicios explícitos más recientes para que el progreso viejo del otro dispositivo no resucite
     if (incomingResetAt > localResetAt && incomingResetAt >= localLastUpdated) {
-      this.saveSmartStudySession(userId, kitId, sanitizedIncoming);
-      return;
+      if (areSmartStudySessionsEquivalent(localSession, sanitizedIncoming)) return false;
+      this.saveSmartStudySession(userId, kitId, sanitizedIncoming, { source });
+      return true;
     }
     if (localResetAt > incomingResetAt && localResetAt >= incomingLastUpdated) {
-      return;
+      return false;
     }
 
     // Fusión por marca temporal: si ambos dispositivos han progresado desde el mismo punto,
@@ -1031,20 +1105,34 @@ export const authService = {
       ...(latestResetAt > 0 ? { resetAt: latestResetAt } : {}),
     };
 
-    this.saveSmartStudySession(userId, kitId, mergedSession);
+    if (areSmartStudySessionsEquivalent(localSession, mergedSession)) {
+      return false;
+    }
+
+    this.saveSmartStudySession(userId, kitId, mergedSession, { source });
+    return true;
   },
 
   /**
    * Guarda y fusiona en lote las sesiones de estudio y preguntas reveladas recibidas desde Google Drive.
    */
-  saveAllSmartStudySessions(userId: string | null, sessions: Record<string, SmartStudySessionState>, revealedQuestions?: Record<string, string[]>): void {
-    if (!sessions || typeof sessions !== 'object') return;
+  saveAllSmartStudySessions(
+    userId: string | null,
+    sessions: Record<string, SmartStudySessionState>,
+    revealedQuestions?: Record<string, string[]>,
+    options?: { source?: 'local' | 'remote_sync' }
+  ): boolean {
+    if (!sessions || typeof sessions !== 'object') return false;
+    const source = options?.source || 'remote_sync';
+    let anyChanged = false;
 
     for (const [rawKitId, session] of Object.entries(sessions)) {
       if (isCorruptedStorageKey(`thea_ss_mem_${userId || 'guest'}_${rawKitId}`)) continue;
       const kitId = extractCleanKitId(rawKitId);
       if (kitId && session && typeof session === 'object') {
-        this.mergeSmartStudySession(userId, kitId, session);
+        if (this.mergeSmartStudySession(userId, kitId, session, { source })) {
+          anyChanged = true;
+        }
       }
     }
 
@@ -1054,18 +1142,22 @@ export const authService = {
         if (kitId && Array.isArray(ids)) {
           const current = this.getRevealedQuestionIds(userId, kitId);
           const union = Array.from(new Set([...current, ...ids]));
-          const key = `thea_revealed_q_${userId || 'guest'}_${kitId}`;
-          try {
-            safeLocalStorageSetItem(key, JSON.stringify(union));
-            saveSessionItem(key, union).catch(() => {});
-          } catch {}
+          if (union.length > current.length) {
+            const key = `thea_revealed_q_${userId || 'guest'}_${kitId}`;
+            try {
+              safeLocalStorageSetItem(key, JSON.stringify(union));
+              saveSessionItem(key, union).catch(() => {});
+              anyChanged = true;
+            } catch {}
+          }
         }
       }
     }
 
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
+    if (anyChanged && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId, source } }));
     }
+    return anyChanged;
   },
 
   /**

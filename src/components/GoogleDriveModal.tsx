@@ -133,7 +133,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         onKitsSynced(pulled);
       }
       // 2. Respaldamos el estado consolidado completo hacia Drive
-      await googleDriveService.pushToDrive(effectiveUserId, unifiedKits);
+      await googleDriveService.pushToDrive(effectiveUserId, unifiedKits, { force: true });
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('thea_ai_settings_changed'));

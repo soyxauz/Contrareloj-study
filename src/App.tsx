@@ -278,9 +278,6 @@ export const App: React.FC = () => {
           setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits.map(stripAssetDataUrlsFromKit)));
         }
         authService.restoreAllSessionsFromIndexedDB().catch(() => {});
-        if (googleDriveService.isLinked()) {
-          googleDriveService.autoSyncOnStartup(restoredUser.id).catch(() => {});
-        }
       }
       setTimeout(() => {
         isStartupHydrationRef.current = false;
@@ -321,7 +318,7 @@ export const App: React.FC = () => {
         if (kits && kits.length > 0) {
           authService.flushKitsSync(userId, kits);
           if (userId) {
-            googleDriveService.flushAutoSync(userId, kits);
+            googleDriveService.flushAutoSync(userId);
           }
         }
       } catch (e) {
@@ -425,9 +422,9 @@ export const App: React.FC = () => {
   };
 
   const handleSelectMode = (mode: StudyMode, pushToHistory = true) => {
-    // Forzar guardado en Drive al cambiar de modo si había cambios pendientes
+    // Forzar guardado en Drive al cambiar de modo únicamente si había cambios pendientes reales
     if (currentUser?.id) {
-      googleDriveService.flushAutoSync(currentUser.id, kits);
+      googleDriveService.flushAllPendingSyncs(currentUser.id);
     }
     // Revocar activamente audios y encolar purga de memoria con retención de 15 segundos
     if (mode !== currentMode) {
@@ -556,19 +553,25 @@ export const App: React.FC = () => {
     }
   }, [kits, currentUser]);
 
-  const isApplyingCloudPullRef = useRef(false);
+  const lastStartupSyncUserRef = useRef<string | null>(null);
 
-  // Sincronización automática ligera al inicio desde Google Drive (sin bloqueo ciego de 5 minutos)
+  // Sincronización automática ligera al inicio desde Google Drive (una sola vez por sesión de usuario)
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser?.id) {
+      lastStartupSyncUserRef.current = null;
+      return;
+    }
     if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+    if (lastStartupSyncUserRef.current === currentUser.id) return;
 
+    const targetUserId = currentUser.id;
     const timer = setTimeout(() => {
-      googleDriveService.autoSyncOnStartup(currentUser.id).then((pulled) => {
+      if (lastStartupSyncUserRef.current === targetUserId) return;
+      lastStartupSyncUserRef.current = targetUserId;
+      googleDriveService.autoSyncOnStartup(targetUserId).then((pulled) => {
         if (pulled && Array.isArray(pulled)) {
           const delIds = getDeletedKitIds();
           const clean = pulled.filter(k => !isCorruptedKit(k) && !delIds.has(k.id));
-          isApplyingCloudPullRef.current = true;
           setKits(prev => mergeKitsByUpdatedAt(
             prev.filter(k => !delIds.has(k.id)),
             clean,
@@ -595,32 +598,18 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [currentUser?.id]);
 
-  // Respaldo reactivo inmediato de cambios en kits hacia Google Drive (debounce corto 1500ms tipo Thea)
+  // Sincronización bidireccional reactiva: subida inmediata ante cambios reales + chequeo remoto silencioso (>30s) al volver a enfocar pestaña
   useEffect(() => {
-    if (isLoggingOutRef.current) return;
-    if (isApplyingCloudPullRef.current) {
-      isApplyingCloudPullRef.current = false;
-      return;
-    }
-    if (!currentUser) return;
-    if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
-    const currentSyncStatus = googleDriveService.getState().status;
-    if (currentSyncStatus === 'needs_reauth') return;
-    if (!isHydratedRef.current) return;
+    if (!currentUser?.id) return;
 
-    googleDriveService.scheduleAutoSync(currentUser.id, kits, 1500);
-  }, [kits, currentUser]);
-
-  // Sincronización bidireccional reactiva: subida en tiempo real + chequeo remoto al enfocar pestaña y flush al ocultar/salir
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const handleProgressSaved = () => {
+    const handleProgressSaved = (event: Event) => {
+      const source = (event as CustomEvent)?.detail?.source;
+      if (source === 'remote_sync' || source === 'idb_restore') return;
       if (isLoggingOutRef.current) return;
       if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
       if (googleDriveService.getState().status === 'needs_reauth') return;
 
-      googleDriveService.scheduleProgressSync(currentUser.id, 1500);
+      googleDriveService.scheduleProgressSync(currentUser.id, 0);
     };
 
     const handleDriveKitsUpdated = (event: any) => {
@@ -634,7 +623,6 @@ export const App: React.FC = () => {
         .filter(k => !isCorruptedKit(k) && !delSet.has(k.id))
         .map(stripAssetDataUrlsFromKit);
 
-      isApplyingCloudPullRef.current = true;
       setKits(prev => {
         const filteredPrev = prev.filter(k => !delSet.has(k.id));
         return mergeKitsByUpdatedAt(filteredPrev, cleanIncoming, delSet);
@@ -692,7 +680,7 @@ export const App: React.FC = () => {
       window.removeEventListener('pagehide', flushAll);
       window.removeEventListener('beforeunload', flushAll);
     };
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
   // Sync Current Kit ID to LocalStorage
   useEffect(() => {
@@ -948,7 +936,7 @@ export const App: React.FC = () => {
 
     try {
       if (userId) {
-        googleDriveService.scheduleAutoSync(userId, updated, 1500);
+        googleDriveService.scheduleAutoSync(userId, updated, 0);
       }
     } catch (e) {
       console.error('Error al programar sincronización de Study Kits tras actualizar:', e);
@@ -1027,7 +1015,7 @@ export const App: React.FC = () => {
       console.error('Error al guardar Study Kits tras cambiar materia en lote:', e);
     }
     if (currentUser) {
-      googleDriveService.scheduleAutoSync(currentUser.id, updated, 1500);
+      googleDriveService.scheduleAutoSync(currentUser.id, updated, 0);
     }
   };
 
@@ -1236,7 +1224,6 @@ export const App: React.FC = () => {
               const clean = (syncedKits || [])
                 .filter(k => !isCorruptedKit(k) && !delIds.has(k.id))
                 .map(stripAssetDataUrlsFromKit);
-              isApplyingCloudPullRef.current = true;
               setKits(prev => mergeKitsByUpdatedAt(
                 prev.filter(k => !delIds.has(k.id)),
                 clean,
