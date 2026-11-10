@@ -333,6 +333,13 @@ export function savePresetApiKey(presetId: string, key: string): void {
   } catch {}
 }
 
+const isUsableGroqModel = (baseUrl: unknown, model: unknown): model is string =>
+  typeof baseUrl === 'string' &&
+  baseUrl.includes('api.groq.com') &&
+  typeof model === 'string' &&
+  model.trim().length > 0 &&
+  !model.includes(':');
+
 function syncEnvGeneralGroqKeyIfUpdated(): void {
   if (typeof localStorage === 'undefined' || !DEFAULT_GENERAL_GROQ_KEY) return;
   const envFingerprint = `groq_gen_${DEFAULT_GENERAL_GROQ_KEY.slice(0, 8)}_${DEFAULT_GENERAL_GROQ_KEY.slice(-4)}_${DEFAULT_GENERAL_GROQ_KEY.length}`;
@@ -342,21 +349,30 @@ function syncEnvGeneralGroqKeyIfUpdated(): void {
     }
 
     safeLocalStorageSetItem('thea_general_env_applied', envFingerprint);
+    const existingDirectBase = localStorage.getItem('thea_general_base_url');
+    const existingDirectModel = localStorage.getItem('thea_general_model');
+    const resolveModel = (base: unknown, model: unknown): string =>
+      isUsableGroqModel(base, model) ? model.trim() : 'openai/gpt-oss-120b';
+
     safeLocalStorageSetItem('thea_general_base_url', 'https://api.groq.com/openai/v1');
     safeLocalStorageSetItem('thea_general_api_key', DEFAULT_GENERAL_GROQ_KEY);
-    safeLocalStorageSetItem('thea_general_model', 'openai/gpt-oss-120b');
+    safeLocalStorageSetItem('thea_general_model', resolveModel(existingDirectBase, existingDirectModel));
     safeLocalStorageSetItem('thea_preset_key_groq-general', DEFAULT_GENERAL_GROQ_KEY);
+
+    const applyGroqSync = (obj: Record<string, any>) => ({
+      ...obj,
+      baseUrl: 'https://api.groq.com/openai/v1',
+      apiKey: DEFAULT_GENERAL_GROQ_KEY,
+      model: resolveModel(obj.baseUrl, obj.model),
+      verified: true,
+    });
 
     const savedRaw = localStorage.getItem(STORAGE_KEY);
     if (savedRaw) {
       try {
         const parsed = JSON.parse(savedRaw);
         if (parsed && typeof parsed === 'object') {
-          parsed.baseUrl = 'https://api.groq.com/openai/v1';
-          parsed.apiKey = DEFAULT_GENERAL_GROQ_KEY;
-          parsed.model = 'openai/gpt-oss-120b';
-          parsed.verified = true;
-          safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(parsed));
+          safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(applyGroqSync(parsed)));
         }
       } catch {}
     }
@@ -369,11 +385,7 @@ function syncEnvGeneralGroqKeyIfUpdated(): void {
         try {
           const parsedUserAi = JSON.parse(userAiRaw);
           if (parsedUserAi && typeof parsedUserAi === 'object') {
-            parsedUserAi.baseUrl = 'https://api.groq.com/openai/v1';
-            parsedUserAi.apiKey = DEFAULT_GENERAL_GROQ_KEY;
-            parsedUserAi.model = 'openai/gpt-oss-120b';
-            parsedUserAi.verified = true;
-            safeLocalStorageSetItem(userAiKeyStorage, JSON.stringify(parsedUserAi));
+            safeLocalStorageSetItem(userAiKeyStorage, JSON.stringify(applyGroqSync(parsedUserAi)));
           }
         } catch {}
       }
@@ -385,14 +397,7 @@ function syncEnvGeneralGroqKeyIfUpdated(): void {
           if (Array.isArray(users)) {
             const idx = users.findIndex((u: any) => u && u.id === sessionId);
             if (idx >= 0) {
-              const prevAi = users[idx].aiSettings || {};
-              users[idx].aiSettings = {
-                ...prevAi,
-                baseUrl: 'https://api.groq.com/openai/v1',
-                apiKey: DEFAULT_GENERAL_GROQ_KEY,
-                model: 'openai/gpt-oss-120b',
-                verified: true,
-              };
+              users[idx].aiSettings = applyGroqSync(users[idx].aiSettings || {});
               safeLocalStorageSetItem('thea_auth_users', JSON.stringify(users));
             }
           }
@@ -1219,9 +1224,17 @@ function collapseWordsLoop(words: string[]): string[] {
   return out;
 }
 
+const isTableDelimiterLine = (trimmed: string): boolean =>
+  /^\|?(?:\s*:?[-–—]{2,}:?\s*\|)+\s*(?:\s*:?[-–—]{2,}:?\s*)?\|?$/.test(trimmed);
+
+const isPipeTableRowLine = (trimmed: string): boolean =>
+  (trimmed.startsWith('|') && trimmed.endsWith('|')) ||
+  (trimmed.split('|').length >= 3 && !trimmed.startsWith('>') && !trimmed.startsWith('#'));
+
 /**
  * Detecta y limpia bucles degenerativos de repetición n-gram o de líneas idénticas
- * generados por modelos LLM en textos extensos (p. ej. "de la presión de la presión...").
+ * generados por modelos LLM en textos extensos (p. ej. "de la presión de la presión..."),
+ * preservando intactas las columnas y separadores de las tablas Markdown.
  */
 export function sanitizeRepetitionLoops(text: string): string {
   if (!text || text.length < 32) return text;
@@ -1233,7 +1246,7 @@ export function sanitizeRepetitionLoops(text: string): string {
 
   for (const rawLine of lines) {
     const trimmed = rawLine.trim();
-    const isSeparatorRow = /^\|?[\s:-]+\|$/.test(trimmed) || /^[-*_]{3,}$/.test(trimmed);
+    const isSeparatorRow = isTableDelimiterLine(trimmed) || /^[-*_]{3,}$/.test(trimmed);
 
     if (trimmed.length >= 12 && !isSeparatorRow) {
       if (trimmed === prevLongNorm) {
@@ -1256,6 +1269,22 @@ export function sanitizeRepetitionLoops(text: string): string {
     }
 
     const indent = rawLine.slice(0, rawLine.length - rawLine.trimStart().length);
+
+    if (isPipeTableRowLine(trimmed)) {
+      const cells = rawLine.split('|');
+      const cleanedCells = cells.map((cell) => {
+        const cellTrimmed = cell.trim();
+        if (cellTrimmed.length < 24) return cell;
+        const cellWords = cellTrimmed.split(/\s+/);
+        if (cellWords.length < 6) return cell;
+        const leadPad = cell.startsWith(' ') ? ' ' : '';
+        const trailPad = cell.endsWith(' ') ? ' ' : '';
+        return `${leadPad}${collapseWordsLoop(cellWords).join(' ')}${trailPad}`;
+      });
+      dedupedLines.push(cleanedCells.join('|'));
+      continue;
+    }
+
     const words = trimmed.split(/\s+/);
     if (words.length < 6) {
       dedupedLines.push(rawLine);
@@ -1286,12 +1315,59 @@ function compactMessagesForTokenCap(
   });
 }
 
-/** Ejecuta una llamada de chat completion con timeout y fallback seguro */
+function parseGroqRetryWaitMs(errText: string): number {
+  const minSecMatch = errText.match(/try again in\s+(\d+)m(\d+(?:\.\d+)?)s/i);
+  if (minSecMatch) {
+    const totalSec = Number(minSecMatch[1]) * 60 + Number(minSecMatch[2]);
+    return Math.min(Math.max(Math.ceil(totalSec * 1000) + 450, 1500), 68000);
+  }
+  const secMatch = errText.match(/try again in\s+(\d+(?:\.\d+)?)s/i);
+  if (secMatch) {
+    return Math.min(Math.max(Math.ceil(Number(secMatch[1]) * 1000) + 450, 1500), 68000);
+  }
+  const msMatch = errText.match(/try again in\s+(\d+(?:\.\d+)?)ms/i);
+  if (msMatch) {
+    return Math.min(Math.max(Math.ceil(Number(msMatch[1])) + 350, 1200), 15000);
+  }
+  return 2600;
+}
+
+async function runFetchAttemptWithTimeout(
+  url: string,
+  headers: Record<string, string>,
+  payload: Record<string, unknown>,
+  timeoutMs: number
+): Promise<Response> {
+  const attemptController = new AbortController();
+  const attemptTimer = setTimeout(() => attemptController.abort(), Math.max(timeoutMs, 45000));
+  try {
+    return await fetchWithProxyFallback(
+      url,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: attemptController.signal,
+      },
+      payload
+    );
+  } finally {
+    clearTimeout(attemptTimer);
+  }
+}
+
+/** Ejecuta una llamada de chat completion con timeout por intento y fallback seguro */
 export async function queryAICompletion(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   jsonMode: boolean = false,
   override?: AISettings,
-  options?: { temperature?: number; max_tokens?: number; frequency_penalty?: number; presence_penalty?: number }
+  options?: {
+    temperature?: number;
+    max_tokens?: number;
+    frequency_penalty?: number;
+    presence_penalty?: number;
+    onRetryWait?: (waitMs: number, status: number, attempt: number) => void;
+  }
 ): Promise<string> {
   const settings = override || getAISettings();
   if (!settings.enabled) {
@@ -1319,11 +1395,8 @@ export async function queryAICompletion(
   const targetModel = settings.model || DEFAULT_AI_SETTINGS.model;
   const targetKey = settings.apiKey.trim();
   const effectiveMessages = messages;
-
   const url = `${targetBase}/chat/completions`;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
+  const perAttemptTimeoutMs = Math.max(settings.timeoutMs || 45000, 60000);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -1345,7 +1418,7 @@ export async function queryAICompletion(
   if (options?.frequency_penalty !== undefined) {
     body['frequency_penalty'] = options.frequency_penalty;
   } else if (!jsonMode && cleanBase.includes('api.groq.com')) {
-    body['frequency_penalty'] = 0.3;
+    body['frequency_penalty'] = 0.25;
   }
 
   if (options?.presence_penalty !== undefined) {
@@ -1358,199 +1431,152 @@ export async function queryAICompletion(
     body['response_format'] = { type: 'json_object' };
   }
 
-  try {
-    let response = await fetchWithProxyFallback(
-      url,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      },
-      body
-    );
+  let response = await runFetchAttemptWithTimeout(url, headers, body, perAttemptTimeoutMs);
 
-    // Si Groq rechaza strict response_format (p. ej. json_validate_failed por LaTeX/saltos), reintentar dejando que safeParseAIJSON parsee el JSON
-    if (response.status === 400 && jsonMode && cleanBase.includes('api.groq.com')) {
-      const relaxedBody: Record<string, unknown> = { ...body };
-      delete relaxedBody['response_format'];
-      response = await fetchWithProxyFallback(
-        url,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(relaxedBody),
-          signal: controller.signal,
-        },
-        relaxedBody
-      );
-    }
+  // Si Groq rechaza strict response_format (p. ej. json_validate_failed por LaTeX/saltos), reintentar dejando que safeParseAIJSON parsee el JSON
+  if (response.status === 400 && jsonMode && cleanBase.includes('api.groq.com')) {
+    const relaxedBody: Record<string, unknown> = { ...body };
+    delete relaxedBody['response_format'];
+    response = await runFetchAttemptWithTimeout(url, headers, relaxedBody, perAttemptTimeoutMs);
+  }
 
-    // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (8K TPM) o pausa breve de 429
-    if (
-      (response.status === 413 || response.status === 429) &&
-      cleanBase.includes('api.groq.com')
-    ) {
-      if (response.status === 429) {
+  // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (8K TPM) o espera real de 429
+  if (cleanBase.includes('api.groq.com')) {
+    for (let retryIdx = 0; retryIdx < 2 && (response.status === 413 || response.status === 429); retryIdx++) {
+      const failedStatus = response.status;
+      if (failedStatus === 429) {
+        let waitMs = 2600;
         try {
           const cloned = response.clone();
           const errText = await cloned.text();
-          const waitMatch = errText.match(/try again in\s+(\d+(?:\.\d+)?)s/i);
-          const waitMs = waitMatch ? Math.min(Math.ceil(Number(waitMatch[1]) * 1000) + 250, 4500) : 1800;
-          await new Promise(r => setTimeout(r, waitMs));
+          waitMs = parseGroqRetryWaitMs(errText);
         } catch {
-          await new Promise(r => setTimeout(r, 1800));
+          waitMs = 2600;
         }
+        options?.onRetryWait?.(waitMs, failedStatus, retryIdx + 1);
+        await new Promise(r => setTimeout(r, waitMs));
       }
+
+      const compactLimit = retryIdx === 0 ? 14000 : 8000;
+      const clampedMaxTokens =
+        retryIdx > 0 && typeof body['max_tokens'] === 'number'
+          ? Math.min(body['max_tokens'] as number, 3072)
+          : body['max_tokens'];
 
       const sameModelRetryBody: Record<string, unknown> = {
         ...body,
         model: targetModel,
-        ...(response.status === 413
-          ? { messages: compactMessagesForTokenCap(effectiveMessages, 15000) }
+        ...(clampedMaxTokens ? { max_tokens: clampedMaxTokens } : {}),
+        ...(failedStatus === 413
+          ? { messages: compactMessagesForTokenCap(effectiveMessages, compactLimit) }
           : {}),
       };
-      response = await fetchWithProxyFallback(
-        url,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(sameModelRetryBody),
-          signal: controller.signal,
-        },
-        sameModelRetryBody
-      );
+
+      response = await runFetchAttemptWithTimeout(url, headers, sameModelRetryBody, perAttemptTimeoutMs);
     }
-
-    // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
-    if (
-      response.status >= 500 &&
-      cleanBase.includes('api.groq.com') &&
-      targetModel === 'openai/gpt-oss-120b'
-    ) {
-      const retryBody = {
-        ...body,
-        model: GROQ_FALLBACK_MODEL,
-      };
-      response = await fetchWithProxyFallback(
-        url,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(retryBody),
-          signal: controller.signal,
-        },
-        retryBody
-      );
-    }
-
-    // Failover automático cuando Ollama Cloud devuelve HTTP 402 (sin créditos): usar Groq si está disponible
-    if (response.status === 402 && cleanBase.includes('ollama.com') && !override) {
-      const groqFallback = getOralAISettings();
-      const canFallbackToGroq = Boolean(
-        groqFallback.baseUrl?.includes('api.groq.com') &&
-        groqFallback.apiKey &&
-        groqFallback.apiKey.startsWith('gsk_') &&
-        !isRevokedGroqKey(groqFallback.apiKey)
-      );
-      if (canFallbackToGroq) {
-        console.warn('[aiService] Ollama Cloud HTTP 402 (sin créditos): activando respaldo automático en Groq...');
-        const groqUrl = `${normalizeOpenAIBaseUrl(groqFallback.baseUrl)}/chat/completions`;
-        const groqHeaders: Record<string, string> = {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${groqFallback.apiKey.trim()}`,
-        };
-        const groqBody: Record<string, unknown> = {
-          model: groqFallback.model || 'openai/gpt-oss-120b',
-          messages: compactMessagesForTokenCap(messages, 20000),
-          temperature: body['temperature'],
-        };
-        if (options?.max_tokens) {
-          groqBody['max_tokens'] = Math.min(options.max_tokens, 6000);
-        }
-        if (jsonMode) {
-          groqBody['response_format'] = { type: 'json_object' };
-        }
-        const groqRes = await fetchWithProxyFallback(
-          groqUrl,
-          {
-            method: 'POST',
-            headers: groqHeaders,
-            body: JSON.stringify(groqBody),
-            signal: controller.signal,
-          },
-          groqBody
-        );
-        if (groqRes.ok) {
-          response = groqRes;
-        }
-      }
-    }
-
-    clearTimeout(timer);
-
-    if (!response.ok) {
-      const isOralExplicit = Boolean(override && override.groqApiKey && override.apiKey === override.groqApiKey);
-      if (isOralExplicit && response.status === 401 && cleanBase.includes('api.groq.com') && targetKey !== DEFAULT_GROQ_KEY && DEFAULT_GROQ_KEY) {
-        console.warn('[aiService] Groq oral 401 detectado, auto-recuperando con DEFAULT_GROQ_KEY...');
-        if (typeof localStorage !== 'undefined') {
-          safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
-        }
-        const retryHeaders = { ...headers, Authorization: `Bearer ${DEFAULT_GROQ_KEY}` };
-        response = await fetchWithProxyFallback(
-          url,
-          {
-            method: 'POST',
-            headers: retryHeaders,
-            body: JSON.stringify(body),
-            signal: controller.signal,
-          },
-          body
-        );
-      }
-    }
-
-    if (!response.ok) {
-      let detail = '';
-      try {
-        const errJson = await response.json();
-        detail = errJson.error?.message || errJson.message || '';
-      } catch {
-        // text fallback
-      }
-
-      if (response.status === 402) {
-        throw new Error(
-          `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Agrega saldo en ollama.com/plans o actualiza tu API Key en Configurar IA.`
-        );
-      }
-      if (response.status === 401) {
-        throw new Error(
-          `Error de autenticación (HTTP 401): Clave de API no válida o expirada. ${detail ? `(${detail})` : ''}`
-        );
-      }
-      if (response.status === 429) {
-        throw new Error(
-          `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada. ${detail ? `(${detail})` : ''}`
-        );
-      }
-      throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
-    }
-
-    const json = await response.json();
-    const content =
-      json.choices?.[0]?.message?.content ||
-      json.choices?.[0]?.message?.reasoning ||
-      json.choices?.[0]?.text;
-    if (!content) {
-      throw new Error('Respuesta de IA vacía recibida del proveedor.');
-    }
-
-    return !jsonMode ? sanitizeRepetitionLoops(content) : content;
-  } catch (err: unknown) {
-    clearTimeout(timer);
-    throw err;
   }
+
+  // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
+  if (
+    response.status >= 500 &&
+    cleanBase.includes('api.groq.com') &&
+    targetModel === 'openai/gpt-oss-120b'
+  ) {
+    const retryBody = {
+      ...body,
+      model: GROQ_FALLBACK_MODEL,
+    };
+    response = await runFetchAttemptWithTimeout(url, headers, retryBody, perAttemptTimeoutMs);
+  }
+
+  // Failover automático cuando Ollama Cloud devuelve HTTP 402 (sin créditos): usar Groq si está disponible
+  if (response.status === 402 && cleanBase.includes('ollama.com') && !override) {
+    const groqFallback = getOralAISettings();
+    const canFallbackToGroq = Boolean(
+      groqFallback.baseUrl?.includes('api.groq.com') &&
+      groqFallback.apiKey &&
+      groqFallback.apiKey.startsWith('gsk_') &&
+      !isRevokedGroqKey(groqFallback.apiKey)
+    );
+    if (canFallbackToGroq) {
+      console.warn('[aiService] Ollama Cloud HTTP 402 (sin créditos): activando respaldo automático en Groq...');
+      const groqUrl = `${normalizeOpenAIBaseUrl(groqFallback.baseUrl)}/chat/completions`;
+      const groqHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${groqFallback.apiKey.trim()}`,
+      };
+      const groqBody: Record<string, unknown> = {
+        model: groqFallback.model || 'openai/gpt-oss-120b',
+        messages: compactMessagesForTokenCap(messages, 20000),
+        temperature: body['temperature'],
+      };
+      if (options?.max_tokens) {
+        groqBody['max_tokens'] = Math.min(options.max_tokens, 6000);
+      }
+      if (jsonMode) {
+        groqBody['response_format'] = { type: 'json_object' };
+      }
+      const groqRes = await runFetchAttemptWithTimeout(groqUrl, groqHeaders, groqBody, perAttemptTimeoutMs);
+      if (groqRes.ok) {
+        response = groqRes;
+      }
+    }
+  }
+
+  if (!response.ok) {
+    const isOralExplicit = Boolean(override && override.groqApiKey && override.apiKey === override.groqApiKey);
+    if (isOralExplicit && response.status === 401 && cleanBase.includes('api.groq.com') && targetKey !== DEFAULT_GROQ_KEY && DEFAULT_GROQ_KEY) {
+      console.warn('[aiService] Groq oral 401 detectado, auto-recuperando con DEFAULT_GROQ_KEY...');
+      if (typeof localStorage !== 'undefined') {
+        safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
+      }
+      const retryHeaders = { ...headers, Authorization: `Bearer ${DEFAULT_GROQ_KEY}` };
+      response = await runFetchAttemptWithTimeout(url, retryHeaders, body, perAttemptTimeoutMs);
+    }
+  }
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const errJson = await response.json();
+      detail = errJson.error?.message || errJson.message || '';
+    } catch {
+      // text fallback
+    }
+
+    if (response.status === 402) {
+      throw new Error(
+        `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Agrega saldo en ollama.com/plans o actualiza tu API Key en Configurar IA.`
+      );
+    }
+    if (response.status === 401) {
+      throw new Error(
+        `Error de autenticación (HTTP 401): Clave de API no válida o expirada. ${detail ? `(${detail})` : ''}`
+      );
+    }
+    if (response.status === 429) {
+      throw new Error(
+        `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada. ${detail ? `(${detail})` : ''}`
+      );
+    }
+    throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
+  }
+
+  const json = await response.json();
+  const rawContent =
+    json.choices?.[0]?.message?.content ||
+    json.choices?.[0]?.message?.reasoning ||
+    json.choices?.[0]?.text;
+  if (!rawContent) {
+    throw new Error('Respuesta de IA vacía recibida del proveedor.');
+  }
+
+  if (jsonMode) {
+    return rawContent;
+  }
+
+  const withoutThink = rawContent.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim() || rawContent;
+  return sanitizeRepetitionLoops(withoutThink);
 }
 
 /**
@@ -2909,6 +2935,49 @@ export function stripExecutiveSummaryPreamble(markdownText: string): string {
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
 
+const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO OBLIGATORIO (Markdown + KaTeX):
+- INCLUYE TABLAS MARKDOWN REALES con el formato estricto:
+  | Columna 1 | Columna 2 | Columna 3 |
+  | :--- | :--- | :--- |
+  | Dato A | Dato B | Dato C |
+  Sin líneas en blanco entre filas y SIN encerrar tablas en bloques \`\`\`.
+- INCLUYE bloques de perla/alerta usando citas: \`> **Perla Clave:** ...\` o \`> **Error Frecuente:** ...\`.
+- USA KaTeX en fórmulas, parámetros numéricos o flechas causales (ej. \`$\\text{Estímulo} \\rightarrow \\text{Mecanismo} \\rightarrow \\text{Efecto}$\`).
+- Combina negritas (**término**), listas jerárquicas y diferenciaciones claras.`;
+
+function buildBalancedStudyExcerpt(text: string, maxChars: number): string {
+  if (!text || text.length <= maxChars) return text;
+
+  const snapEnd = (idx: number): number => {
+    const nl = text.lastIndexOf('\n', idx);
+    return nl > idx - 350 ? nl : idx;
+  };
+  const snapStart = (idx: number): number => {
+    const nl = text.indexOf('\n', idx);
+    return nl !== -1 && nl < idx + 350 ? nl + 1 : idx;
+  };
+
+  const headLen = Math.floor(maxChars * 0.4);
+  const midLen = Math.floor(maxChars * 0.3);
+  const tailLen = maxChars - headLen - midLen;
+
+  const headEnd = snapEnd(headLen);
+  const midCenter = Math.floor(text.length * 0.5);
+  const midStart = snapStart(Math.max(headEnd + 1, midCenter - Math.floor(midLen / 2)));
+  const midEnd = snapEnd(Math.min(text.length, midStart + midLen));
+  const tailStart = snapStart(Math.max(midEnd + 1, text.length - tailLen));
+
+  return [
+    text.slice(0, headEnd).trim(),
+    '[... sección intermedia preservada de forma proporcional ...]',
+    text.slice(midStart, midEnd).trim(),
+    '[... sección final del documento ...]',
+    text.slice(tailStart).trim(),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /** Generación de Guía de Estudio bajo demanda con 3 niveles de extensión (1x, 2x, 3x) y generación modular continua */
 export async function generateAIStudyGuide(
   rawText: string,
@@ -2926,15 +2995,64 @@ export async function generateAIStudyGuide(
     return '';
   }
 
+  const cleanBase = normalizeOpenAIBaseUrl(settings.baseUrl || '');
+  const isGroqTier = cleanBase.includes('api.groq.com');
+  const isCompactModel = isGroqTier && /allam/i.test(settings.model || '');
+  const groqInputBudget = isCompactModel ? 7000 : 10500;
+  const effectiveStudyInput = isGroqTier
+    ? buildBalancedStudyExcerpt(cleanInput, groqInputBudget)
+    : cleanInput;
+
+  const errors: string[] = [];
+  const runModule = async (
+    label: string,
+    percent: number,
+    systemPrompt: string,
+    userPrompt: string,
+    desiredMaxTokens: number
+  ): Promise<string> => {
+    onProgress?.(label, percent);
+    const maxTokens = isCompactModel
+      ? Math.min(desiredMaxTokens, 2600)
+      : isGroqTier
+      ? Math.min(desiredMaxTokens, 4200)
+      : desiredMaxTokens;
+    try {
+      return await queryAICompletion(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        false,
+        undefined,
+        {
+          max_tokens: maxTokens,
+          temperature: 0.35,
+          frequency_penalty: 0.25,
+          presence_penalty: 0.1,
+          onRetryWait: (waitMs) => {
+            const waitSecs = Math.max(1, Math.ceil(waitMs / 1000));
+            onProgress?.(`${label} (pausa Groq ${waitSecs}s por límite TPM...)`, percent);
+          },
+        }
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[StudyGuide AI] Error en ${label}:`, msg);
+      errors.push(`${label}: ${msg}`);
+      return '';
+    }
+  };
+
   // --- MODO 1: ESENCIAL (1x - Síntesis y núcleos conceptuales rápidos) ---
   if (depth === 'essential') {
-    onProgress?.('Generando Guía Esencial: síntesis de núcleos y conceptos clave...', 40);
-
     const systemPrompt = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
 Tu misión es generar una GUÍA DE ESTUDIO ESENCIAL Y DE ALTO IMPACTO (1x) en Markdown.
-Condensa los pilares teóricos, núcleos conceptuales ineludibles, definiciones clave y cuadros rápidos para consolidación veloz.
+Condensa los pilares teóricos, núcleos conceptuales ineludibles, definiciones clave y cuadros comparativos rápidos para consolidación veloz.
 
 ${translationDirective}
+
+${STUDY_GUIDE_RICH_FORMAT_RULES}
 
 REGLA ESTRICTA DE ENTRADA:
 - PROHIBIDO incluir resúmenes ejecutivos, visiones epistémicas o párrafos meta-introductorios (ej. 'El presente tratado...', 'Este documento analiza...').
@@ -2944,50 +3062,45 @@ ESTRUCTURA DIDÁCTICA EXIGIDA:
 # Guía de Estudio Esencial: ${title}
 
 ## 1. Núcleos Conceptuales y Definiciones Clave
-(Definiciones precisas de los términos basales del material)
+(Definiciones precisas de los términos basales del material y al menos un bloque \`> **Concepto Crítico:**\`)
 
-## 2. Vías y Mecanismos Críticos
-(Relaciones de causa-efecto esenciales y puntos de inflexión conceptual)
+## 2. Vías, Fórmulas y Mecanismos Críticos
+(Relaciones de causa-efecto esenciales en KaTeX y puntos de inflexión conceptual)
 
 ## 3. Cuadro Comparativo de Alto Rendimiento
-(Tabla Markdown con las principales distinciones entre elementos del tema)
+(Tabla Markdown obligatoria con las principales distinciones entre elementos del tema)
 
 ## 4. Mnemotecnias y Claves de Examen
-(Reglas nemotécnicas directas y perlas para responder preguntas trampa)`;
+(Reglas nemotécnicas directas y perlas \`> **Pregunta Trampa:**\`)`;
 
     const userPrompt = `DOCUMENTO BASE ("${title}" - ${category}):
-${cleanInput}
+${effectiveStudyInput}
 
-Genera la Guía de Estudio Esencial en español (Markdown):`;
+Genera la Guía de Estudio Esencial completa en español (Markdown) incluyendo tabla comparativa y bloque de perlas:`;
 
-    try {
-      const res = await queryAICompletion(
-        [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        false,
-        undefined,
-        { max_tokens: 4096, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
-      );
-      onProgress?.('Guía Esencial completada.', 100);
-      return stripExecutiveSummaryPreamble(res?.trim() || '');
-    } catch (e) {
-      console.warn('[StudyGuide AI] Error en guía esencial:', e);
-      return '';
+    const res = await runModule(
+      'Generando Guía Esencial: síntesis de núcleos, tablas y claves...',
+      40,
+      systemPrompt,
+      userPrompt,
+      4096
+    );
+    if (!res.trim() && errors.length > 0) {
+      throw new Error(`No se pudo generar la Guía Esencial. ${errors[0]}`);
     }
+    onProgress?.('Guía Esencial completada.', 100);
+    return stripExecutiveSummaryPreamble(res.trim());
   }
 
   // --- MODO 2: COMPLETA (2x - Desarrollo sección por sección y tablas comparativas) ---
   if (depth === 'complete') {
-    onProgress?.('Fase 1/2: Desarrollando marco teórico y desglose sección por sección (2x)...', 25);
-
-    // Fase 1: Marco Teórico y Desarrollo Sistemático
     const phase1System = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
 Tu misión es redactar la PRIMERA PARTE (Fase 1) de una GUÍA DE ESTUDIO COMPLETA Y DETALLADA (2x) en Markdown.
 Esta fase debe cubrir con exhaustividad los fundamentos teóricos y el recorrido sistemático sección por sección / diapositiva por diapositiva.
 
 ${translationDirective}
+
+${STUDY_GUIDE_RICH_FORMAT_RULES}
 
 REGLA ESTRICTA DE ENTRADA:
 - PROHIBIDO incluir resúmenes ejecutivos, visiones epistémicas o párrafos meta-introductorios (ej. 'El presente tratado...', 'Este documento analiza...').
@@ -2997,84 +3110,71 @@ ESTRUCTURA DE LA FASE 1:
 # Guía de Estudio Completa: ${title}
 
 ## 1. Fundamentos y Marco Teórico Integral
-(Principios basales, taxonomía, definiciones formales y antecedentes)
+(Principios basales, taxonomía, definiciones formales, fórmulas/cadenas causales y cuadro resumen inicial en Markdown)
 
 ## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección / Diapositiva por Diapositiva)
-(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original, desglosando cada fármaco, mecanismo o concepto individualmente con rigor causal)`;
+(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original, desglosando cada fármaco, mecanismo o concepto individualmente con rigor causal y bloques \`> **Perla Clave:**\`)`;
 
     const phase1User = `DOCUMENTO ORIGINAL ("${title}" - ${category}):
-${cleanInput}
+${effectiveStudyInput}
 
-Redacta la Fase 1 de la Guía de Estudio Completa en español (Markdown). Cubre minuciosamente cada sección:`;
+Redacta la Fase 1 de la Guía de Estudio Completa en español (Markdown). Cubre minuciosamente cada sección con formato rico:`;
 
-    let part1 = '';
-    try {
-      part1 = await queryAICompletion(
-        [
-          { role: 'system', content: phase1System },
-          { role: 'user', content: phase1User }
-        ],
-        false,
-        undefined,
-        { max_tokens: 6144, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
-      );
-    } catch (e) {
-      console.warn('[StudyGuide AI] Error en Fase 1 de guía completa:', e);
-    }
+    const part1 = await runModule(
+      'Fase 1/2: Desarrollando marco teórico y desglose sección por sección (2x)...',
+      25,
+      phase1System,
+      phase1User,
+      6144
+    );
 
-    onProgress?.('Fase 2/2: Creando cuadros comparativos extensos, perlas y mnemotecnias...', 70);
-
-    // Fase 2: Cuadros comparativos, perlas de examen y mnemotecnias
     const phase2System = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
 Tu misión es redactar la SEGUNDA PARTE (Fase 2) de la GUÍA DE ESTUDIO COMPLETA (2x) en Markdown.
 Debes crear tablas comparativas exhaustivas, casos prácticos, perlas clínicas/analíticas y mnemotecnias avanzadas que complementen la Fase 1.
 
 ${translationDirective}
 
+${STUDY_GUIDE_RICH_FORMAT_RULES}
+
 ESTRUCTURA DE LA FASE 2:
 ## 3. Cuadros Comparativos, Clasificaciones y Vías de Acción
-(Tablas comparativas extensas en Markdown contrastando todas las entidades, fármacos o categorías del tema)
+(Mínimo 2 tablas comparativas extensas en Markdown contrastando todas las entidades, fármacos o categorías del tema)
 
 ## 4. Perlas de Examen, Casos Prácticos y Errores Habituales
-(Diferenciaciones sutiles, preguntas trampa típicas de examen, análisis diferencial y razonamiento analítico)
+(Diferenciaciones sutiles, preguntas trampa típicas de examen en bloques \`> **Pregunta Trampa:**\`, análisis diferencial y razonamiento analítico)
 
 ## 5. Mnemotecnias y Síntesis de Alto Rendimiento
 (Reglas nemotécnicas estructuradas, acrónimos mnemónicos y resumen de consolidación rápida)`;
 
     const phase2User = `DOCUMENTO ORIGINAL ("${title}" - ${category}):
-${cleanInput}
+${effectiveStudyInput}
 
-Redacta la Fase 2 (Tablas comparativas, perlas de examen y mnemotecnias) en español (Markdown):`;
+Redacta la Fase 2 (Tablas comparativas Markdown obligatorias, perlas de examen y mnemotecnias) en español:`;
 
-    let part2 = '';
-    try {
-      part2 = await queryAICompletion(
-        [
-          { role: 'system', content: phase2System },
-          { role: 'user', content: phase2User }
-        ],
-        false,
-        undefined,
-        { max_tokens: 6144, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
-      );
-    } catch (e) {
-      console.warn('[StudyGuide AI] Error en Fase 2 de guía completa:', e);
+    const part2 = await runModule(
+      'Fase 2/2: Creando cuadros comparativos extensos, perlas y mnemotecnias...',
+      70,
+      phase2System,
+      phase2User,
+      6144
+    );
+
+    const parts2x = [part1.trim(), part2.trim()].filter(p => p.length > 50);
+    if (parts2x.length === 0 && errors.length > 0) {
+      throw new Error(`No se pudo generar la Guía Completa. ${errors[0]}`);
     }
-
     onProgress?.('Guía Completa (2x) consolidada con éxito.', 100);
-    const combined2x = [part1.trim(), part2.trim()].filter(p => p.length > 50).join('\n\n---\n\n');
-    return stripExecutiveSummaryPreamble(combined2x || part1 || part2 || '');
+    return stripExecutiveSummaryPreamble(parts2x.join('\n\n---\n\n') || part1 || part2 || '');
   }
 
   // --- MODO 3: ULTRA-EXHAUSTIVA (3x - Tratado académico profundo sin límites) ---
-  onProgress?.('Fase 1/3: Fundamentación estructural, marco conceptual y glosario profundo...', 15);
-
-  // Fase 1: Marco Conceptual, Fundamentación Fisiopatológica/Estructural y Glosario Exhaustivo
   const p1System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
 Tu misión es redactar el MÓDULO 1 de una GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
 Este módulo debe ser de máxima profundidad científica y académica, sin recortar ni condensar nada.
 
 ${translationDirective}
+
+${STUDY_GUIDE_RICH_FORMAT_RULES}
 
 REGLA ESTRICTA DE ENTRADA:
 - PROHIBIDO incluir resúmenes ejecutivos, visiones epistémicas ni párrafos de preámbulo meta-analíticos (ej. 'El presente tratado constituye una disección analítica...', 'Este documento analiza...').
@@ -3084,34 +3184,24 @@ ESTRUCTURA DEL MÓDULO 1:
 # Tratado y Guía de Estudio Magna: ${title}
 
 ## 1. Fundamentos Teóricos, Marco Conceptual y Fisiopatológico / Estructural
-(Principios basales, leyes o axiomas que rigen el tema, taxonomía detallada y causalidad profunda)
+(Principios basales, leyes o axiomas en KaTeX que rigen el tema, taxonomía detallada en tabla Markdown y causalidad profunda con perlas \`> **Concepto Basal:**\`)
 
 ## 2. Glosario Técnico Exhaustivo y Nomenclatura Especializada
 (Definición rigurosa, etimología conceptual y contexto clínico/teórico de cada término técnico mencionado en el material)`;
 
   const p1User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
-${cleanInput}
+${effectiveStudyInput}
 
-Redacta el Módulo 1 con máxima amplitud y rigor en español (Markdown):`;
+Redacta el Módulo 1 con máxima amplitud, rigor y tabla taxonómica Markdown en español:`;
 
-  let mod1 = '';
-  try {
-    mod1 = await queryAICompletion(
-      [
-        { role: 'system', content: p1System },
-        { role: 'user', content: p1User }
-      ],
-      false,
-      undefined,
-      { max_tokens: 6144, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
-    );
-  } catch (e) {
-    console.warn('[StudyGuide AI] Error en Módulo 1 ultra:', e);
-  }
+  const mod1 = await runModule(
+    'Fase 1/3: Fundamentación estructural, marco conceptual y glosario profundo...',
+    15,
+    p1System,
+    p1User,
+    6144
+  );
 
-  onProgress?.('Fase 2/3: Recorrido minucioso diapositiva por diapositiva / sección por sección (3x)...', 45);
-
-  // Fase 2: Recorrido exhaustivo diapositiva por diapositiva / sección por sección
   const p2System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
 Tu misión es redactar el MÓDULO 2 de la GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
 DEBES RECORRER CADA DIAPOSITIVA Y SECCIÓN DEL DOCUMENTO ORIGINAL SIN SALTARTE NINGUNA.
@@ -3119,76 +3209,65 @@ Desglosa cada concepto, fórmula, fármaco, reacción o estructura con detalle a
 
 ${translationDirective}
 
+${STUDY_GUIDE_RICH_FORMAT_RULES}
+
 ESTRUCTURA DEL MÓDULO 2:
 ## 3. Desarrollo Sistemático Minucioso (Diapositiva por Diapositiva / Sección por Sección)
-(Análisis exhaustivo punto por punto:
+(Análisis exhaustivo punto por punto con cuadro síntesis intermedio en Markdown y fórmulas KaTeX:
 - Diapositiva / Sección: Título y objetivo
 - Mecanismo detallado / Fisiología / Derivación matemática
 - Implicaciones prácticas / Clínicas / Aplicaciones reales
 - Interacciones, casos límite y excepciones)`;
 
   const p2User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
-${cleanInput}
+${effectiveStudyInput}
 
-Redacta el Módulo 2 con desarrollo exhaustivo diapositiva por diapositiva en español (Markdown):`;
+Redacta el Módulo 2 con desarrollo exhaustivo diapositiva por diapositiva y tablas de síntesis en español (Markdown):`;
 
-  let mod2 = '';
-  try {
-    mod2 = await queryAICompletion(
-      [
-        { role: 'system', content: p2System },
-        { role: 'user', content: p2User }
-      ],
-      false,
-      undefined,
-      { max_tokens: 8192, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
-    );
-  } catch (e) {
-    console.warn('[StudyGuide AI] Error en Módulo 2 ultra:', e);
-  }
+  const mod2 = await runModule(
+    'Fase 2/3: Recorrido minucioso diapositiva por diapositiva / sección por sección (3x)...',
+    45,
+    p2System,
+    p2User,
+    8192
+  );
 
-  onProgress?.('Fase 3/3: Creando grandes tablas matriciales, casos clínicos de examen y mnemotecnias...', 80);
-
-  // Fase 3: Tablas matriciales, casos clínicos/prácticos de examen, preguntas trampa y mnemotecnias avanzadas
   const p3System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
 Tu misión es redactar el MÓDULO 3 de la GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
 Construye las tablas comparativas más exhaustivas posibles, casos de examen analítico y mnemotecnias de consolidación.
 
 ${translationDirective}
 
+${STUDY_GUIDE_RICH_FORMAT_RULES}
+
 ESTRUCTURA DEL MÓDULO 3:
 ## 4. Cuadros Comparativos Matriciales y Algoritmos Diferenciales
-(Grandes tablas Markdown completas que contrasten todos los elementos del tema sin omitir filas ni columnas)
+(Mínimo 2 grandes tablas Markdown completas con formato estricto | Col 1 | Col 2 | Col 3 | que contrasten todos los elementos del tema sin omitir filas ni columnas)
 
 ## 5. Casos Prácticos de Examen, Perlas Clínicas y Preguntas Trampa Frecuentes
-(Casos de razonamiento complejo, diagnósticos diferenciales, errores habituales y cómo resolver preguntas de nivel experto)
+(Casos de razonamiento complejo, diagnósticos diferenciales, bloques \`> **Pregunta Trampa:**\` y errores habituales)
 
 ## 6. Mnemotecnias Avanzadas y Síntesis de Retención de Máximo Rendimiento
-(Acrónimos, analogías estructuradas y mapas nemotécnicos para fijar todo el contenido en memoria de largo plazo)`;
+(Acrónimos, analogías estructuradas y tabla/mapa nemotécnico final para fijar todo el contenido en memoria de largo plazo)`;
 
   const p3User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
-${cleanInput}
+${effectiveStudyInput}
 
-Redacta el Módulo 3 (Grandes tablas matriciales, casos prácticos, perlas y mnemotecnias) en español (Markdown):`;
+Redacta el Módulo 3 completo en español (Markdown) asegurando grandes tablas matriciales, casos prácticos, bloques de perlas y mnemotecnias:`;
 
-  let mod3 = '';
-  try {
-    mod3 = await queryAICompletion(
-      [
-        { role: 'system', content: p3System },
-        { role: 'user', content: p3User }
-      ],
-      false,
-      undefined,
-      { max_tokens: 8192, temperature: 0.35, frequency_penalty: 0.4, presence_penalty: 0.15 }
-    );
-  } catch (e) {
-    console.warn('[StudyGuide AI] Error en Módulo 3 ultra:', e);
-  }
-
-  onProgress?.('Tratado y Guía Magna Ultra-Exhaustiva (3x) consolidada con éxito.', 100);
+  const mod3 = await runModule(
+    'Fase 3/3: Creando grandes tablas matriciales, casos clínicos de examen y mnemotecnias...',
+    80,
+    p3System,
+    p3User,
+    8192
+  );
 
   const sections = [mod1.trim(), mod2.trim(), mod3.trim()].filter(s => s.length > 50);
+  if (sections.length === 0 && errors.length > 0) {
+    throw new Error(`No se pudo generar la Guía de Estudio Magna. ${errors[0]}`);
+  }
+  onProgress?.('Tratado y Guía Magna Ultra-Exhaustiva (3x) consolidada con éxito.', 100);
   return stripExecutiveSummaryPreamble(sections.join('\n\n---\n\n') || mod1 || mod2 || mod3 || '');
 }
 

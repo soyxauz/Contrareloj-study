@@ -200,10 +200,40 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
     return <span className={className}>{renderInline(text)}</span>;
   }
 
-  // Parseo estructurado por bloques (encabezados, listas, citas, bloques matemáticos, párrafos)
-  const lines = text.split('\n');
+  // Normalizar bloques ```markdown / ```md / ```latex accidentalmente envueltos para renderizar sus tablas y fórmulas
+  const normalizedInputText = text.replace(/```(?:markdown|md|latex)\s*\n([\s\S]*?)```/gi, '$1');
+
+  // Parseo estructurado por bloques (código, tablas, matemáticas multi-línea, encabezados, citas, listas, párrafos)
+  const lines = normalizedInputText.split('\n');
   const blocks: React.ReactNode[] = [];
   let currentList: { type: 'ul' | 'ol'; items: string[] } | null = null;
+  const tableDelimiterRegex = /^\|?(?:\s*:?[-–—]{2,}:?\s*\|)+\s*(?:\s*:?[-–—]{2,}:?\s*)?\|?$/;
+
+  const splitTableCells = (rowLine: string): string[] => {
+    const stripped = rowLine.trim().replace(/^\|/, '').replace(/\|$/, '');
+    const cells: string[] = [];
+    let current = '';
+    let inMath = false;
+    for (let idx = 0; idx < stripped.length; idx++) {
+      const ch = stripped[idx];
+      if (ch === '\\' && idx + 1 < stripped.length && stripped[idx + 1] === '|') {
+        current += '|';
+        idx++;
+        continue;
+      }
+      if (ch === '$') {
+        inMath = !inMath;
+      }
+      if (ch === '|' && !inMath) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  };
 
   const flushList = (key: string) => {
     if (!currentList) return;
@@ -251,6 +281,33 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       continue;
     }
 
+    // Bloques de código / pseudocódigo cercados (```)
+    if (trimmed.startsWith('```')) {
+      if (currentList) flushList(`list-${i}`);
+      const codeLines: string[] = [];
+      let j = i + 1;
+      while (j < lines.length && !lines[j].trim().startsWith('```')) {
+        codeLines.push(lines[j]);
+        j++;
+      }
+      blocks.push(
+        <pre
+          key={`code-${i}`}
+          className={`my-3 p-3.5 rounded-xl border overflow-x-auto font-mono text-xs leading-relaxed ${
+            theme === 'light'
+              ? 'bg-slate-100 border-slate-300 text-slate-900'
+              : theme === 'kitty'
+              ? 'bg-pink-50 border-pink-200 text-pink-950'
+              : 'bg-slate-950/90 border-thea-border/70 text-slate-200'
+          }`}
+        >
+          <code>{codeLines.join('\n')}</code>
+        </pre>
+      );
+      i = j;
+      continue;
+    }
+
     // Regla horizontal
     if (/^(\-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
       if (currentList) flushList(`list-${i}`);
@@ -265,55 +322,73 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       continue;
     }
 
-    // Tablas estructuradas en Markdown (| Col1 | Col2 | Col3 |)
-    if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 2) {
+    // Tablas estructuradas en Markdown (con barras laterales o sin barras en los extremos si la siguiente línea es delimitadora)
+    const startsWithPipedTable = trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 2;
+    const startsUnpipedTable =
+      trimmed.includes('|') &&
+      !trimmed.startsWith('>') &&
+      !trimmed.startsWith('#') &&
+      i + 1 < lines.length &&
+      tableDelimiterRegex.test(lines[i + 1].trim());
+
+    if (startsWithPipedTable || startsUnpipedTable) {
       if (currentList) flushList(`list-${i}`);
 
       const tableLines: string[] = [trimmed];
       let j = i + 1;
       while (j < lines.length) {
         const nextTrimmed = lines[j].trim();
-        if (nextTrimmed.startsWith('|') && nextTrimmed.endsWith('|')) {
+        if (
+          nextTrimmed &&
+          nextTrimmed.includes('|') &&
+          !nextTrimmed.startsWith('>') &&
+          !nextTrimmed.startsWith('#') &&
+          !nextTrimmed.startsWith('```')
+        ) {
           tableLines.push(nextTrimmed);
           j++;
-        } else if (!nextTrimmed && j + 1 < lines.length && lines[j + 1].trim().startsWith('|') && lines[j + 1].trim().endsWith('|')) {
-          // Saltear líneas en blanco accidentales entre filas de la tabla
+        } else if (
+          !nextTrimmed &&
+          j + 1 < lines.length &&
+          lines[j + 1].trim().includes('|') &&
+          !lines[j + 1].trim().startsWith('>') &&
+          !lines[j + 1].trim().startsWith('#') &&
+          !(
+            tableLines.some(l => tableDelimiterRegex.test(l)) &&
+            j + 2 < lines.length &&
+            tableDelimiterRegex.test(lines[j + 2].trim())
+          )
+        ) {
           j++;
         } else {
           break;
         }
       }
 
-      // Buscar la fila delimitadora (ej: | :--- | :--- | :--- |)
-      const delimiterIndex = tableLines.findIndex(l => /^\|(?:\s*:?-+:?\s*\|)+$/.test(l));
+      // Buscar la fila delimitadora (ej: | :--- | :--- | :--- | o --- | --- | ---)
+      const delimiterIndex = tableLines.findIndex(l => tableDelimiterRegex.test(l));
 
       if (delimiterIndex !== -1 && tableLines.length >= 2) {
         const headerLines = tableLines.slice(0, delimiterIndex);
         const delimiterLine = tableLines[delimiterIndex];
         const bodyLines = tableLines.slice(delimiterIndex + 1);
 
-        const parseRow = (rowLine: string) =>
-          rowLine
-            .replace(/^\|/, '')
-            .replace(/\|$/, '')
-            .split('|')
-            .map(c => c.trim());
+        const alignments = splitTableCells(delimiterLine).map(c => {
+          const col = c.trim();
+          const left = col.startsWith(':');
+          const right = col.endsWith(':');
+          if (left && right) return 'text-center';
+          if (right) return 'text-right';
+          return 'text-left';
+        });
 
-        const alignments = delimiterLine
-          .replace(/^\|/, '')
-          .replace(/\|$/, '')
-          .split('|')
-          .map(c => {
-            const col = c.trim();
-            const left = col.startsWith(':');
-            const right = col.endsWith(':');
-            if (left && right) return 'text-center';
-            if (right) return 'text-right';
-            return 'text-left';
-          });
-
-        const headers = headerLines.length > 0 ? parseRow(headerLines[0]) : [];
-        const rows = bodyLines.map(parseRow);
+        const headers = headerLines.length > 0 ? splitTableCells(headerLines[0]) : [];
+        const colCount = Math.max(headers.length, alignments.length);
+        const rows = bodyLines.map((rowLine) => {
+          const parsed = splitTableCells(rowLine);
+          while (parsed.length < colCount) parsed.push('');
+          return parsed.slice(0, colCount);
+        });
 
         blocks.push(
           <div
@@ -397,6 +472,47 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
         i = j - 1;
         continue;
       }
+    }
+
+    // Bloque matemático multi-línea ($$\n...\n$$ o \[\n...\n\])
+    if (trimmed === '$$' || trimmed === '\\[' || ((trimmed.startsWith('$$') && !trimmed.endsWith('$$')) || (trimmed.startsWith('\\[') && !trimmed.endsWith('\\]')))) {
+      if (currentList) flushList(`list-${i}`);
+      const closingToken = trimmed.startsWith('$$') ? '$$' : '\\]';
+      const firstPart = trimmed.slice(2).trim();
+      const mathLines: string[] = firstPart ? [firstPart] : [];
+      let j = i + 1;
+      while (j < lines.length) {
+        const nextT = lines[j].trim();
+        if (nextT.endsWith(closingToken)) {
+          const tailPart = nextT.slice(0, -2).trim();
+          if (tailPart) mathLines.push(tailPart);
+          break;
+        }
+        mathLines.push(lines[j]);
+        j++;
+      }
+      const html = renderKatexSafe(mathLines.join('\n'), true);
+      blocks.push(
+        <div
+          key={`math-multiline-${i}`}
+          className={`my-3 p-3.5 sm:p-4 rounded-2xl border overflow-x-auto text-center shadow-xs transition-colors ${
+            theme === 'light'
+              ? 'bg-slate-50 border-slate-200 text-zinc-900'
+              : theme === 'kitty'
+              ? 'bg-pink-50/60 border-pink-200 text-zinc-900'
+              : 'bg-gradient-to-r from-violet-950/40 via-thea-surface to-indigo-950/30 border-violet-500/30 text-slate-100'
+          }`}
+        >
+          <div
+            className={`katex-display-wrapper text-sm sm:text-base inline-block max-w-full ${
+              theme === 'light' || theme === 'kitty' ? 'text-zinc-900 font-semibold' : 'text-slate-100'
+            }`}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        </div>
+      );
+      i = j;
+      continue;
     }
 
     // Bloque matemático independiente / Flujo Lógico en línea propia (ej: $$\text{...}$$ o $\text{...}$)
@@ -501,13 +617,25 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       continue;
     }
 
-    // Citas (Blockquote)
-    if (trimmed.startsWith('> ')) {
+    // Citas agrupadas (Blockquote multi-línea)
+    if (trimmed.startsWith('> ') || trimmed === '>') {
       if (currentList) flushList(`list-${i}`);
+      const quoteLines: string[] = [];
+      let j = i;
+      while (j < lines.length) {
+        const qTrim = lines[j].trim();
+        if (qTrim.startsWith('> ') || qTrim === '>') {
+          const textPart = qTrim.replace(/^>\s?/, '');
+          if (textPart) quoteLines.push(textPart);
+          j++;
+        } else {
+          break;
+        }
+      }
       blocks.push(
         <blockquote
           key={`bq-${i}`}
-          className={`border-l-3 pl-4 py-2 my-2.5 rounded-r-xl text-xs sm:text-sm italic leading-relaxed transition-colors ${
+          className={`border-l-3 pl-4 pr-3 py-2.5 my-3 rounded-r-xl text-xs sm:text-sm italic leading-relaxed space-y-1 transition-colors ${
             theme === 'light'
               ? 'border-amber-500 bg-amber-50 text-amber-950'
               : theme === 'kitty'
@@ -515,15 +643,18 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
               : 'border-amber-400 bg-amber-500/10 text-amber-200'
           }`}
         >
-          {renderInline(trimmed.replace(/^>\s+/, ''))}
+          {quoteLines.map((ql, qIdx) => (
+            <p key={qIdx}>{renderInline(ql)}</p>
+          ))}
         </blockquote>
       );
+      i = j - 1;
       continue;
     }
 
-    // Listas desordenadas (- item o * item)
-    if (/^[-*]\s+/.test(trimmed)) {
-      const itemText = trimmed.replace(/^[-*]\s+/, '');
+    // Listas desordenadas (- item, * item, • item, + item)
+    if (/^[-*•+]\s+/.test(trimmed)) {
+      const itemText = trimmed.replace(/^[-*•+]\s+/, '');
       if (!currentList || currentList.type !== 'ul') {
         if (currentList) flushList(`list-${i}`);
         currentList = { type: 'ul', items: [itemText] };

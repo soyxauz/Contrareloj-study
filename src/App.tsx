@@ -157,8 +157,11 @@ export const App: React.FC = () => {
   // Carga inicial robusta de kits (para usuario autenticado o sesión de invitado con kits de fábrica garantizados)
   const [kits, setKits] = useState<StudyKit[]>(() => {
     const initialUserId = authService.getCurrentUser()?.id || null;
-    const initialKits = authService.getUserKits(initialUserId).filter(k => !isCorruptedKit(k)).map(stripAssetDataUrlsFromKit);
     const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+    const initialKits = authService
+      .getUserKits(initialUserId)
+      .filter(k => !isCorruptedKit(k))
+      .map(k => stripAssetDataUrlsFromKit(k, k.id === savedCurrentId));
     if (savedCurrentId) {
       if (['bio-respiration', 'cs-algorithms', 'cs-algo'].includes(savedCurrentId)) {
         try { localStorage.removeItem(STORAGE_CURRENT_KIT_KEY); } catch {}
@@ -182,13 +185,13 @@ export const App: React.FC = () => {
         try { localStorage.removeItem(STORAGE_CURRENT_KIT_KEY); } catch {}
       } else {
         const found = kits.find(k => k.id === savedCurrentId && !isCorruptedKit(k));
-        if (found) return stripAssetDataUrlsFromKit(found);
+        if (found) return stripAssetDataUrlsFromKit(found, true);
       }
     }
     const cleanFirst = kits.find(k => !isCorruptedKit(k));
     if (cleanFirst) {
       safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, cleanFirst.id);
-      return stripAssetDataUrlsFromKit(cleanFirst);
+      return stripAssetDataUrlsFromKit(cleanFirst, true);
     }
     return null;
   });
@@ -206,7 +209,8 @@ export const App: React.FC = () => {
       if (isCancelled) return;
       const cleanKits = recoveredKits.filter(k => !isCorruptedKit(k));
       if (cleanKits.length > 0) {
-        const cleanStrippedKits = cleanKits.map(stripAssetDataUrlsFromKit);
+        const savedIdForMap = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+        const cleanStrippedKits = cleanKits.map(k => stripAssetDataUrlsFromKit(k, k.id === savedIdForMap));
         setKits(prev => {
           const merged = mergeKitsByUpdatedAt(prev, cleanStrippedKits);
           isHydratedRef.current = true;
@@ -227,7 +231,7 @@ export const App: React.FC = () => {
           const fullKit = cleanKits.find(k => k.id === targetId);
 
           if (fullKit) {
-            const stripped = stripAssetDataUrlsFromKit(fullKit);
+            const stripped = stripAssetDataUrlsFromKit(fullKit, true);
             if (!prev) return stripped;
             const mergedCurrent = mergeKitsByUpdatedAt([prev], [stripped])[0];
             if (mergedCurrent) {
@@ -236,7 +240,7 @@ export const App: React.FC = () => {
           }
 
           if (!prev) {
-            const selected = fullKit ? stripAssetDataUrlsFromKit(fullKit) : cleanStrippedKits[0];
+            const selected = fullKit ? stripAssetDataUrlsFromKit(fullKit, true) : cleanStrippedKits[0];
             if (selected) {
               safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, selected.id);
             }
@@ -614,9 +618,10 @@ export const App: React.FC = () => {
         ...Array.from(getDeletedKitIds()),
         ...(Array.isArray(detail.deletedIds) ? detail.deletedIds : []),
       ]);
+      const activeIdForSync = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
       const cleanIncoming = (detail.kits as StudyKit[])
         .filter(k => !isCorruptedKit(k) && !delSet.has(k.id))
-        .map(stripAssetDataUrlsFromKit);
+        .map(k => stripAssetDataUrlsFromKit(k, k.id === activeIdForSync));
 
       setKits(prev => {
         const filteredPrev = prev.filter(k => !delSet.has(k.id));
@@ -738,9 +743,9 @@ export const App: React.FC = () => {
     if (syncedKits && Array.isArray(syncedKits) && syncedKits.length > 0) {
       const cleanPulled = syncedKits.filter(k => !isCorruptedKit(k));
       if (cleanPulled.length > 0) {
-        const strippedPulled = cleanPulled.map(stripAssetDataUrlsFromKit);
+        const strippedPulled = cleanPulled.map((k, idx) => stripAssetDataUrlsFromKit(k, idx === 0));
         setKits(prev => mergeKitsByUpdatedAt(prev, strippedPulled));
-        authService.saveUserKits(user.id, strippedPulled);
+        authService.saveUserKits(user.id, cleanPulled);
         const firstPulled = strippedPulled[0] || null;
         setCurrentKit(firstPulled);
         if (firstPulled) {
@@ -755,7 +760,7 @@ export const App: React.FC = () => {
 
     // 3. Restaurar kits del usuario guardados localmente
     const userKits = authService.getUserKits(user.id);
-    const clean = userKits.filter(k => !isCorruptedKit(k)).map(stripAssetDataUrlsFromKit);
+    const clean = userKits.filter(k => !isCorruptedKit(k)).map((k, idx) => stripAssetDataUrlsFromKit(k, idx === 0));
     setKits(clean);
     const first = clean[0] || null;
     setCurrentKit(first);
@@ -771,7 +776,8 @@ export const App: React.FC = () => {
         if (pulled && Array.isArray(pulled) && pulled.length > 0) {
           const cleanPulled = pulled.filter(k => !isCorruptedKit(k));
           if (cleanPulled.length > 0) {
-            const strippedPulled = cleanPulled.map(stripAssetDataUrlsFromKit);
+            const targetActiveId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+            const strippedPulled = cleanPulled.map((k, idx) => stripAssetDataUrlsFromKit(k, targetActiveId ? k.id === targetActiveId : idx === 0));
             setKits(prev => mergeKitsByUpdatedAt(prev, strippedPulled));
             const firstPulled = strippedPulled[0] || null;
             setCurrentKit(prev => prev || firstPulled);
@@ -798,7 +804,8 @@ export const App: React.FC = () => {
           const res = await googleDriveService.pullFromDrive(currentUser?.id || '');
           if (res && res.length > 0) {
             const clean = res.filter(k => !isCorruptedKit(k));
-            setKits(prev => mergeKitsByUpdatedAt(prev, clean.map(stripAssetDataUrlsFromKit)));
+            const targetActiveId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+            setKits(prev => mergeKitsByUpdatedAt(prev, clean.map(k => stripAssetDataUrlsFromKit(k, k.id === targetActiveId))));
           }
           return;
         }
@@ -807,8 +814,9 @@ export const App: React.FC = () => {
       if (res.kits) {
         const clean = res.kits.filter(k => !isCorruptedKit(k));
         if (clean.length > 0) {
-          setKits(prev => mergeKitsByUpdatedAt(prev, clean.map(stripAssetDataUrlsFromKit)));
-          if (!currentKit) setCurrentKit(stripAssetDataUrlsFromKit(clean[0]));
+          const targetActiveId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+          setKits(prev => mergeKitsByUpdatedAt(prev, clean.map((k, idx) => stripAssetDataUrlsFromKit(k, targetActiveId ? k.id === targetActiveId : idx === 0))));
+          if (!currentKit) setCurrentKit(stripAssetDataUrlsFromKit(clean[0], true));
         }
       }
       setDriveNeedsReauth(false);
@@ -826,7 +834,7 @@ export const App: React.FC = () => {
       resetAISettingsToDefault();
       setCurrentUser(null);
       // Al cerrar sesión, cargar los kits limpios de fábrica para invitado en lugar de dejar la pantalla vacía
-      const guestKits = authService.getUserKits(null).filter(k => !isCorruptedKit(k)).map(stripAssetDataUrlsFromKit);
+      const guestKits = authService.getUserKits(null).filter(k => !isCorruptedKit(k)).map((k, idx) => stripAssetDataUrlsFromKit(k, idx === 0));
       setKits(guestKits);
       const first = guestKits[0] || null;
       setCurrentKit(first);
@@ -855,9 +863,20 @@ export const App: React.FC = () => {
 
     const fullKit = kits.find(k => k.id === kit.id);
     const bestKit = (fullKit && (fullKit.questions?.length || 0) > (kit.questions?.length || 0)) ? fullKit : kit;
-    const strippedBest = stripAssetDataUrlsFromKit(bestKit);
+    const strippedBest = stripAssetDataUrlsFromKit(bestKit, true);
     setCurrentKit(strippedBest);
     safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, bestKit.id);
+
+    // Si el kit en RAM tenía sourceText recortado (>300 chars original), re-hidratar texto completo desde IndexedDB
+    if ((strippedBest.sourceText?.length || 0) <= 350) {
+      authService.restoreUserKitsAsync(currentUser ? currentUser.id : null).then((recovered) => {
+        const fullMatch = recovered.find(k => k.id === bestKit.id);
+        if (!fullMatch) return;
+        const hydratedActive = stripAssetDataUrlsFromKit(fullMatch, true);
+        setCurrentKit(prev => (prev && prev.id === bestKit.id ? mergeKitsByUpdatedAt([prev], [hydratedActive])[0] || prev : prev));
+        setKits(prev => mergeKitsByUpdatedAt(prev, [hydratedActive]));
+      }).catch(() => {});
+    }
 
     // Mover siempre el kit seleccionado al principio de la lista
     setKits(prev => {
@@ -882,7 +901,7 @@ export const App: React.FC = () => {
       ...newKit,
       updatedAt: Date.now(),
     };
-    const strippedKit = stripAssetDataUrlsFromKit(kitWithTime);
+    const strippedKit = stripAssetDataUrlsFromKit(kitWithTime, true);
     const updated = [strippedKit, ...kits.filter(k => k.id !== kitWithTime.id)];
     setKits(updated);
     setCurrentKit(strippedKit);
@@ -906,7 +925,7 @@ export const App: React.FC = () => {
       ...updatedKit,
       updatedAt: Date.now(),
     };
-    const strippedKit = stripAssetDataUrlsFromKit(kitWithTime);
+    const strippedKit = stripAssetDataUrlsFromKit(kitWithTime, true);
     setCurrentKit(strippedKit);
     try {
       safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, kitWithTime.id);
@@ -1218,7 +1237,7 @@ export const App: React.FC = () => {
               const delIds = getDeletedKitIds();
               const clean = (syncedKits || [])
                 .filter(k => !isCorruptedKit(k) && !delIds.has(k.id))
-                .map(stripAssetDataUrlsFromKit);
+                .map((k, idx) => stripAssetDataUrlsFromKit(k, currentKit ? k.id === currentKit.id : idx === 0));
               setKits(prev => mergeKitsByUpdatedAt(
                 prev.filter(k => !delIds.has(k.id)),
                 clean,

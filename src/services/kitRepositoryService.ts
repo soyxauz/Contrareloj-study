@@ -132,7 +132,8 @@ export const kitRepositoryService = {
           if (Array.isArray(parsed) && parsed.length > 0) {
             const clean = parsed.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
             if (clean.length > 0) {
-              const stripped = clean.map(stripAssetDataUrlsFromKit);
+              const activeKitId = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_currentkit_id') : null;
+              const stripped = clean.map(k => stripAssetDataUrlsFromKit(k, k.id === activeKitId));
               const hydrated = hydrateFlashcardsMastery(userId, stripped);
               inMemoryKitsCache.set(key, hydrated);
               return hydrated;
@@ -235,27 +236,30 @@ export const kitRepositoryService = {
       }
 
       if (merged.length > 0) {
-        const strippedMerged = merged.map(k => stripAssetDataUrlsFromKit(k, false));
+        const activeKitId = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_currentkit_id') : null;
+        const strippedMerged = merged.map(k => stripAssetDataUrlsFromKit(k, k.id === activeKitId));
         const hydrated = hydrateFlashcardsMastery(userId, strippedMerged);
+        const losslessMerged = hydrateFlashcardsMastery(userId, merged);
         inMemoryKitsCache.set(key, hydrated);
         this.writeIndexToLocalStorage(userId, hydrated, false);
 
-        // Solo reescribir IndexedDB al abrir si faltaba clave primaria o la fusión reparó/actualizó datos
+        // Solo reescribir IndexedDB al abrir si faltaba clave primaria o la fusión reparó/actualizó datos (conservando texto completo)
         const primaryMap = new Map((primaryIdbKits || []).map(k => [k.id, k]));
         const shouldPersistIdb =
           !primaryIdbKits ||
-          primaryIdbKits.length !== hydrated.length ||
-          hydrated.some((hk) => {
+          primaryIdbKits.length !== losslessMerged.length ||
+          losslessMerged.some((hk) => {
             const pk = primaryMap.get(hk.id);
             if (!pk) return true;
             return (
               (hk.updatedAt || 0) > (pk.updatedAt || 0) ||
               (hk.podcast?.dialogue?.length || 0) !== (pk.podcast?.dialogue?.length || 0) ||
-              (hk.questions?.length || 0) !== (pk.questions?.length || 0)
+              (hk.questions?.length || 0) !== (pk.questions?.length || 0) ||
+              (hk.sourceText?.length || 0) > (pk.sourceText?.length || 0)
             );
           });
         if (shouldPersistIdb) {
-          saveKitsToIndexedDB(key, hydrated).catch(() => {});
+          saveKitsToIndexedDB(key, losslessMerged).catch(() => {});
         }
         return hydrated;
       }
@@ -423,7 +427,9 @@ export const kitRepositoryService = {
     const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
 
     // 1. Memoria de acceso inmediato ultraligera (sin binarios base64)
-    const strippedMemoryKits = cleanKits.map(k => stripAssetDataUrlsFromKit(k, false));
+    const activeMemKitId =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('thea_currentkit_id') : null;
+    const strippedMemoryKits = cleanKits.map(k => stripAssetDataUrlsFromKit(k, k.id === activeMemKitId));
     inMemoryKitsCache.set(key, strippedMemoryKits);
 
     // 2. Escribir indice ligero en LocalStorage

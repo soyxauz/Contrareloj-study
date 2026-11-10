@@ -1168,11 +1168,35 @@ export function mergeKitsByUpdatedAt(
 
     const mergedPodcast = selectMergedPodcast(existing.podcast, kit.podcast, existingTime, incomingTime);
 
+    const existingSourceLen = existing.sourceText?.length || 0;
+    const incomingSourceLen = kit.sourceText?.length || 0;
+    const mergedSourceText = incomingSourceLen >= existingSourceLen
+      ? (kit.sourceText ?? existing.sourceText)
+      : existing.sourceText;
+
+    const existingChunksLen = existing.chunks?.length || 0;
+    const incomingChunksLen = kit.chunks?.length || 0;
+    const mergedChunks = incomingChunksLen >= existingChunksLen
+      ? (kit.chunks ?? existing.chunks)
+      : existing.chunks;
+
+    const mergedSourceMaterials = (kit.sourceMaterials && kit.sourceMaterials.length > 0)
+      ? kit.sourceMaterials.map((m, idx) => {
+          const exMat = existing.sourceMaterials?.find(em => em.id === m.id) || existing.sourceMaterials?.[idx];
+          const exRawLen = exMat?.rawText?.length || 0;
+          const inRawLen = m.rawText?.length || 0;
+          return exRawLen > inRawLen ? { ...m, rawText: exMat?.rawText } : m;
+        })
+      : existing.sourceMaterials;
+
     if (incomingTime >= existingTime) {
       map.set(kit.id, {
         ...existing,
         ...kit,
         updatedAt: incomingTime,
+        sourceText: mergedSourceText,
+        chunks: mergedChunks,
+        sourceMaterials: mergedSourceMaterials,
         questions: mergedQuestions,
         flashcards: mergedFlashcards,
         archivedFlashcards: mergedArchived,
@@ -1185,6 +1209,9 @@ export function mergeKitsByUpdatedAt(
         ...kit,
         ...existing,
         updatedAt: existingTime,
+        sourceText: mergedSourceText,
+        chunks: mergedChunks,
+        sourceMaterials: mergedSourceMaterials,
         questions: mergedQuestions,
         flashcards: mergedFlashcards,
         archivedFlashcards: mergedArchived,

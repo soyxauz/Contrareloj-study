@@ -102,6 +102,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [guideError, setGuideError] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<{ message: string; percent: number }>({
     message: '',
     percent: 0,
@@ -109,6 +110,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
   useEffect(() => {
     setCurrentKitState(kit);
+    setGuideError(null);
     setMarkdown(kit.studyGuideMarkdown ? stripExecutiveSummaryPreamble(kit.studyGuideMarkdown) : '');
     if (kit.studyGuideDepth) {
       setSelectedDepth(kit.studyGuideDepth);
@@ -188,6 +190,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
     setShowDepthModal(false);
     setSelectedDepth(depthToUse);
     setIsGenerating(true);
+    setGuideError(null);
     setGenerationProgress({ message: 'Iniciando escáner e indexación multi-fase con IA...', percent: 5 });
     try {
       const fullText =
@@ -219,8 +222,10 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
           onUpdateKit(updated);
         }
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
+      const errMsg = e instanceof Error ? e.message : 'No fue posible completar la Guía de Estudio con el proveedor actual.';
+      setGuideError(errMsg);
     } finally {
       setIsGenerating(false);
       setGenerationProgress({ message: '', percent: 0 });
@@ -604,6 +609,17 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       {/* ── TAB 1: GUÍA TEÓRICA ────────────────────────────────────────────── */}
       {activeTab === 'guide' && (
         <>
+          {!isGenerating && guideError && (
+            <div className={`mb-4 max-w-4xl mx-auto p-4 rounded-2xl border text-xs sm:text-sm leading-relaxed ${
+              theme === 'dark'
+                ? 'bg-red-950/35 border-red-500/40 text-red-200'
+                : theme === 'kitty'
+                ? 'bg-rose-50 border-rose-300 text-rose-900'
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
+              {guideError}
+            </div>
+          )}
           {isGenerating ? (
             <StudyGuideScanner
               title={kit.title}
