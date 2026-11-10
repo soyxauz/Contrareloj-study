@@ -4,6 +4,7 @@ import {
   getSessionItem,
   removeSessionItem,
   notifyQuotaExceeded,
+  safeLocalStorageSetItem,
 } from './storageService';
 import { kitRepositoryService } from './kitRepositoryService';
 
@@ -67,11 +68,11 @@ export const flashcardProgressService = {
                   ...localParsed,
                   masteryMap: mergedMap,
                 };
-                localStorage.setItem(userKey, JSON.stringify(mergedState));
+                safeLocalStorageSetItem(userKey, JSON.stringify(mergedState));
                 return mergedState;
               }
             }
-            localStorage.setItem(userKey, JSON.stringify(res));
+            safeLocalStorageSetItem(userKey, JSON.stringify(res));
           } catch {}
         }
         return res;
@@ -134,7 +135,7 @@ export const flashcardProgressService = {
 
       if (typeof localStorage !== 'undefined') {
         try {
-          localStorage.setItem(userKey, JSON.stringify(minimalStorageState));
+          safeLocalStorageSetItem(userKey, JSON.stringify(minimalStorageState));
         } catch (err) {
           notifyQuotaExceeded(err);
         }

@@ -11,6 +11,7 @@
  */
 
 import { DEFAULT_GROQ_KEY } from './aiService';
+import { safeLocalStorageSetItem } from './storageService';
 
 const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const STT_MODEL = 'whisper-large-v3-turbo';
@@ -140,7 +141,7 @@ async function transcribe(blob: Blob, opts: WhisperMicOptions): Promise<string> 
         console.warn('[WhisperMic] Clave 401 rechazada, auto-recuperando con DEFAULT_GROQ_KEY...');
         try {
           if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
+            safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
           }
         } catch {}
         return transcribe(blob, { ...opts, apiKey: DEFAULT_GROQ_KEY });

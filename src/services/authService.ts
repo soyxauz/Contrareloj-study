@@ -559,7 +559,11 @@ export const authService = {
           const sanitized = sanitizeSmartStudySession(rawVal);
           if (sanitized) {
             inMemorySessionCache.set(item.key, sanitized);
-            if (typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
+            const activeKitId = typeof localStorage !== 'undefined'
+              ? (localStorage.getItem('thea_current_kit_id') || localStorage.getItem('thea_currentkit_id') || '')
+              : '';
+            const isActive = Boolean(activeKitId && item.key.includes(activeKitId));
+            if (isActive && typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
               const cleanCurrentQ = sanitized.currentQuestion ? {
                 ...sanitized.currentQuestion,
                 sourceAsset: sanitized.currentQuestion.sourceAsset ? {
@@ -580,7 +584,11 @@ export const authService = {
             restoredCount++;
           }
         } else if (item.key.startsWith('thea_fc_mem_')) {
-          if (typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
+          const activeKitId = typeof localStorage !== 'undefined'
+            ? (localStorage.getItem('thea_current_kit_id') || localStorage.getItem('thea_currentkit_id') || '')
+            : '';
+          const isActive = Boolean(activeKitId && item.key.includes(activeKitId));
+          if (isActive && typeof localStorage !== 'undefined' && !localStorage.getItem(item.key)) {
             const valStr = typeof item.value === 'string' ? item.value : JSON.stringify(item.value);
             safeLocalStorageSetItem(item.key, valStr);
           }

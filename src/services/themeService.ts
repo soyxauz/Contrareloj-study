@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { authService } from './authService';
 import { googleDriveService } from './googleDriveService';
+import { safeLocalStorageSetItem } from './storageService';
 import { HELLO_KITTY_PNG_DATA_URL } from '../utils/kittyAsset';
 
 export type ThemeMode = 'dark' | 'light' | 'kitty';
@@ -75,7 +76,7 @@ export function applyThemeToDom(theme: ThemeMode): void {
 export function setStoredTheme(theme: ThemeMode, syncToDrive = true): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    safeLocalStorageSetItem(THEME_STORAGE_KEY, theme);
   } catch (e) {
     console.warn('[ThemeService] Error al guardar el tema local:', e);
   }

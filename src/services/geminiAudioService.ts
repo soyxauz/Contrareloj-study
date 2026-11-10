@@ -1,6 +1,7 @@
 import { getAISettings, saveAISettings } from './aiService';
 import type { PodcastSettings } from '../types';
 import { authService } from './authService';
+import { safeLocalStorageSetItem } from './storageService';
 
 export type { PodcastSettings };
 
@@ -258,7 +259,7 @@ export function savePodcastSettings(partial: Partial<PodcastSettings>): PodcastS
   };
 
   try {
-    localStorage.setItem(PODCAST_SETTINGS_KEY, JSON.stringify(updated));
+    safeLocalStorageSetItem(PODCAST_SETTINGS_KEY, JSON.stringify(updated));
   } catch (e) {
     console.warn('[GeminiAudio] Error al guardar ajustes de podcast en localStorage:', e);
   }
@@ -266,7 +267,9 @@ export function savePodcastSettings(partial: Partial<PodcastSettings>): PodcastS
   // Si se actualizó la clave de Gemini
   if (partial.geminiApiKey !== undefined) {
     const cleanKey = partial.geminiApiKey.trim();
-    localStorage.setItem('contrareloj_gemini_api_key', cleanKey);
+    try {
+      safeLocalStorageSetItem('contrareloj_gemini_api_key', cleanKey);
+    } catch {}
     const ai = getAISettings();
     saveAISettings({
       ...ai,
@@ -332,7 +335,9 @@ export function getGeminiAudioApiKey(): string {
  */
 export function setGeminiAudioApiKey(key: string): void {
   const clean = key.trim();
-  localStorage.setItem('contrareloj_gemini_api_key', clean);
+  try {
+    safeLocalStorageSetItem('contrareloj_gemini_api_key', clean);
+  } catch {}
   const settings = getAISettings();
   saveAISettings({
     ...settings,

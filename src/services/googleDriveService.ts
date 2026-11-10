@@ -1374,10 +1374,14 @@ export const googleDriveService = {
 
       if (assetsToDownload.length === 0) return;
 
-      // Descargar en lotes de 4 concurrentes para no saturar la red ni la memoria
+      // Limitar la descarga en segundo plano a un máximo de 8 activos por ciclo para no saturar memoria ni ancho de banda
+      const MAX_BG_DOWNLOADS = 8;
+      const cappedList = assetsToDownload.slice(0, MAX_BG_DOWNLOADS);
       const BATCH_SIZE = 4;
-      for (let i = 0; i < assetsToDownload.length; i += BATCH_SIZE) {
-        const batch = assetsToDownload.slice(i, i + BATCH_SIZE);
+      let hasNewSyncedAssets = false;
+
+      for (let i = 0; i < cappedList.length; i += BATCH_SIZE) {
+        const batch = cappedList.slice(i, i + BATCH_SIZE);
         const downloadedBatch = await Promise.all(
           batch.map(async (file): Promise<DocumentAsset | null> => {
             const rawId = file.name.replace(/\.[^/.]+$/, '');
@@ -1398,10 +1402,13 @@ export const googleDriveService = {
         const validAssets = downloadedBatch.filter((a): a is DocumentAsset => a !== null);
         if (validAssets.length > 0) {
           await saveAssetsToIndexedDB(validAssets);
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new Event('thea_assets_synced'));
-          }
+          hasNewSyncedAssets = true;
         }
+      }
+
+      // Notificar una sola vez al concluir la tanda para evitar re-hidrataciones en cascada
+      if (hasNewSyncedAssets && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('thea_assets_synced'));
       }
     } catch (e) {
       console.warn('[GoogleDriveService] Error en syncAssetsInBackground:', e);

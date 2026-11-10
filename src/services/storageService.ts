@@ -1,5 +1,5 @@
 import type { DocumentAsset, StudyKit, Flashcard } from '../types';
-import { isProtectedStorageKey, purgeOversizedLegacyDataFromLocalStorage } from '../utils/storageKeys';
+import { isProtectedStorageKey, isCorruptedStorageKey, purgeOversizedLegacyDataFromLocalStorage } from '../utils/storageKeys';
 
 /**
  * Servicio de persistencia de activos pesados en IndexedDB.
@@ -549,13 +549,23 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
 }
 
 /**
- * Aligera un kit individual removiendo las cadenas binarias base64 de la memoria de React
- * una vez que no se encuentra en visualización activa. Los datos permanecen a salvo en IndexedDB.
+ * Aligera un kit individual removiendo las cadenas binarias base64 y el texto fuente masivo
+ * de la memoria de React una vez que no se encuentra en visualización activa.
+ * Los datos permanecen a salvo de forma permanente en IndexedDB.
  */
 export function stripAssetDataUrlsFromKit(kit: StudyKit): StudyKit {
   if (!kit) return kit;
   return {
     ...kit,
+    sourceText: kit.sourceText && kit.sourceText.length > 500 ? kit.sourceText.slice(0, 500) : kit.sourceText,
+    sourceMaterials: Array.isArray(kit.sourceMaterials)
+      ? kit.sourceMaterials.map(m => {
+          if (m && m.rawText && m.rawText.length > 500) {
+            return { ...m, rawText: m.rawText.slice(0, 500) };
+          }
+          return m;
+        })
+      : kit.sourceMaterials,
     assets: kit.assets?.map((a) => {
       if (a.dataUrl && a.dataUrl.length > 500) {
         const { dataUrl: _, ...rest } = a;
@@ -648,7 +658,7 @@ export function recordDeletedKitId(id: string): void {
     set.add(id);
     const arr = Array.from(set);
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(DELETED_KITS_KEY, JSON.stringify(arr));
+      safeLocalStorageSetItem(DELETED_KITS_KEY, JSON.stringify(arr));
     }
     saveSessionItem(DELETED_KITS_KEY, arr).catch(() => {});
   } catch (e) {
@@ -668,7 +678,7 @@ export function recordDeletedKitIds(ids: string[]): void {
     }
     const arr = Array.from(set);
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(DELETED_KITS_KEY, JSON.stringify(arr));
+      safeLocalStorageSetItem(DELETED_KITS_KEY, JSON.stringify(arr));
     }
     saveSessionItem(DELETED_KITS_KEY, arr).catch(() => {});
   } catch (e) {
@@ -949,32 +959,50 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
 
     console.warn(`[StorageService] Alerta de cuota en LocalStorage al guardar '${key}'. Iniciando purga automática.`);
 
-    // 1. Ejecutar purga y saneamiento profundo de Base64 e historiales pesados
+    // 1. Ejecutar purga de claves corruptas y activos sobredimensionados
     try {
       purgeOversizedLegacyDataFromLocalStorage();
       localStorage.setItem(key, value);
       return true;
     } catch {}
 
-    // 2. Purga de claves temporales secundarias en LocalStorage
+    // 2. Desalojo masivo de sesiones de kits no activos (están 100% preservadas en IndexedDB)
     try {
+      const activeKitId = localStorage.getItem('thea_current_kit_id') || localStorage.getItem('thea_currentkit_id') || '';
       const keysToRemove: string[] = [];
+
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
+        if (!k) continue;
+
+        if (isCorruptedStorageKey(k)) {
+          keysToRemove.push(k);
+          continue;
+        }
+
         if (
-          k &&
-          (k.startsWith('contrareloj_azure_') ||
-           k.startsWith('thea_temp_') ||
-           k.startsWith('thea_cache_') ||
-           k.includes('_log_') ||
-           k.includes('disambig'))
+          (k.startsWith('thea_ss_mem_') || k.startsWith('thea_fc_mem_')) &&
+          (!activeKitId || !k.includes(activeKitId))
         ) {
           keysToRemove.push(k);
+          continue;
+        }
+
+        if (
+          k.startsWith('contrareloj_azure_') ||
+          k.startsWith('thea_temp_') ||
+          k.startsWith('thea_cache_') ||
+          k.includes('_log_') ||
+          k.includes('disambig')
+        ) {
+          keysToRemove.push(k);
+          continue;
         }
       }
-      keysToRemove.forEach(k => {
-        try { localStorage.removeItem(k); } catch {}
-      });
+
+      for (const rk of keysToRemove) {
+        try { localStorage.removeItem(rk); } catch {}
+      }
 
       localStorage.setItem(key, value);
       return true;
@@ -997,69 +1025,20 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
         }
         if (!isProtectedStorageKey(k)) {
           const val = localStorage.getItem(k);
-          if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 20000)) {
+          if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 5000)) {
             keysToEvict.push(k);
           }
         }
       }
-      keysToEvict.forEach(k => {
+      for (const k of keysToEvict) {
         try { localStorage.removeItem(k); } catch {}
-      });
-
-      localStorage.setItem(key, value);
-      return true;
-    } catch {}
-
-    // 4. Podar historiales de sesiones de Smart Study antiguas en LocalStorage
-    const sessionKeys: { key: string; updatedAt: number }[] = [];
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith('thea_ss_mem_')) {
-          try {
-            const raw = localStorage.getItem(k);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              sessionKeys.push({ key: k, updatedAt: parsed.lastUpdated || 0 });
-            }
-          } catch {}
-        }
-      }
-
-      sessionKeys.sort((a, b) => a.updatedAt - b.updatedAt);
-
-      for (const item of sessionKeys) {
-        try {
-          const raw = localStorage.getItem(item.key);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed.history) && parsed.history.length > 3) {
-              parsed.history = parsed.history.slice(0, 3);
-              localStorage.setItem(item.key, JSON.stringify(parsed));
-            }
-          }
-        } catch {}
       }
 
       localStorage.setItem(key, value);
       return true;
     } catch {}
 
-    // 4b. Si aún no cabe, desalojar sesiones antiguas no activas de LocalStorage (están 100% preservadas en IndexedDB)
-    try {
-      const activeKitId = localStorage.getItem('thea_current_kit_id') || '';
-      for (const item of sessionKeys) {
-        if (!activeKitId || !item.key.includes(activeKitId)) {
-          try {
-            localStorage.removeItem(item.key);
-            localStorage.setItem(key, value);
-            return true;
-          } catch {}
-        }
-      }
-    } catch {}
-
-    // 5. Fallback definitivo: Guardar íntegro en IndexedDB sin fallar jamás
+    // 4. Fallback definitivo: Guardar íntegro en IndexedDB sin fallar jamás
     try {
       const parsedVal = JSON.parse(value);
       saveSessionItem(key, parsedVal).catch(() => {});

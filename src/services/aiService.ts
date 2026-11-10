@@ -1,5 +1,6 @@
 import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions, GuessWhoCase, StudyGuideDepth, GoogleOverview } from '../types';
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
+import { safeLocalStorageSetItem } from './storageService';
 
 export interface AISettings {
   enabled: boolean;
@@ -192,7 +193,7 @@ export function formatTheaSearchOverview(
 export function saveOllamaBaseUrl(url: string): void {
   const cleanUrl = url.trim() || DEFAULT_AI_SETTINGS.baseUrl;
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('thea_ollama_base_url', cleanUrl);
+    safeLocalStorageSetItem('thea_ollama_base_url', cleanUrl);
   }
   const current = getAISettings();
   saveAISettings({
@@ -223,7 +224,7 @@ export function getOllamaModel(): string {
 export function saveOllamaModel(model: string): void {
   const cleanModel = model.trim() || DEFAULT_AI_SETTINGS.model;
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('thea_ollama_model', cleanModel);
+    safeLocalStorageSetItem('thea_ollama_model', cleanModel);
   }
   const current = getAISettings();
   saveAISettings({
@@ -254,7 +255,7 @@ export function getGroqBaseUrl(): string {
 export function saveGroqBaseUrl(url: string): void {
   const cleanUrl = url.trim() || 'https://api.groq.com/openai/v1';
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('thea_groq_base_url', cleanUrl);
+    safeLocalStorageSetItem('thea_groq_base_url', cleanUrl);
   }
   const current = getAISettings();
   saveAISettings({
@@ -282,7 +283,7 @@ export function getGroqModel(): string {
 export function saveGroqModel(model: string): void {
   const cleanModel = model.trim() || 'openai/gpt-oss-120b';
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('thea_groq_model', cleanModel);
+    safeLocalStorageSetItem('thea_groq_model', cleanModel);
   }
   const current = getAISettings();
   saveAISettings({
@@ -455,20 +456,20 @@ export function saveAISettings(settings: AISettings): void {
   }
 
   if (typeof localStorage !== 'undefined') {
-    if (effectiveOllamaKey) localStorage.setItem('thea_ollama_api_key', effectiveOllamaKey);
+    if (effectiveOllamaKey) safeLocalStorageSetItem('thea_ollama_api_key', effectiveOllamaKey);
     if (effectiveOralKey) {
-      localStorage.setItem('thea_groq_api_key', effectiveOralKey);
-      localStorage.setItem('thea_grok_api_key', effectiveOralKey);
+      safeLocalStorageSetItem('thea_groq_api_key', effectiveOralKey);
+      safeLocalStorageSetItem('thea_grok_api_key', effectiveOralKey);
     }
-    if (effectiveOllamaBase) localStorage.setItem('thea_ollama_base_url', effectiveOllamaBase);
+    if (effectiveOllamaBase) safeLocalStorageSetItem('thea_ollama_base_url', effectiveOllamaBase);
     if (effectiveOralBase) {
-      localStorage.setItem('thea_groq_base_url', effectiveOralBase);
-      localStorage.setItem('thea_grok_base_url', effectiveOralBase);
+      safeLocalStorageSetItem('thea_groq_base_url', effectiveOralBase);
+      safeLocalStorageSetItem('thea_grok_base_url', effectiveOralBase);
     }
-    if (effectiveOllamaModel) localStorage.setItem('thea_ollama_model', effectiveOllamaModel);
+    if (effectiveOllamaModel) safeLocalStorageSetItem('thea_ollama_model', effectiveOllamaModel);
     if (effectiveOralModel) {
-      localStorage.setItem('thea_groq_model', effectiveOralModel);
-      localStorage.setItem('thea_grok_model', effectiveOralModel);
+      safeLocalStorageSetItem('thea_groq_model', effectiveOralModel);
+      safeLocalStorageSetItem('thea_grok_model', effectiveOralModel);
     }
   }
 
@@ -494,7 +495,7 @@ export function saveAISettings(settings: AISettings): void {
     grokModel: effectiveOralModel || 'grok-2-mini',
   };
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(generalSettings));
+  safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(generalSettings));
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('thea_ai_settings_changed'));
@@ -502,7 +503,7 @@ export function saveAISettings(settings: AISettings): void {
 }
 
 export function resetAISettingsToDefault(): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_AI_SETTINGS));
+  safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(DEFAULT_AI_SETTINGS));
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('thea_ai_settings_changed'));
   }
@@ -536,7 +537,7 @@ export function saveGrokSettings(settings: Partial<GrokSettings>): void {
   if (typeof localStorage === 'undefined') return;
   const current = getGrokSettings();
   const updated = { ...current, ...settings };
-  localStorage.setItem(GROK_STORAGE_KEY, JSON.stringify(updated));
+  safeLocalStorageSetItem(GROK_STORAGE_KEY, JSON.stringify(updated));
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('thea_grok_settings_changed'));
   }
@@ -557,7 +558,7 @@ export function saveGrokApiKey(key: string): void {
   saveGrokSettings({ apiKey: cleanKey, enabled: Boolean(cleanKey) });
   if (typeof localStorage !== 'undefined') {
     if (cleanKey) {
-      localStorage.setItem('thea_grok_api_key', cleanKey);
+      safeLocalStorageSetItem('thea_grok_api_key', cleanKey);
     } else {
       localStorage.removeItem('thea_grok_api_key');
     }
@@ -599,7 +600,7 @@ export function saveOllamaApiKey(key: string): void {
   const cleanKey = key.trim();
   if (typeof localStorage !== 'undefined') {
     if (cleanKey) {
-      localStorage.setItem('thea_ollama_api_key', cleanKey);
+      safeLocalStorageSetItem('thea_ollama_api_key', cleanKey);
     } else {
       localStorage.removeItem('thea_ollama_api_key');
     }
@@ -652,7 +653,7 @@ export function saveGroqApiKey(key: string): void {
   const cleanKey = key.trim();
   if (typeof localStorage !== 'undefined') {
     if (cleanKey) {
-      localStorage.setItem('thea_groq_api_key', cleanKey);
+      safeLocalStorageSetItem('thea_groq_api_key', cleanKey);
     } else {
       localStorage.removeItem('thea_groq_api_key');
     }
@@ -1010,7 +1011,7 @@ export async function queryAICompletion(
       if (response.status === 401 && cleanBase.includes('api.groq.com') && targetKey !== DEFAULT_GROQ_KEY && DEFAULT_GROQ_KEY) {
         console.warn('[aiService] Groq 401 detectado, auto-recuperando con DEFAULT_GROQ_KEY...');
         if (typeof localStorage !== 'undefined') {
-          localStorage.setItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
+          safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
         }
         const retryHeaders = { ...headers, Authorization: `Bearer ${DEFAULT_GROQ_KEY}` };
         response = await fetchWithProxyFallback(

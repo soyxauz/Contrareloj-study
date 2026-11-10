@@ -77,7 +77,7 @@ export function isProtectedStorageKey(k: string): boolean {
 
 /**
  * Purga de LocalStorage cualquier dato residual o legacy de kits o imágenes en Base64
- * que exceda 50KB o contenga data:image/data:application/pdf.
+ * que exceda límites o claves no críticas.
  * Los activos y kits completos residen de forma segura y permanente en IndexedDB y Google Drive,
  * por lo que LocalStorage solo debe almacenar índices y tokens de estado ultraligeros (<50KB).
  */
@@ -85,34 +85,19 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
   if (typeof localStorage === 'undefined') return;
   try {
     const keysToRemove: string[] = [];
-    const keysToSanitizeSS: string[] = [];
-    const keysToSanitizeFC: string[] = [];
+    const activeKitId = localStorage.getItem('thea_current_kit_id') || localStorage.getItem('thea_currentkit_id') || '';
 
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
 
-      // 1. Saneamiento profundo de sesiones de Smart Study si tienen imagenes base64 o historial masivo
-      if (k.startsWith('thea_ss_mem_')) {
-        const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 25000)) {
-          keysToSanitizeSS.push(k);
-        }
+      // 1. Purgar inmediatamente cualquier clave corrupta con anidamiento
+      if (isCorruptedStorageKey(k)) {
+        keysToRemove.push(k);
         continue;
       }
 
-      // 2. Saneamiento de progreso de Flashcards si contiene imagenes
-      if (k.startsWith('thea_fc_mem_')) {
-        const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 25000)) {
-          keysToSanitizeFC.push(k);
-        }
-        continue;
-      }
-
-      if (isProtectedStorageKey(k)) continue;
-
-      // 3. Purgar copias legacy de kits completos en LocalStorage (los kits residen en IndexedDB e índice ligero)
+      // 2. Desalojar kits completos legacy (deben residir en IndexedDB)
       if (
         (k.startsWith('thea_user_kits_') && !k.startsWith('thea_user_kits_index_')) ||
         k === 'thea_guest_kits' ||
@@ -122,9 +107,38 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
         continue;
       }
 
-      // 4. Purgar cualquier activo no protegido que contenga imágenes base64, PDFs o cadenas masivas
+      // 3. Desalojar sesiones de kits no activos si contienen imágenes o exceden 6KB
+      // Los datos completos están 100% preservados en IndexedDB
+      if (k.startsWith('thea_ss_mem_') || k.startsWith('thea_fc_mem_')) {
+        const cleanKitId = extractCleanKitId(k);
+        const isCurrentKit = Boolean(activeKitId && cleanKitId && cleanKitId === activeKitId);
+        const val = localStorage.getItem(k);
+        if (val) {
+          if (!isCurrentKit && (val.length > 6000 || val.includes('data:image/') || val.includes('data:application/pdf'))) {
+            // Respaldar en IndexedDB de forma segura antes de desalojar de LocalStorage
+            try {
+              const req = indexedDB.open('TheaPlusDB');
+              req.onsuccess = () => {
+                try {
+                  const db = req.result;
+                  if (db.objectStoreNames.contains('sessions')) {
+                    const tx = db.transaction('sessions', 'readwrite');
+                    tx.objectStore('sessions').put({ key: k, value: JSON.parse(val), updatedAt: Date.now() });
+                  }
+                } catch {}
+              };
+            } catch {}
+            keysToRemove.push(k);
+            continue;
+          }
+        }
+      }
+
+      if (isProtectedStorageKey(k)) continue;
+
+      // 4. Purgar cualquier dato no protegido que contenga imágenes base64, PDFs o cadenas masivas
       const val = localStorage.getItem(k);
-      if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 50000)) {
+      if (val && (val.includes('data:image/') || val.includes('data:application/pdf') || val.length > 15000)) {
         keysToRemove.push(k);
       }
     }
@@ -135,51 +149,6 @@ export function purgeOversizedLegacyDataFromLocalStorage(): void {
         localStorage.removeItem(k);
       } catch {}
     });
-
-    // Desprender base64 y podar historial en sesiones de Smart Study saturadas
-    for (const key of keysToSanitizeSS) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        if (parsed.currentQuestion?.sourceAsset) {
-          delete parsed.currentQuestion.sourceAsset;
-        }
-        if (Array.isArray(parsed.errorQueue)) {
-          parsed.errorQueue = parsed.errorQueue.map((q: any) => {
-            if (q?.sourceAsset) delete q.sourceAsset;
-            return q;
-          });
-        }
-        if (Array.isArray(parsed.history)) {
-          parsed.history = parsed.history.slice(0, 10).map((h: any) => ({
-            id: h.id,
-            questionId: h.questionId,
-            questionText: typeof h.questionText === 'string' ? h.questionText.slice(0, 120) : '',
-            userAnswer: typeof h.userAnswer === 'string' ? h.userAnswer.slice(0, 80) : '',
-            correctAnswer: typeof h.correctAnswer === 'string' ? h.correctAnswer.slice(0, 80) : '',
-            explanation: typeof h.explanation === 'string' ? h.explanation.slice(0, 120) : '',
-            isCorrect: Boolean(h.isCorrect),
-            timestamp: h.timestamp,
-            level: h.level,
-          }));
-        }
-        localStorage.setItem(key, JSON.stringify(parsed));
-      } catch {}
-    }
-
-    // Saneamiento de flashcards
-    for (const key of keysToSanitizeFC) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.masteredCards)) {
-          parsed.masteredCards = parsed.masteredCards.slice(0, 50);
-        }
-        localStorage.setItem(key, JSON.stringify(parsed));
-      } catch {}
-    }
   } catch {}
 }
 
@@ -202,11 +171,13 @@ export function recoverAndPurgeCorruptedKeys(): void {
     for (const badKey of keysToPurge) {
       try {
         const val = localStorage.getItem(badKey);
-        const cleanKitId = extractCleanKitId(badKey);
-        if (!cleanKitId) {
+        // Desalojar inmediatamente de LocalStorage para liberar cuota al 100%
+        try {
           localStorage.removeItem(badKey);
-          continue;
-        }
+        } catch {}
+
+        const cleanKitId = extractCleanKitId(badKey);
+        if (!cleanKitId || !val) continue;
 
         let prefix = 'thea_ss_mem_';
         if (badKey.startsWith('thea_fc_mem_')) prefix = 'thea_fc_mem_';
@@ -216,10 +187,21 @@ export function recoverAndPurgeCorruptedKeys(): void {
         const targetUserId = userMatch ? userMatch[1] : 'guest';
         const canonicalKey = `${prefix}${targetUserId}_${cleanKitId}`;
 
-        if (val && !localStorage.getItem(canonicalKey)) {
-          localStorage.setItem(canonicalKey, val);
-        }
-        localStorage.removeItem(badKey);
+        // Guardar asíncronamente en IndexedDB sin saturar LocalStorage
+        try {
+          const req = indexedDB.open('TheaPlusDB');
+          req.onsuccess = () => {
+            try {
+              const db = req.result;
+              if (db.objectStoreNames.contains('sessions')) {
+                const tx = db.transaction('sessions', 'readwrite');
+                let parsedVal = val;
+                try { parsedVal = JSON.parse(val); } catch {}
+                tx.objectStore('sessions').put({ key: canonicalKey, value: parsedVal, updatedAt: Date.now() });
+              }
+            } catch {}
+          };
+        } catch {}
       } catch {}
     }
   } catch {}

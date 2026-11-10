@@ -36,7 +36,7 @@ function purgeRetiredTestKitsFromStorage() {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
             const filtered = parsed.filter((item: any) => item && item.id !== 'bio-respiration' && !String(item.id).startsWith('cs-algo'));
-            localStorage.setItem(k, JSON.stringify(filtered));
+            safeLocalStorageSetItem(k, JSON.stringify(filtered));
           }
         } catch {}
       }
@@ -50,7 +50,7 @@ function purgeRetiredTestKitsFromStorage() {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
             const filtered = parsed.filter((item: any) => item && item.id !== 'bio-respiration' && !String(item.id).startsWith('cs-algo'));
-            localStorage.setItem(k, JSON.stringify(filtered));
+            safeLocalStorageSetItem(k, JSON.stringify(filtered));
           }
         } catch {}
       }

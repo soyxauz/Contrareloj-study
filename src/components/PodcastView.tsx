@@ -16,6 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
+import { safeLocalStorageSetItem } from '../services/storageService';
 
 function parseTimeToSeconds(timeStr: string): number {
   if (!timeStr) return 0;
@@ -192,7 +193,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const safeSecs = secs !== undefined ? secs : currentPlaybackSecsRef.current;
 
     try {
-      localStorage.setItem(`thea_podcast_pos_${kit.id}`, JSON.stringify({
+      safeLocalStorageSetItem(`thea_podcast_pos_${kit.id}`, JSON.stringify({
         lineIndex: segIdx,
         wordIndexInSegment: wordInSegIdx,
         globalIndex: globalIdx,

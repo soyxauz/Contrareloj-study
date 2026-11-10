@@ -6,7 +6,7 @@
  */
 
 import type { StudyKit } from '../types';
-import { saveSessionItem, getSessionItem } from './storageService';
+import { saveSessionItem, getSessionItem, safeLocalStorageSetItem } from './storageService';
 
 export interface MateriaColorDef {
   id: string;
@@ -548,9 +548,9 @@ export function saveCustomMaterias(
     }));
 
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(key, JSON.stringify(clean));
+      safeLocalStorageSetItem(key, JSON.stringify(clean));
       if (!userId) {
-        localStorage.setItem('thea_custom_materias', JSON.stringify(clean));
+        safeLocalStorageSetItem('thea_custom_materias', JSON.stringify(clean));
       }
     }
 

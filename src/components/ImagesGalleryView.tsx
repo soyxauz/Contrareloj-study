@@ -18,7 +18,7 @@ interface ImagesGalleryViewProps {
   onUpdateKit?: (updatedKit: StudyKit) => void;
 }
 
-export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpdateKit }) => {
+export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => {
   const { theme } = useTheme();
   const [assets, setAssets] = useState<DocumentAsset[]>(() => kit.assets || []);
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
@@ -26,9 +26,16 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
   const [isHydrating, setIsHydrating] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ completed: number; total: number } | null>(null);
 
-  // Mantener activos sincronizados cuando cambia el kit
+  // Paginación eficiente para mantener el uso de memoria bajo control (máximo 12 imágenes en DOM a la vez)
+  const PAGE_SIZE = 12;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(assets.length / PAGE_SIZE));
+  const visibleAssets = assets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Mantener activos sincronizados y resetear página cuando cambia el kit
   useEffect(() => {
     setAssets(kit.assets || []);
+    setCurrentPage(1);
   }, [kit.id, kit.assets]);
 
   // Garantizar fondo blanco puro (#ffffff) eliminando fondos negros de transparencia JPEG
@@ -51,19 +58,13 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       );
       if (isMounted && changed) {
         setAssets(sanitized);
-        if (onUpdateKit) {
-          onUpdateKit({
-            ...kit,
-            assets: sanitized,
-          });
-        }
       }
     };
     sanitize();
     return () => {
       isMounted = false;
     };
-  }, [kit.id, kit.assets, onUpdateKit]);
+  }, [kit.id, kit.assets]);
 
   // Carga individual e inmediata para una imagen específica al pulsar sobre ella
   const loadSingleAsset = async (assetId: string) => {
@@ -75,7 +76,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       // 1. Consultar IndexedDB local
       const local = await getAssetById(assetId);
       if (local?.dataUrl) {
-        const updated = (kit.assets || assets).map(a => (a.id === assetId ? { ...a, dataUrl: local.dataUrl } : a));
+        const updated = assets.map(a => (a.id === assetId ? { ...a, dataUrl: local.dataUrl } : a));
         setAssets(updated);
         return;
       }
@@ -84,7 +85,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       const driveMap = await googleDriveService.prioritizeAssetsDownload([assetId]);
       if (driveMap.has(assetId)) {
         const downloaded = driveMap.get(assetId)!;
-        const updated = (kit.assets || assets).map(a => (a.id === assetId ? { ...a, dataUrl: downloaded.dataUrl } : a));
+        const updated = assets.map(a => (a.id === assetId ? { ...a, dataUrl: downloaded.dataUrl } : a));
         setAssets(updated);
         return;
       }
@@ -99,10 +100,9 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
     }
   };
 
-  // Carga e hidratación proactiva e inmediata de activos faltantes en lotes inteligentes
-  const loadMissingAssets = async () => {
-    const currentList = kit.assets || [];
-    const missing = currentList.filter(a => !a.dataUrl && a.id);
+  // Carga e hidratación bajo demanda exclusivamente para las imágenes de la página visible
+  const loadMissingAssetsForCurrentPage = async (pageItems: DocumentAsset[] = visibleAssets) => {
+    const missing = pageItems.filter(a => !a.dataUrl && a.id);
     if (missing.length === 0) return;
 
     const missingIds = missing.map(a => a.id);
@@ -112,21 +112,22 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
     try {
       // 1. Consultar IndexedDB local primero
       const localMap = await getAssetsMap(missingIds);
-      let updatedAssets = currentList.map(a => {
+      let updatedAssets = assets.map(a => {
         if (!a.dataUrl && localMap.has(a.id)) {
           return { ...a, dataUrl: localMap.get(a.id)!.dataUrl };
         }
         return a;
       });
 
-      // Actualizar vista con lo disponible en memoria/IndexedDB
       setAssets(updatedAssets);
 
-      const stillMissing = updatedAssets.filter(a => !a.dataUrl && a.id);
+      const stillMissing = updatedAssets
+        .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+        .filter(a => !a.dataUrl && a.id);
       const stillMissingIds = stillMissing.map(a => a.id);
       setLoadingAssetIds(new Set(stillMissingIds));
 
-      // 2. Si todavía faltan imágenes, descargarlas en lotes paralelos de 6 desde Google Drive
+      // 2. Si todavía faltan imágenes en la página actual, descargarlas desde Google Drive
       if (stillMissingIds.length > 0) {
         setSyncProgress({ completed: 0, total: stillMissingIds.length });
         const driveMap = await googleDriveService.prioritizeAssetsDownload(
@@ -143,10 +144,8 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
           setAssets(updatedAssets);
         }
       }
-
-
     } catch (err) {
-      console.warn('[ImagesGalleryView] Error al cargar activos faltantes:', err);
+      console.warn('[ImagesGalleryView] Error al cargar activos de página:', err);
     } finally {
       setLoadingAssetIds(new Set());
       setIsHydrating(false);
@@ -154,10 +153,10 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
     }
   };
 
-  // Ejecutar carga inmediata al montar la vista o cambiar de kit
+  // Ejecutar carga de imágenes al montar, cambiar kit o cambiar de página
   useEffect(() => {
-    loadMissingAssets();
-  }, [kit.id]);
+    loadMissingAssetsForCurrentPage();
+  }, [kit.id, currentPage]);
 
   // Reaccionar inmediatamente cuando la sincronización en segundo plano guarda nuevas imágenes
   useEffect(() => {
@@ -252,7 +251,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
             {!isHydrating && assets.some(a => !a.dataUrl) && (
               <button
                 type="button"
-                onClick={loadMissingAssets}
+                onClick={() => loadMissingAssetsForCurrentPage()}
                 className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                   theme === 'kitty'
                     ? 'bg-pink-100 hover:bg-pink-200 text-pink-800 border-pink-300'
@@ -298,123 +297,171 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
         </div>
       ) : (
         /* Image Grid */
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {assets.map((asset, index) => {
-            const isImage = asset.type === 'image';
-            const pageInfo = asset.pageOrSlide ? `Pág. / Diapositiva ${asset.pageOrSlide}` : `Elemento #${index + 1}`;
-            const isAssetLoading = loadingAssetIds.has(asset.id);
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {visibleAssets.map((asset, index) => {
+              const globalIndex = ((currentPage - 1) * PAGE_SIZE) + index;
+              const isImage = asset.type === 'image';
+              const pageInfo = asset.pageOrSlide ? `Pág. / Diapositiva ${asset.pageOrSlide}` : `Elemento #${globalIndex + 1}`;
+              const isAssetLoading = loadingAssetIds.has(asset.id);
 
-            return (
-              <div
-                key={asset.id || `asset-${index}`}
-                onClick={() => {
-                  if (asset.dataUrl) {
-                    setSelectedAsset(asset);
-                  } else {
-                    loadSingleAsset(asset.id);
-                  }
-                }}
-                className={`group border rounded-2xl overflow-hidden transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col hover:scale-[1.015] active:scale-[0.985] ${
-                  theme === 'dark'
-                    ? 'bg-[#0e0b16]/95 border-white/[0.08] hover:border-white/25 hover:shadow-2xl'
-                    : theme === 'kitty'
-                    ? 'bg-white border-pink-200 hover:border-pink-300 shadow-sm shadow-pink-100/50 hover:shadow-md'
-                    : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'
-                }`}
-              >
-                {/* Image Box - Pure White Background in all themes per user request */}
-                <div className="relative aspect-video overflow-hidden flex items-center justify-center p-2 border-b bg-white border-slate-200">
-                  {asset.dataUrl ? (
-                    <img
-                      src={asset.dataUrl}
-                      alt={asset.caption || 'Figura del documento'}
-                      className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300 bg-white"
-                      loading="lazy"
-                    />
-                  ) : isAssetLoading ? (
-                    <div className="flex flex-col items-center justify-center gap-2 p-4 text-zinc-300 animate-pulse">
-                      <Loader2 className="w-6 h-6 animate-spin text-zinc-300" />
-                      <span className="text-[10px] font-medium text-zinc-400">Cargando desde Drive...</span>
-                    </div>
-                  ) : (
-                    <div className="text-zinc-500 flex flex-col items-center gap-1.5 p-2 text-center">
-                      <ImageIcon className="w-7 h-7 opacity-40" />
-                      <span className="text-[10px]">Sin previsualización</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          loadSingleAsset(asset.id);
-                        }}
-                        className={`text-[9px] px-2 py-0.5 rounded transition-all flex items-center gap-1 cursor-pointer ${
-                          theme === 'dark' ? 'bg-white/[0.05] text-zinc-300 hover:bg-white/10 hover:text-white' : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200'
-                        }`}
-                      >
-                        <RefreshCw className="w-2.5 h-2.5" />
-                        <span>Cargar</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Hover Overlay with Zoom Icon */}
-                  {asset.dataUrl && (
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="w-9 h-9 rounded-full bg-white text-zinc-950 flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
-                        <ZoomIn className="w-4 h-4" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page/Slide Badge */}
-                  <span className={`absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md border tabular-nums ${
+              return (
+                <div
+                  key={asset.id || `asset-${globalIndex}`}
+                  onClick={() => {
+                    if (asset.dataUrl) {
+                      setSelectedAsset(asset);
+                    } else {
+                      loadSingleAsset(asset.id);
+                    }
+                  }}
+                  className={`group border rounded-2xl overflow-hidden transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col hover:scale-[1.015] active:scale-[0.985] ${
                     theme === 'dark'
-                      ? 'bg-black/85 border-white/10 text-zinc-200'
+                      ? 'bg-[#0e0b16]/95 border-white/[0.08] hover:border-white/25 hover:shadow-2xl'
                       : theme === 'kitty'
-                      ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
-                      : 'bg-white/95 border-slate-200 text-slate-800 shadow-xs'
-                  }`}>
-                    {pageInfo}
-                  </span>
-
-                  {/* Type Badge */}
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 absolute top-2 right-2 ${
-                    theme === 'dark'
-                      ? 'bg-white/[0.08] border-white/15 text-zinc-300'
-                      : theme === 'kitty'
-                      ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
-                      : 'bg-white/95 border-slate-200 text-slate-700 shadow-xs'
-                  }`}>
-                    {isImage ? <ImageIcon className="w-3 h-3" /> : <TableIcon className="w-3 h-3" />}
-                    <span>{isImage ? 'Figura' : 'Tabla'}</span>
-                  </span>
-                </div>
-
-                {/* Caption Footer */}
-                <div className="p-3.5 flex-1 flex flex-col justify-between">
-                  <p className={`text-xs font-medium line-clamp-2 leading-relaxed ${
-                    theme === 'dark' ? 'text-zinc-300' : 'text-zinc-800'
-                  }`}>
-                    {asset.caption || `Figura ${index + 1} extraída del material`}
-                  </p>
-                  <span className={`text-[10px] mt-2 font-semibold flex items-center gap-1 ${
-                    theme === 'dark' ? 'text-zinc-400' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-500'
-                  }`}>
+                      ? 'bg-white border-pink-200 hover:border-pink-300 shadow-sm shadow-pink-100/50 hover:shadow-md'
+                      : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'
+                  }`}
+                >
+                  {/* Image Box - Pure White Background in all themes per user request */}
+                  <div className="relative aspect-video overflow-hidden flex items-center justify-center p-2 border-b bg-white border-slate-200">
                     {asset.dataUrl ? (
-                      <>
-                        <ZoomIn className="w-3 h-3" />
-                        <span>Clic para ampliar</span>
-                      </>
+                      <img
+                        src={asset.dataUrl}
+                        alt={asset.caption || 'Figura del documento'}
+                        className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300 bg-white"
+                        loading="lazy"
+                      />
+                    ) : isAssetLoading ? (
+                      <div className="flex flex-col items-center justify-center gap-2 p-4 text-zinc-300 animate-pulse">
+                        <Loader2 className="w-6 h-6 animate-spin text-zinc-300" />
+                        <span className="text-[10px] font-medium text-zinc-400">Cargando desde Drive...</span>
+                      </div>
                     ) : (
-                      <>
-                        <RefreshCw className="w-3 h-3" />
-                        <span>Clic para cargar</span>
-                      </>
+                      <div className="text-zinc-500 flex flex-col items-center gap-1.5 p-2 text-center">
+                        <ImageIcon className="w-7 h-7 opacity-40" />
+                        <span className="text-[10px]">Sin previsualización</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            loadSingleAsset(asset.id);
+                          }}
+                          className={`text-[9px] px-2 py-0.5 rounded transition-all flex items-center gap-1 cursor-pointer ${
+                            theme === 'dark' ? 'bg-white/[0.05] text-zinc-300 hover:bg-white/10 hover:text-white' : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          <RefreshCw className="w-2.5 h-2.5" />
+                          <span>Cargar</span>
+                        </button>
+                      </div>
                     )}
-                  </span>
+
+                    {/* Hover Overlay with Zoom Icon */}
+                    {asset.dataUrl && (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-full bg-white text-zinc-950 flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                          <ZoomIn className="w-4 h-4" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Page/Slide Badge */}
+                    <span className={`absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md border tabular-nums ${
+                      theme === 'dark'
+                        ? 'bg-black/85 border-white/10 text-zinc-200'
+                        : theme === 'kitty'
+                        ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
+                        : 'bg-white/95 border-slate-200 text-slate-800 shadow-xs'
+                    }`}>
+                      {pageInfo}
+                    </span>
+
+                    {/* Type Badge */}
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 absolute top-2 right-2 ${
+                      theme === 'dark'
+                        ? 'bg-white/[0.08] border-white/15 text-zinc-300'
+                        : theme === 'kitty'
+                        ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
+                        : 'bg-white/95 border-slate-200 text-slate-700 shadow-xs'
+                    }`}>
+                      {isImage ? <ImageIcon className="w-3 h-3" /> : <TableIcon className="w-3 h-3" />}
+                      <span>{isImage ? 'Figura' : 'Tabla'}</span>
+                    </span>
+                  </div>
+
+                  {/* Caption Footer */}
+                  <div className="p-3.5 flex-1 flex flex-col justify-between">
+                    <p className={`text-xs font-medium line-clamp-2 leading-relaxed ${
+                      theme === 'dark' ? 'text-zinc-300' : 'text-zinc-800'
+                    }`}>
+                      {asset.caption || `Figura ${globalIndex + 1} extraída del material`}
+                    </p>
+                    <span className={`text-[10px] mt-2 font-semibold flex items-center gap-1 ${
+                      theme === 'dark' ? 'text-zinc-400' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-500'
+                    }`}>
+                      {asset.dataUrl ? (
+                        <>
+                          <ZoomIn className="w-3 h-3" />
+                          <span>Clic para ampliar</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Clic para cargar</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+
+          {/* Paginador optimizado a 120 FPS sin lag en memoria */}
+          {totalPages > 1 && (
+            <div className={`flex items-center justify-between p-4 rounded-2xl border ${
+              theme === 'dark'
+                ? 'bg-white/[0.02] border-white/[0.08]'
+                : 'bg-slate-50 border-slate-200'
+            }`}>
+              <span className="text-xs text-zinc-400 font-medium tabular-nums">
+                Página {currentPage} de {totalPages} ({assets.length} figuras totales)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => {
+                    setCurrentPage(p => Math.max(1, p - 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-transform duration-150 active:scale-[0.97] cursor-pointer disabled:opacity-30 disabled:pointer-events-none ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.08] text-white hover:bg-white/[0.14] border border-white/[0.1]'
+                      : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-200 shadow-xs'
+                  }`}
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => {
+                    setCurrentPage(p => Math.min(totalPages, p + 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-transform duration-150 active:scale-[0.97] cursor-pointer disabled:opacity-30 disabled:pointer-events-none ${
+                    theme === 'dark'
+                      ? 'bg-white/[0.08] text-white hover:bg-white/[0.14] border border-white/[0.1]'
+                      : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-200 shadow-xs'
+                  }`}
+                >
+                  Siguiente
+                </button>
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
       )}
 
