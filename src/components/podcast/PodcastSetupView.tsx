@@ -23,6 +23,7 @@ export interface PodcastSetupViewProps {
   edgeSofiaVoice: string;
   edgeMateoVoice: string;
   isGenerating: boolean;
+  error?: string | null;
   onOpenVoiceModal: () => void;
   onGeneratePodcast: () => void;
   children?: React.ReactNode;
@@ -39,6 +40,7 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
   edgeSofiaVoice,
   edgeMateoVoice,
   isGenerating,
+  error,
   onOpenVoiceModal,
   onGeneratePodcast,
   children,
@@ -230,6 +232,12 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
             <span>Configurar Voces</span>
           </button>
         </div>
+
+        {error && !isGenerating && (
+          <div className="p-3.5 rounded-2xl border border-rose-500/30 bg-rose-950/35 text-xs text-rose-200 leading-relaxed">
+            {error}
+          </div>
+        )}
 
         {/* BOTÓN PRINCIPAL DE GENERACIÓN */}
         <div className="pt-3">

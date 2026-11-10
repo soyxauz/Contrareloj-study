@@ -2899,69 +2899,72 @@ Responde ÚNICAMENTE con un JSON con la estructura:
 
   const userPrompt = `Material de estudio ("${title}" - ${category}) [Extensión: ${fullMaterial.length} caracteres]:\n\n${fullMaterial}${customOrientation ? `\n\nInstrucción obligatoria del usuario:\n${customOrientation}` : ''}\n\nGenera el episodio de podcast con formato "${selectedFormat}" y duración "${selectedDuration}" (${targetTurnCount} 100% en español):`;
 
-  if (settings.enabled) {
-    try {
-      const res = await queryAICompletion(
-        [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        true,
-        undefined,
-        { temperature: 0.75, max_tokens: 8192 }
-      );
-
-      // Extracción y recuperación tolerante de JSON unificada
-      const parsed = safeParseAIJSON<any>(res);
-
-      if (parsed?.podcast && Array.isArray(parsed.podcast.dialogue) && parsed.podcast.dialogue.length > 0) {
-        // Normalización continua de marcas de tiempo basada en conteo de palabras
-        let accumulatedSecs = 0;
-        const normalizedDialogue = parsed.podcast.dialogue.map((item: any, idx: number) => {
-          const currentSecs = accumulatedSecs;
-          const mins = Math.floor(currentSecs / 60);
-          const secs = Math.floor(currentSecs % 60);
-          const timeFormatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-
-          const text = (item.text || '').trim();
-          const wordCount = text.split(/\s+/).filter(Boolean).length;
-          // ~140 palabras por minuto (~0.43s por palabra) + pausa conversacional de 1.2s
-          const turnDuration = Math.max(4, Math.round(wordCount * 0.43 + 1.2));
-          accumulatedSecs += turnDuration;
-
-          return {
-            speaker: item.speaker || (idx % 2 === 0 ? 'Sofia' : 'Alex'),
-            text,
-            time: timeFormatted,
-          };
-        });
-
-        // Duración real estimada del guion generado sin topes artificiales ni redondeos inconsistentes
-        const totalSecs = Math.max(1, Math.round(accumulatedSecs));
-        const computedMins = Math.floor(totalSecs / 60);
-        const computedSecs = totalSecs % 60;
-        const finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
-
-        return {
-          id: `pod-ai-${Date.now()}`,
-          title: parsed.podcast.title || `Repaso: ${title}`,
-          duration: finalDuration,
-          hosts: [
-            { name: 'Sofia', role: 'Host', avatar: 'S' },
-            { name: 'Alex', role: 'Tutor IA', avatar: 'A' },
-          ],
-          dialogue: normalizedDialogue,
-          format: selectedFormat,
-          durationMode: selectedDuration,
-          orientation: customOrientation,
-        };
-      }
-    } catch (e) {
-      console.warn('[Podcast AI] Error generando podcast con IA:', e);
-    }
+  if (!settings.enabled) {
+    throw new Error('La integración de IA está desactivada en la configuración.');
   }
 
-  return null;
+  try {
+    const res = await queryAICompletion(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      true,
+      undefined,
+      { temperature: 0.75, max_tokens: 8192 }
+    );
+
+    // Extracción y recuperación tolerante de JSON unificada
+    const parsed = safeParseAIJSON<any>(res);
+
+    if (parsed?.podcast && Array.isArray(parsed.podcast.dialogue) && parsed.podcast.dialogue.length > 0) {
+      // Normalización continua de marcas de tiempo basada en conteo de palabras
+      let accumulatedSecs = 0;
+      const normalizedDialogue = parsed.podcast.dialogue.map((item: any, idx: number) => {
+        const currentSecs = accumulatedSecs;
+        const mins = Math.floor(currentSecs / 60);
+        const secs = Math.floor(currentSecs % 60);
+        const timeFormatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+        const text = (item.text || '').trim();
+        const wordCount = text.split(/\s+/).filter(Boolean).length;
+        // ~140 palabras por minuto (~0.43s por palabra) + pausa conversacional de 1.2s
+        const turnDuration = Math.max(4, Math.round(wordCount * 0.43 + 1.2));
+        accumulatedSecs += turnDuration;
+
+        return {
+          speaker: item.speaker || (idx % 2 === 0 ? 'Sofia' : 'Alex'),
+          text,
+          time: timeFormatted,
+        };
+      });
+
+      // Duración real estimada del guion generado sin topes artificiales ni redondeos inconsistentes
+      const totalSecs = Math.max(1, Math.round(accumulatedSecs));
+      const computedMins = Math.floor(totalSecs / 60);
+      const computedSecs = totalSecs % 60;
+      const finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
+
+      return {
+        id: `pod-ai-${Date.now()}`,
+        title: parsed.podcast.title || `Repaso: ${title}`,
+        duration: finalDuration,
+        hosts: [
+          { name: 'Sofia', role: 'Host', avatar: 'S' },
+          { name: 'Alex', role: 'Tutor IA', avatar: 'A' },
+        ],
+        dialogue: normalizedDialogue,
+        format: selectedFormat,
+        durationMode: selectedDuration,
+        orientation: customOrientation,
+      };
+    }
+
+    throw new Error('El modelo de IA devolvió una respuesta sin guion de podcast válido.');
+  } catch (e) {
+    console.warn('[Podcast AI] Error generando podcast con IA:', e);
+    throw e instanceof Error ? e : new Error(String(e));
+  }
 }
 
 /** Asistente IA Contrareloj potenciado por IA con fallback inteligente */

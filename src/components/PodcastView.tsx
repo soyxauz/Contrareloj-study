@@ -59,6 +59,17 @@ function getAzureVoiceForSpeaker(speaker: string, sofiaVoice: string, mateoVoice
   const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(speaker || '');
   return isFemale ? (sofiaVoice || 'es-ES-ElviraNeural') : (mateoVoice || 'es-ES-AlvaroNeural');
 }
+
+function formatPodcastGenerationError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  if (/402|usage credits|ollama\.com\/plans/i.test(raw)) {
+    return 'Tu cuenta de Ollama Cloud se quedó sin créditos disponibles (HTTP 402). Agrega créditos en ollama.com/plans o cambia la clave/modelo en Configurar IA.';
+  }
+  if (/401|unauthorized|api key/i.test(raw)) {
+    return 'Clave de API no válida o ausente. Verifica tu API Key en Configurar IA e inténtalo de nuevo.';
+  }
+  return raw || 'No se pudo generar el guión del podcast. Por favor inténtalo de nuevo.';
+}
 import {
   getPodcastSettings,
   savePodcastSettings,
@@ -1815,7 +1826,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       }
     } catch (e) {
       console.error(e);
-      setSynthesisError('Error al generar el guión del podcast. Por favor inténtalo de nuevo.');
+      setSynthesisError(formatPodcastGenerationError(e));
     } finally {
       setIsGenerating(false);
     }
@@ -1916,6 +1927,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         edgeSofiaVoice={edgeSofiaVoice}
         edgeMateoVoice={edgeMateoVoice}
         isGenerating={isGenerating}
+        error={synthesisError}
         onOpenVoiceModal={() => {
           setVoiceModalTab(voiceEngine === "edge" ? "azure" : "browser");
           setShowVoiceModal(true);
