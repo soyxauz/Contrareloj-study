@@ -60,6 +60,30 @@ export interface GlobalStats {
   booksSummary: BookStats[];
 }
 
+function extractHistoryEpoch(h: any): number {
+  if (!h || typeof h !== 'object') return 0;
+  if (typeof h.timestampEpoch === 'number' && Number.isFinite(h.timestampEpoch) && h.timestampEpoch > 0) {
+    return h.timestampEpoch;
+  }
+  const match = typeof h.id === 'string' ? h.id.match(/^hist-(\d+)/) : null;
+  if (match && match[1]) {
+    const val = parseInt(match[1], 10);
+    if (Number.isFinite(val) && val > 0) return val;
+  }
+  if (h.timestamp) {
+    const parsed = Date.parse(h.timestamp);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
+function toLocalDateKey(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Calcula la racha real de días consecutivos de estudio basándose en los timestamps
  * de las preguntas respondidas registradas en el historial de todas las sesiones.
@@ -70,25 +94,18 @@ export function calculateRealStreak(sessions: (SmartStudySessionState | null)[])
   for (const s of sessions) {
     if (!s || !s.history || !Array.isArray(s.history)) continue;
     for (const h of s.history) {
-      if (h.timestamp) {
-        try {
-          const d = new Date(h.timestamp);
-          if (!isNaN(d.getTime())) {
-            // Formato YYYY-MM-DD
-            const key = d.toISOString().split('T')[0];
-            dates.add(key);
-          }
-        } catch {
-          // ignore invalid date
-        }
+      const epoch = extractHistoryEpoch(h);
+      if (epoch > 0) {
+        dates.add(toLocalDateKey(new Date(epoch)));
       }
     }
   }
 
   if (dates.size === 0) return 0;
 
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const now = new Date();
+  const today = toLocalDateKey(now);
+  const yesterday = toLocalDateKey(new Date(now.getTime() - 86400000));
 
   // Si no hay actividad ni hoy ni ayer, la racha activa se reinició
   if (!dates.has(today) && !dates.has(yesterday)) {
@@ -96,10 +113,10 @@ export function calculateRealStreak(sessions: (SmartStudySessionState | null)[])
   }
 
   let streak = 0;
-  let checkDate = dates.has(today) ? new Date() : new Date(Date.now() - 86400000);
+  let checkDate = dates.has(today) ? now : new Date(now.getTime() - 86400000);
 
   while (true) {
-    const key = checkDate.toISOString().split('T')[0];
+    const key = toLocalDateKey(checkDate);
     if (dates.has(key)) {
       streak++;
       checkDate = new Date(checkDate.getTime() - 86400000);
@@ -149,7 +166,11 @@ if (typeof window !== 'undefined') {
  */
 export function getBookRealStats(kit: StudyKit, userId: string | null = null): BookStats {
   const session = authService.getSmartStudySession(userId, kit.id);
-  const cacheKey = `${userId || 'g'}_${kit.id}_${session?.level || 1}_${session?.levelCorrectCount || 0}_${session?.questionsAnsweredTotal || 0}_${session?.history?.length || 0}_${kit.updatedAt || 0}`;
+  const flashcardProgress = authService.getFlashcardProgress(userId, kit.id);
+  const fcMasteryCount = flashcardProgress?.masteryMap
+    ? Object.values(flashcardProgress.masteryMap).filter(v => v === 'mastered').length
+    : 0;
+  const cacheKey = `${userId || 'g'}_${kit.id}_${session?.level || 1}_${session?.levelCorrectCount || 0}_${session?.questionsAnsweredTotal || 0}_${session?.history?.length || 0}_${session?.lastUpdated || 0}_${(session as any)?.resetAt || 0}_${fcMasteryCount}_${flashcardProgress?.updatedAt || 0}_${flashcardProgress?.resetAt || 0}_${kit.updatedAt || 0}`;
   const hit = bookStatsFastCache.get(cacheKey);
   if (hit && Date.now() - hit.ts < 4000) {
     return hit.stats;
@@ -166,7 +187,10 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     ? Math.round((correctAnswers / (history.length || questionsAnswered)) * 1000) / 10
     : 0;
 
-  const fastSnap = !session ? getGlobalStatsSnapshot(userId)?.booksMap?.[kit.id] : undefined;
+  const hasHydratedQuestions = Boolean(kit.questions && kit.questions.length > 0);
+  const fastSnap = (!session && !hasHydratedQuestions)
+    ? getGlobalStatsSnapshot(userId)?.booksMap?.[kit.id]
+    : undefined;
   const level = (session?.level as 1 | 2 | 3) || (fastSnap?.level as 1 | 2 | 3) || 1;
   const levelNames = {
     1: 'Nivel 1: Retención & Fundamentos',
@@ -184,7 +208,6 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     ? fastSnap.smartStudyProgressPercent
     : Math.min(100, Math.round((levelCorrectCount / levelTarget) * 100));
 
-  const flashcardProgress = authService.getFlashcardProgress(userId, kit.id);
   const flashcardMap = flashcardProgress?.masteryMap || {};
   const activeFlashcards = (kit.flashcards && kit.flashcards.length > 0)
     ? kit.flashcards
@@ -299,21 +322,20 @@ export function getBookRealStats(kit: StudyKit, userId: string | null = null): B
     return a.topic.localeCompare(b.topic);
   });
 
-  // Determinar última fecha de estudio
+  // Determinar última fecha de estudio (history está ordenado descendente: índice 0 es el más reciente)
   let lastStudiedDate: string | undefined = undefined;
-  if (history.length > 0) {
-    const last = history[history.length - 1];
-    if (last.timestamp) {
-      try {
-        lastStudiedDate = new Date(last.timestamp).toLocaleDateString('es-ES', {
-          day: '2-digit',
-          month: 'short',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-      } catch {
-        lastStudiedDate = undefined;
-      }
+  const latestHistoryEpoch = history.length > 0 ? extractHistoryEpoch(history[0]) : 0;
+  const lastActivityEpoch = latestHistoryEpoch || session?.lastUpdated || 0;
+  if (lastActivityEpoch > 0) {
+    try {
+      lastStudiedDate = new Date(lastActivityEpoch).toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      lastStudiedDate = undefined;
     }
   }
 
@@ -395,66 +417,57 @@ export interface GlobalStatsSnapshot {
 
 /**
  * Guarda un resumen ultra compacto en LocalStorage y Cookie para persistencia instantanea en 0ms.
+ * Respeta siempre la verdad actual de las sesiones cargadas para no mezclar aciertos entre niveles ni resucitar reinicios.
  */
-export function saveGlobalStatsSnapshot(stats: GlobalStats, userId: string | null = null): void {
+export function saveGlobalStatsSnapshot(
+  stats: GlobalStats,
+  userId: string | null = null,
+  options?: { hasHydratedContent?: boolean; sessionKitIds?: Set<string> }
+): void {
   if (typeof window === 'undefined') return;
   try {
     const key = `${SNAPSHOT_KEY_PREFIX}${userId || 'guest'}`;
     const prevSnap = getGlobalStatsSnapshot(userId);
+    const hasHydratedContent = options?.hasHydratedContent ?? stats.totalQuestions > 0;
 
-    // Proteccion contra arranque frio: si el snapshot previo ya tenia progreso positivo y el calculo actual es 0,
-    // jamas sobrescribir con ceros.
-    if (prevSnap && prevSnap.totalAnswered > 0 && stats.totalAnswered === 0) {
+    // Proteccion contra arranque frio: si aun no hay contenido hidratado y el snapshot previo tenia datos, no pisar con ceros.
+    if (!hasHydratedContent && prevSnap && (prevSnap.totalAnswered > 0 || prevSnap.totalQuestions > 0)) {
       return;
     }
 
     const booksMap: Record<string, BookSnapshotItem> = {};
-    if (prevSnap?.booksMap) {
-      for (const [kId, prevBook] of Object.entries(prevSnap.booksMap)) {
-        if (prevBook) {
-          booksMap[kId] = { ...prevBook };
-        }
-      }
-    }
-
     if (Array.isArray(stats.booksSummary)) {
       for (const b of stats.booksSummary) {
-        if (b && b.kitId) {
-          const prevB = booksMap[b.kitId];
-          const maxLevel = Math.max(b.level || 1, prevB?.level || 1);
-          const levelVal: 1 | 2 | 3 = (maxLevel >= 3 ? 3 : maxLevel === 2 ? 2 : 1);
+        if (!b || !b.kitId) continue;
+        const hasAuthoritativeSession = options?.sessionKitIds ? options.sessionKitIds.has(b.kitId) : true;
+        const prevB = prevSnap?.booksMap?.[b.kitId];
+        if (!hasAuthoritativeSession && b.questionsAnswered === 0 && b.level === 1 && b.levelCorrectCount === 0 && prevB) {
+          booksMap[b.kitId] = { ...prevB };
+        } else {
           booksMap[b.kitId] = {
-            level: levelVal,
-            levelCorrectCount: Math.max(b.levelCorrectCount || 0, prevB?.levelCorrectCount || 0),
-            smartStudyProgressPercent: Math.max(b.smartStudyProgressPercent || 0, prevB?.smartStudyProgressPercent || 0),
-            questionsAnswered: Math.max(b.questionsAnswered || 0, prevB?.questionsAnswered || 0),
-            accuracy: b.questionsAnswered > 0 ? b.accuracy : (prevB?.accuracy || b.accuracy || 0),
+            level: b.level,
+            levelCorrectCount: b.levelCorrectCount,
+            smartStudyProgressPercent: b.smartStudyProgressPercent,
+            questionsAnswered: b.questionsAnswered,
+            accuracy: b.accuracy,
           };
         }
       }
     }
 
-    const effectiveTotalAnswered = Math.max(stats.totalAnswered, prevSnap?.totalAnswered || 0);
-    const effectiveTotalCorrect = Math.max(stats.totalCorrect, prevSnap?.totalCorrect || 0);
-    const effectiveStreak = Math.max(stats.realStreakDays, prevSnap?.realStreakDays || 0);
-    const effectiveFlashcardsMastered = Math.max(stats.totalFlashcardsMastered, prevSnap?.totalFlashcardsMastered || 0);
-    const effectiveAccuracy = effectiveTotalAnswered > 0
-      ? Math.round((effectiveTotalCorrect / effectiveTotalAnswered) * 1000) / 10
-      : (prevSnap?.overallAccuracy || stats.overallAccuracy || 0);
-
     const snap: GlobalStatsSnapshot = {
-      totalBooks: Math.max(stats.totalBooks, prevSnap?.totalBooks || 0),
-      totalQuestions: Math.max(stats.totalQuestions, prevSnap?.totalQuestions || 0),
-      totalAnswered: effectiveTotalAnswered,
-      totalCorrect: effectiveTotalCorrect,
-      overallAccuracy: effectiveAccuracy,
-      totalFlashcards: Math.max(stats.totalFlashcards, prevSnap?.totalFlashcards || 0),
-      totalFlashcardsMastered: effectiveFlashcardsMastered,
-      totalAssets: Math.max(stats.totalAssets, prevSnap?.totalAssets || 0),
-      totalWords: Math.max(stats.totalWords, prevSnap?.totalWords || 0),
-      totalErrorsReinforced: Math.max(stats.totalErrorsReinforced, prevSnap?.totalErrorsReinforced || 0),
-      realStreakDays: effectiveStreak,
-      activeBooksCount: Math.max(stats.activeBooksCount, prevSnap?.activeBooksCount || 0),
+      totalBooks: stats.totalBooks,
+      totalQuestions: stats.totalQuestions,
+      totalAnswered: stats.totalAnswered,
+      totalCorrect: stats.totalCorrect,
+      overallAccuracy: stats.overallAccuracy,
+      totalFlashcards: stats.totalFlashcards,
+      totalFlashcardsMastered: stats.totalFlashcardsMastered,
+      totalAssets: stats.totalAssets,
+      totalWords: stats.totalWords,
+      totalErrorsReinforced: stats.totalErrorsReinforced,
+      realStreakDays: stats.realStreakDays,
+      activeBooksCount: stats.activeBooksCount,
       updatedAt: Date.now(),
       booksMap,
     };
@@ -519,6 +532,15 @@ export function getGlobalStatsSnapshot(userId: string | null = null): GlobalStat
 export function getGlobalRealStats(kits: StudyKit[], userId: string | null = null): GlobalStats {
   const booksSummary = kits.map(k => getBookRealStats(k, userId));
   const sessions = kits.map(k => authService.getSmartStudySession(userId, k.id));
+  const sessionKitIds = new Set<string>();
+  const hydratedKitIds = new Set<string>();
+  kits.forEach((k, idx) => {
+    if (sessions[idx]) sessionKitIds.add(k.id);
+    if ((k.questions && k.questions.length > 0) || (k.flashcards && k.flashcards.length > 0)) {
+      hydratedKitIds.add(k.id);
+    }
+  });
+  const hasHydratedContent = hydratedKitIds.size > 0 || sessionKitIds.size > 0;
 
   const totalBooks = kits.length;
   let totalQuestions = booksSummary.reduce((acc, b) => acc + b.totalQuestions, 0);
@@ -527,16 +549,18 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
 
   let totalFlashcards = booksSummary.reduce((acc, b) => acc + b.flashcardsTotal, 0);
   let totalFlashcardsMastered = booksSummary.reduce((acc, b) => acc + b.flashcardsMastered, 0);
-  let totalAssets = booksSummary.reduce((acc, b) => acc + b.assetsCount, 0);
-  let totalWords = booksSummary.reduce((acc, b) => acc + b.wordCount, 0);
-  let totalErrorsReinforced = booksSummary.reduce((acc, b) => acc + b.errorsReinforced, 0);
+  const totalAssets = booksSummary.reduce((acc, b) => acc + b.assetsCount, 0);
+  const totalWords = booksSummary.reduce((acc, b) => acc + b.wordCount, 0);
+  const totalErrorsReinforced = booksSummary.reduce((acc, b) => acc + b.errorsReinforced, 0);
 
   let realStreakDays = calculateRealStreak(sessions);
   let activeBooksCount = booksSummary.filter(b => b.questionsAnswered > 0).length;
 
-  // Si los kits aún se están hidratando desde IndexedDB o red, pero existe un snapshot local guardado:
+  // Solo usar snapshot como respaldo en arranque en frío antes de hidratar IndexedDB/sesiones,
+  // nunca sobreescribiendo kits con sesión o preguntas reales ya cargadas.
   const cachedSnap = getGlobalStatsSnapshot(userId);
-  if (cachedSnap) {
+  const isColdStart = totalBooks === 0 || !hasHydratedContent;
+  if (cachedSnap && isColdStart) {
     if (totalQuestions === 0 && cachedSnap.totalQuestions > 0) {
       totalQuestions = cachedSnap.totalQuestions;
     }
@@ -557,24 +581,16 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
       activeBooksCount = cachedSnap.activeBooksCount;
     }
 
-    // Hidratar libros individuales desde el snapshot si los libros locales aun no tienen progreso
     if (cachedSnap.booksMap) {
       for (const book of booksSummary) {
+        if (sessionKitIds.has(book.kitId) || hydratedKitIds.has(book.kitId)) continue;
         const snapB = cachedSnap.booksMap[book.kitId];
-        if (snapB) {
-          if (book.questionsAnswered < snapB.questionsAnswered) {
-            book.questionsAnswered = snapB.questionsAnswered;
-          }
-          if (book.level < snapB.level) {
-            book.level = snapB.level;
-          }
-          if (book.levelCorrectCount < snapB.levelCorrectCount) {
-            book.levelCorrectCount = snapB.levelCorrectCount;
-          }
-          if (book.smartStudyProgressPercent < snapB.smartStudyProgressPercent) {
-            book.smartStudyProgressPercent = snapB.smartStudyProgressPercent;
-          }
-          if (book.questionsAnswered === 0 && snapB.accuracy > 0) {
+        if (snapB && book.questionsAnswered === 0 && book.level === 1 && book.levelCorrectCount === 0) {
+          book.questionsAnswered = snapB.questionsAnswered;
+          book.level = snapB.level;
+          book.levelCorrectCount = snapB.levelCorrectCount;
+          book.smartStudyProgressPercent = snapB.smartStudyProgressPercent;
+          if (snapB.accuracy > 0) {
             book.accuracy = snapB.accuracy;
           }
         }
@@ -584,10 +600,10 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
 
   const overallAccuracy = totalAnswered > 0
     ? Math.round((totalCorrect / totalAnswered) * 1000) / 10
-    : (cachedSnap?.overallAccuracy || 0);
+    : (isColdStart ? (cachedSnap?.overallAccuracy || 0) : 0);
 
   const result: GlobalStats = {
-    totalBooks: Math.max(totalBooks, cachedSnap?.totalBooks || 0),
+    totalBooks: isColdStart ? Math.max(totalBooks, cachedSnap?.totalBooks || 0) : totalBooks,
     totalQuestions,
     totalAnswered,
     totalCorrect,
@@ -602,9 +618,8 @@ export function getGlobalRealStats(kits: StudyKit[], userId: string | null = nul
     booksSummary
   };
 
-  // Solo refrescar y persistir el snapshot cuando haya progreso real comprobable
-  if (totalAnswered > 0 || totalFlashcardsMastered > 0 || realStreakDays > 0) {
-    saveGlobalStatsSnapshot(result, userId);
+  if (hasHydratedContent) {
+    saveGlobalStatsSnapshot(result, userId, { hasHydratedContent, sessionKitIds });
   }
 
   return result;

@@ -2225,6 +2225,82 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     markQuestionResult(false, 'Pregunta saltada', correctAns);
   };
 
+  /** Reinicia únicamente los estados locales de respuesta al cambiar o avanzar de pregunta. */
+  const resetQuestionAnswerState = (targetQ?: Question | null) => {
+    setSelectedOption(null);
+    setSelectedMultiIndices([]);
+    setActiveMatchingTerm(null);
+    setMatchingPairsMap({});
+    setMatchingChecked(false);
+    setDragDropChecked(false);
+    const nextBlanksCount = (targetQ?.blanksCorrect && targetQ.blanksCorrect.length > 0)
+      ? targetQ.blanksCorrect.length
+      : (targetQ?.templateSentence?.match(/\{\d+\}/g)?.length || targetQ?.question?.match(/\{\d+\}/g)?.length || 0);
+    setPlacedChips(nextBlanksCount > 0 ? new Array(nextBlanksCount).fill(null) : []);
+    setShortAnswerInput('');
+    setShortAnswerEvalResult(null);
+    setIsManuallyOverridden(false);
+    setIsAnswered(false);
+    setIsCurrentCorrect(null);
+    setFeedbackGiven(null);
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  /** Persiste de forma atómica y síncrona la transición a la siguiente pregunta o nivel. */
+  const commitTransitionSession = (
+    nextQ: Question,
+    overrides: {
+      currentIndex: number;
+      level: 1 | 2 | 3;
+      activePracticeLevel: 1 | 2 | 3;
+      levelCorrectCount: number;
+      errorQueue: Question[];
+      isReinforcementMode: boolean;
+      answeredQuestionIds: string[];
+    }
+  ) => {
+    setCurrentQuestion(nextQ);
+    lastQId.current = nextQ.id;
+
+    const nextSavedAt = Date.now();
+    sessionTimestampRef.current = nextSavedAt;
+    hasPendingLocalChangeRef.current = false;
+    hasUnflushedDriveSyncRef.current = true;
+
+    const nextSession: any = {
+      ...(latestSessionRef.current || {}),
+      currentIndex: overrides.currentIndex,
+      level: overrides.level,
+      activePracticeLevel: overrides.activePracticeLevel,
+      currentQuestionId: nextQ.id,
+      currentQuestion: nextQ,
+      selectedOption: null,
+      selectedMultiIndices: [],
+      matchingPairsMap: {},
+      matchingChecked: false,
+      placedChips: [],
+      dragDropChecked: false,
+      isAnswered: false,
+      isCurrentCorrect: null,
+      shortAnswerInput: '',
+      levelCorrectCount: overrides.levelCorrectCount,
+      levelCorrectCounts,
+      errorQueue: overrides.errorQueue,
+      isReinforcementMode: overrides.isReinforcementMode,
+      history: history.slice(0, 50),
+      questionsAnsweredTotal,
+      totalErrorsReinforced,
+      answeredQuestionIds: overrides.answeredQuestionIds,
+      lastUpdated: nextSavedAt,
+    };
+    latestSessionRef.current = nextSession;
+    authService.saveSmartStudySession(userId || null, kit.id, nextSession);
+  };
+
   const handleNext = () => {
     if (isAdvancingRef.current) return;
 
@@ -2248,6 +2324,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }, 600);
 
     let nextQ: Question = currentQ;
+    let nextSavedLevel = level;
+    let nextSavedActiveLevel = activePracticeLevel;
+    let nextSavedCount = currentLevelCorrect;
+    let nextSavedIndex = currentIndex;
+    let nextSavedErrorQueue = errorQueue;
+    let nextSavedReinforcement = isReinforcementMode;
 
     // Registrar ID en el conjunto de preguntas respondidas
     markQuestionAsAnswered(currentQ.id);
@@ -2275,6 +2357,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         if (level < 3) {
           const nextLevel = (level + 1) as 1 | 2 | 3;
           const nextCount = levelCorrectCounts[nextLevel] ?? 0;
+          nextSavedLevel = nextLevel;
+          nextSavedActiveLevel = nextLevel;
+          nextSavedCount = nextCount;
+          nextSavedIndex = 0;
+          nextSavedErrorQueue = [];
+          nextSavedReinforcement = false;
+
           setLevel(nextLevel);
           setActivePracticeLevel(nextLevel);
           setTargetLevel(nextLevel);
@@ -2310,10 +2399,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         if (isCurrentCorrect) {
           // Remueve la pregunta superada de la cola de refuerzo
           const remainingQueue = errorQueue.slice(1);
+          nextSavedErrorQueue = remainingQueue;
           setErrorQueue(remainingQueue);
           if (remainingQueue.length === 0) {
-            setIsReinforcementMode(false);
+            nextSavedReinforcement = false;
             const nextIdx = currentIndex + 1;
+            nextSavedIndex = nextIdx;
+            setIsReinforcementMode(false);
             setCurrentIndex(nextIdx);
             nextQ = resolveNextQuestion(activePracticeLevel, nextIdx, false, [], currentQ.id);
             checkAndPrefetchQuestions(activePracticeLevel, nextIdx);
@@ -2323,12 +2415,14 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         } else {
           // Si falló en refuerzo, rotar la pregunta al final de la cola para volver a intentarla
           const rotated = [...errorQueue.slice(1), errorQueue[0]];
+          nextSavedErrorQueue = rotated;
           setErrorQueue(rotated);
           nextQ = rotated[0];
         }
       } else {
         // Avance normal a la siguiente pregunta del nivel actual
         const nextIdx = currentIndex + 1;
+        nextSavedIndex = nextIdx;
         setCurrentIndex(nextIdx);
         nextQ = resolveNextQuestion(activePracticeLevel, nextIdx, false, [], currentQ.id);
         checkAndPrefetchQuestions(activePracticeLevel, nextIdx);
@@ -2345,66 +2439,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     // Actualizar de forma explícita y controlada la pregunta mostrada
     if (nextQ) {
-      setCurrentQuestion(nextQ);
-      lastQId.current = nextQ.id;
-
-      const nextSavedAt = Date.now();
-      sessionTimestampRef.current = nextSavedAt;
-      hasPendingLocalChangeRef.current = false;
-      hasUnflushedDriveSyncRef.current = true;
-
-      const nextSession: any = {
-        ...(latestSessionRef.current || {}),
-        currentIndex: currentIndex + 1,
-        level,
-        activePracticeLevel,
-        currentQuestionId: nextQ.id,
-        currentQuestion: nextQ,
-        selectedOption: null,
-        selectedMultiIndices: [],
-        matchingPairsMap: {},
-        matchingChecked: false,
-        placedChips: [],
-        dragDropChecked: false,
-        isAnswered: false,
-        isCurrentCorrect: null,
-        shortAnswerInput: '',
-        levelCorrectCount: currentLevelCorrect,
-        levelCorrectCounts,
-        errorQueue,
-        isReinforcementMode,
-        history: history.slice(0, 50),
-        questionsAnsweredTotal,
-        totalErrorsReinforced,
+      commitTransitionSession(nextQ, {
+        currentIndex: nextSavedIndex,
+        level: nextSavedLevel,
+        activePracticeLevel: nextSavedActiveLevel,
+        levelCorrectCount: nextSavedCount,
+        errorQueue: nextSavedErrorQueue,
+        isReinforcementMode: nextSavedReinforcement,
         answeredQuestionIds: Array.from(answeredQuestionIdsRef.current),
-        lastUpdated: nextSavedAt,
-      };
-      latestSessionRef.current = nextSession;
-      authService.saveSmartStudySession(userId || null, kit.id, nextSession);
+      });
     }
 
     // 3. Limpieza DIRECTA e INCONDICIONAL de todos los estados para que NUNCA quede bloqueada
-    setSelectedOption(null);
-    setSelectedMultiIndices([]);
-    setActiveMatchingTerm(null);
-    setMatchingPairsMap({});
-    setMatchingChecked(false);
-    setDragDropChecked(false);
-    const nextBlanksCount = (nextQ?.blanksCorrect && nextQ.blanksCorrect.length > 0)
-      ? nextQ.blanksCorrect.length
-      : (nextQ?.templateSentence?.match(/\{\d+\}/g)?.length || nextQ?.question?.match(/\{\d+\}/g)?.length || 0);
-    setPlacedChips(nextBlanksCount > 0 ? new Array(nextBlanksCount).fill(null) : []);
-    setShortAnswerInput('');
-    setShortAnswerEvalResult(null);
-    setIsManuallyOverridden(false);
-    setIsAnswered(false);
-    setIsCurrentCorrect(null);
-    setFeedbackGiven(null);
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
+    resetQuestionAnswerState(nextQ);
   };
 
   const handleResetProgress = () => {
@@ -2498,8 +2545,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       completedSocraticIdsRef.current.clear();
 
       const nextQ = resolveNextQuestion(nextLevel, 0, false, []);
-      setCurrentQuestion(nextQ);
-      lastQId.current = nextQ.id;
+      resetQuestionAnswerState(nextQ);
+      if (nextQ) {
+        commitTransitionSession(nextQ, {
+          currentIndex: 0,
+          level: nextLevel,
+          activePracticeLevel: nextLevel,
+          levelCorrectCount: nextCount,
+          errorQueue: [],
+          isReinforcementMode: false,
+          answeredQuestionIds: [],
+        });
+      }
       checkAndPrefetchQuestions(nextLevel, 0);
     } else {
       setAllCompleted(true);
