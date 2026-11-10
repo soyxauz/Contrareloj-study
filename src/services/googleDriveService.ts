@@ -355,6 +355,11 @@ function computeProgressDigest(
       const revIds = Array.isArray(s.revealedQuestionIds) ? s.revealedQuestionIds.join(',') : '';
       const histLen = Array.isArray(s.history) ? s.history.length : 0;
       const latestHistId = histLen > 0 ? (s.history[0]?.id || '') : '';
+      const multiSig = Array.isArray(s.selectedMultiIndices) ? [...s.selectedMultiIndices].sort((a, b) => a - b).join(',') : '';
+      const matchSig = s.matchingPairsMap && typeof s.matchingPairsMap === 'object'
+        ? Object.keys(s.matchingPairsMap).sort().map(k => `${k}=${s.matchingPairsMap[k]}`).join(',')
+        : '';
+      const chipsSig = Array.isArray(s.placedChips) ? s.placedChips.map(c => c ?? '').join(',') : '';
       return [
         kitId,
         s.level,
@@ -366,6 +371,13 @@ function computeProgressDigest(
         s.isAnswered ? 1 : 0,
         s.isCurrentCorrect ?? 'n',
         s.selectedOption ?? 'n',
+        multiSig,
+        matchSig,
+        s.matchingChecked ? 1 : 0,
+        chipsSig,
+        s.dragDropChecked ? 1 : 0,
+        s.shortAnswerInput || '',
+        (s as any).shuffleSeed || 1,
         s.isReinforcementMode ? 1 : 0,
         s.questionsAnsweredTotal || 0,
         s.totalErrorsReinforced || 0,

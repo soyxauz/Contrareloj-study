@@ -117,6 +117,16 @@ function getSessionProgressRank(s: SmartStudySessionState): number {
   return (s.level || 1) * 1000 + (s.levelCorrectCount || 0) * 10 + ansCount + histCount + (s.currentIndex || 0);
 }
 
+function getSessionDraftRank(s: SmartStudySessionState): number {
+  const qRank = s.currentQuestionId || s.currentQuestion?.id ? 1 : 0;
+  const singleRank = s.selectedOption !== null && s.selectedOption !== undefined ? 1 : 0;
+  const multiRank = Array.isArray(s.selectedMultiIndices) ? s.selectedMultiIndices.length : 0;
+  const matchRank = s.matchingPairsMap && typeof s.matchingPairsMap === 'object' ? Object.keys(s.matchingPairsMap).length : 0;
+  const chipRank = Array.isArray(s.placedChips) ? s.placedChips.filter(Boolean).length : 0;
+  const shortRank = s.shortAnswerInput && s.shortAnswerInput.trim().length > 0 ? 1 : 0;
+  return qRank + singleRank + multiRank + matchRank + chipRank + shortRank;
+}
+
 /**
  * Compara dos instantáneas de sesión para determinar si `candidate` debe prevalecer sobre `baseline`.
  * Evita que copias antiguas de IndexedDB o caché en memoria sobreescriban progreso local más reciente.
@@ -135,7 +145,11 @@ function isSessionNewerOrBetter(
   if (baseReset > candReset && baseReset >= candUpdated) return false;
   if (candUpdated !== baseUpdated) return candUpdated > baseUpdated;
 
-  return getSessionProgressRank(candidate) > getSessionProgressRank(baseline);
+  const candProg = getSessionProgressRank(candidate);
+  const baseProg = getSessionProgressRank(baseline);
+  if (candProg !== baseProg) return candProg > baseProg;
+
+  return getSessionDraftRank(candidate) > getSessionDraftRank(baseline);
 }
 
 function readLocalStorageSmartStudySession(key: string): SmartStudySessionState | null {
@@ -236,6 +250,24 @@ function normalizeOrderedIds(ids: unknown): string {
   return Array.isArray(ids) ? ids.filter(Boolean).join(',') : '';
 }
 
+function normalizeMultiIndicesSig(indices: unknown): string {
+  return Array.isArray(indices)
+    ? [...indices].filter(n => typeof n === 'number' && !isNaN(n)).sort((a, b) => a - b).join(',')
+    : '';
+}
+
+function normalizeMatchingMapSig(map: unknown): string {
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return '';
+  return Object.keys(map as Record<string, unknown>)
+    .sort()
+    .map(k => `${k}=>${String((map as Record<string, unknown>)[k] ?? '')}`)
+    .join('|');
+}
+
+function normalizePlacedChipsSig(chips: unknown): string {
+  return Array.isArray(chips) ? chips.map(c => (c == null ? '' : String(c))).join('\x1f') : '';
+}
+
 function areSmartStudySessionsEquivalent(
   a: SmartStudySessionState | null | undefined,
   b: SmartStudySessionState | null | undefined
@@ -253,6 +285,14 @@ function areSmartStudySessionsEquivalent(
     Boolean(a.isAnswered) !== Boolean(b.isAnswered) ||
     (a.isCurrentCorrect ?? null) !== (b.isCurrentCorrect ?? null) ||
     (a.selectedOption ?? null) !== (b.selectedOption ?? null) ||
+    normalizeMultiIndicesSig(a.selectedMultiIndices) !== normalizeMultiIndicesSig(b.selectedMultiIndices) ||
+    normalizeMatchingMapSig(a.matchingPairsMap) !== normalizeMatchingMapSig(b.matchingPairsMap) ||
+    Boolean(a.matchingChecked) !== Boolean(b.matchingChecked) ||
+    normalizePlacedChipsSig(a.placedChips) !== normalizePlacedChipsSig(b.placedChips) ||
+    Boolean(a.dragDropChecked) !== Boolean(b.dragDropChecked) ||
+    (a.shortAnswerInput || '') !== (b.shortAnswerInput || '') ||
+    (a.activeTab || 'practice') !== (b.activeTab || 'practice') ||
+    ((a as any).shuffleSeed || 1) !== ((b as any).shuffleSeed || 1) ||
     Boolean(a.isReinforcementMode) !== Boolean(b.isReinforcementMode) ||
     (a.questionsAnsweredTotal || 0) !== (b.questionsAnsweredTotal || 0) ||
     (a.totalErrorsReinforced || 0) !== (b.totalErrorsReinforced || 0) ||
@@ -631,21 +671,23 @@ export const authService = {
   async restoreSmartStudySessionAsync(userId: string | null, rawKitId: string): Promise<SmartStudySessionState | null> {
     try {
       const syncSession = this.getSmartStudySession(userId, rawKitId);
-      if (syncSession) return syncSession;
       const kitId = extractCleanKitId(rawKitId);
-      if (!kitId) return null;
+      if (!kitId) return syncSession;
       const userKey = `thea_ss_mem_${userId || 'guest'}_${kitId}`;
-      const idbVal = await getSessionItem<SmartStudySessionState>(userKey);
+      let idbVal = await getSessionItem<SmartStudySessionState>(userKey);
+      if (!idbVal && userId && userId !== 'guest') {
+        idbVal = await getSessionItem<SmartStudySessionState>(`thea_ss_mem_guest_${kitId}`);
+      }
       if (idbVal) {
         const sanitized = sanitizeSmartStudySession(idbVal);
-        if (sanitized) {
+        if (sanitized && isSessionNewerOrBetter(sanitized, syncSession)) {
           this.saveSmartStudySession(userId, kitId, sanitized, { source: 'idb_restore' });
           return sanitized;
         }
       }
-      return null;
+      return syncSession || null;
     } catch {
-      return null;
+      return this.getSmartStudySession(userId, rawKitId);
     }
   },
 
