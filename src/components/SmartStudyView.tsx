@@ -699,7 +699,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     ].join('|');
   }, []);
 
-  const persistSessionSnapshot = useCallback((overrides?: Record<string, any>) => {
+  const persistSessionSnapshot = useCallback((
+    overrides?: Record<string, any>,
+    options?: { source?: 'local' | 'initial_pin' }
+  ) => {
     if (!kit?.id || !latestSessionRef.current) return;
     const merged = overrides ? { ...latestSessionRef.current, ...overrides } : { ...latestSessionRef.current };
     if (!merged.currentQuestionId || merged.currentQuestionId === 'thea-placeholder-loading') return;
@@ -709,12 +712,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       autoSaveTimerRef.current = null;
     }
 
+    const source = options?.source || 'local';
     const savedAt = typeof overrides?.lastUpdated === 'number' ? overrides.lastUpdated : Date.now();
     merged.lastUpdated = savedAt;
     sessionTimestampRef.current = savedAt;
     latestSessionRef.current = merged;
     hasPendingLocalChangeRef.current = false;
-    hasUnflushedDriveSyncRef.current = true;
+    if (source !== 'initial_pin') {
+      hasUnflushedDriveSyncRef.current = true;
+    }
     persistedActiveQIdRef.current = merged.currentQuestionId;
 
     lastSavedSignatureRef.current = buildSessionSignature({
@@ -744,7 +750,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       shuffleSeed: merged.shuffleSeed || 1,
     });
 
-    authService.saveSmartStudySession(userId || null, kit.id, merged);
+    authService.saveSmartStudySession(userId || null, kit.id, merged, { source });
   }, [kit?.id, userId, buildSessionSignature, revealedQuestionIds.length]);
 
   const handleSelectDifficulty = async (selectedLvl: 1 | 2 | 3) => {
@@ -1993,7 +1999,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               totalErrorsReinforced: idbSession.totalErrorsReinforced || 0,
               answeredQuestionIds: Array.from(restoredAnswered),
               shuffleSeed: rSeed,
-            });
+            }, { source: 'initial_pin' });
           }
         }
         return;
@@ -2007,7 +2013,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         curSnap.currentQuestionId !== 'thea-placeholder-loading' &&
         persistedActiveQIdRef.current !== curSnap.currentQuestionId
       ) {
-        persistSessionSnapshot();
+        persistSessionSnapshot(undefined, { source: 'initial_pin' });
       }
     }).catch(() => {
       pendingIdbHydrationRef.current = false;
@@ -2035,12 +2041,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         hasValidQuestion &&
         (hasPendingLocalChangeRef.current || (!pendingIdbHydrationRef.current && persistedActiveQIdRef.current !== snapshot.currentQuestionId))
       ) {
+        const hadPendingUserChange = hasPendingLocalChangeRef.current;
         hasPendingLocalChangeRef.current = false;
         const savedAt = Date.now();
         snapshot.lastUpdated = savedAt;
         sessionTimestampRef.current = savedAt;
         persistedActiveQIdRef.current = snapshot.currentQuestionId;
-        authService.saveSmartStudySession(userId || null, kit.id, snapshot);
+        authService.saveSmartStudySession(userId || null, kit.id, snapshot, {
+          source: hadPendingUserChange ? 'local' : 'initial_pin',
+        });
       }
       if (hasUnflushedDriveSyncRef.current && userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
         hasUnflushedDriveSyncRef.current = false;
@@ -2075,13 +2084,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       hasMountedSaveCycleRef.current = true;
       lastSavedSignatureRef.current = currentSessionSignature;
       if (!pendingIdbHydrationRef.current && persistedActiveQIdRef.current !== currentQ.id) {
-        persistSessionSnapshot();
+        persistSessionSnapshot(undefined, { source: 'initial_pin' });
       }
       return;
     }
     if (currentSessionSignature === lastSavedSignatureRef.current) {
       if (!pendingIdbHydrationRef.current && persistedActiveQIdRef.current !== currentQ.id) {
-        persistSessionSnapshot();
+        persistSessionSnapshot(undefined, { source: 'initial_pin' });
       }
       return;
     }

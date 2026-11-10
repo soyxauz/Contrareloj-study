@@ -88,12 +88,43 @@ function synthesizeEdgeTtsPython(text, voice = 'es-ES-ElviraNeural', rate, pitch
   });
 }
 
+function sanitizeBackendTtsText(rawText) {
+  return String(rawText || '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, ' y ')
+    .replace(/(?:&[hH]arr;|&leftrightarrow;|&Leftrightarrow;|\\leftrightarrow\b|<-->|<->|<=>|[↔⇔⟷⟺⇄⇆])/g, ' y ')
+    .replace(/\s*(?:↑|⇑|\\uparrow\b|&uarr;)\s*(?=(?!(?:y|e|o|u|ni|que|pero|con|sin|por|para|en|a|de|al|del)\b)[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]{2,})/gi, ' aumento de ')
+    .replace(/\s*(?:↑|⇑|\\uparrow\b|&uarr;)/g, ' en aumento')
+    .replace(/\s*(?:↓|⇓|\\downarrow\b|&darr;)\s*(?=(?!(?:y|e|o|u|ni|que|pero|con|sin|por|para|en|a|de|al|del)\b)[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]{2,})/gi, ' disminución de ')
+    .replace(/\s*(?:↓|⇓|\\downarrow\b|&darr;)/g, ' en descenso')
+    .replace(/\s*(?:&[rRlL]arr;|&(?:right|left)arrow;|&(?:Right|Left)arrow;|\\(?:long)?(?:right|left)arrow\b|\\implies\b|\\mapsto\b|\\to\b|(?:--|==|-|=)>|<--?|[\u2190-\u21FF\u2794-\u27BF\u2B00-\u2B7F])\s*/g, ', ')
+    .replace(/\b(?:rightwards?|leftwards?|upwards?|downwards?|bidirectional|left-right|right|left|up|down)\s+arrow(?!\s+function)\b/gi, ', ')
+    .replace(/≥|>=/g, ' mayor o igual que ')
+    .replace(/≤|<=/g, ' menor o igual que ')
+    .replace(/≠/g, ' diferente de ')
+    .replace(/≈/g, ' aproximadamente ')
+    .replace(/±/g, ' más o menos ')
+    .replace(/[*_#`~[\]$]/g, '')
+    .replace(/\s+([,;:.!?])/g, '$1')
+    .replace(/([,;:])\s*,+/g, '$1')
+    .replace(/\s*,\s+(?=(?:y|e|o|u|hacia)\b)/gi, ' ')
+    .replace(/^\s*[,;:\-–—]+\s*/, '')
+    .replace(/\s*[,;]+\s*$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /**
  * Síntesis de voz usando msedge-tts nativo en Node.js con fallback a Python.
  */
 async function synthesizeEdgeTts(text, voice = 'es-ES-ElviraNeural', rate, pitch) {
+  const safeText = sanitizeBackendTtsText(text);
+  if (!safeText) {
+    throw new Error('Texto vacío tras sanitización TTS');
+  }
   try {
-    return await synthesizeEdgeTtsPython(text, voice, rate, pitch);
+    return await synthesizeEdgeTtsPython(safeText, voice, rate, pitch);
   } catch (err) {
     console.warn('[EdgeTtsBridge] Worker Python con error, intentando msedge-tts como respaldo:', err.message);
     try {
@@ -105,7 +136,7 @@ async function synthesizeEdgeTts(text, voice = 'es-ES-ElviraNeural', rate, pitch
       if (rate) options.rate = rate;
       if (pitch) options.pitch = pitch;
 
-      const { audioStream } = tts.toStream(text.trim(), options);
+      const { audioStream } = tts.toStream(safeText, options);
       const chunks = [];
       audioStream.on('data', chunk => chunks.push(chunk));
 

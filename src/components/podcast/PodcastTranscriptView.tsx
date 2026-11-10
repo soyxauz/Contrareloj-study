@@ -1,4 +1,5 @@
 import React from 'react';
+import { sanitizePodcastText } from '../../utils/podcastTextSanitizer';
 
 export interface DialogueLine {
   speaker: string;
@@ -43,7 +44,7 @@ export const PodcastTranscriptView: React.FC<PodcastTranscriptViewProps> = ({
                 {segmentTimes?.[idx] || item.time}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{item.text}</p>
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{sanitizePodcastText(item.text)}</p>
           </div>
         ))}
       </div>

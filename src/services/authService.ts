@@ -781,7 +781,7 @@ export const authService = {
     userId: string | null,
     rawKitId: string,
     state: SmartStudySessionState,
-    options?: { source?: 'local' | 'remote_sync' | 'idb_restore' }
+    options?: { source?: 'local' | 'remote_sync' | 'idb_restore' | 'initial_pin' }
   ): void {
     const source = options?.source || 'local';
     try {

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { generateAIPodcast } from '../services/aiService';
 import { safeLocalStorageSetItem } from '../services/storageService';
+import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
 
 function parseTimeToSeconds(timeStr: string): number {
   if (!timeStr) return 0;
@@ -38,13 +39,7 @@ function formatSeconds(totalSecs: number): string {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-function cleanPodcastDialogueText(text: string): string {
-  return (text || '')
-    .replace(/[*_#`~[\]]/g, '')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/[$]/g, '')
-    .trim();
-}
+const cleanPodcastDialogueText = sanitizePodcastText;
 
 function estimateSegmentDurationSecs(text: string): number {
   const clean = cleanPodcastDialogueText(text);
@@ -499,11 +494,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (!podcast?.dialogue) return [];
     const list: { segmentIndex: number; wordIndexInSegment: number; globalIndex: number; word: string }[] = [];
     podcast.dialogue.forEach((item, sIdx) => {
-      const clean = item.text
-        .replace(/[*_#`~[\]]/g, '')
-        .replace(/https?:\/\/\S+/g, '')
-        .replace(/[$]/g, '')
-        .trim();
+      const clean = cleanPodcastDialogueText(item.text);
       const words = clean ? clean.split(/\s+/).filter(Boolean) : ['...'];
       words.forEach((w, wIdx) => {
         list.push({
@@ -523,11 +514,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     let count = 0;
     podcast.dialogue.forEach((item) => {
       offsets.push(count);
-      const clean = item.text
-        .replace(/[*_#`~[\]]/g, '')
-        .replace(/https?:\/\/\S+/g, '')
-        .replace(/[$]/g, '')
-        .trim();
+      const clean = cleanPodcastDialogueText(item.text);
       const words = clean ? clean.split(/\s+/).filter(Boolean) : ['...'];
       count += words.length;
     });
@@ -538,11 +525,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   const currentSegmentWords = useMemo(() => {
     if (!currentItem?.text) return [];
-    const clean = currentItem.text
-      .replace(/[*_#`~[\]]/g, '')
-      .replace(/https?:\/\/\S+/g, '')
-      .replace(/[$]/g, '')
-      .trim();
+    const clean = cleanPodcastDialogueText(currentItem.text);
     return clean ? clean.split(/\s+/).filter(Boolean) : [];
   }, [currentItem?.text]);
 
@@ -921,11 +904,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
 
     const item = podcast.dialogue[index];
-    const cleanText = item.text
-      .replace(/[*_#`~[\]]/g, '')
-      .replace(/https?:\/\/\S+/g, '')
-      .replace(/[$]/g, '')
-      .trim();
+    const cleanText = cleanPodcastDialogueText(item.text);
 
     if (!cleanText) {
       advanceToNextLine(index);
@@ -1345,7 +1324,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const audio = audioPlayerRef.current;
     if (voiceEngineRef.current === 'edge' && audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
       const segmentWords = podcast?.dialogue[target.segmentIndex]
-        ? podcast.dialogue[target.segmentIndex].text.replace(/[*_#`~[\]]/g, '').trim().split(/\s+/).filter(Boolean)
+        ? cleanPodcastDialogueText(podcast.dialogue[target.segmentIndex].text).split(/\s+/).filter(Boolean)
         : [];
       const totalWords = segmentWords.length || 1;
       const targetTime = (target.wordIndexInSegment / totalWords) * audio.duration;
@@ -2063,7 +2042,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 <h2 className={`text-base sm:text-lg md:text-xl font-black leading-snug tracking-tight truncate ${
                   theme === 'dark' ? 'text-white' : 'text-zinc-950'
                 }`}>
-                  {podcast.title}
+                  {cleanPodcastDialogueText(podcast.title) || podcast.title}
                 </h2>
               </div>
               <span className={`text-xs sm:text-sm tabular-nums shrink-0 font-medium ${

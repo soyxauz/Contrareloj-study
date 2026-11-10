@@ -4,6 +4,8 @@
  * Incluye almacenamiento en caché persistente en IndexedDB y pre-carga fluida.
  */
 
+import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
+
 export interface AzureEdgeVoiceOption {
   id: string;
   name: string;
@@ -116,11 +118,7 @@ const ongoingDurationRequests = new Map<string, Promise<number>>();
 const ongoingBlobFetches = new Map<string, Promise<Blob>>();
 
 function cleanTtsText(text: string): string {
-  return (text || '')
-    .replace(/[*_#`~[\]]/g, '')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/[$]/g, '')
-    .trim();
+  return sanitizePodcastText(text);
 }
 
 /** Mide la duración exacta en segundos de un Blob de audio y libera el ObjectURL de inmediato. */

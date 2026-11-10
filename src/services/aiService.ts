@@ -1,6 +1,7 @@
 import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, ShortAnswerEvaluation, PodcastFormat, PodcastDuration, PodcastGenerationOptions, GuessWhoCase, StudyGuideDepth, GoogleOverview } from '../types';
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 import { safeLocalStorageSetItem } from './storageService';
+import { PODCAST_SPOKEN_SCRIPT_RULES, sanitizePodcastText } from '../utils/podcastTextSanitizer';
 
 export interface AISettings {
   enabled: boolean;
@@ -3570,6 +3571,8 @@ ${previousEpisodeDirective}
 
 ${translationDirective}
 
+${PODCAST_SPOKEN_SCRIPT_RULES}
+
 Responde ÚNICAMENTE con un JSON con la estructura:
 {
   "podcast": {
@@ -3611,7 +3614,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
         const secs = Math.floor(currentSecs % 60);
         const timeFormatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 
-        const text = (item.text || '').trim();
+        const text = sanitizePodcastText(item.text || '');
         const wordCount = text.split(/\s+/).filter(Boolean).length;
         // ~140 palabras por minuto (~0.43s por palabra) + pausa conversacional de 1.2s
         const turnDuration = Math.max(4, Math.round(wordCount * 0.43 + 1.2));
@@ -3632,7 +3635,7 @@ Responde ÚNICAMENTE con un JSON con la estructura:
 
       return {
         id: `pod-ai-${Date.now()}`,
-        title: parsed.podcast.title || `Repaso: ${title}`,
+        title: sanitizePodcastText(parsed.podcast.title || `Repaso: ${title}`) || `Repaso: ${title}`,
         duration: finalDuration,
         hosts: [
           { name: 'Sofia', role: 'Host', avatar: 'S' },

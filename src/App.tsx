@@ -603,7 +603,7 @@ export const App: React.FC = () => {
 
     const handleProgressSaved = (event: Event) => {
       const source = (event as CustomEvent)?.detail?.source;
-      if (source === 'remote_sync' || source === 'idb_restore') return;
+      if (source === 'remote_sync' || source === 'idb_restore' || source === 'initial_pin') return;
       if (isLoggingOutRef.current) return;
       if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
       if (googleDriveService.getState().status === 'needs_reauth') return;
