@@ -1,5 +1,6 @@
 import type { StudyKit, DocumentAsset, User, PodcastSettings } from '../types';
 import { authService } from './authService';
+import { flashcardProgressService } from './flashcardProgressService';
 import {
   getAllStoredAssetKeys,
   getAssetById,
@@ -10,7 +11,10 @@ import {
   removeSessionItem,
   isCorruptedKit,
   mergeKitsByUpdatedAt,
-  getDeletedKitIds,
+  restoreDeletedKitTombstonesAsync,
+  mergeDeletedKitTombstones,
+  isKitDeletedByTombstone,
+  RETIRED_TEST_KIT_IDS,
   registerDriveAssetDownloader,
   safeLocalStorageSetItem
 } from './storageService';
@@ -21,6 +25,9 @@ import {
   getStoredCustomMaterias,
   saveCustomMaterias,
   mergeCustomMaterias,
+  getDeletedCustomMaterias,
+  saveDeletedCustomMaterias,
+  mergeDeletedCustomMaterias,
   type CustomMateria
 } from './materiaService';
 import { getStoredTheme, setStoredTheme } from './themeService';
@@ -280,6 +287,143 @@ let pendingPushToDriveUserId: string | null = null;
 
 let isPushProgressInFlight = false;
 let pendingProgressPushUserId: string | null = null;
+
+let isPullFromDriveInFlight = false;
+let inFlightPullPromise: Promise<StudyKit[] | null> | null = null;
+let lastRemoteCheckTime = 0;
+
+function getWatermarkStorageKey(userId: string): string {
+  return `thea_drive_remote_watermark_${userId}`;
+}
+
+function getRemoteWatermark(userId: string): number {
+  try {
+    if (typeof localStorage === 'undefined') return 0;
+    const raw = localStorage.getItem(getWatermarkStorageKey(userId));
+    const parsed = raw ? Number(raw) : 0;
+    return Number.isFinite(parsed) ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setRemoteWatermark(userId: string, ms: number): void {
+  if (!userId || !ms || !Number.isFinite(ms)) return;
+  try {
+    safeLocalStorageSetItem(getWatermarkStorageKey(userId), String(ms));
+    saveSessionItem(getWatermarkStorageKey(userId), String(ms)).catch(() => {});
+  } catch {}
+}
+
+function getMaxModifiedTimeMs(files: Array<{ id: string; name: string; modifiedTime?: string }>): number {
+  let maxMs = 0;
+  for (const f of files) {
+    if (!f?.name?.endsWith('.json')) continue;
+    if (f.modifiedTime) {
+      const ts = Date.parse(f.modifiedTime);
+      if (Number.isFinite(ts) && ts > maxMs) {
+        maxMs = ts;
+      }
+    }
+  }
+  return maxMs;
+}
+
+function sortProgressFilesChronologically(
+  files: Array<{ id: string; name: string; modifiedTime?: string }>,
+  userId: string
+): Array<{ id: string; name: string; modifiedTime?: string }> {
+  return files
+    .filter(f => f.name.startsWith('thea_progress_') || f.name === 'thea_progress.json')
+    .sort((a, b) => {
+      const tA = a.modifiedTime ? Date.parse(a.modifiedTime) || 0 : 0;
+      const tB = b.modifiedTime ? Date.parse(b.modifiedTime) || 0 : 0;
+      if (tA !== tB) return tA - tB;
+      if (a.name === `thea_progress_${userId}.json`) return 1;
+      if (b.name === `thea_progress_${userId}.json`) return -1;
+      return 0;
+    });
+}
+
+function parseRemoteMateriasPayload(raw: any): {
+  materias: CustomMateria[];
+  deletedMaterias: Record<string, number>;
+} {
+  if (Array.isArray(raw)) {
+    return { materias: raw as CustomMateria[], deletedMaterias: {} };
+  }
+  if (raw && typeof raw === 'object') {
+    const materias = Array.isArray(raw.materias) ? (raw.materias as CustomMateria[]) : [];
+    const deletedMaterias =
+      raw.deletedMaterias && typeof raw.deletedMaterias === 'object' && !Array.isArray(raw.deletedMaterias)
+        ? (raw.deletedMaterias as Record<string, number>)
+        : {};
+    return { materias, deletedMaterias };
+  }
+  return { materias: [], deletedMaterias: {} };
+}
+
+const DELETED_KITS_DRIVE_FILE = 'thea_deleted_kits.json';
+
+function classifyDriveError(err: any): { is401: boolean; isNetwork: boolean } {
+  const msg = String(err?.message || '');
+  const is401 = msg.includes('401') || msg.includes('TOKEN_EXPIRED') || err?.status === 401;
+  const isNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
+  return { is401, isNetwork };
+}
+
+async function readUnifiedProgressAsync(userId: string) {
+  const [sessions, revealedQuestions, flashcards] = await Promise.all([
+    authService.getAllSmartStudySessionsAsync(userId),
+    authService.getAllRevealedQuestionIdsAsync(userId),
+    flashcardProgressService.getAllFlashcardProgressAsync(userId),
+  ]);
+  return { sessions, revealedQuestions, flashcards };
+}
+
+function applyRemoteProgressPayloads(userId: string, progressList: any[]): boolean {
+  let anyIntegrated = false;
+  for (const prog of progressList) {
+    if (!prog || typeof prog !== 'object') continue;
+    if (prog.sessions && typeof prog.sessions === 'object' && Object.keys(prog.sessions).length > 0) {
+      authService.saveAllSmartStudySessions(userId, prog.sessions, prog.revealedQuestions);
+      anyIntegrated = true;
+    }
+    if (prog.flashcards && typeof prog.flashcards === 'object' && Object.keys(prog.flashcards).length > 0) {
+      authService.saveAllFlashcardProgress(userId, prog.flashcards);
+      anyIntegrated = true;
+    }
+    if (prog.theme && (prog.theme === 'dark' || prog.theme === 'light' || prog.theme === 'kitty')) {
+      setStoredTheme(prog.theme, false);
+      anyIntegrated = true;
+    }
+  }
+  return anyIntegrated;
+}
+
+function mergeAndPersistRemoteMaterias(
+  userId: string,
+  remoteRawPayloads: any[],
+  localMateriasOverride?: CustomMateria[]
+): { materias: CustomMateria[]; deletedMaterias: Record<string, number> } {
+  let mergedDeleted = getDeletedCustomMaterias(userId);
+  const parsedList = remoteRawPayloads.filter(Boolean).map(parseRemoteMateriasPayload);
+  for (const p of parsedList) {
+    mergedDeleted = mergeDeletedCustomMaterias(mergedDeleted, p.deletedMaterias);
+  }
+  saveDeletedCustomMaterias(mergedDeleted, userId);
+
+  let mergedMaterias = localMateriasOverride || getStoredCustomMaterias(userId);
+  for (const p of parsedList) {
+    if (p.materias.length > 0) {
+      mergedMaterias = mergeCustomMaterias(mergedMaterias, p.materias, mergedDeleted);
+    }
+  }
+  // Filtrar también materias locales que hayan sido eliminadas en otro dispositivo
+  mergedMaterias = mergeCustomMaterias(mergedMaterias, [], mergedDeleted);
+  saveCustomMaterias(mergedMaterias, userId, false);
+  return { materias: mergedMaterias, deletedMaterias: mergedDeleted };
+}
 
 /**
  * Si el usuario está realizando scroll inercial suave a 120 FPS o interactuando,
@@ -608,21 +752,40 @@ export const googleDriveService = {
   },
 
   /**
-   * Sincronización automática optimizada para el arranque de la aplicación o inicio de sesión.
+   * Devuelve el userId canónico de Google vinculado en este navegador (si existe) para evitar divergencia entre dispositivos.
+   */
+  getLinkedGoogleUserId(): string | null {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_PROFILE_KEY) : null;
+      if (raw) {
+        const prof = JSON.parse(raw);
+        if (prof?.id) return `usr_g_${prof.id}`;
+      }
+    } catch {}
+    return null;
+  },
+
+  /**
+   * Sincronización automática inteligente al arrancar o iniciar sesión:
+   * Verifica la marca temporal real de los archivos en Google Drive (sin bloqueo ciego de 5 minutos)
+   * y descarga únicamente si hay cambios remotos o faltan datos locales.
    */
   async autoSyncOnStartup(userId: string): Promise<StudyKit[] | null> {
-    const lastSyncKey = `thea_last_drive_sync_${userId}`;
-    const lastSync = typeof localStorage !== 'undefined' ? Number(localStorage.getItem(lastSyncKey) || '0') : 0;
-    const now = Date.now();
-    const hasLocalKits = authService.getUserKits(userId).length > 0;
-    const localSessions = authService.getAllSmartStudySessions(userId);
-    const hasProgress = Object.values(localSessions).some(s => Array.isArray(s.history) && s.history.length > 0);
+    return this.syncRemoteChangesIfNeeded(userId, true);
+  },
 
-    // Si los kits locales ya existen, tienen progreso y se sincronizó hace menos de 5 minutos, no gastar recursos
-    if (hasLocalKits && hasProgress && now - lastSync < 5 * 60 * 1000) {
-      updateState({ status: 'idle', errorMessage: null });
+  /**
+   * Verifica de forma ligera (1 sola consulta de metadatos modifiedTime) si otro dispositivo subió cambios a Drive.
+   * Si hay novedades en kits, progreso, eliminaciones o materias, descarga y fusiona de inmediato.
+   */
+  async syncRemoteChangesIfNeeded(userId: string, forceCheck: boolean = false): Promise<StudyKit[] | null> {
+    if (!userId || userId === 'guest') return null;
+
+    const now = Date.now();
+    if (!forceCheck && now - lastRemoteCheckTime < 4000) {
       return null;
     }
+    lastRemoteCheckTime = now;
 
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
@@ -639,8 +802,55 @@ export const googleDriveService = {
       return null;
     }
 
-    await this.pullProgressFromDrive(userId).catch(() => {});
-    return this.pullFromDrive(userId);
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const rootFiles = await this.listFilesInFolder(token, rootFolderId);
+      const remoteMaxMs = getMaxModifiedTimeMs(rootFiles);
+      const localWatermark = getRemoteWatermark(userId);
+      const localKits = authService.getUserKits(userId);
+      const localSessions = await authService.getAllSmartStudySessionsAsync(userId);
+      const localFlashcards = await flashcardProgressService.getAllFlashcardProgressAsync(userId);
+      const hasLocalProgress =
+        Object.values(localSessions).some(s => Array.isArray(s.history) && s.history.length > 0) ||
+        Object.keys(localFlashcards).length > 0;
+
+      const hasRemoteFiles = rootFiles.some(f => f.name.endsWith('.json'));
+      const needsPull =
+        localKits.length === 0 ||
+        !hasLocalProgress ||
+        (remoteMaxMs > 0 && remoteMaxMs > localWatermark) ||
+        (hasRemoteFiles && localWatermark === 0);
+
+      if (needsPull) {
+        return await this.pullFromDrive(userId);
+      }
+
+      updateState({
+        status: 'synced',
+        filesSyncedCount: rootFiles.length,
+        errorMessage: null,
+      });
+      return null;
+    } catch (err: any) {
+      const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
+      if (is401) {
+        this.clearAccessToken();
+        const refreshed = await this.attemptSilentTokenRefresh();
+        if (refreshed) {
+          return this.syncRemoteChangesIfNeeded(userId, true);
+        }
+        updateState({
+          status: 'needs_reauth',
+          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+        });
+      } else if (err?.message?.includes('Failed to fetch') || err?.name === 'TypeError') {
+        updateState({
+          status: 'error',
+          errorMessage: 'Sin conexión para verificar cambios en Google Drive.',
+        });
+      }
+      return null;
+    }
   },
 
   /**
@@ -1319,16 +1529,17 @@ export const googleDriveService = {
   },
 
   /**
-   * Lista todos los archivos dentro de una carpeta en Google Drive con soporte de paginación completa.
+   * Lista todos los archivos dentro de una carpeta en Google Drive con soporte de paginación completa
+   * e incluyendo modifiedTime para detección instantánea de cambios entre dispositivos.
    */
-  async listFilesInFolder(token: string, folderId: string): Promise<Array<{ id: string; name: string }>> {
-    const allFiles: Array<{ id: string; name: string }> = [];
+  async listFilesInFolder(token: string, folderId: string): Promise<Array<{ id: string; name: string; modifiedTime?: string }>> {
+    const allFiles: Array<{ id: string; name: string; modifiedTime?: string }> = [];
     let pageToken: string | undefined = undefined;
     let pageCount = 0;
 
     do {
       const q = `'${folderId}' in parents and trashed = false`;
-      let url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name)&pageSize=1000`;
+      let url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,modifiedTime)&pageSize=1000`;
       if (pageToken) {
         url += `&pageToken=${encodeURIComponent(pageToken)}`;
       }
@@ -1493,9 +1704,14 @@ export const googleDriveService = {
   },
 
   /**
-   * Descarga el estado completo guardado en Google Drive y lo restaura localmente con consultas paralelas ultra rápidas.
+   * Descarga el estado completo guardado en Google Drive y lo restaura localmente con fusión por timestamps
+   * y tombstones de eliminaciones para kits y materias.
    */
   async pullFromDrive(userId: string): Promise<StudyKit[] | null> {
+    if (isPullFromDriveInFlight && inFlightPullPromise) {
+      return inFlightPullPromise;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
@@ -1511,308 +1727,319 @@ export const googleDriveService = {
       return null;
     }
 
+    isPullFromDriveInFlight = true;
     updateState({ status: 'syncing', errorMessage: null });
 
-    try {
-      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
-
-      // 1. Obtener todos los archivos en la carpeta raíz en UNA sola llamada de red
-      const rootFiles = await this.listFilesInFolder(token, rootFolderId);
-      const rootFilesMap = new Map<string, { id: string; name: string }>();
-      for (const f of rootFiles) {
-        rootFilesMap.set(f.name, f);
-      }
-
-      // Archivos de kits: capturar todos los archivos de kits existentes (incluyendo otras PCs/navegadores con distintos userIds)
-      const allKitsFiles = rootFiles.filter(f =>
-        f.name.startsWith('thea_kits_') || f.name === 'thea_study_kits.json' || f.name === 'thea_study_kits_v2.json'
-      );
-      allKitsFiles.sort((a, _b) => (a.name === `thea_kits_${userId}.json` ? -1 : 1));
-
-      // Archivos de progreso: capturar archivos de progreso dando prioridad máxima al del usuario actual
-      const allProgressFiles = rootFiles.filter(f =>
-        f.name === `thea_progress_${userId}.json` || f.name === 'thea_progress.json'
-      );
-      // El archivo específico del usuario se procesa al final para asegurar que sus novedades prevalezcan
-      allProgressFiles.sort((a, b) => {
-        if (a.name === `thea_progress_${userId}.json`) return 1;
-        if (b.name === `thea_progress_${userId}.json`) return -1;
-        return 0;
-      });
-
-      // Archivos de materias: capturar todas las materias personalizadas
-      const allMateriasFiles = rootFiles.filter(f =>
-        f.name.startsWith('thea_materias_') || f.name === 'thea_custom_materias.json'
-      );
-      allMateriasFiles.sort((a, _b) => (a.name === `thea_materias_${userId}.json` ? -1 : 1));
-
-      const usersFile = rootFilesMap.get('thea_auth_users.json');
-      const aiSettingsFile = rootFilesMap.get('thea_ai_settings.json');
-      const userPodcastSettingsFileName = `thea_podcast_settings_${userId}.json`;
-      const podcastSettingsFile = rootFilesMap.get(userPodcastSettingsFileName) ||
-                                  Array.from(rootFilesMap.values()).find(f => f.name.startsWith('thea_podcast_settings'));
-
-      // 2. Descargar todos los archivos esenciales en paralelo ultrarrápido
-      const [remoteUsers, pulledKitsLists, pulledProgressList, remoteAISettings, remotePodcastSettings, pulledMateriasList] = await Promise.all([
-        usersFile ? this.readJsonFromDrive<any[]>(token, usersFile.id).catch(() => null) : null,
-        Promise.all(allKitsFiles.map(f => this.readJsonFromDrive<StudyKit[]>(token, f.id).catch(() => null))),
-        Promise.all(allProgressFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))),
-        aiSettingsFile ? this.readJsonFromDrive<AISettings>(token, aiSettingsFile.id).catch(() => null) : null,
-        podcastSettingsFile ? this.readJsonFromDrive<PodcastSettings>(token, podcastSettingsFile.id).catch(() => null) : null,
-        Promise.all(allMateriasFiles.map(f => this.readJsonFromDrive<CustomMateria[]>(token, f.id).catch(() => null))),
-      ]);
-
-      // 3. Procesar e integrar usuarios
-      if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
-        const localUsers = authService.getRawStoredUsers();
-        const mergedMap = new Map<string, any>();
-        for (const u of localUsers) mergedMap.set(u.id, u);
-        for (const u of remoteUsers) {
-          const localU = mergedMap.get(u.id);
-          const uHasAiKey = Boolean(
-            (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) ||
-            (u.aiSettings?.geminiApiKey && u.aiSettings.geminiApiKey.trim().length > 0) ||
-            (u.aiSettings?.grokApiKey && u.aiSettings.grokApiKey.trim().length > 0) ||
-            (u.aiSettings?.groqApiKey && u.aiSettings.groqApiKey.trim().length > 0)
-          );
-          if (uHasAiKey && u.aiSettings) {
-            u.aiSettings.verified = true;
-            authService.saveUserAISettings(u.id, u.aiSettings);
-            const currentSettings = getAISettings();
-            const currHasKey = Boolean(
-              (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
-              (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0)
-            );
-            if (!currHasKey) {
-              saveAISettings(u.aiSettings);
-            }
-          }
-          if (u.podcastSettings) {
-            authService.saveUserPodcastSettings(u.id, u.podcastSettings);
-          }
-          mergedMap.set(u.id, { ...localU, ...u });
-        }
-        authService.setRawStoredUsers(Array.from(mergedMap.values()));
-      }
-
-      // 4. Procesar e integrar kits de estudio con fusion acumulativa completa (une kits de todas las PCs)
-      let validPulledKits: StudyKit[] | null = null;
-      const deletedIds = getDeletedKitIds();
-      let remoteKitsAccumulated: StudyKit[] = [];
-      for (const kList of (pulledKitsLists || [])) {
-        if (Array.isArray(kList) && kList.length > 0) {
-          const clean = kList.filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id));
-          remoteKitsAccumulated = mergeKitsByUpdatedAt(remoteKitsAccumulated, clean, deletedIds);
-        }
-      }
-
-      const localKits = authService.getUserKits(userId);
-      const mergedKits = mergeKitsByUpdatedAt(localKits, remoteKitsAccumulated, deletedIds);
-
-      if (mergedKits.length > 0) {
-        validPulledKits = mergedKits;
-        await authService.saveUserKitsAsync(userId, mergedKits);
-        authService.markKitsSyncedWithDrive(userId, mergedKits.map(k => k.id));
-
-        // Subir de vuelta la lista consolidada para que el archivo de este usuario tenga todos los kits
-        setTimeout(() => {
-          this.pushToDrive(userId, mergedKits).catch(() => {});
-        }, 1500);
-      }
-
-      // 5. Procesar e integrar progreso de Smart Study y Flashcards (nivel, respuestas, historial, dominadas)
-      for (const prog of (pulledProgressList || [])) {
-        if (prog && typeof prog === 'object') {
-          if (prog.sessions && typeof prog.sessions === 'object') {
-            authService.saveAllSmartStudySessions(userId, prog.sessions, prog.revealedQuestions);
-          }
-          if (prog.flashcards && typeof prog.flashcards === 'object') {
-            authService.saveAllFlashcardProgress(userId, prog.flashcards);
-          }
-          if (prog.theme && (prog.theme === 'dark' || prog.theme === 'light' || prog.theme === 'kitty')) {
-            setStoredTheme(prog.theme, false);
-          }
-        }
-      }
-
-      const hasAnyProgress = Array.isArray(pulledProgressList) && pulledProgressList.some(p => p && typeof p === 'object');
-      if (hasAnyProgress) {
-        // Subir inmediatamente la versión validada y saneada a Google Drive para limpiar la nube
-        const cleanSessions = authService.getAllSmartStudySessions(userId);
-        const cleanRevealed = authService.getAllRevealedQuestionIds(userId);
-        const cleanFlashcards = authService.getAllFlashcardProgress(userId);
-        const cleanPayload = {
-          version: 1,
-          updatedAt: Date.now(),
-          userId,
-          sessions: cleanSessions,
-          revealedQuestions: cleanRevealed,
-          flashcards: cleanFlashcards,
-          theme: getStoredTheme(),
-        };
-        const userProgressFileName = `thea_progress_${userId}.json`;
-        this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, cleanPayload).catch(err => {
-          console.warn('[GoogleDriveService] Error actualizando progreso saneado en Drive:', err);
-        });
-      }
-
-      // 6. Procesar e integrar ajustes de IA
-      const localAISettings = getAISettings();
-      let effectiveRemoteAI = remoteAISettings;
-      if (effectiveRemoteAI && typeof effectiveRemoteAI === 'object') {
-        const remoteHasKey = Boolean(
-          (effectiveRemoteAI.apiKey && effectiveRemoteAI.apiKey.trim().length > 0) ||
-          (effectiveRemoteAI.geminiApiKey && effectiveRemoteAI.geminiApiKey.trim().length > 0) ||
-          (effectiveRemoteAI.grokApiKey && effectiveRemoteAI.grokApiKey.trim().length > 0) ||
-          (effectiveRemoteAI.groqApiKey && effectiveRemoteAI.groqApiKey.trim().length > 0)
-        );
-        const localHasKey = Boolean(
-          (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
-          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0) ||
-          (localAISettings.grokApiKey && localAISettings.grokApiKey.trim().length > 0) ||
-          (localAISettings.groqApiKey && localAISettings.groqApiKey.trim().length > 0)
-        );
-
-        if (remoteHasKey) {
-          const merged: AISettings = {
-            ...effectiveRemoteAI,
-            verified: true,
-          };
-          saveAISettings(merged);
-          if (effectiveRemoteAI.geminiApiKey?.trim()) {
-            safeLocalStorageSetItem('contrareloj_gemini_api_key', effectiveRemoteAI.geminiApiKey.trim());
-            savePodcastSettings({ geminiApiKey: effectiveRemoteAI.geminiApiKey.trim() });
-          }
-          if (userId) {
-            authService.saveUserAISettings(userId, merged);
-          }
-          const activeUser = authService.getCurrentUser();
-          if (activeUser) {
-            authService.saveUserAISettings(activeUser.id, merged);
-          }
-        } else if (localHasKey) {
-          this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
-        }
-      } else if (
-        (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
-        (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0)
-      ) {
-        this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
-      }
-
-      // 6.1 Procesar e integrar ajustes de Podcast
-      if (remotePodcastSettings && typeof remotePodcastSettings === 'object') {
-        savePodcastSettings(remotePodcastSettings);
-        if (userId) {
-          authService.saveUserPodcastSettings(userId, remotePodcastSettings);
-        }
-        if (remotePodcastSettings.geminiApiKey && remotePodcastSettings.geminiApiKey.trim().length > 0) {
-          safeLocalStorageSetItem('contrareloj_gemini_api_key', remotePodcastSettings.geminiApiKey.trim());
-          const currAi = getAISettings();
-          saveAISettings({
-            ...currAi,
-            geminiApiKey: remotePodcastSettings.geminiApiKey.trim(),
-          });
-        }
-      } else {
-        const localPodcastSettings = getPodcastSettings();
-        if (
-          localPodcastSettings.geminiApiKey ||
-          localPodcastSettings.sofiaVoice !== 'Aoede' ||
-          localPodcastSettings.mateoVoice !== 'Puck'
-        ) {
-          this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', localPodcastSettings).catch(() => {});
-        }
-      }
-
-      // 6.b Procesar e integrar materias personalizadas y colores con prioridad por fecha y hora (más reciente gana)
-      let remoteMateriasAccumulated: CustomMateria[] = [];
-      for (const mList of (pulledMateriasList || [])) {
-        if (Array.isArray(mList) && mList.length > 0) {
-          remoteMateriasAccumulated = mergeCustomMaterias(remoteMateriasAccumulated, mList);
-        }
-      }
-      if (remoteMateriasAccumulated.length > 0) {
-        const localMaterias = getStoredCustomMaterias(userId);
-        const mergedMaterias = mergeCustomMaterias(localMaterias, remoteMateriasAccumulated);
-        saveCustomMaterias(mergedMaterias, userId, false);
-      }
-
-      // 7. Notificar inmediatamente que los datos y el progreso están listos
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('thea_ai_settings_changed'));
-        window.dispatchEvent(new CustomEvent('contrareloj_podcast_settings_changed', { detail: getPodcastSettings() }));
-        window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
-      }
-
-      const now = Date.now();
-      safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
-      updateState({
-        status: 'synced',
-        lastSyncTime: now,
-        filesSyncedCount: rootFiles.length,
-        errorMessage: null,
-      });
-
+    inFlightPullPromise = (async (): Promise<StudyKit[] | null> => {
       try {
-        safeLocalStorageSetItem(`thea_last_drive_sync_${userId}`, Date.now().toString());
-      } catch {}
+        const rootFolderId = await this.getOrCreateFolder(token!, DRIVE_ROOT_FOLDER);
 
-      // 8. Descarga de activos visuales en segundo plano sin bloquear el retorno ni la UI
-      this.syncAssetsInBackground(token, rootFolderId).catch((err) => {
-        console.warn('[GoogleDriveService] Error en sincronización de activos en segundo plano:', err);
-      });
-
-      return validPulledKits;
-    } catch (err: any) {
-      console.error('[GoogleDriveService] Error en pullFromDrive:', err);
-      const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
-      if (is401) {
-        this.clearAccessToken();
-        const refreshedToken = await this.attemptSilentTokenRefresh();
-        if (refreshedToken) {
-          return this.pullFromDrive(userId);
+        // 1. Obtener todos los archivos en la carpeta raíz en UNA sola llamada de red (con modifiedTime)
+        const rootFiles = await this.listFilesInFolder(token!, rootFolderId);
+        const rootFilesMap = new Map<string, { id: string; name: string; modifiedTime?: string }>();
+        for (const f of rootFiles) {
+          rootFilesMap.set(f.name, f);
         }
+
+        const allKitsFiles = rootFiles.filter(f =>
+          f.name.startsWith('thea_kits_') || f.name === 'thea_study_kits.json' || f.name === 'thea_study_kits_v2.json'
+        );
+        allKitsFiles.sort((a, _b) => (a.name === `thea_kits_${userId}.json` ? -1 : 1));
+
+        // Descargar TODOS los archivos de progreso de todos los dispositivos en orden cronológico ascendente
+        const allProgressFiles = sortProgressFilesChronologically(rootFiles, userId);
+
+        const allMateriasFiles = rootFiles.filter(f =>
+          f.name.startsWith('thea_materias_') || f.name === 'thea_custom_materias.json'
+        );
+        allMateriasFiles.sort((a, _b) => (a.name === `thea_materias_${userId}.json` ? -1 : 1));
+
+        const deletedKitsFile = rootFilesMap.get(DELETED_KITS_DRIVE_FILE);
+        const usersFile = rootFilesMap.get('thea_auth_users.json');
+        const aiSettingsFile = rootFilesMap.get('thea_ai_settings.json');
+        const userPodcastSettingsFileName = `thea_podcast_settings_${userId}.json`;
+        const podcastSettingsFile = rootFilesMap.get(userPodcastSettingsFileName) ||
+                                    Array.from(rootFilesMap.values()).find(f => f.name.startsWith('thea_podcast_settings'));
+
+        // 2. Descargar todos los archivos esenciales en paralelo ultrarrápido
+        const [remoteDeletedPayload, remoteUsers, pulledKitsLists, pulledProgressList, remoteAISettings, remotePodcastSettings, pulledMateriasList] = await Promise.all([
+          deletedKitsFile ? this.readJsonFromDrive<any>(token!, deletedKitsFile.id).catch(() => null) : null,
+          usersFile ? this.readJsonFromDrive<any[]>(token!, usersFile.id).catch(() => null) : null,
+          Promise.all(allKitsFiles.map(f => this.readJsonFromDrive<StudyKit[]>(token!, f.id).catch(() => null))),
+          Promise.all(allProgressFiles.map(f => this.readJsonFromDrive<any>(token!, f.id).catch(() => null))),
+          aiSettingsFile ? this.readJsonFromDrive<AISettings>(token!, aiSettingsFile.id).catch(() => null) : null,
+          podcastSettingsFile ? this.readJsonFromDrive<PodcastSettings>(token!, podcastSettingsFile.id).catch(() => null) : null,
+          Promise.all(allMateriasFiles.map(f => this.readJsonFromDrive<any>(token!, f.id).catch(() => null))),
+        ]);
+
+        // 3. Procesar tombstones de kits eliminados antes de fusionar kits
+        const baseTombstones = await restoreDeletedKitTombstonesAsync();
+        const remoteTombMap = remoteDeletedPayload?.tombstones && typeof remoteDeletedPayload.tombstones === 'object'
+          ? remoteDeletedPayload.tombstones
+          : null;
+        const remoteTombArr = Array.isArray(remoteDeletedPayload?.deletedIds)
+          ? remoteDeletedPayload.deletedIds
+          : (Array.isArray(remoteDeletedPayload) ? remoteDeletedPayload : null);
+        const mergedTombstones = mergeDeletedKitTombstones(remoteTombMap, remoteTombArr, baseTombstones);
+        const deletedIds = new Set(Object.keys(mergedTombstones));
+
+        // 4. Procesar e integrar usuarios
+        if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+          const localUsers = authService.getRawStoredUsers();
+          const mergedMap = new Map<string, any>();
+          for (const u of localUsers) mergedMap.set(u.id, u);
+          for (const u of remoteUsers) {
+            const localU = mergedMap.get(u.id);
+            const uHasAiKey = Boolean(
+              (u.aiSettings?.apiKey && u.aiSettings.apiKey.trim().length > 0) ||
+              (u.aiSettings?.geminiApiKey && u.aiSettings.geminiApiKey.trim().length > 0) ||
+              (u.aiSettings?.grokApiKey && u.aiSettings.grokApiKey.trim().length > 0) ||
+              (u.aiSettings?.groqApiKey && u.aiSettings.groqApiKey.trim().length > 0)
+            );
+            if (uHasAiKey && u.aiSettings) {
+              u.aiSettings.verified = true;
+              authService.saveUserAISettings(u.id, u.aiSettings);
+              const currentSettings = getAISettings();
+              const currHasKey = Boolean(
+                (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
+                (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0)
+              );
+              if (!currHasKey) {
+                saveAISettings(u.aiSettings);
+              }
+            }
+            if (u.podcastSettings) {
+              authService.saveUserPodcastSettings(u.id, u.podcastSettings);
+            }
+            mergedMap.set(u.id, { ...localU, ...u });
+          }
+          authService.setRawStoredUsers(Array.from(mergedMap.values()));
+        }
+
+        // 5. Procesar progreso ANTES de fusionar kits para que getSavedFlashcardMasteryInfo tenga lo último
+        const validRemoteProgressList = (pulledProgressList || []).filter(p => p && typeof p === 'object');
+        const anyProgressIntegrated = applyRemoteProgressPayloads(userId, validRemoteProgressList);
+
+        // 6. Procesar e integrar kits de estudio respetando tombstones y marcas temporales
+        let remoteKitsAccumulated: StudyKit[] = [];
+        for (const kList of (pulledKitsLists || [])) {
+          if (Array.isArray(kList) && kList.length > 0) {
+            const clean = kList.filter(k => !isCorruptedKit(k) && !isKitDeletedByTombstone(k, deletedIds, mergedTombstones));
+            remoteKitsAccumulated = mergeKitsByUpdatedAt(remoteKitsAccumulated, clean, deletedIds, mergedTombstones);
+          }
+        }
+
+        const localKits = authService.getUserKits(userId).filter(
+          k => !isCorruptedKit(k) && !isKitDeletedByTombstone(k, deletedIds, mergedTombstones)
+        );
+        const mergedKits = mergeKitsByUpdatedAt(localKits, remoteKitsAccumulated, deletedIds, mergedTombstones);
+
+        let validPulledKits: StudyKit[] | null = null;
+        if (mergedKits.length > 0 || allKitsFiles.length > 0) {
+          validPulledKits = mergedKits;
+          await authService.saveUserKitsAsync(userId, mergedKits);
+          authService.markKitsSyncedWithDrive(userId, mergedKits.map(k => k.id));
+
+          // Si el dispositivo local aportó kits nuevos que no estaban aún en Drive, subir la consolidación
+          const remoteIds = new Set(remoteKitsAccumulated.map(k => k.id));
+          const localHasExtraKits = localKits.some(k => !remoteIds.has(k.id) || (k.updatedAt || 0) > (remoteKitsAccumulated.find(r => r.id === k.id)?.updatedAt || 0));
+          const localHasExtraTombstones = Object.keys(mergedTombstones).some(id =>
+            !RETIRED_TEST_KIT_IDS.includes(id) && (!remoteTombMap || (mergedTombstones[id] > (remoteTombMap[id] || 0)))
+          );
+          if (localHasExtraKits || localHasExtraTombstones) {
+            setTimeout(() => {
+              this.pushToDrive(userId, mergedKits).catch(() => {});
+            }, 800);
+          }
+        }
+
+        // Consolidar progreso saneado si se integraron múltiples archivos de progreso
+        if (anyProgressIntegrated && allProgressFiles.length > 1) {
+          const unifiedProgress = await readUnifiedProgressAsync(userId);
+          if (Object.keys(unifiedProgress.sessions).length > 0 || Object.keys(unifiedProgress.flashcards).length > 0) {
+            const cleanPayload = {
+              version: 1,
+              updatedAt: Date.now(),
+              userId,
+              ...unifiedProgress,
+              theme: getStoredTheme(),
+            };
+            this.uploadOrUpdateJson(token!, rootFolderId, `thea_progress_${userId}.json`, cleanPayload).catch(() => {});
+          }
+        }
+
+        // 7. Procesar ajustes de IA
+        const localAISettings = getAISettings();
+        let effectiveRemoteAI = remoteAISettings;
+        if (effectiveRemoteAI && typeof effectiveRemoteAI === 'object') {
+          const remoteHasKey = Boolean(
+            (effectiveRemoteAI.apiKey && effectiveRemoteAI.apiKey.trim().length > 0) ||
+            (effectiveRemoteAI.geminiApiKey && effectiveRemoteAI.geminiApiKey.trim().length > 0) ||
+            (effectiveRemoteAI.grokApiKey && effectiveRemoteAI.grokApiKey.trim().length > 0) ||
+            (effectiveRemoteAI.groqApiKey && effectiveRemoteAI.groqApiKey.trim().length > 0)
+          );
+          const localHasKey = Boolean(
+            (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
+            (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0) ||
+            (localAISettings.grokApiKey && localAISettings.grokApiKey.trim().length > 0) ||
+            (localAISettings.groqApiKey && localAISettings.groqApiKey.trim().length > 0)
+          );
+
+          if (remoteHasKey) {
+            const merged: AISettings = {
+              ...effectiveRemoteAI,
+              verified: true,
+            };
+            saveAISettings(merged);
+            if (effectiveRemoteAI.geminiApiKey?.trim()) {
+              safeLocalStorageSetItem('contrareloj_gemini_api_key', effectiveRemoteAI.geminiApiKey.trim());
+              savePodcastSettings({ geminiApiKey: effectiveRemoteAI.geminiApiKey.trim() });
+            }
+            if (userId) {
+              authService.saveUserAISettings(userId, merged);
+            }
+            const activeUser = authService.getCurrentUser();
+            if (activeUser) {
+              authService.saveUserAISettings(activeUser.id, merged);
+            }
+          } else if (localHasKey) {
+            this.uploadOrUpdateJson(token!, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
+          }
+        } else if (
+          (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
+          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0)
+        ) {
+          this.uploadOrUpdateJson(token!, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
+        }
+
+        // 8. Procesar ajustes de Podcast
+        if (remotePodcastSettings && typeof remotePodcastSettings === 'object') {
+          savePodcastSettings(remotePodcastSettings);
+          if (userId) {
+            authService.saveUserPodcastSettings(userId, remotePodcastSettings);
+          }
+          if (remotePodcastSettings.geminiApiKey && remotePodcastSettings.geminiApiKey.trim().length > 0) {
+            safeLocalStorageSetItem('contrareloj_gemini_api_key', remotePodcastSettings.geminiApiKey.trim());
+            const currAi = getAISettings();
+            saveAISettings({
+              ...currAi,
+              geminiApiKey: remotePodcastSettings.geminiApiKey.trim(),
+            });
+          }
+        } else {
+          const localPodcastSettings = getPodcastSettings();
+          if (
+            localPodcastSettings.geminiApiKey ||
+            localPodcastSettings.sofiaVoice !== 'Aoede' ||
+            localPodcastSettings.mateoVoice !== 'Puck'
+          ) {
+            this.uploadOrUpdateJson(token!, rootFolderId, 'thea_podcast_settings.json', localPodcastSettings).catch(() => {});
+          }
+        }
+
+        // 9. Procesar e integrar materias personalizadas y tombstones
+        if (Array.isArray(pulledMateriasList) && pulledMateriasList.some(Boolean)) {
+          mergeAndPersistRemoteMaterias(userId, pulledMateriasList);
+        }
+
+        // 10. Notificar inmediatamente a toda la interfaz (incluyendo App.tsx para kits y Analytics/Home para progreso)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('thea_ai_settings_changed'));
+          window.dispatchEvent(new CustomEvent('contrareloj_podcast_settings_changed', { detail: getPodcastSettings() }));
+          window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
+          if (validPulledKits !== null) {
+            window.dispatchEvent(new CustomEvent('thea_drive_kits_updated', {
+              detail: { userId, kits: validPulledKits, deletedIds: Array.from(deletedIds) }
+            }));
+          }
+        }
+
+        const now = Date.now();
+        const remoteMaxMs = getMaxModifiedTimeMs(rootFiles);
+        setRemoteWatermark(userId, Math.max(remoteMaxMs, now));
+        safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
+        saveSessionItem(STORAGE_LAST_SYNC_KEY, now.toString()).catch(() => {});
+        try {
+          safeLocalStorageSetItem(`thea_last_drive_sync_${userId}`, now.toString());
+        } catch {}
+
         updateState({
-          status: 'needs_reauth',
-          errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+          status: 'synced',
+          lastSyncTime: now,
+          filesSyncedCount: rootFiles.length,
+          errorMessage: null,
         });
-      } else {
-        updateState({ status: 'error', errorMessage: err?.message || 'Error al descargar datos de Drive.' });
+
+        // 11. Descarga de activos visuales en segundo plano sin bloquear el retorno ni la UI
+        this.syncAssetsInBackground(token!, rootFolderId).catch((err) => {
+          console.warn('[GoogleDriveService] Error en sincronización de activos en segundo plano:', err);
+        });
+
+        return validPulledKits;
+      } catch (err: any) {
+        console.error('[GoogleDriveService] Error en pullFromDrive:', err);
+        const { is401 } = classifyDriveError(err);
+        if (is401) {
+          this.clearAccessToken();
+          const refreshedToken = await this.attemptSilentTokenRefresh();
+          if (refreshedToken) {
+            isPullFromDriveInFlight = false;
+            inFlightPullPromise = null;
+            return this.pullFromDrive(userId);
+          }
+          updateState({
+            status: 'needs_reauth',
+            errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
+          });
+        } else {
+          updateState({ status: 'error', errorMessage: err?.message || 'Error al descargar datos de Drive.' });
+        }
+        return null;
+      } finally {
+        isPullFromDriveInFlight = false;
+        inFlightPullPromise = null;
       }
-      return null;
-    }
+    })();
+
+    return inFlightPullPromise;
   },
 
   /**
-   * Sube los datos locales actualizados a Google Drive en segundo plano con auto-renovación silenciosa de token.
+   * Sube los datos locales actualizados a Google Drive en segundo plano con fusión previa bidireccional
+   * de tombstones, progreso, kits y materias para no pisar jamás cambios de otros dispositivos.
    */
   async pushToDrive(userId: string, kits: StudyKit[]): Promise<void> {
-    // 1. Candado estricto de sesión abierta: los datos de la nube solo pueden ser modificados con sesión abierta
     if (!userId || userId === 'guest') {
       console.warn('[GoogleDriveService] Intento de escritura en la nube sin sesión de usuario activa bloqueado.');
       return;
     }
 
-    // 2. Candado estricto anti-vaciado: prohibido sobreescribir la nube con listas vacías o corruptas (datos infinitos)
-    if (!kits || !Array.isArray(kits) || kits.length === 0) {
+    if (!kits || !Array.isArray(kits)) {
+      return;
+    }
+
+    const localTombstonesPre = await restoreDeletedKitTombstonesAsync();
+    const hasExplicitUserDeletions = Object.keys(localTombstonesPre).some(
+      id => !RETIRED_TEST_KIT_IDS.includes(id)
+    );
+
+    if (kits.length === 0 && !hasExplicitUserDeletions) {
       console.warn('[GoogleDriveService] Bloqueada sobreescritura de la nube con lista vacía para proteger la persistencia infinita.');
       return;
     }
 
-    // 3. Mutex de subida concurrente: si ya hay una sincronización en progreso, encolar los últimos kits y salir sin saturar
     if (isPushToDriveInFlight) {
       pendingPushToDriveKits = kits;
       pendingPushToDriveUserId = userId;
       return;
     }
 
-    const deletedIds = getDeletedKitIds();
+    const delSetPre = new Set(Object.keys(localTombstonesPre));
     const cleanKits: StudyKit[] = kits
-      .filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id))
+      .filter(k => !isCorruptedKit(k) && !isKitDeletedByTombstone(k, delSetPre, localTombstonesPre))
       .map(k => ({ ...k, updatedAt: k.updatedAt || Date.now() }));
 
-    if (cleanKits.length === 0) {
+    if (cleanKits.length === 0 && !hasExplicitUserDeletions) {
       console.warn('[GoogleDriveService] Intento de subir kits corruptos a la nube bloqueado.');
       return;
     }
@@ -1839,66 +2066,124 @@ export const googleDriveService = {
       await yieldIfScrolling();
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
 
-      // 1. Guardar base de usuarios, kits y progreso en paralelo con fusion acumulativa completa
+      // 1. Listar archivos existentes y descargar tombstones, kits, progreso y materias remotos para fusionar antes de escribir
       const userKitsFileName = `thea_kits_${userId}.json`;
+      const userProgressFileName = `thea_progress_${userId}.json`;
+      const userMateriasFileName = `thea_materias_${userId}.json`;
+
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
+      const deletedFile = rootFiles.find(f => f.name === DELETED_KITS_DRIVE_FILE);
       const allDriveKitsFiles = rootFiles.filter(f =>
         f.name.startsWith('thea_kits_') || f.name === 'thea_study_kits.json' || f.name === 'thea_study_kits_v2.json'
       );
+      const allProgressFiles = sortProgressFilesChronologically(rootFiles, userId);
+      const allMateriasFiles = rootFiles.filter(f =>
+        f.name.startsWith('thea_materias_') || f.name === 'thea_custom_materias.json'
+      );
 
-      let driveMergedKits: StudyKit[] = cleanKits;
-      for (const kf of allDriveKitsFiles) {
-        try {
-          const remoteKits = await this.readJsonFromDrive<StudyKit[]>(token, kf.id);
-          if (Array.isArray(remoteKits) && remoteKits.length > 0) {
-            driveMergedKits = mergeKitsByUpdatedAt(remoteKits, driveMergedKits, deletedIds);
-          }
-        } catch (e) {
-          console.warn('[GoogleDriveService] Error leyendo kits remotos previos:', e);
+      const [remoteDeletedPayload, remoteKitsLists, remoteProgressLists, remoteMateriasLists] = await Promise.all([
+        deletedFile ? this.readJsonFromDrive<any>(token, deletedFile.id).catch(() => null) : null,
+        Promise.all(allDriveKitsFiles.map(f => this.readJsonFromDrive<StudyKit[]>(token, f.id).catch(() => null))),
+        Promise.all(allProgressFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))),
+        Promise.all(allMateriasFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))),
+      ]);
+
+      const remoteTombMap = remoteDeletedPayload?.tombstones && typeof remoteDeletedPayload.tombstones === 'object'
+        ? remoteDeletedPayload.tombstones
+        : null;
+      const remoteTombArr = Array.isArray(remoteDeletedPayload?.deletedIds)
+        ? remoteDeletedPayload.deletedIds
+        : (Array.isArray(remoteDeletedPayload) ? remoteDeletedPayload : null);
+      const mergedTombstones = mergeDeletedKitTombstones(remoteTombMap, remoteTombArr, localTombstonesPre);
+      const mergedDelSet = new Set(Object.keys(mergedTombstones));
+
+      // Integrar progreso remoto antes de leer el progreso unificado (evita sobrescribir avance de otro dispositivo)
+      const validRemoteProg = remoteProgressLists.filter(p => p && typeof p === 'object');
+      if (validRemoteProg.length > 0) {
+        applyRemoteProgressPayloads(userId, validRemoteProg);
+      }
+
+      // Integrar materias remotas antes de subir
+      const localMaterias = getStoredCustomMaterias(userId);
+      const mergedMatState = mergeAndPersistRemoteMaterias(userId, remoteMateriasLists, localMaterias);
+
+      // Integrar kits remotos respetando tombstones y updatedAt
+      let driveMergedKits: StudyKit[] = cleanKits.filter(k => !isKitDeletedByTombstone(k, mergedDelSet, mergedTombstones));
+      for (const remoteKits of remoteKitsLists) {
+        if (Array.isArray(remoteKits) && remoteKits.length > 0) {
+          driveMergedKits = mergeKitsByUpdatedAt(remoteKits, driveMergedKits, mergedDelSet, mergedTombstones);
         }
       }
 
-      if (driveMergedKits.length > cleanKits.length) {
-        authService.saveUserKits(userId, driveMergedKits);
+      // Si los kits locales difieren por fusión remota o eliminaciones remotas, sincronizar estado local + UI
+      const cleanLocalIds = new Set(cleanKits.map(k => k.id));
+      const mergedIds = new Set(driveMergedKits.map(k => k.id));
+      const kitsChangedByMerge =
+        driveMergedKits.length !== cleanKits.length ||
+        driveMergedKits.some(k => !cleanLocalIds.has(k.id)) ||
+        cleanKits.some(k => !mergedIds.has(k.id));
+
+      if (kitsChangedByMerge) {
+        await authService.saveUserKitsAsync(userId, driveMergedKits);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('thea_drive_kits_updated', {
+            detail: { userId, kits: driveMergedKits, deletedIds: Array.from(mergedDelSet) }
+          }));
+        }
       }
 
       const localUsers = authService.getRawStoredUsers();
       const lightweightKits = stripHeavyAssetsForLocalStorage(driveMergedKits);
-      const userSessions = authService.getAllSmartStudySessions(userId);
-      const userRevealed = authService.getAllRevealedQuestionIds(userId);
-      const userFlashcards = authService.getAllFlashcardProgress(userId);
+      const { sessions: userSessions, revealedQuestions: userRevealed, flashcards: userFlashcards } =
+        await readUnifiedProgressAsync(userId);
 
-      // Escudo protector: nunca sobrescribir el archivo en la nube con un payload vacio
-      // si la sesion local todavia no se ha hidratado desde IndexedDB.
-      if (Object.keys(userSessions).length === 0 && Object.keys(userFlashcards).length === 0) {
-        return;
-      }
-      const userProgressPayload = {
+      const deletedPayload = {
         version: 1,
         updatedAt: Date.now(),
-        userId,
-        sessions: userSessions,
-        revealedQuestions: userRevealed,
-        flashcards: userFlashcards,
-        theme: getStoredTheme(),
+        tombstones: mergedTombstones,
+        deletedIds: Array.from(mergedDelSet),
       };
-      const userProgressFileName = `thea_progress_${userId}.json`;
-      const userMateriasFileName = `thea_materias_${userId}.json`;
-      const localMaterias = getStoredCustomMaterias(userId);
+
+      const materiasPayload = {
+        version: 2,
+        updatedAt: Date.now(),
+        materias: mergedMatState.materias,
+        deletedMaterias: mergedMatState.deletedMaterias,
+      };
 
       const currentPodcastSettings = getPodcastSettings();
-      await Promise.all([
+      const uploadPromises: Promise<any>[] = [
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers),
         this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits),
-        this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
-        this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, localMaterias),
+        this.uploadOrUpdateJson(token, rootFolderId, DELETED_KITS_DRIVE_FILE, deletedPayload),
+        this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, materiasPayload),
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', currentPodcastSettings),
-      ]);
+      ];
+
+      // Solo subir progreso si hay datos reales (y tras haber fusionado lo remoto) para jamás pisar progreso ajeno con {}
+      const hasAnyProgressToUpload =
+        Object.keys(userSessions).length > 0 ||
+        Object.keys(userFlashcards).length > 0 ||
+        Object.keys(userRevealed).length > 0;
+
+      if (hasAnyProgressToUpload) {
+        const userProgressPayload = {
+          version: 1,
+          updatedAt: Date.now(),
+          userId,
+          sessions: userSessions,
+          revealedQuestions: userRevealed,
+          flashcards: userFlashcards,
+          theme: getStoredTheme(),
+        };
+        uploadPromises.push(this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload));
+      }
+
+      await Promise.all(uploadPromises);
 
       authService.markKitsSyncedWithDrive(userId, driveMergedKits.map(k => k.id));
 
       // 2. Comprobación O(1) de memoria para activos visuales:
-      // En lugar de cargar todos los megabytes de imágenes a la RAM, comprobar primero solo las claves en IndexedDB
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
       const existingDriveAssets = await this.listFilesInFolder(token, assetsFolderId);
       const driveAssetNames = new Set(existingDriveAssets.map(f => f.name));
@@ -1936,22 +2221,19 @@ export const googleDriveService = {
       }
 
       const now = Date.now();
+      setRemoteWatermark(userId, now);
       safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      saveSessionItem(STORAGE_LAST_SYNC_KEY, now.toString()).catch(() => {});
       updateState({
         status: 'synced',
         lastSyncTime: now,
-        filesSyncedCount: existingDriveAssets.length + uploadedCount + 3,
+        filesSyncedCount: existingDriveAssets.length + uploadedCount + uploadPromises.length,
         errorMessage: null,
       });
     } catch (err: any) {
       console.warn('[GoogleDriveService] Error en pushToDrive:', err?.message || err);
-      const isAuthOrNetwork =
-        err?.message?.includes('401') ||
-        err?.message?.includes('TOKEN_EXPIRED') ||
-        err?.status === 401 ||
-        err?.message?.includes('Failed to fetch') ||
-        err?.name === 'TypeError';
-      if (isAuthOrNetwork) {
+      const { is401, isNetwork } = classifyDriveError(err);
+      if (is401) {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
@@ -1963,7 +2245,12 @@ export const googleDriveService = {
           errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
         });
       } else {
-        updateState({ status: 'error', errorMessage: err?.message || 'Error al sincronizar con Google Drive.' });
+        updateState({
+          status: 'error',
+          errorMessage: isNetwork
+            ? 'Sin conexión al guardar en Google Drive. Se reintentará automáticamente.'
+            : (err?.message || 'Error al sincronizar con Google Drive.'),
+        });
       }
     } finally {
       isPushToDriveInFlight = false;
@@ -1974,14 +2261,14 @@ export const googleDriveService = {
         pendingPushToDriveUserId = null;
         setTimeout(() => {
           this.pushToDrive(nextUser, nextKits).catch(() => {});
-        }, 1500);
+        }, 1200);
       }
     }
   },
 
   /**
    * Sube un kit recién creado y todas sus imágenes asociadas a Google Drive de forma inmediata y ultra rápida,
-   * sin esperar el debounce y con subidas concurrentes en paralelo (lotes de 6 simultáneos).
+   * garantizando que la subida nunca se aborte aunque aún no existan sesiones previas de estudio.
    */
   async pushKitImmediately(userId: string, newKit: StudyKit, allKits: StudyKit[]): Promise<void> {
     if (!userId || userId === 'guest') {
@@ -2001,56 +2288,83 @@ export const googleDriveService = {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const assetsFolderId = await this.getOrCreateFolder(token, DRIVE_ASSETS_FOLDER, rootFolderId);
 
-      // 1. Guardar de inmediato los JSONs fundamentales en paralelo con fusion acumulativa
-      const deletedIds = getDeletedKitIds();
+      // 1. Descargar tombstones, kits y progreso remoto existentes antes de fusionar
+      const localTombstones = await restoreDeletedKitTombstonesAsync();
+      const rootFiles = await this.listFilesInFolder(token, rootFolderId);
+      const deletedFile = rootFiles.find(f => f.name === DELETED_KITS_DRIVE_FILE);
+      const userKitsFileName = `thea_kits_${userId}.json`;
+      const existingDriveKitsFile = rootFiles.find(f => f.name === userKitsFileName);
+      const progressFiles = sortProgressFilesChronologically(rootFiles, userId);
+
+      const [remoteDeletedPayload, remoteKits, remoteProgressList] = await Promise.all([
+        deletedFile ? this.readJsonFromDrive<any>(token, deletedFile.id).catch(() => null) : null,
+        existingDriveKitsFile ? this.readJsonFromDrive<StudyKit[]>(token, existingDriveKitsFile.id).catch(() => null) : null,
+        Promise.all(progressFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))),
+      ]);
+
+      const remoteTombMap = remoteDeletedPayload?.tombstones && typeof remoteDeletedPayload.tombstones === 'object'
+        ? remoteDeletedPayload.tombstones
+        : null;
+      const remoteTombArr = Array.isArray(remoteDeletedPayload?.deletedIds)
+        ? remoteDeletedPayload.deletedIds
+        : (Array.isArray(remoteDeletedPayload) ? remoteDeletedPayload : null);
+      const mergedTombstones = mergeDeletedKitTombstones(remoteTombMap, remoteTombArr, localTombstones);
+      const deletedIds = new Set(Object.keys(mergedTombstones));
+
+      const validRemoteProg = remoteProgressList.filter(p => p && typeof p === 'object');
+      if (validRemoteProg.length > 0) {
+        applyRemoteProgressPayloads(userId, validRemoteProg);
+      }
+
       const cleanKits: StudyKit[] = allKits
-        .filter(k => !isCorruptedKit(k) && !deletedIds.has(k.id))
+        .filter(k => !isCorruptedKit(k) && !isKitDeletedByTombstone(k, deletedIds, mergedTombstones))
         .map(k => ({ ...k, updatedAt: k.updatedAt || Date.now() }));
 
-      const userKitsFileName = `thea_kits_${userId}.json`;
-      const existingDriveKitsFile = await this.findFileInFolder(token, rootFolderId, userKitsFileName);
       let driveMergedKits: StudyKit[] = cleanKits;
-      if (existingDriveKitsFile) {
-        try {
-          const remoteKits = await this.readJsonFromDrive<StudyKit[]>(token, existingDriveKitsFile.id);
-          if (Array.isArray(remoteKits) && remoteKits.length > 0) {
-            driveMergedKits = mergeKitsByUpdatedAt(remoteKits, cleanKits, deletedIds);
-          }
-        } catch {}
+      if (Array.isArray(remoteKits) && remoteKits.length > 0) {
+        driveMergedKits = mergeKitsByUpdatedAt(remoteKits, cleanKits, deletedIds, mergedTombstones);
       }
 
       if (driveMergedKits.length > cleanKits.length) {
-        authService.saveUserKits(userId, driveMergedKits);
+        await authService.saveUserKitsAsync(userId, driveMergedKits);
       }
 
       const lightweightKits = stripHeavyAssetsForLocalStorage(driveMergedKits);
       const localUsers = authService.getRawStoredUsers();
+      const { sessions: userSessions, revealedQuestions: userRevealed, flashcards: userFlashcards } =
+        await readUnifiedProgressAsync(userId);
 
-      const userSessions = authService.getAllSmartStudySessions(userId);
-      const userRevealed = authService.getAllRevealedQuestionIds(userId);
-      const userFlashcards = authService.getAllFlashcardProgress(userId);
-
-      // Escudo protector: nunca sobrescribir el archivo en la nube con un payload vacio
-      // si la sesion local todavia no se ha hidratado desde IndexedDB.
-      if (Object.keys(userSessions).length === 0 && Object.keys(userFlashcards).length === 0) {
-        return;
-      }
-      const userProgressPayload = {
+      const deletedPayload = {
         version: 1,
         updatedAt: Date.now(),
-        userId,
-        sessions: userSessions,
-        revealedQuestions: userRevealed,
-        flashcards: userFlashcards,
-        theme: getStoredTheme(),
+        tombstones: mergedTombstones,
+        deletedIds: Array.from(deletedIds),
       };
-      const userProgressFileName = `thea_progress_${userId}.json`;
 
-      const jsonUploadPromises = [
+      const jsonUploadPromises: Promise<any>[] = [
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers),
         this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits),
-        this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
+        this.uploadOrUpdateJson(token, rootFolderId, DELETED_KITS_DRIVE_FILE, deletedPayload),
       ];
+
+      if (
+        Object.keys(userSessions).length > 0 ||
+        Object.keys(userFlashcards).length > 0 ||
+        Object.keys(userRevealed).length > 0
+      ) {
+        const userProgressPayload = {
+          version: 1,
+          updatedAt: Date.now(),
+          userId,
+          sessions: userSessions,
+          revealedQuestions: userRevealed,
+          flashcards: userFlashcards,
+          theme: getStoredTheme(),
+        };
+        jsonUploadPromises.push(
+          this.uploadOrUpdateJson(token, rootFolderId, `thea_progress_${userId}.json`, userProgressPayload)
+        );
+      }
 
       // 2. Extraer activos de este kit de forma desacoplada sin mutar los kits en memoria
       const kitAssetsToUpload: DocumentAsset[] = [];
@@ -2096,7 +2410,6 @@ export const googleDriveService = {
 
       const driveAssetNames = new Set(existingDriveAssets.map(f => f.name));
 
-      // Filtrar los activos que aún no existen en Drive
       const pendingAssets = kitAssetsToUpload.filter(asset => {
         if (!asset.id || !asset.dataUrl) return false;
         const isPng = asset.dataUrl.includes('image/png');
@@ -2119,18 +2432,20 @@ export const googleDriveService = {
       }
 
       const now = Date.now();
+      setRemoteWatermark(userId, now);
       safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      saveSessionItem(STORAGE_LAST_SYNC_KEY, now.toString()).catch(() => {});
       authService.markKitsSyncedWithDrive(userId, driveMergedKits.map(k => k.id));
       updateState({
         status: 'synced',
         lastSyncTime: now,
-        filesSyncedCount: existingDriveAssets.length + uploadedCount + 3,
+        filesSyncedCount: existingDriveAssets.length + uploadedCount + jsonUploadPromises.length,
         errorMessage: null,
       });
       console.log(`[GoogleDriveService] Kit '${newKit.title}' sincronizado de inmediato. ${uploadedCount} imágenes subidas a Drive.`);
     } catch (err: any) {
       console.error('[GoogleDriveService] Error en pushKitImmediately:', err);
-      const is401 = err?.message?.includes('401') || err?.message?.includes('TOKEN_EXPIRED') || err?.status === 401;
+      const { is401, isNetwork } = classifyDriveError(err);
       if (is401) {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
@@ -2144,7 +2459,9 @@ export const googleDriveService = {
       } else {
         updateState({
           status: 'error',
-          errorMessage: err.message || 'Error al respaldar kit en Google Drive',
+          errorMessage: isNetwork
+            ? 'Sin conexión al respaldar kit en Google Drive.'
+            : (err.message || 'Error al respaldar kit en Google Drive'),
         });
       }
     }
@@ -2235,7 +2552,8 @@ export const googleDriveService = {
   },
 
   /**
-   * Sincroniza únicamente el progreso de estudio hacia Google Drive en segundo plano (nivel, respuestas e historial).
+   * Sincroniza el progreso de estudio hacia Google Drive con fusión previa (merge-before-write)
+   * y lectura completa de IndexedDB + LocalStorage para jamás pisar el avance de otros dispositivos.
    */
   async pushProgressToDrive(userId: string): Promise<void> {
     if (!userId || userId === 'guest') {
@@ -2255,22 +2573,43 @@ export const googleDriveService = {
     if (!token) return;
 
     isPushProgressInFlight = true;
+    updateState({ status: 'syncing', errorMessage: null });
 
     try {
       await yieldIfScrolling();
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
-      const userSessions = authService.getAllSmartStudySessions(userId);
-      const userRevealed = authService.getAllRevealedQuestionIds(userId);
-      const userFlashcards = authService.getAllFlashcardProgress(userId);
 
-      // Escudo protector: nunca sobrescribir el archivo en la nube con un payload vacio
-      // si la sesion local todavia no se ha hidratado desde IndexedDB.
-      if (Object.keys(userSessions).length === 0 && Object.keys(userFlashcards).length === 0) {
+      // 1. Descargar y fusionar progreso remoto antes de reescribir (si otro dispositivo avanzó, no lo aplastamos)
+      const rootFiles = await this.listFilesInFolder(token, rootFolderId);
+      const allProgressFiles = sortProgressFilesChronologically(rootFiles, userId);
+      if (allProgressFiles.length > 0) {
+        const remoteProgressLists = await Promise.all(
+          allProgressFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))
+        );
+        const validRemote = remoteProgressLists.filter(p => p && typeof p === 'object');
+        if (validRemote.length > 0) {
+          applyRemoteProgressPayloads(userId, validRemote);
+        }
+      }
+
+      // 2. Leer estado consolidado completo desde RAM + LocalStorage + IndexedDB
+      const { sessions: userSessions, revealedQuestions: userRevealed, flashcards: userFlashcards } =
+        await readUnifiedProgressAsync(userId);
+
+      // Escudo protector: nunca subir payload vacío si aún no hay sesiones ni flashcards
+      if (
+        Object.keys(userSessions).length === 0 &&
+        Object.keys(userFlashcards).length === 0 &&
+        Object.keys(userRevealed).length === 0
+      ) {
+        updateState({ status: 'synced', errorMessage: null });
         return;
       }
+
+      const now = Date.now();
       const userProgressPayload = {
         version: 1,
-        updatedAt: Date.now(),
+        updatedAt: now,
         userId,
         sessions: userSessions,
         revealedQuestions: userRevealed,
@@ -2279,15 +2618,18 @@ export const googleDriveService = {
       };
       const userProgressFileName = `thea_progress_${userId}.json`;
       await this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload);
+
+      setRemoteWatermark(userId, now);
+      safeLocalStorageSetItem(STORAGE_LAST_SYNC_KEY, now.toString());
+      updateState({
+        status: 'synced',
+        lastSyncTime: now,
+        errorMessage: null,
+      });
     } catch (e: any) {
       console.warn('[GoogleDriveService] Error en pushProgressToDrive:', e?.message || e);
-      const isAuthOrNetwork =
-        e?.message?.includes('401') ||
-        e?.message?.includes('TOKEN_EXPIRED') ||
-        e?.status === 401 ||
-        e?.message?.includes('Failed to fetch') ||
-        e?.name === 'TypeError';
-      if (isAuthOrNetwork) {
+      const { is401, isNetwork } = classifyDriveError(e);
+      if (is401) {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
@@ -2298,6 +2640,13 @@ export const googleDriveService = {
           status: 'needs_reauth',
           errorMessage: 'Tu sesión de Google Drive requiere reconexión.',
         });
+      } else {
+        updateState({
+          status: 'error',
+          errorMessage: isNetwork
+            ? 'Sin conexión al subir progreso a Drive.'
+            : (e?.message || 'Error al sincronizar progreso con Drive.'),
+        });
       }
     } finally {
       isPushProgressInFlight = false;
@@ -2306,14 +2655,13 @@ export const googleDriveService = {
         pendingProgressPushUserId = null;
         setTimeout(() => {
           this.pushProgressToDrive(nextUser).catch(() => {});
-        }, 1500);
+        }, 800);
       }
     }
   },
 
   /**
-   * Descarga e integra rápidamente solo el progreso de Smart Study y Flashcards desde Google Drive (sub-segundo).
-   * Ideal para cuando el usuario cambia de ventana o regresa a la aplicación desde otra PC.
+   * Descarga e integra rápidamente el progreso de todos los dispositivos (thea_progress_*.json) desde Google Drive.
    */
   async pullProgressFromDrive(userId: string): Promise<boolean> {
     if (!userId || userId === 'guest') return false;
@@ -2326,14 +2674,7 @@ export const googleDriveService = {
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
-      const allProgressFiles = rootFiles.filter(f =>
-        f.name === `thea_progress_${userId}.json` || f.name === 'thea_progress.json'
-      );
-      allProgressFiles.sort((a, b) => {
-        if (a.name === `thea_progress_${userId}.json`) return 1;
-        if (b.name === `thea_progress_${userId}.json`) return -1;
-        return 0;
-      });
+      const allProgressFiles = sortProgressFilesChronologically(rootFiles, userId);
 
       if (allProgressFiles.length === 0) return false;
 
@@ -2341,22 +2682,7 @@ export const googleDriveService = {
         allProgressFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))
       );
 
-      let anyIntegrated = false;
-      for (const cloudProgress of progressList) {
-        if (!cloudProgress || typeof cloudProgress !== 'object') continue;
-        if (cloudProgress.sessions && typeof cloudProgress.sessions === 'object') {
-          authService.saveAllSmartStudySessions(userId, cloudProgress.sessions, cloudProgress.revealedQuestions);
-          anyIntegrated = true;
-        }
-        if (cloudProgress.flashcards && typeof cloudProgress.flashcards === 'object') {
-          authService.saveAllFlashcardProgress(userId, cloudProgress.flashcards);
-          anyIntegrated = true;
-        }
-        if (cloudProgress.theme && (cloudProgress.theme === 'dark' || cloudProgress.theme === 'light' || cloudProgress.theme === 'kitty')) {
-          setStoredTheme(cloudProgress.theme, false);
-          anyIntegrated = true;
-        }
-      }
+      const anyIntegrated = applyRemoteProgressPayloads(userId, progressList);
 
       if (anyIntegrated && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('thea_progress_synced', { detail: { userId } }));
@@ -2369,7 +2695,7 @@ export const googleDriveService = {
   },
 
   /**
-   * Sube inmediatamente a Google Drive los colores y materias personalizadas en segundo plano.
+   * Sube inmediatamente a Google Drive los colores, materias personalizadas y tombstones de eliminaciones.
    * Realiza fusión previa por marca temporal para que prevalezca la modificación más reciente.
    */
   async pushMateriasToDrive(userId: string, materias?: CustomMateria[]): Promise<void> {
@@ -2386,25 +2712,41 @@ export const googleDriveService = {
       const userMateriasFileName = `thea_materias_${userId}.json`;
       const localMaterias = materias || getStoredCustomMaterias(userId);
 
-      // Descargar materias previas de Drive para fusión por fecha y hora (más reciente gana)
+      // Descargar materias y tombstones previos de Drive para fusión por fecha y hora
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
-      const remoteFile = rootFiles.find(f => f.name === userMateriasFileName || f.name === 'thea_custom_materias.json');
-      let payload = localMaterias;
-      if (remoteFile) {
-        try {
-          const remoteMaterias = await this.readJsonFromDrive<CustomMateria[]>(token, remoteFile.id);
-          if (Array.isArray(remoteMaterias) && remoteMaterias.length > 0) {
-            payload = mergeCustomMaterias(localMaterias, remoteMaterias);
-            saveCustomMaterias(payload, userId, false);
-          }
-        } catch {}
+      const remoteFiles = rootFiles.filter(f =>
+        f.name === userMateriasFileName || f.name.startsWith('thea_materias_') || f.name === 'thea_custom_materias.json'
+      );
+
+      let mergedState = {
+        materias: localMaterias,
+        deletedMaterias: getDeletedCustomMaterias(userId),
+      };
+
+      if (remoteFiles.length > 0) {
+        const remotePayloads = await Promise.all(
+          remoteFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))
+        );
+        if (remotePayloads.some(Boolean)) {
+          mergedState = mergeAndPersistRemoteMaterias(userId, remotePayloads, localMaterias);
+        }
       }
 
-      await this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, payload);
-      console.log('[GoogleDriveService] Colores de materias sincronizados con Google Drive inmediatamente.');
+      const now = Date.now();
+      const uploadPayload = {
+        version: 2,
+        updatedAt: now,
+        materias: mergedState.materias,
+        deletedMaterias: mergedState.deletedMaterias,
+      };
+
+      await this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, uploadPayload);
+      setRemoteWatermark(userId, now);
+      updateState({ status: 'synced', lastSyncTime: now, errorMessage: null });
+      console.log('[GoogleDriveService] Materias y colores sincronizados con Google Drive inmediatamente.');
     } catch (e: any) {
       console.warn('[GoogleDriveService] Error en pushMateriasToDrive:', e);
-      const is401 = e?.message?.includes('401') || e?.message?.includes('TOKEN_EXPIRED') || e?.status === 401;
+      const { is401 } = classifyDriveError(e);
       if (is401) {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
@@ -2416,16 +2758,46 @@ export const googleDriveService = {
   },
 
   /**
-   * Programa la sincronización automática hacia Google Drive con debounce configurable.
+   * Programa la sincronización automática de kits hacia Google Drive con debounce corto (1.5s por defecto).
    */
-  scheduleAutoSync(userId: string, kits: StudyKit[], delayMs: number = 7000): void {
+  scheduleAutoSync(userId: string, kits: StudyKit[], delayMs: number = 1500): void {
     if (!userId || userId === 'guest') return;
     globalDrivePendingKits = kits;
     globalDrivePendingUserId = userId;
+    hasPendingAutoSync = true;
     if (globalDriveDebounceTimer) clearTimeout(globalDriveDebounceTimer);
     globalDriveDebounceTimer = setTimeout(() => {
       this.flushAutoSync(userId, kits);
     }, delayMs);
+  },
+
+  /**
+   * Programa la sincronización inmediata de progreso (respuestas, flashcards, reinicios) con debounce corto (1.5s).
+   */
+  scheduleProgressSync(userId: string, delayMs: number = 1500): void {
+    if (!userId || userId === 'guest') return;
+    globalProgressPendingUserId = userId;
+    hasPendingProgressSync = true;
+    if (globalProgressDebounceTimer) clearTimeout(globalProgressDebounceTimer);
+    globalProgressDebounceTimer = setTimeout(() => {
+      this.flushProgressSync(userId);
+    }, delayMs);
+  },
+
+  flushProgressSync(userId?: string): void {
+    if (globalProgressDebounceTimer) {
+      clearTimeout(globalProgressDebounceTimer);
+      globalProgressDebounceTimer = null;
+    }
+    const targetUserId = userId || globalProgressPendingUserId || authService.getCurrentUser()?.id;
+    const shouldPush = Boolean(userId) || hasPendingProgressSync;
+    globalProgressPendingUserId = null;
+    hasPendingProgressSync = false;
+
+    if (!shouldPush || !targetUserId || targetUserId === 'guest') return;
+    this.pushProgressToDrive(targetUserId).catch(err => {
+      console.warn('[GoogleDriveService] Error en flushProgressSync:', err);
+    });
   },
 
   flushAutoSync(userId?: string, kits?: StudyKit[]): void {
@@ -2433,24 +2805,41 @@ export const googleDriveService = {
       clearTimeout(globalDriveDebounceTimer);
       globalDriveDebounceTimer = null;
     }
+    const hadPending = hasPendingAutoSync || Boolean(userId && kits);
     const targetUserId = userId || globalDrivePendingUserId || authService.getCurrentUser()?.id;
-    if (!targetUserId || targetUserId === 'guest') return;
-
-    const targetKits = kits || globalDrivePendingKits || authService.getUserKits(targetUserId);
+    const targetKits = kits || globalDrivePendingKits;
     globalDrivePendingKits = null;
     globalDrivePendingUserId = null;
+    hasPendingAutoSync = false;
 
-    if (targetKits && targetKits.length > 0) {
-      this.pushToDrive(targetUserId, targetKits).catch(err => {
+    if (!hadPending || !targetUserId || targetUserId === 'guest') return;
+
+    const kitsToPush = targetKits || authService.getUserKits(targetUserId);
+    if (Array.isArray(kitsToPush)) {
+      this.pushToDrive(targetUserId, kitsToPush).catch(err => {
         console.warn('[GoogleDriveService] Error en flushAutoSync:', err);
       });
     }
+  },
+
+  /**
+   * Vacía de inmediato todos los respaldos pendientes (flashcards IDB, progreso y kits) al ocultar pestaña o salir.
+   */
+  flushAllPendingSyncs(userId?: string): void {
+    flashcardProgressService.flushPendingSaves();
+    this.flushAutoSync(userId);
+    this.flushProgressSync(userId);
   },
 };
 
 let globalDriveDebounceTimer: any = null;
 let globalDrivePendingKits: StudyKit[] | null = null;
 let globalDrivePendingUserId: string | null = null;
+let hasPendingAutoSync = false;
+
+let globalProgressDebounceTimer: any = null;
+let globalProgressPendingUserId: string | null = null;
+let hasPendingProgressSync = false;
 
 // Registrar el descargador prioritario de activos en storageService para hidratar imágenes automáticamente
 registerDriveAssetDownloader((assetIds) => googleDriveService.prioritizeAssetsDownload(assetIds));

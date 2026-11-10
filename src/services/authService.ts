@@ -5,6 +5,7 @@ import {
   saveSessionItem,
   getSessionItem,
   getAllSessionItems,
+  getSessionItemsByPrefix,
   removeSessionItem,
   requestPersistentStorage,
   safeLocalStorageSetItem,
@@ -714,6 +715,31 @@ export const authService = {
   },
 
   /**
+   * Obtiene TODAS las sesiones de Smart Study combinando RAM, LocalStorage e IndexedDB,
+   * evitando perder avance de kits inactivos que hayan sido desalojados de LocalStorage.
+   */
+  async getAllSmartStudySessionsAsync(userId: string | null): Promise<Record<string, SmartStudySessionState>> {
+    const result = this.getAllSmartStudySessions(userId);
+    const targetUserId = userId || 'guest';
+    const prefix = `thea_ss_mem_${targetUserId}_`;
+    try {
+      const idbMap = await getSessionItemsByPrefix<SmartStudySessionState>(prefix);
+      for (const [rawKitId, rawSession] of Object.entries(idbMap)) {
+        const kitId = extractCleanKitId(rawKitId);
+        if (!kitId || !rawSession) continue;
+        const sanitized = sanitizeSmartStudySession(rawSession);
+        if (!sanitized) continue;
+        inMemorySessionCache.set(`${prefix}${kitId}`, sanitized);
+        const existing = result[kitId];
+        if (!existing || (sanitized.lastUpdated || 0) > (existing.lastUpdated || 0) || (sanitized.resetAt || 0) > (existing.resetAt || 0)) {
+          result[kitId] = sanitized;
+        }
+      }
+    } catch {}
+    return result;
+  },
+
+  /**
    * Obtiene todos los conjuntos de preguntas reveladas del usuario.
    */
   getAllRevealedQuestionIds(userId: string | null): Record<string, string[]> {
@@ -735,6 +761,23 @@ export const authService = {
         } catch {}
       }
     }
+    return result;
+  },
+
+  /**
+   * Obtiene todas las preguntas reveladas combinando LocalStorage e IndexedDB.
+   */
+  async getAllRevealedQuestionIdsAsync(userId: string | null): Promise<Record<string, string[]>> {
+    const result = this.getAllRevealedQuestionIds(userId);
+    const prefix = `thea_revealed_q_${userId || 'guest'}_`;
+    try {
+      const idbMap = await getSessionItemsByPrefix<string[]>(prefix);
+      for (const [rawKitId, arr] of Object.entries(idbMap)) {
+        const kitId = extractCleanKitId(rawKitId);
+        if (!kitId || !Array.isArray(arr)) continue;
+        result[kitId] = Array.from(new Set([...(result[kitId] || []), ...arr]));
+      }
+    } catch {}
     return result;
   },
 
@@ -784,11 +827,34 @@ export const authService = {
     }
 
     const localSession = sanitizeSmartStudySession(rawCurrent) || rawCurrent;
+    const localResetAt = localSession.resetAt || 0;
+    const incomingResetAt = sanitizedIncoming.resetAt || 0;
+    const localLastUpdated = localSession.lastUpdated || 0;
+    const incomingLastUpdated = sanitizedIncoming.lastUpdated || 0;
 
-    // Fusión aditiva inteligente (conserva el mayor nivel alcanzado y el máximo de aciertos por nivel de ambas máquinas)
-    const mergedL1 = Math.min(25, Math.max(localSession.levelCorrectCounts?.[1] || 0, sanitizedIncoming.levelCorrectCounts?.[1] || 0));
-    const mergedL2 = Math.min(25, Math.max(localSession.levelCorrectCounts?.[2] || 0, sanitizedIncoming.levelCorrectCounts?.[2] || 0));
-    const mergedL3 = Math.min(25, Math.max(localSession.levelCorrectCounts?.[3] || 0, sanitizedIncoming.levelCorrectCounts?.[3] || 0));
+    // Respetar reinicios explícitos más recientes para que el progreso viejo del otro dispositivo no resucite
+    if (incomingResetAt > localResetAt && incomingResetAt >= localLastUpdated) {
+      this.saveSmartStudySession(userId, kitId, sanitizedIncoming);
+      return;
+    }
+    if (localResetAt > incomingResetAt && localResetAt >= incomingLastUpdated) {
+      return;
+    }
+
+    // Fusión por marca temporal: si ambos dispositivos han progresado desde el mismo punto,
+    // combinamos historial nuevo y tomamos el avance más reciente o mayor si empatan.
+    const incomingClearlyNewer = incomingLastUpdated > localLastUpdated + 2000;
+    const localClearlyNewer = localLastUpdated > incomingLastUpdated + 2000;
+
+    const mergedL1 = incomingClearlyNewer && incomingResetAt > 0
+      ? (sanitizedIncoming.levelCorrectCounts?.[1] || 0)
+      : Math.min(25, Math.max(localSession.levelCorrectCounts?.[1] || 0, sanitizedIncoming.levelCorrectCounts?.[1] || 0));
+    const mergedL2 = incomingClearlyNewer && incomingResetAt > 0
+      ? (sanitizedIncoming.levelCorrectCounts?.[2] || 0)
+      : Math.min(25, Math.max(localSession.levelCorrectCounts?.[2] || 0, sanitizedIncoming.levelCorrectCounts?.[2] || 0));
+    const mergedL3 = incomingClearlyNewer && incomingResetAt > 0
+      ? (sanitizedIncoming.levelCorrectCounts?.[3] || 0)
+      : Math.min(25, Math.max(localSession.levelCorrectCounts?.[3] || 0, sanitizedIncoming.levelCorrectCounts?.[3] || 0));
 
     let finalLevel: 1 | 2 | 3 = 1;
     let finalCurrentCount = mergedL1;
@@ -838,8 +904,9 @@ export const authService = {
     });
 
     // Determinar cuál sesión tenía el contexto activo más reciente para cursor y estado de pregunta actual
-    const isIncomingMoreRecent = (sanitizedIncoming.lastUpdated || 0) > (localSession.lastUpdated || 0);
+    const isIncomingMoreRecent = incomingLastUpdated > localLastUpdated && !localClearlyNewer;
     const activeContext = isIncomingMoreRecent ? sanitizedIncoming : localSession;
+    const latestResetAt = Math.max(localResetAt, incomingResetAt);
 
     const mergedSession: SmartStudySessionState = {
       ...activeContext,
@@ -863,7 +930,8 @@ export const authService = {
         mergedL1 + mergedL2 + mergedL3,
         mergedHistory.length
       ),
-      lastUpdated: Math.max(localSession.lastUpdated || 0, sanitizedIncoming.lastUpdated || 0, Date.now()),
+      lastUpdated: Math.max(localLastUpdated, incomingLastUpdated),
+      ...(latestResetAt > 0 ? { resetAt: latestResetAt } : {}),
     };
 
     this.saveSmartStudySession(userId, kitId, mergedSession);

@@ -558,13 +558,29 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
     } else if (prog?.archivedCards && prog.archivedCards.length > 0) {
       setArchivedCards(prog.archivedCards);
     }
+
+    const handleProgressSynced = () => {
+      const syncedProg = authService.getFlashcardProgress(userId, kit.id);
+      if (!syncedProg?.masteryMap) return;
+      masteryMapRef.current = { ...syncedProg.masteryMap };
+      setCards(prevCards =>
+        prevCards.map(c => ({
+          ...c,
+          mastery: getCardMastery(c, syncedProg.masteryMap),
+        }))
+      );
+    };
+    window.addEventListener('thea_progress_synced', handleProgressSynced);
+    return () => {
+      window.removeEventListener('thea_progress_synced', handleProgressSynced);
+    };
   }, [kit.id, userId]);
 
-  // Al salir de la pantalla de flashcards, refrescar o cerrar pestaña, sincronizar inmediatamente cambios pendientes en kit y Drive
+  // Al salir de la pantalla de flashcards, refrescar o cerrar pestaña, sincronizar inmediatamente cambios pendientes en kit, IDB y Drive
   useEffect(() => {
     const handleBeforeUnload = () => {
       flushKitUpdate();
-      googleDriveService.flushAutoSync();
+      googleDriveService.flushAllPendingSyncs(userId || undefined);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pagehide', handleBeforeUnload);
@@ -573,9 +589,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handleBeforeUnload);
       flushKitUpdate();
-      googleDriveService.flushAutoSync();
+      googleDriveService.flushAllPendingSyncs(userId || undefined);
     };
-  }, [flushKitUpdate]);
+  }, [flushKitUpdate, userId]);
   const [isFlipped, setIsFlipped] = useState(false);
   const [gameMode, setGameMode] = useState<'study' | 'guess-who'>('study');
   const [isGenerating, setIsGenerating] = useState(false);

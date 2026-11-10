@@ -162,6 +162,29 @@ export async function getAllSessionItems(): Promise<{ key: string; value: any }[
 }
 
 /**
+ * Recupera todos los registros de sesión cuyo identificador comienza por un prefijo dado,
+ * indexados por el sufijo posterior al prefijo.
+ */
+export async function getSessionItemsByPrefix<T = any>(prefix: string): Promise<Record<string, T>> {
+  const result: Record<string, T> = {};
+  if (!prefix) return result;
+  try {
+    const items = await getAllSessionItems();
+    for (const item of items) {
+      if (item && typeof item.key === 'string' && item.key.startsWith(prefix) && item.value !== undefined) {
+        const suffix = item.key.substring(prefix.length);
+        if (suffix) {
+          result[suffix] = item.value as T;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[StorageService] Error al consultar sesiones por prefijo en IndexedDB:', e);
+  }
+  return result;
+}
+
+/**
  * Elimina un elemento de sesión de IndexedDB al cerrar sesión explícitamente.
  */
 export async function removeSessionItem(key: string): Promise<void> {
@@ -630,6 +653,122 @@ export interface StudyKitIndexItem {
 
 export const RETIRED_TEST_KIT_IDS: readonly string[] = ['bio-respiration', 'cs-algorithms', 'cs-algo'];
 const DELETED_KITS_KEY = 'thea_deleted_kit_ids';
+const DELETED_KITS_TOMBSTONES_KEY = 'thea_deleted_kit_tombstones';
+const RETIRED_TOMBSTONE_TS = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Lee el mapa de eliminaciones (tombstones) con marca temporal por kitId.
+ */
+export function getDeletedKitTombstones(): Record<string, number> {
+  const map: Record<string, number> = {};
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const rawTomb = localStorage.getItem(DELETED_KITS_TOMBSTONES_KEY);
+      if (rawTomb) {
+        const parsed = JSON.parse(rawTomb);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          for (const [id, ts] of Object.entries(parsed)) {
+            if (id && typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+              map[id] = Math.max(map[id] || 0, ts);
+            }
+          }
+        }
+      }
+      const rawLegacy = localStorage.getItem(DELETED_KITS_KEY);
+      if (rawLegacy) {
+        const arr = JSON.parse(rawLegacy);
+        if (Array.isArray(arr)) {
+          for (const id of arr) {
+            if (typeof id === 'string' && id && !map[id]) {
+              map[id] = 1;
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+  for (const id of RETIRED_TEST_KIT_IDS) {
+    map[id] = RETIRED_TOMBSTONE_TS;
+  }
+  return map;
+}
+
+function persistDeletedKitTombstones(map: Record<string, number>): void {
+  const cleanMap: Record<string, number> = {};
+  const ids: string[] = [];
+  for (const [id, ts] of Object.entries(map)) {
+    if (!id) continue;
+    cleanMap[id] = ts;
+    ids.push(id);
+  }
+  for (const id of RETIRED_TEST_KIT_IDS) {
+    cleanMap[id] = RETIRED_TOMBSTONE_TS;
+    if (!ids.includes(id)) ids.push(id);
+  }
+  try {
+    if (typeof localStorage !== 'undefined') {
+      safeLocalStorageSetItem(DELETED_KITS_TOMBSTONES_KEY, JSON.stringify(cleanMap));
+      safeLocalStorageSetItem(DELETED_KITS_KEY, JSON.stringify(ids));
+    }
+    saveSessionItem(DELETED_KITS_TOMBSTONES_KEY, cleanMap).catch(() => {});
+    saveSessionItem(DELETED_KITS_KEY, ids).catch(() => {});
+  } catch (e) {
+    console.warn('[StorageService] Error al persistir tombstones de kits eliminados:', e);
+  }
+}
+
+/**
+ * Restaura y combina los tombstones de kits eliminados desde IndexedDB + LocalStorage.
+ */
+export async function restoreDeletedKitTombstonesAsync(): Promise<Record<string, number>> {
+  const local = getDeletedKitTombstones();
+  try {
+    const [idbTomb, idbIds] = await Promise.all([
+      getSessionItem<Record<string, number>>(DELETED_KITS_TOMBSTONES_KEY),
+      getSessionItem<string[]>(DELETED_KITS_KEY),
+    ]);
+    return mergeDeletedKitTombstones(idbTomb || null, idbIds || null, local);
+  } catch {
+    return local;
+  }
+}
+
+/**
+ * Fusiona tombstones remotos/locales quedándose con el timestamp de borrado más reciente.
+ */
+export function mergeDeletedKitTombstones(
+  remoteTombstones?: Record<string, number> | null,
+  remoteDeletedIds?: string[] | null,
+  baseTombstones?: Record<string, number> | null
+): Record<string, number> {
+  const merged = { ...(baseTombstones || getDeletedKitTombstones()) };
+  let changed = false;
+
+  if (remoteTombstones && typeof remoteTombstones === 'object') {
+    for (const [id, ts] of Object.entries(remoteTombstones)) {
+      if (!id || typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) continue;
+      if ((merged[id] || 0) < ts) {
+        merged[id] = ts;
+        changed = true;
+      }
+    }
+  }
+  if (Array.isArray(remoteDeletedIds)) {
+    for (const id of remoteDeletedIds) {
+      if (typeof id === 'string' && id && !merged[id]) {
+        merged[id] = 1;
+        changed = true;
+      }
+    }
+  }
+  for (const id of RETIRED_TEST_KIT_IDS) {
+    merged[id] = RETIRED_TOMBSTONE_TS;
+  }
+  if (changed) {
+    persistDeletedKitTombstones(merged);
+  }
+  return merged;
+}
 
 /**
  * Obtiene el conjunto de identificadores de kits eliminados explícitamente por el usuario
@@ -637,9 +776,8 @@ const DELETED_KITS_KEY = 'thea_deleted_kit_ids';
  */
 export function getDeletedKitIds(): Set<string> {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(DELETED_KITS_KEY) : null;
-    const arr = raw ? JSON.parse(raw) : [];
-    const set = new Set<string>(Array.isArray(arr) ? arr : []);
+    const tombstones = getDeletedKitTombstones();
+    const set = new Set<string>(Object.keys(tombstones));
     for (const id of RETIRED_TEST_KIT_IDS) {
       set.add(id);
     }
@@ -651,17 +789,15 @@ export function getDeletedKitIds(): Set<string> {
 
 /**
  * Registra un identificador en la lista negra de kits eliminados para evitar resurrección en fusiones.
+ * Garantiza vencer cualquier desfase de reloj tomando Math.max(Date.now(), minUpdatedAt + 1).
  */
-export function recordDeletedKitId(id: string): void {
+export function recordDeletedKitId(id: string, minUpdatedAt?: number): void {
   if (!id) return;
   try {
-    const set = getDeletedKitIds();
-    set.add(id);
-    const arr = Array.from(set);
-    if (typeof localStorage !== 'undefined') {
-      safeLocalStorageSetItem(DELETED_KITS_KEY, JSON.stringify(arr));
-    }
-    saveSessionItem(DELETED_KITS_KEY, arr).catch(() => {});
+    const tombstones = getDeletedKitTombstones();
+    tombstones[id] = Math.max(Date.now(), (minUpdatedAt || 0) + 1);
+    fcMasteryCache.delete(id);
+    persistDeletedKitTombstones(tombstones);
   } catch (e) {
     console.warn('[StorageService] Error al registrar kit eliminado:', e);
   }
@@ -670,18 +806,18 @@ export function recordDeletedKitId(id: string): void {
 /**
  * Registra múltiples identificadores en la lista negra de kits eliminados.
  */
-export function recordDeletedKitIds(ids: string[]): void {
+export function recordDeletedKitIds(ids: string[], minUpdatedAt?: number): void {
   if (!ids || ids.length === 0) return;
   try {
-    const set = getDeletedKitIds();
+    const tombstones = getDeletedKitTombstones();
+    const ts = Math.max(Date.now(), (minUpdatedAt || 0) + 1);
     for (const id of ids) {
-      if (id) set.add(id);
+      if (id) {
+        tombstones[id] = Math.max(tombstones[id] || 0, ts);
+        fcMasteryCache.delete(id);
+      }
     }
-    const arr = Array.from(set);
-    if (typeof localStorage !== 'undefined') {
-      safeLocalStorageSetItem(DELETED_KITS_KEY, JSON.stringify(arr));
-    }
-    saveSessionItem(DELETED_KITS_KEY, arr).catch(() => {});
+    persistDeletedKitTombstones(tombstones);
   } catch (e) {
     console.warn('[StorageService] Error al registrar kits eliminados en lote:', e);
   }
@@ -695,13 +831,17 @@ export async function saveKitsToIndexedDB(key: string, kits: StudyKit[]): Promis
   const db = await getDatabase();
   if (!db) return;
 
-  const clean = Array.isArray(kits) ? kits.filter(k => !isCorruptedKit(k)) : [];
+  const tombstones = getDeletedKitTombstones();
+  const delSet = new Set(Object.keys(tombstones));
+  const clean = Array.isArray(kits)
+    ? kits.filter(k => !isCorruptedKit(k) && !isKitDeletedByTombstone(k, delSet, tombstones))
+    : [];
 
   let payload = clean;
   try {
     const existingKits = await getKitsFromIndexedDB(key).catch(() => null);
     if (existingKits && existingKits.length > 0) {
-      payload = mergeKitsByUpdatedAt(existingKits, clean);
+      payload = mergeKitsByUpdatedAt(existingKits, clean, delSet, tombstones);
     }
   } catch {}
 
@@ -739,13 +879,49 @@ export async function getKitsFromIndexedDB(key: string): Promise<StudyKit[] | nu
  * Cache liviano en memoria para evitar escanear y deserializar LocalStorage
  * repetitivamente por cada tarjeta individual durante una fusión.
  */
-const fcMasteryCache = new Map<string, { map: Record<string, 'to-learn' | 'known' | 'mastered'>; timestamp: number }>();
+const fcMasteryCache = new Map<
+  string,
+  { map: Record<string, 'to-learn' | 'known' | 'mastered'>; updatedAt: number; timestamp: number }
+>();
 
 /**
- * Consulta la memoria persistente de flashcards para garantizar que las tarjetas
- * marcadas como dominadas o conocidas nunca retrocedan durante una fusion.
+ * Invalida la caché en RAM de maestría de flashcards para un kit o para todos.
  */
-function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' | 'known' | 'mastered') | null {
+export function invalidateFlashcardMasteryCache(kitId?: string): void {
+  if (kitId) {
+    fcMasteryCache.delete(kitId);
+  } else {
+    fcMasteryCache.clear();
+  }
+}
+
+/**
+ * Determina si un kit está eliminado según conjunto o tombstone temporal.
+ */
+export function isKitDeletedByTombstone(
+  kit: Pick<StudyKit, 'id' | 'updatedAt'>,
+  deletedIds?: Set<string>,
+  tombstones?: Record<string, number>
+): boolean {
+  if (!kit?.id) return true;
+  if (RETIRED_TEST_KIT_IDS.includes(kit.id)) return true;
+  const tombMap = tombstones || getDeletedKitTombstones();
+  const tombTs = tombMap[kit.id];
+  if (typeof tombTs === 'number' && tombTs > 0) {
+    if (tombTs === 1) return true;
+    return tombTs >= (kit.updatedAt || 0);
+  }
+  return Boolean(deletedIds?.has(kit.id));
+}
+
+/**
+ * Consulta la memoria persistente de flashcards junto con su marca temporal updatedAt
+ * para respetar ediciones más recientes entre dispositivos sin sobrescribir cambios remotos.
+ */
+function getSavedFlashcardMasteryInfo(
+  kitId: string,
+  cardKey: string
+): { mastery: 'to-learn' | 'known' | 'mastered'; updatedAt: number } | null {
   if (typeof localStorage === 'undefined' || !kitId || !cardKey) return null;
   try {
     const cleanKey = cardKey.trim();
@@ -755,11 +931,13 @@ function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' |
     const cached = fcMasteryCache.get(kitId);
     if (cached && (Date.now() - cached.timestamp < 2500)) {
       const m = cached.map;
-      return m[cardKey] || m[cleanKey] || m[lowerKey] || null;
+      const hit = m[cardKey] || m[cleanKey] || m[lowerKey] || null;
+      return hit ? { mastery: hit, updatedAt: cached.updatedAt } : null;
     }
 
     // 2. Si no está en caché, buscar la clave directamente
     let foundMap: Record<string, any> | null = null;
+    let foundUpdatedAt = 0;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.includes('_fc_mem_') && k.endsWith(`_${kitId}`)) {
@@ -768,8 +946,11 @@ function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' |
           try {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object' && parsed.masteryMap) {
-              foundMap = parsed.masteryMap;
-              break;
+              const ts = typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0;
+              if (!foundMap || ts >= foundUpdatedAt) {
+                foundMap = parsed.masteryMap;
+                foundUpdatedAt = ts;
+              }
             }
           } catch {}
         }
@@ -777,8 +958,9 @@ function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' |
     }
 
     if (foundMap) {
-      fcMasteryCache.set(kitId, { map: foundMap, timestamp: Date.now() });
-      return foundMap[cardKey] || foundMap[cleanKey] || foundMap[lowerKey] || null;
+      fcMasteryCache.set(kitId, { map: foundMap, updatedAt: foundUpdatedAt, timestamp: Date.now() });
+      const hit = foundMap[cardKey] || foundMap[cleanKey] || foundMap[lowerKey] || null;
+      return hit ? { mastery: hit, updatedAt: foundUpdatedAt } : null;
     }
   } catch {}
   return null;
@@ -786,19 +968,21 @@ function getSavedFlashcardMastery(kitId: string, cardKey: string): ('to-learn' |
 
 /**
  * Fusión acumulativa estricta por ID y marca temporal updatedAt (el más reciente gana).
- * Respeta la lista negra de kits eliminados y PRESERVA SIEMPRE los dataUrls de activos para que nunca se deshidraten.
+ * Respeta la lista negra/tombstones de kits eliminados y PRESERVA SIEMPRE los dataUrls en IndexedDB.
  */
 export function mergeKitsByUpdatedAt(
   listA: StudyKit[],
   listB: StudyKit[],
-  deletedIds?: Set<string>
+  deletedIds?: Set<string>,
+  deletedTombstones?: Record<string, number>
 ): StudyKit[] {
-  const delSet = deletedIds || getDeletedKitIds();
+  const tombMap = deletedTombstones || getDeletedKitTombstones();
+  const delSet = deletedIds || new Set(Object.keys(tombMap));
   const map = new Map<string, StudyKit>();
 
   const addOrMerge = (kit: StudyKit) => {
     if (!kit || isCorruptedKit(kit)) return;
-    if (delSet.has(kit.id)) return;
+    if (isKitDeletedByTombstone(kit, delSet, tombMap)) return;
 
     const existing = map.get(kit.id);
     if (!existing) {
@@ -832,14 +1016,18 @@ export function mergeKitsByUpdatedAt(
     const existingFlashcardsMap = new Map((existing.flashcards || []).map(f => [f.id || f.term, f]));
     const incomingFlashcardsMap = new Map((kit.flashcards || []).map(f => [f.id || f.term, f]));
 
+    const newestKitTime = Math.max(existingTime, incomingTime);
+
     const mergedFlashcards = rawFlashcards.map(f => {
       const fromExist = existingFlashcardsMap.get(f.id || f.term);
       const fromIn = incomingFlashcardsMap.get(f.id || f.term);
       const cardKey = f.id || f.term;
-      const dedicatedMastery = getSavedFlashcardMastery(kit.id, cardKey);
-      const mastery = dedicatedMastery || (incomingTime >= existingTime
-        ? (fromIn?.mastery || f.mastery || fromExist?.mastery || 'to-learn')
-        : (fromExist?.mastery || f.mastery || fromIn?.mastery || 'to-learn'));
+      const dedicatedInfo = getSavedFlashcardMasteryInfo(kit.id, cardKey);
+      const mastery = (dedicatedInfo && dedicatedInfo.updatedAt >= newestKitTime)
+        ? dedicatedInfo.mastery
+        : (incomingTime >= existingTime
+          ? (fromIn?.mastery || f.mastery || fromExist?.mastery || dedicatedInfo?.mastery || 'to-learn')
+          : (fromExist?.mastery || f.mastery || fromIn?.mastery || dedicatedInfo?.mastery || 'to-learn'));
 
       let sourceAsset = f.sourceAsset || fromExist?.sourceAsset;
       if (sourceAsset && sourceAsset.dataUrl) {

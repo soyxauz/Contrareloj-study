@@ -8,6 +8,7 @@ import {
   mergeKitsByUpdatedAt,
   recordDeletedKitId,
   recordDeletedKitIds,
+  getDeletedKitIds,
   purgeAssetMemoryCache,
   stripAssetDataUrlsFromKit,
   cleanOrphanAssetsFromIndexedDB,
@@ -555,26 +556,33 @@ export const App: React.FC = () => {
     }
   }, [kits, currentUser]);
 
-  // Sincronización automática diferida al inicio desde Google Drive (evita bloquear los primeros 3.5s de interacción)
+  const isApplyingCloudPullRef = useRef(false);
+
+  // Sincronización automática ligera al inicio desde Google Drive (sin bloqueo ciego de 5 minutos)
   useEffect(() => {
     if (!currentUser) return;
     if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
 
     const timer = setTimeout(() => {
       googleDriveService.autoSyncOnStartup(currentUser.id).then((pulled) => {
-        if (pulled && Array.isArray(pulled) && pulled.length > 0) {
-          const clean = pulled.filter(k => !isCorruptedKit(k));
-          if (clean.length > 0) {
-            setKits(prev => mergeKitsByUpdatedAt(prev, clean));
-            setCurrentKit(prev => {
-              if (!prev) return clean[0];
-              const match = clean.find(k => k.id === prev.id);
-              if (match) {
-                return mergeKitsByUpdatedAt([prev], [match])[0] || prev;
-              }
-              return prev;
-            });
-          }
+        if (pulled && Array.isArray(pulled)) {
+          const delIds = getDeletedKitIds();
+          const clean = pulled.filter(k => !isCorruptedKit(k) && !delIds.has(k.id));
+          isApplyingCloudPullRef.current = true;
+          setKits(prev => mergeKitsByUpdatedAt(
+            prev.filter(k => !delIds.has(k.id)),
+            clean,
+            delIds
+          ));
+          setCurrentKit(prev => {
+            if (prev && delIds.has(prev.id)) return clean[0] || null;
+            if (!prev) return clean[0] || null;
+            const match = clean.find(k => k.id === prev.id);
+            if (match) {
+              return mergeKitsByUpdatedAt([prev], [match], delIds)[0] || prev;
+            }
+            return prev;
+          });
         }
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('thea_ai_settings_changed'));
@@ -582,86 +590,107 @@ export const App: React.FC = () => {
       }).catch(err => {
         console.warn('[App] Error al sincronizar inicio desde Google Drive:', err);
       });
-    }, 3500);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [currentUser?.id]);
 
-  const startupGracePeriodRef = useRef(Date.now() + 10000); // 10s de gracia inicial para no saturar la red con subidas
-
-  // Respaldo en segundo plano hacia Google Drive con debounce de 8000ms
+  // Respaldo reactivo inmediato de cambios en kits hacia Google Drive (debounce corto 1500ms tipo Thea)
   useEffect(() => {
     if (isLoggingOutRef.current) return;
+    if (isApplyingCloudPullRef.current) {
+      isApplyingCloudPullRef.current = false;
+      return;
+    }
     if (!currentUser) return;
     if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
     const currentSyncStatus = googleDriveService.getState().status;
-    if (currentSyncStatus === 'needs_reauth' || currentSyncStatus === 'error') return;
+    if (currentSyncStatus === 'needs_reauth') return;
     if (!isHydratedRef.current) return;
-    if (Date.now() < startupGracePeriodRef.current) return;
 
-    googleDriveService.scheduleAutoSync(currentUser.id, kits, 8000);
+    googleDriveService.scheduleAutoSync(currentUser.id, kits, 1500);
   }, [kits, currentUser]);
 
-  // Respaldo en segundo plano del progreso de Smart Study y Flashcards hacia Google Drive en tiempo real
+  // Sincronización bidireccional reactiva: subida en tiempo real + chequeo remoto al enfocar pestaña y flush al ocultar/salir
   useEffect(() => {
     if (!currentUser) return;
-    let debounceTimer: any = null;
-    let hasPendingPush = false;
-    let lastPullTime = 0;
-
-    const flushPush = () => {
-      if (!hasPendingPush) return;
-      hasPendingPush = false;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      if (isLoggingOutRef.current) return;
-      if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
-
-      googleDriveService.pushProgressToDrive(currentUser.id).catch((err) => {
-        console.warn('[App] Error al sincronizar progreso en Google Drive:', err);
-      });
-    };
 
     const handleProgressSaved = () => {
       if (isLoggingOutRef.current) return;
       if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+      if (googleDriveService.getState().status === 'needs_reauth') return;
 
-      hasPendingPush = true;
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        flushPush();
-      }, 3500);
+      googleDriveService.scheduleProgressSync(currentUser.id, 1500);
     };
 
-    // Al regresar a la pestaña o cambiar de ventana (ej. tras estudiar en otra PC), comprobar y fusionar novedades
-    const handleTabFocus = () => {
+    const handleDriveKitsUpdated = (event: any) => {
+      const detail = event?.detail;
+      if (!detail || detail.userId !== currentUser.id || !Array.isArray(detail.kits)) return;
+      const delSet = new Set<string>([
+        ...Array.from(getDeletedKitIds()),
+        ...(Array.isArray(detail.deletedIds) ? detail.deletedIds : []),
+      ]);
+      const cleanIncoming = (detail.kits as StudyKit[])
+        .filter(k => !isCorruptedKit(k) && !delSet.has(k.id))
+        .map(stripAssetDataUrlsFromKit);
+
+      isApplyingCloudPullRef.current = true;
+      setKits(prev => {
+        const filteredPrev = prev.filter(k => !delSet.has(k.id));
+        return mergeKitsByUpdatedAt(filteredPrev, cleanIncoming, delSet);
+      });
+      setCurrentKit(prev => {
+        if (prev && delSet.has(prev.id)) {
+          return cleanIncoming[0] || null;
+        }
+        if (!prev) return cleanIncoming[0] || null;
+        const match = cleanIncoming.find(k => k.id === prev.id);
+        return match ? (mergeKitsByUpdatedAt([prev], [match], delSet)[0] || match) : prev;
+      });
+    };
+
+    const flushAll = () => {
       if (isLoggingOutRef.current) return;
+      if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+      googleDriveService.flushAllPendingSyncs(currentUser.id);
+    };
+
+    const checkCloudChanges = () => {
+      if (isLoggingOutRef.current) return;
+      if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+      if (googleDriveService.getState().status === 'needs_reauth') return;
+      googleDriveService.syncRemoteChangesIfNeeded(currentUser.id).catch(() => {});
+    };
+
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        flushPush();
+        flushAll();
         return;
       }
-      const now = Date.now();
-      if (now - lastPullTime > 15000) {
-        lastPullTime = now;
-        if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-          googleDriveService.pullProgressFromDrive(currentUser.id).catch(() => {});
-        }
-      }
+      checkCloudChanges();
     };
 
     window.addEventListener('thea_session_saved', handleProgressSaved);
     window.addEventListener('thea_flashcard_saved', handleProgressSaved);
-    window.addEventListener('visibilitychange', handleTabFocus);
-    window.addEventListener('pagehide', flushPush);
-    window.addEventListener('beforeunload', flushPush);
+    window.addEventListener('thea_drive_kits_updated', handleDriveKitsUpdated);
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkCloudChanges);
+    window.addEventListener('online', checkCloudChanges);
+    window.addEventListener('online', flushAll);
+    window.addEventListener('pagehide', flushAll);
+    window.addEventListener('beforeunload', flushAll);
 
     return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      flushPush();
+      flushAll();
       window.removeEventListener('thea_session_saved', handleProgressSaved);
       window.removeEventListener('thea_flashcard_saved', handleProgressSaved);
-      window.removeEventListener('visibilitychange', handleTabFocus);
-      window.removeEventListener('pagehide', flushPush);
-      window.removeEventListener('beforeunload', flushPush);
+      window.removeEventListener('thea_drive_kits_updated', handleDriveKitsUpdated);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkCloudChanges);
+      window.removeEventListener('online', checkCloudChanges);
+      window.removeEventListener('online', flushAll);
+      window.removeEventListener('pagehide', flushAll);
+      window.removeEventListener('beforeunload', flushAll);
     };
   }, [currentUser]);
 
@@ -919,7 +948,7 @@ export const App: React.FC = () => {
 
     try {
       if (userId) {
-        googleDriveService.scheduleAutoSync(userId, updated, 7000);
+        googleDriveService.scheduleAutoSync(userId, updated, 1500);
       }
     } catch (e) {
       console.error('Error al programar sincronización de Study Kits tras actualizar:', e);
@@ -927,7 +956,8 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteKit = (kitId: string) => {
-    recordDeletedKitId(kitId);
+    const targetKit = kits.find(k => k.id === kitId);
+    recordDeletedKitId(kitId, targetKit?.updatedAt);
     authService.removeFlashcardProgress(currentUser ? currentUser.id : null, kitId);
     const updated = kits.filter(k => k.id !== kitId);
     setKits(updated);
@@ -952,8 +982,9 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteKitsBatch = (kitIds: string[]) => {
-    recordDeletedKitIds(kitIds);
     const idSet = new Set(kitIds);
+    const maxUpdatedAt = kits.reduce((max, k) => (idSet.has(k.id) ? Math.max(max, k.updatedAt || 0) : max), 0);
+    recordDeletedKitIds(kitIds, maxUpdatedAt);
     const updated = kits.filter(k => !idSet.has(k.id));
     setKits(updated);
     try {
@@ -994,6 +1025,9 @@ export const App: React.FC = () => {
       authService.saveUserKitsAsync(currentUser ? currentUser.id : null, updated).catch(() => {});
     } catch (e) {
       console.error('Error al guardar Study Kits tras cambiar materia en lote:', e);
+    }
+    if (currentUser) {
+      googleDriveService.scheduleAutoSync(currentUser.id, updated, 1500);
     }
   };
 
@@ -1198,15 +1232,24 @@ export const App: React.FC = () => {
             kits={kits}
             onAuthSuccess={handleAuthSuccess}
             onKitsSynced={(syncedKits) => {
-              const clean = syncedKits.filter(k => !isCorruptedKit(k));
-              if (clean.length > 0) {
-                setKits(prev => mergeKitsByUpdatedAt(prev, clean));
-                setCurrentKit(prev => {
-                  if (!prev) return clean[0];
-                  const match = clean.find(k => k.id === prev.id);
-                  return match ? mergeKitsByUpdatedAt([prev], [match])[0] : clean[0];
-                });
-              }
+              const delIds = getDeletedKitIds();
+              const clean = (syncedKits || [])
+                .filter(k => !isCorruptedKit(k) && !delIds.has(k.id))
+                .map(stripAssetDataUrlsFromKit);
+              isApplyingCloudPullRef.current = true;
+              setKits(prev => mergeKitsByUpdatedAt(
+                prev.filter(k => !delIds.has(k.id)),
+                clean,
+                delIds
+              ));
+              setCurrentKit(prev => {
+                if (prev && delIds.has(prev.id)) {
+                  return clean[0] || null;
+                }
+                if (!prev) return clean[0] || null;
+                const match = clean.find(k => k.id === prev.id);
+                return match ? mergeKitsByUpdatedAt([prev], [match], delIds)[0] : prev;
+              });
             }}
             onLogout={handleLogout}
           />

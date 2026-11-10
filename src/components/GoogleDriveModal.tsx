@@ -112,7 +112,10 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       return;
     }
 
-    const effectiveUserId = currentUser?.id || (syncState.userEmail ? `usr_g_${syncState.userEmail}` : null);
+    const effectiveUserId =
+      currentUser?.id ||
+      googleDriveService.getLinkedGoogleUserId() ||
+      (syncState.userEmail ? `usr_g_${syncState.userEmail}` : null);
     if (!effectiveUserId) {
       setNoticeMessage('Debes iniciar sesión para sincronizar datos con la nube.');
       return;
@@ -120,13 +123,13 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     setIsProcessing(true);
     setNoticeMessage(null);
     try {
-      // 1. Descargamos y fusionamos todo lo existente en Drive (kits, sesiones, materias de todas las PCs)
+      // 1. Descargamos y fusionamos todo lo existente en Drive (kits, tombstones, sesiones, materias de todas las PCs)
       const pulled = await googleDriveService.pullFromDrive(effectiveUserId);
-      const unifiedKits = (pulled && pulled.length > 0)
+      const unifiedKits = pulled !== null
         ? pulled
         : (authService.getUserKits(effectiveUserId) || kits);
 
-      if (pulled && onKitsSynced) {
+      if (pulled !== null && onKitsSynced) {
         onKitsSynced(pulled);
       }
       // 2. Respaldamos el estado consolidado completo hacia Drive

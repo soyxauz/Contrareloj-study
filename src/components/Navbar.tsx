@@ -199,19 +199,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className={theme === 'dark' ? 'text-slate-200' : 'text-zinc-950'}>{realStreak}</span>
           </div>
 
-          {/* Google Drive Cloud Sync */}
+          {/* Google Drive Cloud Sync Status Pill */}
           <button
             onClick={onOpenGoogleDrive}
             title={
               driveState.status === 'needs_reauth'
                 ? 'Sesión de Google Drive expirada - Clic para reconectar en 1 clic'
+                : driveState.status === 'error'
+                ? (driveState.errorMessage || 'Error de sincronización con Google Drive - Clic para reintentar')
+                : driveState.status === 'syncing'
+                ? 'Sincronizando cambios con Google Drive...'
                 : driveState.userEmail
-                ? `Google Drive sincronizado (${driveState.userEmail})`
+                ? `Google Drive sincronizado (${driveState.userEmail})${driveState.lastSyncTime ? ` · ${new Date(driveState.lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`
                 : 'Conectar Google Drive para respaldo en la nube'
             }
-            className={`active-press flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+            className={`active:scale-[0.97] flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer shrink-0 tabular-nums ${
               theme === 'dark'
-                ? driveState.userEmail
+                ? driveState.status === 'needs_reauth' || driveState.status === 'error'
+                  ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-200'
+                  : driveState.userEmail
                   ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
                   : 'bg-transparent hover:bg-white/[0.04] border-transparent text-slate-400 hover:text-white'
                 : theme === 'kitty'
@@ -220,13 +226,41 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             {driveState.status === 'syncing' ? (
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
+              <RefreshCw className="w-3.5 h-3.5 text-sky-400 animate-spin shrink-0" />
             ) : (
-              <Cloud className={`w-3.5 h-3.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
+              <Cloud
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  driveState.status === 'needs_reauth' || driveState.status === 'error'
+                    ? 'text-amber-400'
+                    : theme === 'dark'
+                    ? 'text-slate-400'
+                    : 'text-slate-500'
+                }`}
+              />
             )}
-            <span className="hidden sm:inline">Drive</span>
+            <span className="hidden sm:inline">
+              {driveState.status === 'syncing'
+                ? 'Sincronizando'
+                : driveState.status === 'needs_reauth'
+                ? 'Reconectar'
+                : driveState.status === 'error'
+                ? 'Reintentar'
+                : driveState.userEmail
+                ? 'Sincronizado'
+                : 'Drive'}
+            </span>
             {driveState.userEmail && (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" />
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-150 ${
+                  driveState.status === 'syncing'
+                    ? 'bg-sky-400 animate-pulse'
+                    : driveState.status === 'needs_reauth'
+                    ? 'bg-amber-400'
+                    : driveState.status === 'error'
+                    ? 'bg-rose-500'
+                    : 'bg-emerald-500'
+                }`}
+              />
             )}
           </button>
 

@@ -263,11 +263,13 @@ export interface SmartStudySessionState {
   activePracticeDifficulty?: 'easy' | 'medium' | 'hard';
   seenQuestionIds?: string[];
   answeredQuestionIds?: string[];
+  resetAt?: number;
 }
 
 export interface FlashcardProgressState {
   version: 1;
   updatedAt: number;
+  resetAt?: number;
   kitId: string;
   cards?: Flashcard[];
   archivedCards?: Flashcard[];

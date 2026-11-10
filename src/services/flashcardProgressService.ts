@@ -2,13 +2,17 @@ import type { FlashcardProgressState } from '../types';
 import {
   saveSessionItem,
   getSessionItem,
+  getSessionItemsByPrefix,
   removeSessionItem,
   notifyQuotaExceeded,
   safeLocalStorageSetItem,
+  invalidateFlashcardMasteryCache,
 } from './storageService';
 import { kitRepositoryService } from './kitRepositoryService';
 
 const flashcardIdbTimers = new Map<string, any>();
+const pendingFlashcardIdbPayloads = new Map<string, FlashcardProgressState>();
+const inMemoryFlashcardCache = new Map<string, FlashcardProgressState>();
 
 export const flashcardProgressService = {
   /**
@@ -128,10 +132,14 @@ export const flashcardProgressService = {
       const minimalStorageState: FlashcardProgressState = {
         version: 1,
         updatedAt: state.updatedAt || Date.now(),
+        ...(state.resetAt ? { resetAt: state.resetAt } : {}),
         kitId,
         masteryMap: normalizedMap,
         currentIdx: safeIdx,
       };
+
+      inMemoryFlashcardCache.set(userKey, minimalStorageState);
+      invalidateFlashcardMasteryCache(kitId);
 
       if (typeof localStorage !== 'undefined') {
         try {
@@ -157,19 +165,23 @@ export const flashcardProgressService = {
         }
       }
 
-      // 4. Persistencia diferida hacia IndexedDB y eventos en vivo con debounce de 150ms
-      // Previene saturacion del bucle de eventos y de memoria (OOM) ante clics sucesivos ultrarrapidos
+      // Notificar de inmediato al bus de eventos para activar la sincronizacion con Drive sin demoras
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thea_flashcard_saved', {
+          detail: { userId, kitId, state: minimalStorageState }
+        }));
+      }
+
+      // 4. Persistencia diferida hacia IndexedDB con debounce de 150ms y flush seguro al ocultar/cerrar
       if (flashcardIdbTimers.has(userKey)) {
         clearTimeout(flashcardIdbTimers.get(userKey));
       }
+      pendingFlashcardIdbPayloads.set(userKey, fullStateForIdb);
       const timer = setTimeout(() => {
         flashcardIdbTimers.delete(userKey);
-        saveSessionItem(userKey, fullStateForIdb).catch(() => {});
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('thea_flashcard_saved', {
-            detail: { userId, kitId, state: fullStateForIdb }
-          }));
-        }
+        const payload = pendingFlashcardIdbPayloads.get(userKey) || fullStateForIdb;
+        pendingFlashcardIdbPayloads.delete(userKey);
+        saveSessionItem(userKey, payload).catch(() => {});
       }, 150);
       flashcardIdbTimers.set(userKey, timer);
     } catch (e) {
@@ -178,12 +190,35 @@ export const flashcardProgressService = {
   },
 
   /**
-   * Obtiene todos los progresos de flashcards guardados para un usuario.
+   * Vacía inmediatamente cualquier escritura pendiente en IndexedDB (al salir de la vista u ocultar la pestaña).
+   */
+  flushPendingSaves(): void {
+    for (const [userKey, timer] of flashcardIdbTimers.entries()) {
+      clearTimeout(timer);
+      flashcardIdbTimers.delete(userKey);
+      const payload = pendingFlashcardIdbPayloads.get(userKey);
+      pendingFlashcardIdbPayloads.delete(userKey);
+      if (payload) {
+        saveSessionItem(userKey, payload).catch(() => {});
+      }
+    }
+  },
+
+  /**
+   * Obtiene todos los progresos de flashcards en caché/LocalStorage para lectura síncrona.
    */
   getAllFlashcardProgress(userId: string | null): Record<string, FlashcardProgressState> {
     const result: Record<string, FlashcardProgressState> = {};
-    if (typeof localStorage === 'undefined') return result;
     const prefix = `thea_fc_mem_${userId || 'guest'}_`;
+
+    for (const [k, cached] of inMemoryFlashcardCache.entries()) {
+      if (k.startsWith(prefix) && cached?.masteryMap) {
+        const kitId = k.substring(prefix.length);
+        if (kitId) result[kitId] = cached;
+      }
+    }
+
+    if (typeof localStorage === 'undefined') return result;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key || !key.startsWith(prefix)) continue;
@@ -193,7 +228,10 @@ export const flashcardProgressService = {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && parsed.masteryMap) {
-            result[kitId] = parsed;
+            const existing = result[kitId];
+            if (!existing || (parsed.updatedAt || 0) >= (existing.updatedAt || 0)) {
+              result[kitId] = parsed;
+            }
           }
         }
       } catch {}
@@ -202,7 +240,37 @@ export const flashcardProgressService = {
   },
 
   /**
-   * Guarda o actualiza un lote completo de progresos de flashcards con fusión aditiva de dominio.
+   * Obtiene el progreso completo de flashcards de TODOS los kits combinando RAM, LocalStorage e IndexedDB,
+   * garantizando que los kits inactivos desalojados de LocalStorage nunca se omitan al sincronizar con la nube.
+   */
+  async getAllFlashcardProgressAsync(userId: string | null): Promise<Record<string, FlashcardProgressState>> {
+    const combined = this.getAllFlashcardProgress(userId);
+    const prefix = `thea_fc_mem_${userId || 'guest'}_`;
+    try {
+      const idbMap = await getSessionItemsByPrefix<FlashcardProgressState>(prefix);
+      for (const [kitId, idbVal] of Object.entries(idbMap)) {
+        if (!kitId || !idbVal || !idbVal.masteryMap) continue;
+        const compact: FlashcardProgressState = {
+          version: 1,
+          updatedAt: idbVal.updatedAt || 0,
+          ...(idbVal.resetAt ? { resetAt: idbVal.resetAt } : {}),
+          kitId,
+          masteryMap: idbVal.masteryMap,
+          currentIdx: idbVal.currentIdx || 0,
+        };
+        const existing = combined[kitId];
+        if (!existing || (compact.updatedAt || 0) > (existing.updatedAt || 0)) {
+          combined[kitId] = compact;
+          inMemoryFlashcardCache.set(`${prefix}${kitId}`, compact);
+        }
+      }
+    } catch {}
+    return combined;
+  },
+
+  /**
+   * Guarda o actualiza un lote completo de progresos de flashcards por marca temporal (updatedAt)
+   * y respetando reinicios explícitos (resetAt).
    */
   saveAllFlashcardProgress(userId: string | null, progressMap: Record<string, FlashcardProgressState>): void {
     if (!progressMap || typeof progressMap !== 'object') return;
@@ -215,27 +283,52 @@ export const flashcardProgressService = {
         continue;
       }
 
-      // Fusión aditiva: el nivel más alto de dominio prevalece (mastered > known > to-learn)
+      const curResetAt = currentState.resetAt || 0;
+      const incResetAt = incomingState.resetAt || 0;
+      const curUpdated = currentState.updatedAt || 0;
+      const incUpdated = incomingState.updatedAt || 0;
+
+      // Si uno de los dos dispositivos hizo un reset explícito más reciente, prevalece ese estado limpio
+      if (incResetAt > curResetAt && incResetAt >= curUpdated) {
+        this.saveFlashcardProgress(userId, kitId, incomingState);
+        continue;
+      }
+      if (curResetAt > incResetAt && curResetAt >= incUpdated) {
+        continue;
+      }
+
       type MasteryLevel = 'to-learn' | 'known' | 'mastered';
       const rank = (lvl: string) => lvl === 'mastered' ? 3 : (lvl === 'known' ? 2 : 1);
+      const isIncomingStrictlyNewer = incUpdated > curUpdated + 1000;
+      const isLocalStrictlyNewer = curUpdated > incUpdated + 1000;
+
       const mergedMastery: Record<string, MasteryLevel> = {
         ...(currentState.masteryMap || {}),
       };
 
       for (const [cardId, incLvl] of Object.entries(incomingState.masteryMap || {})) {
         const curLvl = mergedMastery[cardId];
-        if (!curLvl || rank(incLvl) >= rank(curLvl)) {
+        if (!curLvl) {
+          mergedMastery[cardId] = incLvl as MasteryLevel;
+        } else if (isIncomingStrictlyNewer) {
+          mergedMastery[cardId] = incLvl as MasteryLevel;
+        } else if (isLocalStrictlyNewer) {
+          // Mantener valor local más reciente
+          mergedMastery[cardId] = curLvl;
+        } else if (rank(incLvl) >= rank(curLvl)) {
           mergedMastery[cardId] = incLvl as MasteryLevel;
         }
       }
 
+      const newestIsIncoming = incUpdated >= curUpdated;
       const merged: FlashcardProgressState = {
         ...incomingState,
         masteryMap: mergedMastery,
-        currentIdx: Math.max(currentState.currentIdx || 0, incomingState.currentIdx || 0),
+        currentIdx: newestIsIncoming ? (incomingState.currentIdx ?? currentState.currentIdx ?? 0) : (currentState.currentIdx ?? incomingState.currentIdx ?? 0),
         cards: incomingState.cards || currentState.cards,
         archivedCards: incomingState.archivedCards || currentState.archivedCards,
-        updatedAt: Math.max(currentState.updatedAt || 0, incomingState.updatedAt || 0, Date.now()),
+        updatedAt: Math.max(curUpdated, incUpdated),
+        ...(Math.max(curResetAt, incResetAt) > 0 ? { resetAt: Math.max(curResetAt, incResetAt) } : {}),
       };
 
       this.saveFlashcardProgress(userId, kitId, merged);

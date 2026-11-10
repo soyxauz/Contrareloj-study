@@ -1569,6 +1569,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   // Referencia actualizada al último estado de sesión para persistencia garantizada al desmontar la vista
   const latestSessionRef = useRef<any>(null);
   const autoSaveTimerRef = useRef<any>(null);
+  const resetAtRef = useRef<number>((savedSession as any)?.resetAt || 0);
+  const sessionTimestampRef = useRef<number>(savedSession?.lastUpdated || 0);
+  const hasMountedSaveCycleRef = useRef(false);
+  const hasPendingLocalChangeRef = useRef(false);
 
   latestSessionRef.current = {
     currentIndex,
@@ -1598,20 +1602,23 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     socraticProfile,
     revealedQuestionIds,
     seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
-    lastUpdated: Date.now(),
+    answeredQuestionIds: Array.from(answeredQuestionIdsRef.current),
+    lastUpdated: sessionTimestampRef.current || Date.now(),
+    ...(resetAtRef.current > 0 ? { resetAt: resetAtRef.current } : {}),
     shuffleSeed,
   };
 
-  // Guardado garantizado al salir o desmontar de Smart Study a otra sección
+  // Guardado garantizado al salir o desmontar de Smart Study solo si hubo interacción/cambio real
   useEffect(() => {
     return () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
-      if (latestSessionRef.current && kit?.id) {
+      if (hasPendingLocalChangeRef.current && latestSessionRef.current && kit?.id) {
+        hasPendingLocalChangeRef.current = false;
         authService.saveSmartStudySession(userId || null, kit.id, latestSessionRef.current);
         if (userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
-          googleDriveService.pushProgressToDrive(userId).catch(() => {});
+          googleDriveService.flushProgressSync(userId);
         }
       }
     };
@@ -1619,6 +1626,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // ── Auto-Save Session Memory (Con debounce suave de 600ms para evitar saturación de CPU y GC) ──
   useEffect(() => {
+    if (!hasMountedSaveCycleRef.current) {
+      hasMountedSaveCycleRef.current = true;
+      return;
+    }
+    sessionTimestampRef.current = Date.now();
+    hasPendingLocalChangeRef.current = true;
+    if (latestSessionRef.current) {
+      latestSessionRef.current.lastUpdated = sessionTimestampRef.current;
+    }
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
     }
@@ -1895,6 +1911,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     };
 
     latestSessionRef.current = immediateState;
+    sessionTimestampRef.current = immediateState.lastUpdated;
+    hasPendingLocalChangeRef.current = true;
     authService.saveSmartStudySession(userId || null, kit.id, immediateState);
   };
 
@@ -1992,6 +2010,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       lastUpdated: Date.now(),
     };
     latestSessionRef.current = immediateSession;
+    sessionTimestampRef.current = immediateSession.lastUpdated;
+    hasPendingLocalChangeRef.current = true;
     authService.saveSmartStudySession(userId || null, kit.id, immediateSession);
   };
 
@@ -2390,23 +2410,36 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       setIsSpeaking(false);
     }
 
-    // Actualizar almacenamiento manteniendo las respuestas previas en Historial
-    const currentSession = authService.getSmartStudySession(userId || null, kit.id);
+    // Actualizar almacenamiento manteniendo las respuestas previas en Historial y marcando resetAt explícito para sync multi-dispositivo
+    const now = Date.now();
+    resetAtRef.current = now;
+    sessionTimestampRef.current = now;
+    hasPendingLocalChangeRef.current = true;
+    const currentSession = authService.getSmartStudySession(userId || null, kit.id) || latestSessionRef.current;
     if (currentSession) {
-      authService.saveSmartStudySession(userId || null, kit.id, {
+      const resetSession = {
         ...currentSession,
-        level: 1,
-        activePracticeLevel: 1,
+        level: 1 as const,
+        activePracticeLevel: 1 as const,
         currentQuestionId: firstQ?.id,
         currentQuestion: firstQ,
         levelCorrectCount: 0,
         levelCorrectCounts: { 1: 0, 2: 0, 3: 0 },
         currentIndex: 0,
         errorQueue: [],
+        answeredQuestionIds: [],
+        completedSocraticIds: [],
         isReinforcementMode: false,
         isAnswered: false,
         isCurrentCorrect: null,
-      });
+        lastUpdated: now,
+        resetAt: now,
+      };
+      latestSessionRef.current = resetSession;
+      authService.saveSmartStudySession(userId || null, kit.id, resetSession);
+      if (userId && (googleDriveService.isLinked() || googleDriveService.getValidAccessToken())) {
+        googleDriveService.scheduleProgressSync(userId, 500);
+      }
     }
   };
 

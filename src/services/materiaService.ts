@@ -456,6 +456,55 @@ export const getMateriaStorageKey = (userId?: string | null): string => {
   return userId ? `thea_custom_materias_${userId}` : 'thea_custom_materias';
 };
 
+export const getDeletedMateriaStorageKey = (userId?: string | null): string => {
+  return userId ? `thea_deleted_materias_${userId}` : 'thea_deleted_materias';
+};
+
+/**
+ * Obtiene el mapa de tombstones (nombre en minúscula -> deletedAt) de materias eliminadas o renombradas.
+ */
+export function getDeletedCustomMaterias(userId?: string | null): Record<string, number> {
+  try {
+    const key = getDeletedMateriaStorageKey(userId);
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, number>;
+      }
+    }
+  } catch {}
+  return {};
+}
+
+export function saveDeletedCustomMaterias(deletedMap: Record<string, number>, userId?: string | null): void {
+  try {
+    const key = getDeletedMateriaStorageKey(userId);
+    if (typeof localStorage !== 'undefined') {
+      safeLocalStorageSetItem(key, JSON.stringify(deletedMap));
+    }
+    saveSessionItem(key, deletedMap).catch(() => {});
+  } catch (e) {
+    console.warn('[materiaService] Error guardando tombstones de materias:', e);
+  }
+}
+
+export function mergeDeletedCustomMaterias(
+  mapA?: Record<string, number> | null,
+  mapB?: Record<string, number> | null
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const src of [mapA, mapB]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [k, ts] of Object.entries(src)) {
+      if (!k || typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) continue;
+      const cleanKey = k.trim().toLowerCase();
+      result[cleanKey] = Math.max(result[cleanKey] || 0, ts);
+    }
+  }
+  return result;
+}
+
 /**
  * Obtiene las materias personalizadas guardadas por el usuario.
  * No genera materias vacías por defecto.
@@ -487,35 +536,47 @@ export function getStoredCustomMaterias(userId?: string | null): CustomMateria[]
 }
 
 /**
- * Fusión acumulativa de materias personalizadas por nombre y marca temporal updatedAt (el más reciente gana).
+ * Fusión acumulativa de materias personalizadas por nombre y marca temporal updatedAt (el más reciente gana),
+ * respetando tombstones de materias eliminadas o renombradas.
  */
-export function mergeCustomMaterias(listA: CustomMateria[], listB: CustomMateria[]): CustomMateria[] {
+export function mergeCustomMaterias(
+  listA: CustomMateria[],
+  listB: CustomMateria[],
+  deletedMap?: Record<string, number>
+): CustomMateria[] {
+  const deleted = deletedMap || {};
   const map = new Map<string, CustomMateria>();
 
   const addOrMerge = (m: CustomMateria) => {
     if (!m || !m.name) return;
     const key = m.name.trim().toLowerCase();
+    const itemTime = m.updatedAt || 0;
+    const deletedAt = deleted[key] || 0;
+    if (deletedAt > 0 && deletedAt >= itemTime) {
+      map.delete(key);
+      return;
+    }
+
     const existing = map.get(key);
     if (!existing) {
       map.set(key, {
         ...m,
         name: m.name.trim(),
-        updatedAt: m.updatedAt || Date.now(),
+        updatedAt: itemTime || Date.now(),
       });
       return;
     }
 
     const existingTime = existing.updatedAt || 0;
-    const incomingTime = m.updatedAt || 0;
 
     // Prevalece la edición más reciente por fecha y hora
-    if (incomingTime >= existingTime) {
+    if (itemTime >= existingTime) {
       map.set(key, {
         ...existing,
         ...m,
         name: m.name.trim() || existing.name,
         colorId: m.colorId || existing.colorId,
-        updatedAt: incomingTime,
+        updatedAt: itemTime,
       });
     }
   };
@@ -541,11 +602,17 @@ export function saveCustomMaterias(
 ): void {
   try {
     const key = getMateriaStorageKey(userId);
-    const clean = materias.map(m => ({
-      ...m,
-      name: m.name.trim(),
-      updatedAt: m.updatedAt || Date.now(),
-    }));
+    const deletedMap = getDeletedCustomMaterias(userId);
+    const clean = materias
+      .map(m => ({
+        ...m,
+        name: m.name.trim(),
+        updatedAt: m.updatedAt || Date.now(),
+      }))
+      .filter(m => {
+        const delTs = deletedMap[m.name.toLowerCase()] || 0;
+        return !(delTs > 0 && delTs >= m.updatedAt);
+      });
 
     if (typeof localStorage !== 'undefined') {
       safeLocalStorageSetItem(key, JSON.stringify(clean));
@@ -560,13 +627,13 @@ export function saveCustomMaterias(
     // Notificar reactivamente a la UI
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('thea_materias_updated', {
-        detail: { materias: clean, userId }
+        detail: { materias: clean, deletedMaterias: deletedMap, userId }
       }));
 
       // Disparar sincronización inmediata a Google Drive en segundo plano
       if (triggerCloudSync && userId && userId !== 'guest') {
         window.dispatchEvent(new CustomEvent('thea_materias_cloud_sync_request', {
-          detail: { userId, materias: clean }
+          detail: { userId, materias: clean, deletedMaterias: deletedMap }
         }));
       }
     }
@@ -580,11 +647,18 @@ export function saveCustomMaterias(
  */
 export async function restoreCustomMateriasAsync(userId?: string | null): Promise<CustomMateria[]> {
   const key = getMateriaStorageKey(userId);
+  const delKey = getDeletedMateriaStorageKey(userId);
   try {
-    const idbMaterias = await getSessionItem<CustomMateria[]>(key);
+    const [idbMaterias, idbDeleted] = await Promise.all([
+      getSessionItem<CustomMateria[]>(key),
+      getSessionItem<Record<string, number>>(delKey),
+    ]);
     const localMaterias = getStoredCustomMaterias(userId);
-    const merged = mergeCustomMaterias(localMaterias, idbMaterias || []);
-    if (merged.length > 0) {
+    const mergedDeleted = mergeDeletedCustomMaterias(getDeletedCustomMaterias(userId), idbDeleted);
+    saveDeletedCustomMaterias(mergedDeleted, userId);
+
+    const merged = mergeCustomMaterias(localMaterias, idbMaterias || [], mergedDeleted);
+    if (merged.length > 0 || (idbMaterias && idbMaterias.length > 0)) {
       saveCustomMaterias(merged, userId, false);
       return merged;
     }
@@ -705,6 +779,11 @@ export function addCustomMateria(name: string, colorId?: string, userId?: string
   const current = getStoredCustomMaterias(userId);
   const existing = current.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
   const now = Date.now();
+  const deletedMap = getDeletedCustomMaterias(userId);
+  if (deletedMap[trimmed.toLowerCase()]) {
+    delete deletedMap[trimmed.toLowerCase()];
+    saveDeletedCustomMaterias(deletedMap, userId);
+  }
   if (existing) {
     existing.colorId = assignedColor;
     existing.updatedAt = now;
@@ -725,9 +804,21 @@ export function addCustomMateria(name: string, colorId?: string, userId?: string
 export function updateCustomMateria(oldName: string, newName: string, colorId: string, userId?: string | null): void {
   const current = getStoredCustomMaterias(userId);
   const now = Date.now();
+  const cleanOld = oldName.trim().toLowerCase();
+  const cleanNew = newName.trim();
+  const cleanNewLower = cleanNew.toLowerCase();
+  const deletedMap = getDeletedCustomMaterias(userId);
+  if (cleanOld && cleanOld !== cleanNewLower) {
+    deletedMap[cleanOld] = now;
+  }
+  if (cleanNewLower && deletedMap[cleanNewLower]) {
+    delete deletedMap[cleanNewLower];
+  }
+  saveDeletedCustomMaterias(deletedMap, userId);
+
   const updated = current.map(m => {
-    if (m.name.toLowerCase() === oldName.toLowerCase()) {
-      return { ...m, name: newName.trim(), colorId, updatedAt: now };
+    if (m.name.toLowerCase() === cleanOld) {
+      return { ...m, name: cleanNew, colorId, updatedAt: now };
     }
     return m;
   });
@@ -736,6 +827,12 @@ export function updateCustomMateria(oldName: string, newName: string, colorId: s
 
 export function deleteCustomMateria(name: string, userId?: string | null): void {
   const current = getStoredCustomMaterias(userId);
-  const updated = current.filter(m => m.name.toLowerCase() !== name.toLowerCase());
+  const lower = name.trim().toLowerCase();
+  const deletedMap = getDeletedCustomMaterias(userId);
+  if (lower) {
+    deletedMap[lower] = Date.now();
+    saveDeletedCustomMaterias(deletedMap, userId);
+  }
+  const updated = current.filter(m => m.name.toLowerCase() !== lower);
   saveCustomMaterias(updated, userId, true);
 }
