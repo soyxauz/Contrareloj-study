@@ -38,14 +38,13 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
     setCurrentPage(1);
   }, [kit.id, kit.assets]);
 
-  // Garantizar fondo blanco puro (#ffffff) eliminando fondos negros de transparencia JPEG
+  // Garantizar fondo blanco puro (#ffffff) eliminando fondos negros de transparencia JPEG solo en la página visible
   useEffect(() => {
     let isMounted = true;
     const sanitize = async () => {
-      const rawAssets = kit.assets || [];
       let changed = false;
-      const sanitized = await Promise.all(
-        rawAssets.map(async (a) => {
+      const sanitizedVisible = await Promise.all(
+        visibleAssets.map(async (a) => {
           if (a.dataUrl && a.dataUrl.startsWith('data:image')) {
             const cleaned = await cleanImageBlackBackground(a.dataUrl);
             if (cleaned !== a.dataUrl) {
@@ -57,14 +56,17 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
         })
       );
       if (isMounted && changed) {
-        setAssets(sanitized);
+        setAssets(prev => {
+          const map = new Map(sanitizedVisible.map(a => [a.id, a]));
+          return prev.map(a => map.get(a.id) || a);
+        });
       }
     };
     sanitize();
     return () => {
       isMounted = false;
     };
-  }, [kit.id, kit.assets]);
+  }, [currentPage, visibleAssets.length]);
 
   // Carga individual e inmediata para una imagen específica al pulsar sobre ella
   const loadSingleAsset = async (assetId: string) => {

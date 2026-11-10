@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
@@ -8,6 +8,7 @@ import {
   Copy,
   Check,
   FileText,
+  ChevronLeft,
   ChevronRight,
   Loader2,
   Image as ImageIcon,
@@ -74,7 +75,7 @@ export const DEPTH_OPTIONS: Array<{
 import { generateAIStudyGuide, stripExecutiveSummaryPreamble } from '../services/aiService';
 import { FormattedText } from './FormattedText';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
-import { hydrateKitAssets } from '../services/storageService';
+import { getAssetById } from '../services/storageService';
 import { StudyGuideScanner } from './StudyGuideScanner';
 import { useTheme } from '../services/themeService';
 
@@ -115,37 +116,73 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
     }
   }, [kit]);
 
-  // Hidratar activos desde IndexedDB o Google Drive si faltan figuras en la guía
+  // Paginación bajo demanda de 6 figuras por página para no saturar memoria RAM
+  const FIGURES_PER_PAGE = 6;
+  const [figurePage, setFigurePage] = useState(1);
+  const totalFigures = currentKitState.assets?.length || 0;
+  const totalFigurePages = Math.max(1, Math.ceil(totalFigures / FIGURES_PER_PAGE));
+  const currentFigureSlice = useMemo(() => {
+    return (currentKitState.assets || []).slice((figurePage - 1) * FIGURES_PER_PAGE, figurePage * FIGURES_PER_PAGE);
+  }, [currentKitState.assets, figurePage]);
+
+  // Mapa local de activos hidratados para las 6 figuras visibles en la página actual
+  const [hydratedFiguresMap, setHydratedFiguresMap] = useState<Map<string, string>>(new Map());
+
+  // Resetear página de figuras al cambiar de kit
   useEffect(() => {
-    let isMounted = true;
-    const hasMissing =
-      kit.assets?.some(a => !a.dataUrl) ||
-      kit.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
-
-    if (hasMissing) {
-      hydrateKitAssets(kit)
-        .then(hydrated => {
-          if (!isMounted) return;
-          setCurrentKitState(hydrated);
-        })
-        .catch(() => {});
-    }
-
-    const handleAssetsSynced = () => {
-      hydrateKitAssets(kit)
-        .then(hydrated => {
-          if (!isMounted) return;
-          setCurrentKitState(hydrated);
-        })
-        .catch(() => {});
-    };
-
-    window.addEventListener('thea_assets_synced', handleAssetsSynced);
-    return () => {
-      isMounted = false;
-      window.removeEventListener('thea_assets_synced', handleAssetsSynced);
-    };
+    setFigurePage(1);
+    setHydratedFiguresMap(new Map());
   }, [kit.id]);
+
+  // Hidratar bajo demanda exclusivamente las 6 figuras visibles desde IndexedDB
+  useEffect(() => {
+    let isCancelled = false;
+    const missing = currentFigureSlice.filter(a => a.id && !a.dataUrl && !hydratedFiguresMap.has(a.id));
+    if (missing.length === 0) return;
+
+    Promise.all(
+      missing.map(async (a) => {
+        try {
+          const stored = await getAssetById(a.id);
+          return stored?.dataUrl ? { id: a.id, dataUrl: stored.dataUrl } : null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((results) => {
+      if (isCancelled) return;
+      setHydratedFiguresMap((prev) => {
+        const next = new Map(prev);
+        results.forEach((r) => {
+          if (r) next.set(r.id, r.dataUrl);
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentFigureSlice]);
+
+  const handleOpenAssetZoom = async (asset: DocumentAsset) => {
+    if (asset.dataUrl) {
+      setSelectedAsset(asset);
+      return;
+    }
+    const cachedUrl = hydratedFiguresMap.get(asset.id);
+    if (cachedUrl) {
+      setSelectedAsset({ ...asset, dataUrl: cachedUrl });
+      return;
+    }
+    setSelectedAsset(asset);
+    try {
+      const stored = await getAssetById(asset.id);
+      if (stored?.dataUrl) {
+        setSelectedAsset({ ...asset, dataUrl: stored.dataUrl });
+      }
+    } catch {}
+  };
 
   const handleGenerateStudyGuide = async (depthToUse: StudyGuideDepth = selectedDepth) => {
     setShowDepthModal(false);
@@ -791,86 +828,119 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {currentKitState.assets.map((asset, idx) => (
-                  <div
-                    key={asset.id || idx}
-                    className="bg-thea-surface border border-thea-border hover:border-violet-500/60 rounded-2xl overflow-hidden transition-all shadow-md group flex flex-col justify-between"
-                  >
-                    <div>
-                      {/* Image Preview Container */}
-                      <div
-                        onClick={() => setSelectedAsset(asset)}
-                        className="relative aspect-video bg-slate-950 flex items-center justify-center cursor-pointer overflow-hidden p-2"
-                      >
-                        {asset.dataUrl ? (
-                          <img
-                            src={asset.dataUrl}
-                            alt={asset.caption || 'Figura extraída'}
-                            className="max-h-full max-w-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="text-slate-500 text-xs flex items-center gap-1.5">
-                            <ImageIcon className="w-5 h-5" />
-                            <span>Figura</span>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <span className="px-3 py-1.5 rounded-xl bg-violet-600/90 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg">
-                            <ZoomIn className="w-3.5 h-3.5" />
-                            Ampliar
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Card Body */}
-                      <div className="p-4 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                            {asset.type === 'table' ? 'Tabla de Datos' : 'Esquema / Figura'}
-                          </span>
-                          {asset.pageOrSlide && (
-                            <span className="text-[11px] text-slate-400 font-mono">
-                              Pág / Diap. {asset.pageOrSlide}
+                {currentFigureSlice.map((asset, idx) => {
+                  const displayUrl = asset.dataUrl || hydratedFiguresMap.get(asset.id);
+                  const figureIndex = (figurePage - 1) * FIGURES_PER_PAGE + idx + 1;
+                  return (
+                    <div
+                      key={asset.id || idx}
+                      className="bg-thea-surface border border-thea-border hover:border-violet-500/60 rounded-2xl overflow-hidden transition-all shadow-md group flex flex-col justify-between"
+                    >
+                      <div>
+                        {/* Image Preview Container */}
+                        <div
+                          onClick={() => handleOpenAssetZoom(asset)}
+                          className="relative aspect-video bg-slate-950 flex items-center justify-center cursor-pointer overflow-hidden p-2"
+                        >
+                          {displayUrl ? (
+                            <img
+                              src={displayUrl}
+                              alt={asset.caption || 'Figura extraída'}
+                              className="max-h-full max-w-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="text-slate-500 text-xs flex items-center gap-1.5 animate-pulse">
+                              <ImageIcon className="w-5 h-5 text-violet-400/60" />
+                              <span>Cargando figura...</span>
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <span className="px-3 py-1.5 rounded-xl bg-violet-600/90 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-[0.97] transition-transform duration-160">
+                              <ZoomIn className="w-3.5 h-3.5" />
+                              Ampliar
                             </span>
+                          </div>
+                        </div>
+
+                        {/* Card Body */}
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                              {asset.type === 'table' ? 'Tabla de Datos' : 'Esquema / Figura'}
+                            </span>
+                            {asset.pageOrSlide && (
+                              <span className="text-[11px] text-slate-400 font-mono tabular-nums">
+                                Pág / Diap. {asset.pageOrSlide}
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="text-sm font-bold text-white line-clamp-2">
+                            {asset.caption || `Figura ${figureIndex}`}
+                          </h4>
+
+                          {asset.contextNearby && (
+                            <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                              {asset.contextNearby}
+                            </p>
                           )}
                         </div>
+                      </div>
 
-                        <h4 className="text-sm font-bold text-white line-clamp-2">
-                          {asset.caption || `Figura ${idx + 1}`}
-                        </h4>
+                      {/* Card Actions */}
+                      <div className="p-3 bg-thea-surfaceLight border-t border-thea-border/60 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => handleOpenAssetZoom(asset)}
+                          className="text-xs font-semibold text-violet-300 hover:text-white transition-colors flex items-center gap-1 active:scale-[0.97] transition-transform duration-160"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                          Ver detalle
+                        </button>
 
-                        {asset.contextNearby && (
-                          <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                            {asset.contextNearby}
-                          </p>
+                        {displayUrl && (
+                          <a
+                            href={displayUrl}
+                            download={`figura-${asset.pageOrSlide || figureIndex}.png`}
+                            className="p-1.5 rounded-lg border border-thea-border text-slate-400 hover:text-white hover:bg-thea-border/40 transition-colors active:scale-[0.97] transition-transform duration-160"
+                            title="Descargar imagen"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
                         )}
                       </div>
                     </div>
-
-                    {/* Card Actions */}
-                    <div className="p-3 bg-thea-surfaceLight border-t border-thea-border/60 flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => setSelectedAsset(asset)}
-                        className="text-xs font-semibold text-violet-300 hover:text-white transition-colors flex items-center gap-1"
-                      >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                        Ver detalle
-                      </button>
-
-                      {asset.dataUrl && (
-                        <a
-                          href={asset.dataUrl}
-                          download={`figura-${asset.pageOrSlide || idx + 1}.png`}
-                          className="p-1.5 rounded-lg border border-thea-border text-slate-400 hover:text-white hover:bg-thea-border/40 transition-colors"
-                          title="Descargar imagen"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {/* Controles de Paginación de Figuras (120 FPS / Emil Kowalski / Zero Jitter) */}
+              {totalFigurePages > 1 && (
+                <div className="mt-6 flex items-center justify-between px-4 py-3 rounded-2xl bg-thea-surface border border-thea-border/80">
+                  <span className="text-xs text-slate-400 font-medium font-mono tabular-nums">
+                    Página <span className="text-white font-bold">{figurePage}</span> de <span className="text-white font-bold">{totalFigurePages}</span> ({totalFigures} figuras en total)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={figurePage <= 1}
+                      onClick={() => setFigurePage(p => Math.max(1, p - 1))}
+                      className="px-3 py-1.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-border/50 text-slate-300 hover:text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer active:scale-[0.97] transition-transform duration-160"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      disabled={figurePage >= totalFigurePages}
+                      onClick={() => setFigurePage(p => Math.min(totalFigurePages, p + 1))}
+                      className="px-3 py-1.5 rounded-xl border border-thea-border bg-thea-surfaceLight hover:bg-thea-border/50 text-slate-300 hover:text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer active:scale-[0.97] transition-transform duration-160"
+                    >
+                      Siguiente
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -553,28 +553,29 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
  * de la memoria de React una vez que no se encuentra en visualización activa.
  * Los datos permanecen a salvo de forma permanente en IndexedDB.
  */
-export function stripAssetDataUrlsFromKit(kit: StudyKit): StudyKit {
+export function stripAssetDataUrlsFromKit(kit: StudyKit, isActiveKit?: boolean | unknown): StudyKit {
   if (!kit) return kit;
+  const isTargetActive = typeof isActiveKit === 'boolean' ? isActiveKit : false;
   return {
     ...kit,
-    sourceText: kit.sourceText && kit.sourceText.length > 500 ? kit.sourceText.slice(0, 500) : kit.sourceText,
+    sourceText: isTargetActive ? kit.sourceText : (kit.sourceText && kit.sourceText.length > 300 ? kit.sourceText.slice(0, 300) : kit.sourceText),
     sourceMaterials: Array.isArray(kit.sourceMaterials)
       ? kit.sourceMaterials.map(m => {
-          if (m && m.rawText && m.rawText.length > 500) {
-            return { ...m, rawText: m.rawText.slice(0, 500) };
+          if (m && m.rawText && !isTargetActive && m.rawText.length > 300) {
+            return { ...m, rawText: m.rawText.slice(0, 300) };
           }
           return m;
         })
       : kit.sourceMaterials,
     assets: kit.assets?.map((a) => {
-      if (a.dataUrl && a.dataUrl.length > 500) {
+      if (a.dataUrl) {
         const { dataUrl: _, ...rest } = a;
         return rest;
       }
       return a;
     }),
     questions: kit.questions?.map((q) => {
-      if (q.sourceAsset && q.sourceAsset.dataUrl && q.sourceAsset.dataUrl.length > 500) {
+      if (q.sourceAsset && q.sourceAsset.dataUrl) {
         const { dataUrl: _, ...restAsset } = q.sourceAsset;
         return {
           ...q,
@@ -584,7 +585,7 @@ export function stripAssetDataUrlsFromKit(kit: StudyKit): StudyKit {
       return q;
     }),
     flashcards: kit.flashcards?.map((f) => {
-      if (f.sourceAsset && f.sourceAsset.dataUrl && f.sourceAsset.dataUrl.length > 500) {
+      if (f.sourceAsset && f.sourceAsset.dataUrl) {
         const { dataUrl: _, ...restAsset } = f.sourceAsset;
         return {
           ...f,
@@ -817,11 +818,9 @@ export function mergeKitsByUpdatedAt(
       : (existing.questions || []);
 
     const mergedQuestions = rawQuestions.map(q => {
-      if (q.sourceAsset && !q.sourceAsset.dataUrl) {
-        const fromExist = existing.questions?.find(eq => eq.id === q.id || eq.question === q.question)?.sourceAsset;
-        if (fromExist?.dataUrl) {
-          return { ...q, sourceAsset: { ...q.sourceAsset, dataUrl: fromExist.dataUrl } };
-        }
+      if (q.sourceAsset && q.sourceAsset.dataUrl) {
+        const { dataUrl: _, ...rest } = q.sourceAsset;
+        return { ...q, sourceAsset: rest };
       }
       return q;
     });
@@ -842,11 +841,10 @@ export function mergeKitsByUpdatedAt(
         ? (fromIn?.mastery || f.mastery || fromExist?.mastery || 'to-learn')
         : (fromExist?.mastery || f.mastery || fromIn?.mastery || 'to-learn'));
 
-      let sourceAsset = f.sourceAsset;
-      if (sourceAsset && !sourceAsset.dataUrl && fromExist?.sourceAsset?.dataUrl) {
-        sourceAsset = { ...sourceAsset, dataUrl: fromExist.sourceAsset.dataUrl };
-      } else if (!sourceAsset && fromExist?.sourceAsset) {
-        sourceAsset = fromExist.sourceAsset;
+      let sourceAsset = f.sourceAsset || fromExist?.sourceAsset;
+      if (sourceAsset && sourceAsset.dataUrl) {
+        const { dataUrl: _, ...rest } = sourceAsset;
+        sourceAsset = rest;
       }
       return {
         ...fromExist,
@@ -863,7 +861,8 @@ export function mergeKitsByUpdatedAt(
     incomingArchived.forEach(c => archivedMap.set(c.id || c.term, c));
     const mergedArchived = Array.from(archivedMap.values());
 
-    // En activos, preservar estrictamente cualquier dataUrl ya cargado o existente para no deshidratar
+    // En activos, los binarios pesados residen exclusivamente en IndexedDB.
+    // En la memoria de React solo se mantienen los metadatos ligeros (id, nombre, pie de figura).
     const candidateAssets = (kit.assets && kit.assets.length > 0)
       ? ((existing.assets && existing.assets.length > kit.assets.length && existingTime > incomingTime) ? existing.assets : kit.assets)
       : (existing.assets || []);
@@ -874,12 +873,13 @@ export function mergeKitsByUpdatedAt(
     const mergedAssets = candidateAssets.map(a => {
       const fromEx = existingAssetsMap.get(a.id);
       const fromIn = incomingAssetsMap.get(a.id);
-      const bestDataUrl = a.dataUrl || fromEx?.dataUrl || fromIn?.dataUrl;
+      const { dataUrl: _ex, ...cleanEx } = fromEx || {};
+      const { dataUrl: _in, ...cleanIn } = fromIn || {};
+      const { dataUrl: _a, ...cleanA } = a;
       return {
-        ...fromEx,
-        ...fromIn,
-        ...a,
-        dataUrl: bestDataUrl,
+        ...cleanEx,
+        ...cleanIn,
+        ...cleanA,
       };
     });
 

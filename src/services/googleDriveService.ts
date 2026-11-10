@@ -2052,37 +2052,37 @@ export const googleDriveService = {
         this.uploadOrUpdateJson(token, rootFolderId, userProgressFileName, userProgressPayload),
       ];
 
-      // 2. Extraer todos los activos de este kit y de IndexedDB
-      const kitAssets: DocumentAsset[] = [];
-      const seenIds = new Set<string>();
+      // 2. Extraer activos de este kit de forma desacoplada sin mutar los kits en memoria
+      const kitAssetsToUpload: DocumentAsset[] = [];
+      const seenAssetIds = new Set<string>();
 
-      const collectAsset = (a?: DocumentAsset | null) => {
-        if (a && a.id && a.dataUrl && !seenIds.has(a.id)) {
-          seenIds.add(a.id);
-          kitAssets.push(a);
+      const collectAssetId = (a?: DocumentAsset | null) => {
+        if (a && a.id && !seenAssetIds.has(a.id)) {
+          seenAssetIds.add(a.id);
+          kitAssetsToUpload.push({ ...a });
         }
       };
 
       if (Array.isArray(newKit.assets)) {
-        for (const a of newKit.assets) collectAsset(a);
+        for (const a of newKit.assets) collectAssetId(a);
       }
       if (Array.isArray(newKit.questions)) {
-        for (const q of newKit.questions) collectAsset(q.sourceAsset);
+        for (const q of newKit.questions) collectAssetId(q.sourceAsset);
       }
       if (Array.isArray(newKit.flashcards)) {
-        for (const f of newKit.flashcards) collectAsset(f.sourceAsset);
+        for (const f of newKit.flashcards) collectAssetId(f.sourceAsset);
       }
       if (Array.isArray((newKit as any).smartStudyQuestions)) {
-        for (const q of (newKit as any).smartStudyQuestions) collectAsset(q.sourceAsset);
+        for (const q of (newKit as any).smartStudyQuestions) collectAssetId(q.sourceAsset);
       }
 
-      // Hidratar dataUrl desde IndexedDB solo para los activos de este kit que carezcan de el
-      for (const asset of kitAssets) {
-        if (asset.id && !asset.dataUrl) {
+      // Hidratar dataUrl desde IndexedDB en los objetos temporales desacoplados exclusivamente para la subida
+      for (const tempAsset of kitAssetsToUpload) {
+        if (!tempAsset.dataUrl) {
           try {
-            const stored = await getAssetById(asset.id);
+            const stored = await getAssetById(tempAsset.id);
             if (stored?.dataUrl) {
-              asset.dataUrl = stored.dataUrl;
+              tempAsset.dataUrl = stored.dataUrl;
             }
           } catch {}
         }
@@ -2097,7 +2097,7 @@ export const googleDriveService = {
       const driveAssetNames = new Set(existingDriveAssets.map(f => f.name));
 
       // Filtrar los activos que aún no existen en Drive
-      const pendingAssets = kitAssets.filter(asset => {
+      const pendingAssets = kitAssetsToUpload.filter(asset => {
         if (!asset.id || !asset.dataUrl) return false;
         const isPng = asset.dataUrl.includes('image/png');
         const expectedName = `${asset.id}.${isPng ? 'png' : 'jpg'}`;

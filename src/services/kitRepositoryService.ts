@@ -234,7 +234,8 @@ export const kitRepositoryService = {
       }
 
       if (merged.length > 0) {
-        const hydrated = hydrateFlashcardsMastery(userId, merged);
+        const strippedMerged = merged.map(k => stripAssetDataUrlsFromKit(k, false));
+        const hydrated = hydrateFlashcardsMastery(userId, strippedMerged);
         inMemoryKitsCache.set(key, hydrated);
         this.writeIndexToLocalStorage(userId, hydrated, false);
         saveKitsToIndexedDB(key, hydrated).catch(() => {});
@@ -403,8 +404,9 @@ export const kitRepositoryService = {
 
     const key = userId ? `thea_user_kits_${userId}` : 'thea_guest_kits';
 
-    // 1. Memoria de acceso inmediato
-    inMemoryKitsCache.set(key, cleanKits);
+    // 1. Memoria de acceso inmediato ultraligera (sin binarios base64)
+    const strippedMemoryKits = cleanKits.map(k => stripAssetDataUrlsFromKit(k, false));
+    inMemoryKitsCache.set(key, strippedMemoryKits);
 
     // 2. Escribir indice ligero en LocalStorage
     this.writeIndexToLocalStorage(userId, cleanKits, true);

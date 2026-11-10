@@ -3,7 +3,6 @@ import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
 import { BookOpen, AlertCircle } from 'lucide-react';
 import { authService } from './services/authService';
 import {
-  hydrateKitAssets,
   isCorruptedKit,
   requestPersistentStorage,
   mergeKitsByUpdatedAt,
@@ -121,6 +120,7 @@ export const App: React.FC = () => {
   const isLoggingOutRef = useRef(false);
   const isHydratedRef = useRef(false);
   const isStartupHydrationRef = useRef(true);
+  const modeCleanupTimerRef = useRef<any>(null);
 
   useEffect(() => {
     const unsubscribe = googleDriveService.subscribe((state) => {
@@ -428,32 +428,24 @@ export const App: React.FC = () => {
     if (currentUser?.id) {
       googleDriveService.flushAutoSync(currentUser.id, kits);
     }
-    // Revocar activamente audios en memoria al cambiar de vista o de sección de estudio
+    // Revocar activamente audios y encolar purga de memoria con retención de 15 segundos
     if (mode !== currentMode) {
-      revokeAllAzureAudioUrls();
-      revokeAllPodcastAudioUrls();
-
-      // Si se sale de ImagesGalleryView, liberar inmediatamente todos los activos pesados de la RAM
-      if (mode !== 'images') {
+      if (modeCleanupTimerRef.current) {
+        clearTimeout(modeCleanupTimerRef.current);
+      }
+      modeCleanupTimerRef.current = setTimeout(() => {
         purgeAssetMemoryCache();
         purgeImageCleanerCache();
-        setKits(prev => prev.map(stripAssetDataUrlsFromKit));
-        setCurrentKit(prev => (prev ? stripAssetDataUrlsFromKit(prev) : prev));
+        revokeAllAzureAudioUrls();
+        revokeAllPodcastAudioUrls();
+      }, 15000);
+
+      if (mode !== 'images') {
+        setKits(prev => prev.map(k => stripAssetDataUrlsFromKit(k, Boolean(currentKit && k.id === currentKit.id))));
+        setCurrentKit(prev => (prev ? stripAssetDataUrlsFromKit(prev, true) : prev));
       }
     }
 
-    // Hidratar activos completos únicamente cuando el usuario entra explícitamente a la Galería de Imágenes
-    if (mode === 'images' && currentKit) {
-      const hasMissing = currentKit.assets?.some(a => !a.dataUrl);
-
-      if (hasMissing) {
-        hydrateKitAssets(currentKit)
-          .then(hydrated => {
-            setCurrentKit(hydrated);
-          })
-          .catch(() => {});
-      }
-    }
     setCurrentMode(mode);
     if (pushToHistory) {
       if (mode !== currentMode || window.history.state?.mode !== mode) {
@@ -681,48 +673,6 @@ export const App: React.FC = () => {
       localStorage.removeItem(STORAGE_CURRENT_KIT_KEY);
     }
   }, [currentKit]);
-
-  // Hidratar activos desde IndexedDB únicamente cuando la vista activa es la Galería de Imágenes
-  useEffect(() => {
-    if (currentMode !== 'images') return;
-    const checkAndHydrate = (kitToHydrate: StudyKit | null) => {
-      if (!kitToHydrate) return;
-      const hasStrippedAssets =
-        kitToHydrate.assets?.some(a => !a.dataUrl) ||
-        kitToHydrate.questions?.some(q => q.sourceAsset && !q.sourceAsset.dataUrl);
-
-      if (hasStrippedAssets) {
-        hydrateKitAssets(kitToHydrate)
-          .then(hydrated => {
-            const countBefore = (kitToHydrate.assets?.filter(a => !!a.dataUrl).length || 0) +
-              (kitToHydrate.questions?.filter(q => !!q.sourceAsset?.dataUrl).length || 0);
-            const countAfter = (hydrated.assets?.filter(a => !!a.dataUrl).length || 0) +
-              (hydrated.questions?.filter(q => !!q.sourceAsset?.dataUrl).length || 0);
-
-            if (countAfter > countBefore) {
-              setCurrentKit(hydrated);
-            }
-          })
-          .catch(err => {
-            console.warn('[App] Error al hidratar activos desde IndexedDB:', err);
-          });
-      }
-    };
-
-    checkAndHydrate(currentKit);
-
-    const handleAssetsSynced = () => {
-      setCurrentKit(prev => {
-        checkAndHydrate(prev);
-        return prev;
-      });
-    };
-
-    window.addEventListener('thea_assets_synced', handleAssetsSynced);
-    return () => {
-      window.removeEventListener('thea_assets_synced', handleAssetsSynced);
-    };
-  }, [currentKit?.id]);
 
   // Safety check: ensure currentKit is never corrupted
   useEffect(() => {
