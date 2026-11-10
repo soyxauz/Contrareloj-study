@@ -10,6 +10,9 @@ export type { PodcastSetupViewProps } from './PodcastSetupView';
 export { PodcastTranscriptView } from './PodcastTranscriptView';
 export type { PodcastTranscriptViewProps, DialogueLine } from './PodcastTranscriptView';
 
+export { PodcastReplacingCard } from './PodcastReplacingCard';
+export type { PodcastReplacingCardProps } from './PodcastReplacingCard';
+
 export {
   PODCAST_FORMAT_OPTIONS,
   PODCAST_DURATION_OPTIONS,

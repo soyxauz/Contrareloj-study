@@ -79,6 +79,7 @@ import {
   PodcastVoiceModal,
   PodcastSetupView,
   PodcastTranscriptView,
+  PodcastReplacingCard,
   PODCAST_FORMAT_OPTIONS,
   PODCAST_DURATION_OPTIONS,
 } from './podcast';
@@ -120,6 +121,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => getPodcastSettings().playbackSpeed || 1);
   const [activeTab, setActiveTab] = useState<'player' | 'transcript'>('player');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isReplacingEpisode, setIsReplacingEpisode] = useState(false);
+  const lastReplacementOptsRef = useRef<{
+    format?: PodcastFormat;
+    duration?: PodcastDuration;
+    orientation?: string;
+  } | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -401,7 +408,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   // Pre-sintetizar turno 0 y medir en segundo plano la duración real de todos los segmentos de audio (sin retener Blobs en RAM)
   useEffect(() => {
-    if (!podcast?.dialogue || podcast.dialogue.length === 0) return;
+    if (!podcast?.dialogue || podcast.dialogue.length === 0 || isReplacingEpisode) return;
 
     if (voiceEngine !== 'edge') {
       setRealSegmentDurations({});
@@ -474,7 +481,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     return () => {
       cancelled = true;
     };
-  }, [podcast?.id, podcast?.dialogue, voiceEngine, edgeSofiaVoice, edgeMateoVoice, recordRealSegmentDuration]);
+  }, [podcast?.id, podcast?.dialogue, voiceEngine, edgeSofiaVoice, edgeMateoVoice, recordRealSegmentDuration, isReplacingEpisode]);
 
   // Mapeo exhaustivo de todas las palabras del podcast para scrubber palabra por palabra
   const allWords = useMemo(() => {
@@ -1724,6 +1731,16 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       getPodcastSettings().orientation;
 
     if (overrideOptions?.isReplacement) {
+      lastReplacementOptsRef.current = {
+        format: activeFormat,
+        duration: activeDuration,
+        orientation: activeOrientation,
+      };
+      setIsReplacingEpisode(true);
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      loadedAudioSegmentRef.current = -1;
+      setRealSegmentDurations({});
       stopCurrentAudio(true);
       try {
         localStorage.removeItem(`thea_podcast_pos_${kit.id}`);
@@ -1760,8 +1777,14 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           previousPodcast: kit.podcast || undefined,
         }
       );
-      if (generated && onUpdateKit) {
-        onUpdateKit({ ...kit, podcast: generated });
+      if (generated) {
+        if (onUpdateKit) {
+          onUpdateKit({ ...kit, podcast: generated });
+        }
+        setActiveTab('player');
+        setIsReplacingEpisode(false);
+      } else if (overrideOptions?.isReplacement) {
+        setSynthesisError('No se pudo generar el nuevo episodio. Verifica tu configuración de IA e inténtalo de nuevo.');
       }
       if (generated?.dialogue && generated.dialogue.length > 0) {
         setRealSegmentDurations({});
@@ -1852,6 +1875,34 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   const speeds = [0.75, 1, 1.25, 1.5, 2];
 
+  if (isReplacingEpisode) {
+    const replaceFormatTitle =
+      PODCAST_FORMAT_OPTIONS.find((f) => f.id === (lastReplacementOptsRef.current?.format || selectedFormat))?.title ||
+      'Personalizado';
+    const replaceDurationSubtitle =
+      PODCAST_DURATION_OPTIONS.find((d) => d.id === (lastReplacementOptsRef.current?.duration || selectedDuration))?.subtitle ||
+      'Normal';
+
+    return (
+      <PodcastReplacingCard
+        formatTitle={replaceFormatTitle}
+        durationSubtitle={replaceDurationSubtitle}
+        isGenerating={isGenerating}
+        error={synthesisError}
+        onRetry={() =>
+          handleGeneratePodcast({
+            ...(lastReplacementOptsRef.current || {}),
+            isReplacement: true,
+          })
+        }
+        onCancelRestore={() => {
+          setSynthesisError(null);
+          setIsReplacingEpisode(false);
+        }}
+      />
+    );
+  }
+
   if (!podcast || !podcast.dialogue || podcast.dialogue.length === 0) {
     return (
       <PodcastSetupView
@@ -1881,7 +1932,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const speakerAcoustics = getSpeakerAcoustics(currentItem.speaker, currentItem.text);
 
   return (
-    <div className="max-w-5xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 h-full flex flex-col min-h-0 overflow-hidden animate-fadeIn">
+    <div
+      key={podcast.id || podcast.title}
+      className="max-w-5xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 h-full flex flex-col min-h-0 overflow-hidden animate-podcast-panel-enter"
+    >
       {/* Top Controls Bar (Limpio y Espacioso) */}
       <div className="mb-2 sm:mb-3 pb-2 border-b border-thea-border shrink-0 flex items-center justify-between gap-3">
         {/* Selector de Pestañas [Reproductor | Transcripción] */}
