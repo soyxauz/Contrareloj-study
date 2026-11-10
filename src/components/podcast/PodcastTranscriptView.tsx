@@ -10,12 +10,14 @@ export interface PodcastTranscriptViewProps {
   dialogue: DialogueLine[];
   currentLineIndex: number;
   onSelectLine: (idx: number) => void;
+  segmentTimes?: string[];
 }
 
 export const PodcastTranscriptView: React.FC<PodcastTranscriptViewProps> = ({
   dialogue,
   currentLineIndex,
   onSelectLine,
+  segmentTimes,
 }) => {
   return (
     <div className="bg-[#0e0b16]/95 border border-white/[0.08] rounded-2xl sm:rounded-3xl p-4 sm:p-8 space-y-3 sm:space-y-4 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
@@ -37,7 +39,9 @@ export const PodcastTranscriptView: React.FC<PodcastTranscriptViewProps> = ({
           >
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-xs text-zinc-200">{item.speaker}</span>
-              <span className="text-[10px] sm:text-[11px] text-zinc-500 font-mono tabular-nums">{item.time}</span>
+              <span className="text-[10px] sm:text-[11px] text-zinc-500 font-mono tabular-nums">
+                {segmentTimes?.[idx] || item.time}
+              </span>
             </div>
             <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{item.text}</p>
           </div>

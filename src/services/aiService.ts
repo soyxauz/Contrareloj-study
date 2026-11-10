@@ -2936,22 +2936,11 @@ Responde ÚNICAMENTE con un JSON con la estructura:
           };
         });
 
-        // Duración final calculada
-        let finalDuration = parsed.podcast.duration || defaultDurationLabel;
-        if (selectedDuration === 'long') {
-          // El podcast largo debe situarse entre 10 y 30 min (con tope de 43 min)
-          const computedMins = Math.max(10, Math.min(43, Math.round(accumulatedSecs / 60)));
-          const computedSecs = accumulatedSecs % 60;
-          finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
-        } else if (selectedDuration === 'short') {
-          const computedMins = Math.max(1, Math.min(3, Math.round(accumulatedSecs / 60)));
-          const computedSecs = accumulatedSecs % 60;
-          finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
-        } else {
-          const computedMins = Math.max(3, Math.min(8, Math.round(accumulatedSecs / 60)));
-          const computedSecs = accumulatedSecs % 60;
-          finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
-        }
+        // Duración real estimada del guion generado sin topes artificiales ni redondeos inconsistentes
+        const totalSecs = Math.max(1, Math.round(accumulatedSecs));
+        const computedMins = Math.floor(totalSecs / 60);
+        const computedSecs = totalSecs % 60;
+        const finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
 
         return {
           id: `pod-ai-${Date.now()}`,

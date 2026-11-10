@@ -20,17 +20,44 @@ import { safeLocalStorageSetItem } from '../services/storageService';
 
 function parseTimeToSeconds(timeStr: string): number {
   if (!timeStr) return 0;
-  const parts = timeStr.split(':').map(Number);
-  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    return parts[0] * 60 + parts[1];
+  const match = timeStr.match(/(\d+):(\d{1,2})/);
+  if (match) {
+    const mins = parseInt(match[1], 10);
+    const secs = parseInt(match[2], 10);
+    if (!isNaN(mins) && !isNaN(secs)) {
+      return mins * 60 + secs;
+    }
   }
   return 0;
 }
 
 function formatSeconds(totalSecs: number): string {
-  const mins = Math.floor(totalSecs / 60);
-  const secs = Math.floor(totalSecs % 60);
+  const safe = Math.max(0, Number.isFinite(totalSecs) ? totalSecs : 0);
+  const mins = Math.floor(safe / 60);
+  const secs = Math.floor(safe % 60);
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+function cleanPodcastDialogueText(text: string): string {
+  return (text || '')
+    .replace(/[*_#`~[\]]/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[$]/g, '')
+    .trim();
+}
+
+function estimateSegmentDurationSecs(text: string): number {
+  const clean = cleanPodcastDialogueText(text);
+  if (!clean) return 1.5;
+  const words = clean.split(/\s+/).filter(Boolean);
+  const pauseCount = (clean.match(/[.!?\u2026,;:](\s|$)/g) || []).length;
+  // Ritmo realista de voces neuronales en español (~145 palabras/min) + pausas de puntuación
+  return Math.max(2.5, words.length * 0.415 + pauseCount * 0.22 + 0.35);
+}
+
+function getAzureVoiceForSpeaker(speaker: string, sofiaVoice: string, mateoVoice: string): string {
+  const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(speaker || '');
+  return isFemale ? (sofiaVoice || 'es-ES-ElviraNeural') : (mateoVoice || 'es-ES-AlvaroNeural');
 }
 import {
   getPodcastSettings,
@@ -43,6 +70,8 @@ import {
   prefetchAzureEdgeSpeech,
   preloadEntireAzurePodcast,
   clearAzureAudioCache,
+  getCachedAudioDuration,
+  measureAzureSpeechDuration,
 } from '../services/azureEdgeTtsService';
 import { googleDriveService } from '../services/googleDriveService';
 import {
@@ -145,25 +174,80 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     voiceEngineRef.current = voiceEngine;
   }, [voiceEngine]);
 
-  // Duración total calculada en segundos del podcast
+  // Duraciones reales medidas por segmento (seg) desde los audios sintetizados; sin estimación inflada
+  const [realSegmentDurations, setRealSegmentDurations] = useState<Record<number, number>>(() => {
+    const initialMap: Record<number, number> = {};
+    if (kit.podcast?.dialogue && getPodcastSettings().voiceEngine !== 'browser') {
+      const sVoice = getPodcastSettings().edgeSofiaVoice || 'es-ES-ElviraNeural';
+      const mVoice = getPodcastSettings().edgeMateoVoice || 'es-ES-AlvaroNeural';
+      kit.podcast.dialogue.forEach((item, idx) => {
+        const dur = getCachedAudioDuration(item.text, getAzureVoiceForSpeaker(item.speaker, sVoice, mVoice));
+        if (typeof dur === 'number' && dur > 0) {
+          initialMap[idx] = dur;
+        }
+      });
+    }
+    return initialMap;
+  });
+
+  const recordRealSegmentDuration = useCallback((segIdx: number, durationSec: number) => {
+    if (!Number.isFinite(durationSec) || durationSec <= 0) return;
+    setRealSegmentDurations((prev) => {
+      if (prev[segIdx] !== undefined && Math.abs(prev[segIdx] - durationSec) < 0.05) {
+        return prev;
+      }
+      return { ...prev, [segIdx]: durationSec };
+    });
+  }, []);
+
+  // Línea de tiempo unificada y continua calculada por cada segmento (duración real o estimación realista sin topes inventados)
+  const segmentTimelines = useMemo(() => {
+    const dialogue = kit.podcast?.dialogue || [];
+    let accSecs = 0;
+    return dialogue.map((item, idx) => {
+      const startSecs = accSecs;
+      const realDur = realSegmentDurations[idx];
+      const durationSecs = (typeof realDur === 'number' && Number.isFinite(realDur) && realDur > 0)
+        ? realDur
+        : estimateSegmentDurationSecs(item.text);
+      accSecs += durationSecs;
+      return {
+        startSecs,
+        durationSecs,
+        endSecs: accSecs,
+        timeLabel: formatSeconds(Math.round(startSecs)),
+      };
+    });
+  }, [kit.podcast?.dialogue, realSegmentDurations]);
+
+  const segmentTimelinesRef = useRef(segmentTimelines);
+  segmentTimelinesRef.current = segmentTimelines;
+
+  // Duración total real del podcast en segundos
   const totalDurationSecs = useMemo(() => {
-    if (!kit.podcast?.dialogue || kit.podcast.dialogue.length === 0) return 60;
-    const parsedDuration = parseTimeToSeconds(kit.podcast.duration || '');
-    if (parsedDuration > 0) return parsedDuration;
-    const lastItem = kit.podcast.dialogue[kit.podcast.dialogue.length - 1];
-    const lastStartSec = parseTimeToSeconds(lastItem.time || '');
-    const estimatedLastSegSec = Math.max(15, lastItem.text.split(/\s+/).length * 0.4);
-    return Math.max(60, Math.round(lastStartSec + estimatedLastSegSec));
-  }, [kit.podcast?.dialogue, kit.podcast?.duration]);
+    if (segmentTimelines.length > 0) {
+      return Math.max(1, segmentTimelines[segmentTimelines.length - 1].endSecs);
+    }
+    const parsed = parseTimeToSeconds(kit.podcast?.duration || '');
+    return parsed > 0 ? parsed : 60;
+  }, [segmentTimelines, kit.podcast?.duration]);
+
+  const totalDurationLabel = useMemo(() => {
+    return formatSeconds(Math.round(totalDurationSecs));
+  }, [totalDurationSecs]);
 
   // Tiempo continuo actual en segundos (resolución continua para animación ultra-suave a 60fps)
   const [currentPlaybackSecs, setCurrentPlaybackSecs] = useState<number>(() => {
-    if (initialPosition.lineIndex && kit.podcast?.dialogue?.[initialPosition.lineIndex]) {
-      return parseTimeToSeconds(kit.podcast.dialogue[initialPosition.lineIndex].time || '0:00');
-    }
-    return 0;
+    const seg = segmentTimelines[initialPosition.lineIndex];
+    if (!seg) return 0;
+    const item = kit.podcast?.dialogue?.[initialPosition.lineIndex];
+    const clean = item ? cleanPodcastDialogueText(item.text) : '';
+    const wordsCount = clean ? clean.split(/\s+/).filter(Boolean).length : 0;
+    const wordRatio = wordsCount > 0 ? Math.min(0.99, initialPosition.wordIndexInSegment / wordsCount) : 0;
+    return seg.startSecs + wordRatio * seg.durationSecs;
   });
   const currentPlaybackSecsRef = useRef<number>(currentPlaybackSecs);
+  const prevTotalDurationRef = useRef<number>(totalDurationSecs);
 
   // Estados y referencias para navegación y resaltado sincronizado
   const [currentWordIndexInSegment, setCurrentWordIndexInSegment] = useState(initialPosition.wordIndexInSegment);
@@ -315,32 +399,82 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
   const podcast = kit.podcast;
 
-  // Pre-sintetizar proactivamente los primeros turnos al cargar para arranque instantáneo (0ms)
+  // Pre-sintetizar turno 0 y medir en segundo plano la duración real de todos los segmentos de audio (sin retener Blobs en RAM)
   useEffect(() => {
     if (!podcast?.dialogue || podcast.dialogue.length === 0) return;
-    const firstItem = podcast.dialogue[0];
-    const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(firstItem.speaker);
 
-    if (voiceEngine === 'edge') {
-      const voice = isFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural');
-      synthesizeAzureEdgeSpeech(firstItem.text, voice)
-        .then((url) => {
-          if (isMountedRef.current) {
-            const firstAudio = new Audio();
-            firstAudio.preload = 'auto';
-            firstAudio.src = url;
-            firstAudio.load();
-            preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
-
-            // Pre-cargar en paralelo los siguientes 3 turnos para reproducción continua y sin pausas
-            preloadEntireAzurePodcast(podcast.dialogue, edgeSofiaVoice, edgeMateoVoice, 1, 4);
-          }
-        })
-        .catch((err) => {
-          console.warn('[PodcastView] Error en precarga inicial Azure Neural Turno 0:', err);
-        });
+    if (voiceEngine !== 'edge') {
+      setRealSegmentDurations({});
+      return;
     }
-  }, [podcast?.dialogue, voiceEngine, edgeSofiaVoice, edgeMateoVoice]);
+
+    let cancelled = false;
+    const initialMap: Record<number, number> = {};
+    podcast.dialogue.forEach((item, idx) => {
+      const dur = getCachedAudioDuration(item.text, getAzureVoiceForSpeaker(item.speaker, edgeSofiaVoice, edgeMateoVoice));
+      if (typeof dur === 'number' && dur > 0) {
+        initialMap[idx] = dur;
+      }
+    });
+    setRealSegmentDurations(initialMap);
+
+    const firstItem = podcast.dialogue[0];
+    const firstVoice = getAzureVoiceForSpeaker(firstItem.speaker, edgeSofiaVoice, edgeMateoVoice);
+    synthesizeAzureEdgeSpeech(firstItem.text, firstVoice)
+      .then((url) => {
+        if (cancelled || !isMountedRef.current) return;
+        const firstAudio = new Audio();
+        firstAudio.preload = 'auto';
+        firstAudio.onloadedmetadata = () => {
+          if (!cancelled && Number.isFinite(firstAudio.duration) && firstAudio.duration > 0) {
+            recordRealSegmentDuration(0, firstAudio.duration);
+          }
+        };
+        firstAudio.src = url;
+        firstAudio.load();
+        preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
+
+        // Pre-cargar los siguientes turnos para reproducción sin pausas
+        preloadEntireAzurePodcast(podcast.dialogue, edgeSofiaVoice, edgeMateoVoice, 1, 3);
+      })
+      .catch((err) => {
+        console.warn('[PodcastView] Error en precarga inicial Azure Neural Turno 0:', err);
+      });
+
+    // Medición gradual en lotes de 2 para conocer la duración real total desde el primer momento
+    const measureAllDurations = async () => {
+      const indicesToMeasure: number[] = [];
+      for (let i = 0; i < podcast.dialogue.length; i++) {
+        if (!initialMap[i]) indicesToMeasure.push(i);
+      }
+
+      const BATCH = 2;
+      for (let i = 0; i < indicesToMeasure.length; i += BATCH) {
+        if (cancelled || !isMountedRef.current) break;
+        const chunk = indicesToMeasure.slice(i, i + BATCH);
+        await Promise.all(
+          chunk.map(async (segIdx) => {
+            if (cancelled || !isMountedRef.current) return;
+            const item = podcast.dialogue[segIdx];
+            if (!item?.text) return;
+            const voice = getAzureVoiceForSpeaker(item.speaker, edgeSofiaVoice, edgeMateoVoice);
+            try {
+              const dur = await measureAzureSpeechDuration(item.text, voice);
+              if (!cancelled && isMountedRef.current && dur > 0) {
+                recordRealSegmentDuration(segIdx, dur);
+              }
+            } catch {}
+          })
+        );
+      }
+    };
+
+    measureAllDurations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [podcast?.id, podcast?.dialogue, voiceEngine, edgeSofiaVoice, edgeMateoVoice, recordRealSegmentDuration]);
 
   // Mapeo exhaustivo de todas las palabras del podcast para scrubber palabra por palabra
   const allWords = useMemo(() => {
@@ -394,10 +528,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     return clean ? clean.split(/\s+/).filter(Boolean) : [];
   }, [currentItem?.text]);
 
-  // Tiempo formateado actual (ej. "3:13")
+  // Tiempo formateado actual sincronizado exactamente con la duración total real al llegar al final
   const currentTimeDisplay = useMemo(() => {
-    return formatSeconds(Math.floor(currentPlaybackSecs));
-  }, [currentPlaybackSecs]);
+    if (totalDurationSecs > 0 && currentPlaybackSecs >= totalDurationSecs - 0.2) {
+      return formatSeconds(Math.round(totalDurationSecs));
+    }
+    return formatSeconds(Math.floor(Math.max(0, currentPlaybackSecs)));
+  }, [currentPlaybackSecs, totalDurationSecs]);
 
   // Porcentaje fluido de 0% a 100% para la barra interactiva
   const progressPercent = useMemo(() => {
@@ -406,7 +543,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     return Math.max(0, Math.min(100, pct));
   }, [currentPlaybackSecs, totalDurationSecs]);
 
-  // Bucle de sincronización continua a 60 FPS durante la reproducción
+  // Bucle de sincronización continua a 60 FPS durante la reproducción con tiempos reales por segmento
   useEffect(() => {
     if (!isPlaying) return;
     let animId: number;
@@ -419,8 +556,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       ) {
         const audio = audioPlayerRef.current;
         if (!audio.paused && audio.duration && Number.isFinite(audio.duration)) {
-          const segStart = parseTimeToSeconds(podcast?.dialogue?.[currentLineIndexRef.current]?.time || '0:00');
-          const exact = segStart + audio.currentTime;
+          const tl = segmentTimelinesRef.current[currentLineIndexRef.current];
+          const segStart = tl ? tl.startSecs : 0;
+          const exact = Math.min(tl ? tl.endSecs : segStart + audio.currentTime, segStart + audio.currentTime);
           currentPlaybackSecsRef.current = exact;
           setCurrentPlaybackSecs(exact);
         }
@@ -429,16 +567,30 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     };
     animId = requestAnimationFrame(updateSmoothTick);
     return () => cancelAnimationFrame(animId);
-  }, [isPlaying, podcast?.dialogue]);
+  }, [isPlaying]);
 
-  // Sincronizar tiempo base cuando cambia el segmento si no se está arrastrando
+  // Reajustar suavemente el reloj si la duración real se recalibra mientras está en pausa (nunca pisar seeks al medio/final de un segmento)
   useEffect(() => {
-    if (isScrubbingRef.current) return;
-    if (!podcast?.dialogue) return;
-    const segStart = parseTimeToSeconds(podcast.dialogue[currentLineIndex]?.time || '0:00');
-    currentPlaybackSecsRef.current = segStart;
-    setCurrentPlaybackSecs(segStart);
-  }, [currentLineIndex, podcast?.dialogue]);
+    const prevTotal = prevTotalDurationRef.current;
+    prevTotalDurationRef.current = totalDurationSecs;
+    if (isPlayingRef.current || isScrubbingRef.current || isAudioSeekingRef.current) return;
+    const tl = segmentTimelines[currentLineIndexRef.current];
+    if (!tl) return;
+
+    // Si el usuario dejó la barra al 100% del final, mantenerla alineada con el nuevo total real
+    if (prevTotal > 0 && currentPlaybackSecsRef.current >= prevTotal - 0.25) {
+      currentPlaybackSecsRef.current = totalDurationSecs;
+      setCurrentPlaybackSecs(totalDurationSecs);
+      return;
+    }
+
+    const item = podcast?.dialogue?.[currentLineIndexRef.current];
+    const wordsCount = item ? cleanPodcastDialogueText(item.text).split(/\s+/).filter(Boolean).length : 0;
+    const ratio = wordsCount > 0 ? Math.min(0.99, currentWordIndexRef.current / wordsCount) : 0;
+    const updatedSecs = tl.startSecs + ratio * tl.durationSecs;
+    currentPlaybackSecsRef.current = updatedSecs;
+    setCurrentPlaybackSecs(updatedSecs);
+  }, [segmentTimelines, totalDurationSecs, podcast?.dialogue]);
 
   // Cargar catálogo de voces del sintetizador del navegador
   useEffect(() => {
@@ -619,7 +771,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (fromIndex < podcast.dialogue.length - 1) {
       const nextSeg = fromIndex + 1;
       const nextGlobal = segmentStartGlobalIndices[nextSeg] || 0;
-      setWordPosition(nextGlobal, nextSeg, 0);
+      const nextStartSecs = segmentTimelinesRef.current[nextSeg]?.startSecs || 0;
+      currentPlaybackSecsRef.current = nextStartSecs;
+      setCurrentPlaybackSecs(nextStartSecs);
+      setWordPosition(nextGlobal, nextSeg, 0, nextStartSecs);
 
       // Deslizar ventana de precarga para los próximos turnos de diálogo
       if (voiceEngineRef.current === 'edge') {
@@ -631,7 +786,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       setIsPlaying(false);
       isPlayingRef.current = false;
       setIsAudioActive(false);
-      setWordPosition(0, 0, 0);
+      currentPlaybackSecsRef.current = 0;
+      setCurrentPlaybackSecs(0);
+      setWordPosition(0, 0, 0, 0);
     }
   }, [podcast?.dialogue, segmentStartGlobalIndices, setWordPosition, edgeSofiaVoice, edgeMateoVoice]);
 
@@ -681,7 +838,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       setIsAudioActive(true);
     };
 
-    // Seguimiento sincronizado palabra por palabra en el navegador
+    // Seguimiento sincronizado palabra por palabra y tiempo continuo en el navegador
     utterance.onboundary = (e) => {
       if (!isMountedRef.current || isScrubbingRef.current || isManualInterruptionRef.current || !isPlayingRef.current) return;
       if (e.name === 'word') {
@@ -689,7 +846,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         const spokenWordCount = textSoFar.trim() ? textSoFar.trim().split(/\s+/).length : 0;
         const currentWord = Math.min(rawWords.length - 1, safeWordIdx + spokenWordCount);
         const baseGlobal = segmentStartGlobalIndices[index] || 0;
-        setWordPosition(baseGlobal + currentWord, index, currentWord);
+        const tl = segmentTimelinesRef.current[index];
+        const ratio = rawWords.length > 0 ? Math.min(0.99, currentWord / rawWords.length) : 0;
+        const approxSecs = tl ? tl.startSecs + ratio * tl.durationSecs : currentPlaybackSecsRef.current;
+        currentPlaybackSecsRef.current = approxSecs;
+        setCurrentPlaybackSecs(approxSecs);
+        setWordPosition(baseGlobal + currentWord, index, currentWord, approxSecs);
       }
     };
 
@@ -755,7 +917,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const rawWords = cleanText.split(/\s+/).filter(Boolean);
     const safeWordIdx = Math.max(0, Math.min(rawWords.length - 1, startWordIdx));
     const baseGlobal = segmentStartGlobalIndices[index] || 0;
-    setWordPosition(baseGlobal + safeWordIdx, index, safeWordIdx);
+    const tlInit = segmentTimelinesRef.current[index];
+    const ratioInit = rawWords.length > 0 ? Math.min(0.99, safeWordIdx / rawWords.length) : 0;
+    const exactInitSecs = tlInit ? tlInit.startSecs + ratioInit * tlInit.durationSecs : currentPlaybackSecsRef.current;
+    currentPlaybackSecsRef.current = exactInitSecs;
+    setCurrentPlaybackSecs(exactInitSecs);
+    setWordPosition(baseGlobal + safeWordIdx, index, safeWordIdx, exactInitSecs);
 
     if (isMutedRef.current) {
       const remainingWords = rawWords.slice(safeWordIdx);
@@ -772,8 +939,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Ruta 1: Motor Neuronal Azure (Edge Neural TTS)
     if (voiceEngineRef.current === 'edge') {
-      const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(item.speaker);
-      const targetVoice = isFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural');
+      const targetVoice = getAzureVoiceForSpeaker(item.speaker, edgeSofiaVoice, edgeMateoVoice);
 
       try {
         let audio: HTMLAudioElement;
@@ -808,19 +974,19 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         if (podcast.dialogue[index + 1]) {
           const nextIdx = index + 1;
           const nextItem = podcast.dialogue[nextIdx];
-          const nextClean = nextItem.text
-            .replace(/[*_#`~[\]]/g, '')
-            .replace(/https?:\/\/\S+/g, '')
-            .replace(/[$]/g, '')
-            .trim();
-          const nextIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(nextItem.speaker);
-          const nextVoice = nextIsFemale ? (edgeSofiaVoice || 'es-ES-ElviraNeural') : (edgeMateoVoice || 'es-ES-AlvaroNeural');
+          const nextClean = cleanPodcastDialogueText(nextItem.text);
+          const nextVoice = getAzureVoiceForSpeaker(nextItem.speaker, edgeSofiaVoice, edgeMateoVoice);
 
           synthesizeAzureEdgeSpeech(nextClean, nextVoice)
             .then((nextUrl) => {
               if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
                 const nextAudio = new Audio();
                 nextAudio.preload = 'auto';
+                nextAudio.onloadedmetadata = () => {
+                  if (Number.isFinite(nextAudio.duration) && nextAudio.duration > 0) {
+                    recordRealSegmentDuration(nextIdx, nextAudio.duration);
+                  }
+                };
                 nextAudio.src = nextUrl;
                 nextAudio.load();
                 preloadedNextAudioRef.current = { index: nextIdx, audio: nextAudio };
@@ -831,12 +997,15 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
             });
         }
 
-        // Si se especificó una palabra inicial dentro del segmento, saltar a ese punto exacto
+        // Si se especificó una palabra inicial dentro del segmento, saltar a ese punto exacto y registrar duración real
         const setAudioTimeFromWord = () => {
-          if (audio && audio.duration && Number.isFinite(audio.duration) && rawWords.length > 0) {
-            const targetTime = (safeWordIdx / rawWords.length) * audio.duration;
-            if (Math.abs(audio.currentTime - targetTime) > 0.15) {
-              audio.currentTime = targetTime;
+          if (audio && audio.duration && Number.isFinite(audio.duration)) {
+            recordRealSegmentDuration(index, audio.duration);
+            if (rawWords.length > 0) {
+              const targetTime = (safeWordIdx / rawWords.length) * audio.duration;
+              if (Math.abs(audio.currentTime - targetTime) > 0.15) {
+                audio.currentTime = targetTime;
+              }
             }
           }
         };
@@ -1139,8 +1308,17 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const target = allWords[safeGlobal];
     if (!target) return;
 
+    // Calcular instante exacto usando la línea de tiempo real unificada
+    const tl = segmentTimelinesRef.current[target.segmentIndex];
+    const segItem = podcast?.dialogue?.[target.segmentIndex];
+    const segWordsCount = segItem ? cleanPodcastDialogueText(segItem.text).split(/\s+/).filter(Boolean).length : 0;
+    const ratioInSeg = segWordsCount > 0 ? Math.min(0.99, target.wordIndexInSegment / segWordsCount) : 0;
+    const exactTargetSecs = tl ? tl.startSecs + ratioInSeg * tl.durationSecs : currentPlaybackSecsRef.current;
+    currentPlaybackSecsRef.current = exactTargetSecs;
+    setCurrentPlaybackSecs(exactTargetSecs);
+
     // Actualizar estado y refs de inmediato de forma síncrona
-    setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment);
+    setWordPosition(safeGlobal, target.segmentIndex, target.wordIndexInSegment, exactTargetSecs);
 
     const willPlay = forcePlay !== undefined ? forcePlay : isPlayingRef.current;
     const isSameLoadedSegment = loadedAudioSegmentRef.current === target.segmentIndex;
@@ -1206,40 +1384,35 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }, 60);
   }, [allWords, podcast?.dialogue, setWordPosition, stopCurrentAudio]);
 
-  // Navegar a un segundo específico en el podcast de forma continua y suave
+  // Navegar a un segundo específico en el podcast de forma continua y suave usando la línea de tiempo real
   const seekToTime = useCallback((targetSecs: number, forcePlay?: boolean) => {
     if (!podcast?.dialogue || podcast.dialogue.length === 0) return;
+    const timelines = segmentTimelinesRef.current;
     const safeSecs = Math.max(0, Math.min(totalDurationSecs, targetSecs));
     currentPlaybackSecsRef.current = safeSecs;
     setCurrentPlaybackSecs(safeSecs);
 
-    // Encontrar qué segmento corresponde al segundo destino
+    // Encontrar qué segmento real corresponde al segundo destino
     let targetSegIdx = 0;
-    for (let i = 0; i < podcast.dialogue.length; i++) {
-      const segStart = parseTimeToSeconds(podcast.dialogue[i].time || '0:00');
-      if (segStart <= safeSecs) {
+    for (let i = 0; i < timelines.length; i++) {
+      if (timelines[i].startSecs <= safeSecs) {
         targetSegIdx = i;
       } else {
         break;
       }
     }
 
-    const segStartSecs = parseTimeToSeconds(podcast.dialogue[targetSegIdx].time || '0:00');
+    const segTl = timelines[targetSegIdx];
+    const segStartSecs = segTl ? segTl.startSecs : 0;
+    const segDuration = segTl ? Math.max(0.5, segTl.durationSecs) : 15;
     const offsetInSeg = Math.max(0, safeSecs - segStartSecs);
 
-    const segWords = podcast.dialogue[targetSegIdx].text
-      .replace(/[*_#`~[\]]/g, '')
-      .replace(/https?:\/\/\S+/g, '')
-      .replace(/[$]/g, '')
-      .trim()
+    const segWords = cleanPodcastDialogueText(podcast.dialogue[targetSegIdx].text)
       .split(/\s+/)
       .filter(Boolean);
 
-    const nextSeg = podcast.dialogue[targetSegIdx + 1];
-    const nextSegStart = nextSeg ? parseTimeToSeconds(nextSeg.time) : (segStartSecs + Math.max(10, segWords.length * 0.4));
-    const segDuration = Math.max(1, nextSegStart - segStartSecs);
     const wordRatio = Math.max(0, Math.min(0.99, offsetInSeg / segDuration));
-    const approxWordIdx = Math.floor(wordRatio * segWords.length);
+    const approxWordIdx = segWords.length > 0 ? Math.min(segWords.length - 1, Math.floor(wordRatio * segWords.length)) : 0;
 
     const baseGlobal = segmentStartGlobalIndices[targetSegIdx] || 0;
     setWordPosition(baseGlobal + approxWordIdx, targetSegIdx, approxWordIdx, safeSecs);
@@ -1260,7 +1433,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         }, 120);
       };
       audio.addEventListener('seeked', finishSeek, { once: true });
-      audio.currentTime = Math.max(0, Math.min(audio.duration - 0.05, offsetInSeg));
+      const maxAudioOffset = willPlay ? Math.max(0, audio.duration - 0.15) : Math.max(0, audio.duration - 0.01);
+      audio.currentTime = Math.max(0, Math.min(maxAudioOffset, offsetInSeg));
 
       setTimeout(() => {
         isAudioSeekingRef.current = false;
@@ -1327,10 +1501,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     currentPlaybackSecsRef.current = targetSecs;
     setCurrentPlaybackSecs(targetSecs);
 
-    if (podcast?.dialogue) {
+    const timelines = segmentTimelinesRef.current;
+    if (timelines.length > 0) {
       let previewSeg = 0;
-      for (let i = 0; i < podcast.dialogue.length; i++) {
-        if (parseTimeToSeconds(podcast.dialogue[i].time || '0:00') <= targetSecs) {
+      for (let i = 0; i < timelines.length; i++) {
+        if (timelines[i].startSecs <= targetSecs) {
           previewSeg = i;
         } else {
           break;
@@ -1341,7 +1516,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         setCurrentLineIndex(previewSeg);
       }
     }
-  }, [totalDurationSecs, podcast?.dialogue]);
+  }, [totalDurationSecs]);
 
   const handleProgressPointerUp = useCallback((e?: React.SyntheticEvent | Event) => {
     if (!isScrubbingRef.current) return;
@@ -1589,23 +1764,25 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         onUpdateKit({ ...kit, podcast: generated });
       }
       if (generated?.dialogue && generated.dialogue.length > 0) {
+        setRealSegmentDurations({});
         const firstItem = generated.dialogue[0];
-        const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(firstItem.speaker);
         if (voiceEngine === 'edge') {
-          const voice = isFemale ? edgeSofiaVoice : edgeMateoVoice;
+          const voice = getAzureVoiceForSpeaker(firstItem.speaker, edgeSofiaVoice, edgeMateoVoice);
           synthesizeAzureEdgeSpeech(firstItem.text, voice)
             .then((url) => {
               if (isMountedRef.current) {
                 const firstAudio = new Audio();
                 firstAudio.preload = 'auto';
                 firstAudio.src = url;
+                firstAudio.onloadedmetadata = () => {
+                  recordRealSegmentDuration(0, firstAudio.duration);
+                };
                 firstAudio.load();
                 preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
 
                 if (generated.dialogue[1]) {
                   const secondItem = generated.dialogue[1];
-                  const secondIsFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(secondItem.speaker);
-                  const secondVoice = secondIsFemale ? edgeSofiaVoice : edgeMateoVoice;
+                  const secondVoice = getAzureVoiceForSpeaker(secondItem.speaker, edgeSofiaVoice, edgeMateoVoice);
                   prefetchAzureEdgeSpeech(secondItem.text, secondVoice);
                 }
               }
@@ -1826,7 +2003,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               <span className={`text-xs sm:text-sm tabular-nums shrink-0 font-medium ${
                 theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'
               }`}>
-                Duración: {podcast.duration}
+                Duración: {totalDurationLabel} min
               </span>
             </div>
 
@@ -1865,11 +2042,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                 {/* Host Cards + Equalizer Waveform Row */}
                 <div className="flex items-center justify-between gap-4 shrink-0">
                   <div className="flex items-center gap-4">
-                    {podcast.hosts.map((host, idx) => {
+                    {(podcast.hosts || []).map((host, idx) => {
+                      const hostFirst = (host?.name || 'H').split(' ')[0].toLowerCase();
                       const isCurrentHostSpeaking =
                         isPlaying &&
                         isAudioActive &&
-                        currentItem.speaker.toLowerCase().includes(host.name.split(' ')[0].toLowerCase());
+                        currentItem.speaker.toLowerCase().includes(hostFirst);
 
                       return (
                         <div key={idx} className="flex items-center gap-2.5">
@@ -2012,7 +2190,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                     }`}>
                       Segmento {currentLineIndex + 1} de {podcast.dialogue.length}
                     </span>
-                    <span className={theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}>{podcast.duration}</span>
+                    <span className={theme === 'dark' ? 'text-zinc-400' : 'text-slate-500'}>{totalDurationLabel} min</span>
                   </div>
 
                   <div className="relative flex items-center group py-2">
@@ -2210,6 +2388,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           <PodcastTranscriptView
             dialogue={podcast.dialogue}
             currentLineIndex={currentLineIndex}
+            segmentTimes={segmentTimelines.map(t => t.timeLabel)}
             onSelectLine={(idx) => {
               handleSeek(idx);
               setIsPlaying(true);

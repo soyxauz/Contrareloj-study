@@ -110,7 +110,61 @@ const STORE_NAME = 'azure_edge_audio_cache';
 
 const MAX_ACTIVE_AUDIO_URLS = 4;
 const memoryAudioUrlCache = new Map<string, string>();
+const audioDurationCache = new Map<string, number>();
 const ongoingRequests = new Map<string, Promise<string>>();
+const ongoingDurationRequests = new Map<string, Promise<number>>();
+const ongoingBlobFetches = new Map<string, Promise<Blob>>();
+
+function cleanTtsText(text: string): string {
+  return (text || '')
+    .replace(/[*_#`~[\]]/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[$]/g, '')
+    .trim();
+}
+
+/** Mide la duración exacta en segundos de un Blob de audio y libera el ObjectURL de inmediato. */
+function measureAudioBlobDuration(blob: Blob): Promise<number> {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined' || !blob || blob.size === 0) {
+    return Promise.resolve(0);
+  }
+  return new Promise((resolve) => {
+    const tempUrl = URL.createObjectURL(blob);
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    let settled = false;
+    const cleanup = (secs: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      audio.onloadedmetadata = null;
+      audio.ondurationchange = null;
+      audio.onerror = null;
+      try {
+        audio.src = '';
+        audio.load();
+      } catch {}
+      try {
+        URL.revokeObjectURL(tempUrl);
+      } catch {}
+      resolve(Number.isFinite(secs) && secs > 0 ? secs : 0);
+    };
+
+    const timeoutId = setTimeout(() => cleanup(0), 4000);
+    audio.onloadedmetadata = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        cleanup(audio.duration);
+      }
+    };
+    audio.ondurationchange = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        cleanup(audio.duration);
+      }
+    };
+    audio.onerror = () => cleanup(0);
+    audio.src = tempUrl;
+  });
+}
 
 /**
  * Registra un Object URL en la caché acotada en memoria y revoca inmediatamente
@@ -188,7 +242,12 @@ function computeCacheKey(text: string, voice: string, rate?: string, pitch?: str
   return `azure_${voice}_${rate || ''}_${pitch || ''}_${norm}`;
 }
 
-async function getCachedAudioBlob(key: string): Promise<Blob | null> {
+interface CachedAudioRecord {
+  blob: Blob;
+  durationSec?: number;
+}
+
+async function getCachedAudioRecord(key: string): Promise<CachedAudioRecord | null> {
   const db = await getAudioDatabase();
   if (!db) return null;
 
@@ -199,7 +258,10 @@ async function getCachedAudioBlob(key: string): Promise<Blob | null> {
       const req = store.get(key);
       req.onsuccess = () => {
         if (req.result && req.result.blob) {
-          resolve(req.result.blob);
+          resolve({
+            blob: req.result.blob,
+            durationSec: typeof req.result.durationSec === 'number' ? req.result.durationSec : undefined,
+          });
         } else {
           resolve(null);
         }
@@ -265,7 +327,7 @@ export async function pruneAudioCacheIfNeeded(maxEntries = 120, maxAgeDays = 14)
   }
 }
 
-async function saveAudioBlobToCache(key: string, blob: Blob): Promise<void> {
+async function saveAudioBlobToCache(key: string, blob: Blob, durationSec?: number): Promise<void> {
   const db = await getAudioDatabase();
   if (!db) return;
 
@@ -275,6 +337,7 @@ async function saveAudioBlobToCache(key: string, blob: Blob): Promise<void> {
     store.put({
       key,
       blob,
+      ...(typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0 ? { durationSec } : {}),
       timestamp: Date.now(),
     });
   } catch (err) {
@@ -285,49 +348,20 @@ async function saveAudioBlobToCache(key: string, blob: Blob): Promise<void> {
   pruneAudioCacheIfNeeded().catch(() => {});
 }
 
-/**
- * Sintetiza un fragmento de texto con las voces originales de Microsoft Azure Neural.
- * Devuelve una Object URL (blob:...) lista para reproducirse en un elemento HTMLAudioElement.
- */
-export async function synthesizeAzureEdgeSpeech(
-  text: string,
-  voice: string = 'es-ES-ElviraNeural',
+async function fetchAzureAudioBlob(
+  clean: string,
+  voice: string,
   rate?: string,
   pitch?: string
-): Promise<string> {
-  const clean = text
-    .replace(/[*_#`~[\]]/g, '')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/[$]/g, '')
-    .trim();
-
-  if (!clean) {
-    throw new Error('Texto vacío para síntesis');
+): Promise<Blob> {
+  const fetchKey = computeCacheKey(clean, voice, rate, pitch);
+  if (ongoingBlobFetches.has(fetchKey)) {
+    return ongoingBlobFetches.get(fetchKey)!;
   }
 
-  const cacheKey = computeCacheKey(clean, voice, rate, pitch);
-
-  // 1. Memoria RAM instantánea (0ms)
-  if (memoryAudioUrlCache.has(cacheKey)) {
-    return memoryAudioUrlCache.get(cacheKey)!;
-  }
-
-  // 2. Caché persistente en IndexedDB (5-10ms)
-  const cachedBlob = await getCachedAudioBlob(cacheKey);
-  if (cachedBlob) {
-    const url = URL.createObjectURL(cachedBlob);
-    registerAudioUrl(cacheKey, url);
-    return url;
-  }
-
-  // 3. Deduplicación de peticiones en vuelo
-  if (ongoingRequests.has(cacheKey)) {
-    return ongoingRequests.get(cacheKey)!;
-  }
-
-  const fetchPromise = (async () => {
+  const promise = (async () => {
+    let lastErr: Error | null = null;
     try {
-      let lastErr: Error | null = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const controller = new AbortController();
@@ -359,12 +393,7 @@ export async function synthesizeAzureEdgeSpeech(
             throw new Error('La síntesis de Azure Neural devolvió un archivo de audio vacío');
           }
 
-          // Persistir en IndexedDB para futuras reproducciones offline y sin latencia
-          saveAudioBlobToCache(cacheKey, blob);
-
-          const objectUrl = URL.createObjectURL(blob);
-          registerAudioUrl(cacheKey, objectUrl);
-          return objectUrl;
+          return blob;
         } catch (attemptErr: unknown) {
           lastErr = attemptErr instanceof Error ? attemptErr : new Error(String(attemptErr));
           if (attempt < 3) {
@@ -373,6 +402,135 @@ export async function synthesizeAzureEdgeSpeech(
         }
       }
       throw lastErr || new Error('No se pudo sintetizar voz tras 3 intentos');
+    } finally {
+      ongoingBlobFetches.delete(fetchKey);
+    }
+  })();
+
+  ongoingBlobFetches.set(fetchKey, promise);
+  return promise;
+}
+
+/** Devuelve sincrónicamente la duración en segundos si ya fue medida en memoria para este fragmento. */
+export function getCachedAudioDuration(
+  text: string,
+  voice: string = 'es-ES-ElviraNeural',
+  rate?: string,
+  pitch?: string
+): number | null {
+  const clean = cleanTtsText(text);
+  if (!clean) return 0;
+  const cacheKey = computeCacheKey(clean, voice, rate, pitch);
+  return audioDurationCache.get(cacheKey) ?? null;
+}
+
+/**
+ * Obtiene y mide la duración real del audio (en segundos) guardándolo en IndexedDB sin retener ObjectURLs en RAM.
+ */
+export async function measureAzureSpeechDuration(
+  text: string,
+  voice: string = 'es-ES-ElviraNeural',
+  rate?: string,
+  pitch?: string
+): Promise<number> {
+  const clean = cleanTtsText(text);
+  if (!clean) return 0;
+
+  const cacheKey = computeCacheKey(clean, voice, rate, pitch);
+  const memDur = audioDurationCache.get(cacheKey);
+  if (typeof memDur === 'number' && memDur > 0) {
+    return memDur;
+  }
+
+  if (ongoingDurationRequests.has(cacheKey)) {
+    return ongoingDurationRequests.get(cacheKey)!;
+  }
+
+  const measurePromise = (async () => {
+    try {
+      const cached = await getCachedAudioRecord(cacheKey);
+      if (cached) {
+        if (typeof cached.durationSec === 'number' && cached.durationSec > 0) {
+          audioDurationCache.set(cacheKey, cached.durationSec);
+          return cached.durationSec;
+        }
+        const measuredCached = await measureAudioBlobDuration(cached.blob);
+        if (measuredCached > 0) {
+          audioDurationCache.set(cacheKey, measuredCached);
+          saveAudioBlobToCache(cacheKey, cached.blob, measuredCached).catch(() => {});
+          return measuredCached;
+        }
+      }
+
+      const blob = await fetchAzureAudioBlob(clean, voice, rate, pitch);
+      const measured = await measureAudioBlobDuration(blob);
+      if (measured > 0) {
+        audioDurationCache.set(cacheKey, measured);
+      }
+      saveAudioBlobToCache(cacheKey, blob, measured > 0 ? measured : undefined).catch(() => {});
+      return measured;
+    } finally {
+      ongoingDurationRequests.delete(cacheKey);
+    }
+  })();
+
+  ongoingDurationRequests.set(cacheKey, measurePromise);
+  return measurePromise;
+}
+
+/**
+ * Sintetiza un fragmento de texto con las voces originales de Microsoft Azure Neural.
+ * Devuelve una Object URL (blob:...) lista para reproducirse en un elemento HTMLAudioElement.
+ */
+export async function synthesizeAzureEdgeSpeech(
+  text: string,
+  voice: string = 'es-ES-ElviraNeural',
+  rate?: string,
+  pitch?: string
+): Promise<string> {
+  const clean = cleanTtsText(text);
+
+  if (!clean) {
+    throw new Error('Texto vacío para síntesis');
+  }
+
+  const cacheKey = computeCacheKey(clean, voice, rate, pitch);
+
+  // 1. Memoria RAM instantánea (0ms)
+  if (memoryAudioUrlCache.has(cacheKey)) {
+    return memoryAudioUrlCache.get(cacheKey)!;
+  }
+
+  // 2. Caché persistente en IndexedDB (5-10ms)
+  const cached = await getCachedAudioRecord(cacheKey);
+  if (cached) {
+    if (typeof cached.durationSec === 'number' && cached.durationSec > 0) {
+      audioDurationCache.set(cacheKey, cached.durationSec);
+    }
+    const url = URL.createObjectURL(cached.blob);
+    registerAudioUrl(cacheKey, url);
+    return url;
+  }
+
+  // 3. Deduplicación de peticiones en vuelo
+  if (ongoingRequests.has(cacheKey)) {
+    return ongoingRequests.get(cacheKey)!;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const blob = await fetchAzureAudioBlob(clean, voice, rate, pitch);
+
+      // Persistir en IndexedDB para futuras reproducciones offline y sin latencia
+      const measured = await measureAudioBlobDuration(blob);
+      if (measured > 0) {
+        audioDurationCache.set(cacheKey, measured);
+      }
+      saveAudioBlobToCache(cacheKey, blob, measured > 0 ? measured : undefined);
+
+      const objectUrl = URL.createObjectURL(blob);
+      registerAudioUrl(cacheKey, objectUrl);
+      return objectUrl;
     } finally {
       ongoingRequests.delete(cacheKey);
     }
@@ -419,6 +577,7 @@ export function preloadEntireAzurePodcast(
  */
 export async function clearAzureAudioCache(): Promise<void> {
   revokeAllAzureAudioUrls();
+  audioDurationCache.clear();
   const db = await getAudioDatabase();
   if (!db) return;
   try {
