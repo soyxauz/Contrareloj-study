@@ -229,15 +229,9 @@ export const App: React.FC = () => {
           if (fullKit) {
             const stripped = stripAssetDataUrlsFromKit(fullKit);
             if (!prev) return stripped;
-            const fullTime = stripped.updatedAt || 0;
-            const prevTime = prev.updatedAt || 0;
-            if (
-              fullTime >= prevTime ||
-              (stripped.questions?.length || 0) > (prev.questions?.length || 0) ||
-              (stripped.flashcards?.length || 0) > (prev.flashcards?.length || 0) ||
-              (stripped.archivedFlashcards?.length || 0) > (prev.archivedFlashcards?.length || 0)
-            ) {
-              return stripped;
+            const mergedCurrent = mergeKitsByUpdatedAt([prev], [stripped])[0];
+            if (mergedCurrent) {
+              return mergedCurrent;
             }
           }
 
@@ -312,6 +306,7 @@ export const App: React.FC = () => {
   // Volcado de seguridad (Safety Flush) ante pagehide o cambio de pestaña
   useEffect(() => {
     const handleSafetyFlush = () => {
+      if (!isHydratedRef.current) return;
       try {
         const activeUser = authService.getCurrentUser();
         const userId = activeUser ? activeUser.id : null;

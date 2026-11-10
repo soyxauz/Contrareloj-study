@@ -2,7 +2,7 @@ import type { StudyKit, Flashcard } from '../types';
 import { DEFAULT_STUDY_KITS } from '../data/defaultKits';
 import {
   saveAssetsFromKits,
-  stripHeavyAssetsForLocalStorage,
+  buildLocalStorageKitsSnapshot,
   isCorruptedKit,
   saveKitsToIndexedDB,
   getKitsFromIndexedDB,
@@ -218,7 +218,8 @@ export const kitRepositoryService = {
       const deletedIds = getDeletedKitIds();
 
       // 1. Intentar leer de IndexedDB primero para recuperar kits integros con sus activos
-      let idbKits = await getKitsFromIndexedDB(key);
+      const primaryIdbKits = await getKitsFromIndexedDB(key);
+      let idbKits = primaryIdbKits;
       if (!idbKits || idbKits.length === 0) {
         idbKits = await getKitsFromIndexedDB('thea_study_kits_v2');
       }
@@ -227,7 +228,7 @@ export const kitRepositoryService = {
       let merged: StudyKit[] = [];
 
       if (idbKits && idbKits.length > 0) {
-        // Si memKits tiene elementos completos, fusionar por updatedAt.
+        // Si memKits tiene elementos completos, fusionar por updatedAt sin perder episodios largos de podcast.
         merged = mergeKitsByUpdatedAt(memKits, idbKits, deletedIds);
       } else if (memKits.length > 0) {
         merged = memKits.filter(k => !deletedIds.has(k.id));
@@ -238,7 +239,24 @@ export const kitRepositoryService = {
         const hydrated = hydrateFlashcardsMastery(userId, strippedMerged);
         inMemoryKitsCache.set(key, hydrated);
         this.writeIndexToLocalStorage(userId, hydrated, false);
-        saveKitsToIndexedDB(key, hydrated).catch(() => {});
+
+        // Solo reescribir IndexedDB al abrir si faltaba clave primaria o la fusión reparó/actualizó datos
+        const primaryMap = new Map((primaryIdbKits || []).map(k => [k.id, k]));
+        const shouldPersistIdb =
+          !primaryIdbKits ||
+          primaryIdbKits.length !== hydrated.length ||
+          hydrated.some((hk) => {
+            const pk = primaryMap.get(hk.id);
+            if (!pk) return true;
+            return (
+              (hk.updatedAt || 0) > (pk.updatedAt || 0) ||
+              (hk.podcast?.dialogue?.length || 0) !== (pk.podcast?.dialogue?.length || 0) ||
+              (hk.questions?.length || 0) !== (pk.questions?.length || 0)
+            );
+          });
+        if (shouldPersistIdb) {
+          saveKitsToIndexedDB(key, hydrated).catch(() => {});
+        }
         return hydrated;
       }
 
@@ -411,13 +429,16 @@ export const kitRepositoryService = {
     // 2. Escribir indice ligero en LocalStorage
     this.writeIndexToLocalStorage(userId, cleanKits, true);
 
-    // 3. Intentar guardar version aligerada en LocalStorage protegiendo la cuota
-    // Umbral acotado a 350KB para asegurar que nunca sature la cuota global de LocalStorage (5MB)
+    // 3. Intentar guardar espejo rápido en LocalStorage (<350KB) sin recortar nunca diálogos de podcast;
+    //    si la biblioteca supera ese umbral, prioriza el kit activo + más recientes y delega los antiguos a IndexedDB
     try {
-      const lightweight = stripHeavyAssetsForLocalStorage(cleanKits);
-      const serialized = JSON.stringify(lightweight);
-      if (serialized.length < 350000) {
-        safeLocalStorageSetItem(key, serialized);
+      const activeKitId =
+        typeof localStorage !== 'undefined'
+          ? (localStorage.getItem('thea_currentkit_id') || localStorage.getItem('thea_current_kit_id'))
+          : null;
+      const snapshot = buildLocalStorageKitsSnapshot(cleanKits, activeKitId, 350000);
+      if (snapshot) {
+        safeLocalStorageSetItem(key, snapshot.serialized);
       } else {
         localStorage.removeItem(key);
       }

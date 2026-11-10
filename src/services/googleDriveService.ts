@@ -983,7 +983,7 @@ export const googleDriveService = {
       );
       const remoteMaxMs = getMaxModifiedTimeMs(relevantRemoteFiles);
       const localWatermark = getRemoteWatermark(userId);
-      const localKits = authService.getUserKits(userId);
+      const localKits = await authService.restoreUserKitsAsync(userId);
       const localSessions = await authService.getAllSmartStudySessionsAsync(userId);
       const localFlashcards = await flashcardProgressService.getAllFlashcardProgressAsync(userId);
       const hasLocalProgress =
@@ -2022,7 +2022,8 @@ export const googleDriveService = {
           }
         }
 
-        const localKits = authService.getUserKits(userId).filter(
+        const restoredLocalKits = await authService.restoreUserKitsAsync(userId);
+        const localKits = restoredLocalKits.filter(
           k => !isCorruptedKit(k) && !isKitDeletedByTombstone(k, deletedIds, mergedTombstones)
         );
         const mergedKits = mergeKitsByUpdatedAt(localKits, remoteKitsAccumulated, deletedIds, mergedTombstones);
@@ -2033,16 +2034,21 @@ export const googleDriveService = {
           await authService.saveUserKitsAsync(userId, mergedKits);
           authService.markKitsSyncedWithDrive(userId, mergedKits.map(k => k.id));
 
-          // Si el dispositivo local aportó kits nuevos o cambios más recientes (>1s), subir la consolidación
+          // Si el dispositivo local aportó kits nuevos, cambios más recientes (>1s), o reparó un podcast truncado en Drive, subir la consolidación
           const remoteById = new Map(remoteKitsAccumulated.map(r => [r.id, r]));
           const localHasExtraKits = localKits.some(k => {
             const remoteKit = remoteById.get(k.id);
             return !remoteKit || (k.updatedAt || 0) > ((remoteKit.updatedAt || 0) + 1000);
           });
+          const remotePodcastRepaired = mergedKits.some(m => {
+            const remoteKit = remoteById.get(m.id);
+            if (!m.podcast) return false;
+            return (m.podcast.dialogue?.length || 0) > (remoteKit?.podcast?.dialogue?.length || 0);
+          });
           const localHasExtraTombstones = Object.keys(mergedTombstones).some(id =>
             !RETIRED_TEST_KIT_IDS.includes(id) && (!remoteTombMap || (mergedTombstones[id] > (remoteTombMap[id] || 0)))
           );
-          if (localHasExtraKits || localHasExtraTombstones) {
+          if (localHasExtraKits || localHasExtraTombstones || remotePodcastRepaired) {
             setTimeout(() => {
               this.pushToDrive(userId, mergedKits, { force: true }).catch(() => {});
             }, 800);

@@ -1,4 +1,4 @@
-import type { DocumentAsset, StudyKit, Flashcard } from '../types';
+import type { DocumentAsset, StudyKit, Flashcard, PodcastEpisode } from '../types';
 import { isProtectedStorageKey, isCorruptedStorageKey, purgeOversizedLegacyDataFromLocalStorage } from '../utils/storageKeys';
 
 /**
@@ -514,26 +514,38 @@ export async function hydrateKitsAssets(kits: StudyKit[]): Promise<StudyKit[]> {
   return hydrated;
 }
 
-/**
- * Elimina las cadenas pesadas de datos base64 para aligerar la persistencia en LocalStorage.
- * Los metadatos de los activos se conservan intactos.
- */
-export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
-  return kits.map((kit) => ({
+function stripLargeAssetDataUrl(asset: DocumentAsset, maxLen = 500): DocumentAsset {
+  if (asset.dataUrl && asset.dataUrl.length > maxLen) {
+    const { dataUrl: _, ...rest } = asset;
+    return rest;
+  }
+  return asset;
+}
+
+function stripHeavyAssetsFromKit(
+  kit: StudyKit,
+  options?: { omitPodcast?: boolean; omitStudyGuide?: boolean; omitQuestions?: boolean }
+): StudyKit {
+  return {
     ...kit,
-    // Eliminar sourceText y chunks del almacenamiento en LocalStorage para garantizar que nunca exceda 5MB
+    // Eliminar sourceText y chunks pesados manteniendo íntegros los diálogos de podcast y metadatos
     sourceText: undefined,
     chunks: undefined,
-    podcast: kit.podcast ? {
-      id: kit.podcast.id,
-      title: kit.podcast.title,
-      duration: kit.podcast.duration,
-      hosts: kit.podcast.hosts,
-      dialogue: (kit.podcast.dialogue || []).slice(0, 5),
-      format: kit.podcast.format,
-      durationMode: kit.podcast.durationMode,
-      orientation: kit.podcast.orientation,
-    } : null,
+    studyGuideMarkdown: options?.omitStudyGuide ? '' : kit.studyGuideMarkdown,
+    podcast: options?.omitPodcast
+      ? null
+      : (kit.podcast
+          ? {
+              id: kit.podcast.id,
+              title: kit.podcast.title,
+              duration: kit.podcast.duration,
+              hosts: kit.podcast.hosts,
+              dialogue: Array.isArray(kit.podcast.dialogue) ? kit.podcast.dialogue : [],
+              format: kit.podcast.format,
+              durationMode: kit.podcast.durationMode,
+              orientation: kit.podcast.orientation,
+            }
+          : null),
     sourceMaterials: kit.sourceMaterials?.map(m => ({
       id: m.id,
       name: m.name,
@@ -541,34 +553,88 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
       size: m.size,
       rawText: undefined,
     })),
-    assets: kit.assets?.map((a) => {
-      if (a.dataUrl && a.dataUrl.length > 500) {
-        const { dataUrl: _, ...rest } = a;
-        return rest;
-      }
-      return a;
-    }),
-    questions: kit.questions?.map((q) => {
-      if (q.sourceAsset && q.sourceAsset.dataUrl && q.sourceAsset.dataUrl.length > 500) {
-        const { dataUrl: _, ...restAsset } = q.sourceAsset;
-        return {
-          ...q,
-          sourceAsset: restAsset,
-        };
-      }
-      return q;
-    }),
-    flashcards: kit.flashcards?.map((f) => {
-      if (f.sourceAsset && f.sourceAsset.dataUrl && f.sourceAsset.dataUrl.length > 500) {
-        const { dataUrl: _, ...restAsset } = f.sourceAsset;
-        return {
-          ...f,
-          sourceAsset: restAsset,
-        };
-      }
-      return f;
-    }),
-  }));
+    assets: kit.assets?.map((a) => stripLargeAssetDataUrl(a)),
+    questions: options?.omitQuestions
+      ? []
+      : kit.questions?.map((q) => (
+          q.sourceAsset
+            ? { ...q, sourceAsset: stripLargeAssetDataUrl(q.sourceAsset) }
+            : q
+        )),
+    flashcards: options?.omitQuestions
+      ? []
+      : kit.flashcards?.map((f) => (
+          f.sourceAsset
+            ? { ...f, sourceAsset: stripLargeAssetDataUrl(f.sourceAsset) }
+            : f
+        )),
+    archivedFlashcards: options?.omitQuestions ? [] : kit.archivedFlashcards,
+  };
+}
+
+/**
+ * Elimina las cadenas pesadas de datos base64 para aligerar la persistencia sin recortar ningún diálogo de podcast.
+ * Los metadatos de los activos y las conversaciones completas se conservan intactos.
+ */
+export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
+  return kits.map((kit) => stripHeavyAssetsFromKit(kit));
+}
+
+/**
+ * Construye el respaldo de kits para LocalStorage dentro del presupuesto de cuota (~350KB)
+ * preservando completo el podcast del kit activo y los kits más recientes, y delegando
+ * únicamente los kits más antiguos a IndexedDB cuando la biblioteca supera el umbral.
+ */
+export function buildLocalStorageKitsSnapshot(
+  kits: StudyKit[],
+  activeKitId?: string | null,
+  maxBytes = 350000
+): { serialized: string } | null {
+  const working = stripHeavyAssetsForLocalStorage(kits);
+  const fullSerialized = JSON.stringify(working);
+  if (fullSerialized.length < maxBytes) {
+    return { serialized: fullSerialized };
+  }
+
+  // Ordenar índices no activos del más antiguo al más reciente para compactar primero los menos usados
+  const lowPriorityIndices = working
+    .map((k, idx) => ({ idx, id: k.id, updatedAt: k.updatedAt || 0 }))
+    .filter((item) => item.id !== activeKitId && !(activeKitId == null && item.idx === 0))
+    .sort((a, b) => a.updatedAt - b.updatedAt)
+    .map((item) => item.idx);
+
+  const itemSizes = working.map((k) => JSON.stringify(k).length + 1);
+  let estimatedTotal = fullSerialized.length;
+
+  const replaceWithCompacted = (
+    idx: number,
+    options: { omitPodcast?: boolean; omitStudyGuide?: boolean; omitQuestions?: boolean }
+  ) => {
+    const compacted = stripHeavyAssetsFromKit(working[idx], options);
+    const nextSize = JSON.stringify(compacted).length + 1;
+    estimatedTotal -= Math.max(0, itemSizes[idx] - nextSize);
+    itemSizes[idx] = nextSize;
+    working[idx] = compacted;
+  };
+
+  // Paso 1: Omitir temporalmente en LocalStorage (nunca en IndexedDB ni Drive) guías y podcasts de kits antiguos
+  for (const idx of lowPriorityIndices) {
+    if (estimatedTotal < maxBytes) break;
+    replaceWithCompacted(idx, { omitPodcast: true, omitStudyGuide: true });
+  }
+
+  // Paso 2: Si aún supera el presupuesto, omitir bancos de preguntas de los kits antiguos en el espejo de LocalStorage
+  for (const idx of lowPriorityIndices) {
+    if (estimatedTotal < maxBytes) break;
+    replaceWithCompacted(idx, { omitPodcast: true, omitStudyGuide: true, omitQuestions: true });
+  }
+
+  const finalSerialized = JSON.stringify(working);
+  if (finalSerialized.length < maxBytes) {
+    return { serialized: finalSerialized };
+  }
+
+  return null;
 }
 
 /**
@@ -966,6 +1032,31 @@ function getSavedFlashcardMasteryInfo(
   return null;
 }
 
+/** Selecciona el episodio de podcast más completo para el mismo id, o el más reciente si fue regenerado. */
+function selectMergedPodcast(
+  existPod: PodcastEpisode | null | undefined,
+  incPod: PodcastEpisode | null | undefined,
+  existTime: number,
+  incTime: number
+): PodcastEpisode | null {
+  if (!incPod) return existPod || null;
+  if (!existPod) return incPod || null;
+
+  const sameEpisode = (existPod.id && incPod.id)
+    ? existPod.id === incPod.id
+    : (existPod.title || '').trim().toLowerCase() === (incPod.title || '').trim().toLowerCase();
+
+  if (sameEpisode) {
+    const existLen = Array.isArray(existPod.dialogue) ? existPod.dialogue.length : 0;
+    const incLen = Array.isArray(incPod.dialogue) ? incPod.dialogue.length : 0;
+    if (existLen !== incLen) {
+      return existLen > incLen ? existPod : incPod;
+    }
+  }
+
+  return incTime >= existTime ? incPod : existPod;
+}
+
 /**
  * Fusión acumulativa estricta por ID y marca temporal updatedAt (el más reciente gana).
  * Respeta la lista negra/tombstones de kits eliminados y PRESERVA SIEMPRE los dataUrls en IndexedDB.
@@ -1075,9 +1166,7 @@ export function mergeKitsByUpdatedAt(
       ? (incomingTime >= existingTime ? kit.studyGuideMarkdown : (existing.studyGuideMarkdown || kit.studyGuideMarkdown))
       : (existing.studyGuideMarkdown || '');
 
-    const mergedPodcast = (incomingTime >= existingTime && kit.podcast)
-      ? kit.podcast
-      : (existing.podcast || kit.podcast || null);
+    const mergedPodcast = selectMergedPodcast(existing.podcast, kit.podcast, existingTime, incomingTime);
 
     if (incomingTime >= existingTime) {
       map.set(kit.id, {
