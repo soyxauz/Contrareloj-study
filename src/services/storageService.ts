@@ -1008,8 +1008,8 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
     } catch {}
 
     // 4. Podar historiales de sesiones de Smart Study antiguas en LocalStorage
+    const sessionKeys: { key: string; updatedAt: number }[] = [];
     try {
-      const sessionKeys: { key: string; updatedAt: number }[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && k.startsWith('thea_ss_mem_')) {
@@ -1040,6 +1040,20 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
 
       localStorage.setItem(key, value);
       return true;
+    } catch {}
+
+    // 4b. Si aún no cabe, desalojar sesiones antiguas no activas de LocalStorage (están 100% preservadas en IndexedDB)
+    try {
+      const activeKitId = localStorage.getItem('thea_current_kit_id') || '';
+      for (const item of sessionKeys) {
+        if (!activeKitId || !item.key.includes(activeKitId)) {
+          try {
+            localStorage.removeItem(item.key);
+            localStorage.setItem(key, value);
+            return true;
+          } catch {}
+        }
+      }
     } catch {}
 
     // 5. Fallback definitivo: Guardar íntegro en IndexedDB sin fallar jamás

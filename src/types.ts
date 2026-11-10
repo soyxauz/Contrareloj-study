@@ -262,6 +262,7 @@ export interface SmartStudySessionState {
   activePracticeLevel?: 1 | 2 | 3;
   activePracticeDifficulty?: 'easy' | 'medium' | 'hard';
   seenQuestionIds?: string[];
+  answeredQuestionIds?: string[];
 }
 
 export interface FlashcardProgressState {

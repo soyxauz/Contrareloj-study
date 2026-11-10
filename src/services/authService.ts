@@ -187,6 +187,9 @@ export function sanitizeSmartStudySession(session: SmartStudySessionState | null
       3: Math.min(25, Math.max(0, l3)),
     },
     questionsAnsweredTotal: Math.max(answeredTotal, l1 + l2 + l3),
+    answeredQuestionIds: Array.isArray((session as any).answeredQuestionIds)
+      ? (session as any).answeredQuestionIds
+      : Array.from(new Set(history.map((h: any) => h.questionId).filter(Boolean))),
   };
 }
 
@@ -624,6 +627,9 @@ export const authService = {
       const compactSession = {
         ...sanitized,
         currentQuestion: cleanCurrentQ,
+        answeredQuestionIds: Array.isArray((sanitized as any).answeredQuestionIds)
+          ? (sanitized as any).answeredQuestionIds.slice(-200)
+          : Array.from(new Set((sanitized.history || []).map((h: any) => h.questionId).filter(Boolean))),
         history: Array.isArray(sanitized.history) ? sanitized.history.slice(0, 15).map(h => ({
           id: h.id,
           questionId: h.questionId,
@@ -837,6 +843,11 @@ export const authService = {
         3: finalLevel === 3 ? mergedL3 : 0,
       },
       revealedQuestionIds: mergedRevealed,
+      answeredQuestionIds: Array.from(new Set([
+        ...((localSession as any).answeredQuestionIds || []),
+        ...((sanitizedIncoming as any).answeredQuestionIds || []),
+        ...mergedHistory.map((h: any) => h.questionId).filter(Boolean)
+      ])),
       history: mergedHistory.slice(0, 50),
       questionsAnsweredTotal: Math.max(
         localSession.questionsAnsweredTotal || 0,

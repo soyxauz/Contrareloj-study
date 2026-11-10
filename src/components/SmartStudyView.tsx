@@ -278,6 +278,8 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
   return q;
 }
 
+const normalizeQId = (id: string): string => (!id ? '' : id.replace(/^(?:tf-|sa-|mc-|dd-|drag-drop-)/, ''));
+
 export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
   // Conversion automatica de preguntas obsoletas de tipo 'image-labeling' a formato conceptual
   useEffect(() => {
@@ -551,9 +553,46 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   };
 
   // ── Tracking de Preguntas Respondidas y Vistas (para rotación dinámica y generación) ──
-  const answeredQuestionIdsRef = useRef<Set<string>>(
-    new Set(savedSession?.history?.map((h: any) => h.questionId) || [])
-  );
+  const answeredQuestionIdsRef = useRef<Set<string>>((() => {
+    const ids = new Set<string>();
+    const sessionAnswered = (savedSession as any)?.answeredQuestionIds;
+    if (Array.isArray(sessionAnswered)) {
+      sessionAnswered.forEach((id: string) => {
+        if (id) {
+          ids.add(id);
+          ids.add(normalizeQId(id));
+        }
+      });
+    }
+    if (Array.isArray(savedSession?.history)) {
+      savedSession.history.forEach((h: any) => {
+        if (h?.questionId) {
+          ids.add(h.questionId);
+          ids.add(normalizeQId(h.questionId));
+        }
+      });
+    }
+    if (savedSession?.isAnswered) {
+      const lastId = savedSession.currentQuestion?.id || savedSession.currentQuestionId;
+      if (lastId) {
+        ids.add(lastId);
+        ids.add(normalizeQId(lastId));
+      }
+    }
+    return ids;
+  })());
+
+  const isQuestionAnswered = useCallback((qId: string): boolean => {
+    if (!qId) return false;
+    return answeredQuestionIdsRef.current.has(qId) || answeredQuestionIdsRef.current.has(normalizeQId(qId));
+  }, []);
+
+  const markQuestionAsAnswered = useCallback((qId: string) => {
+    if (!qId) return;
+    answeredQuestionIdsRef.current.add(qId);
+    answeredQuestionIdsRef.current.add(normalizeQId(qId));
+  }, []);
+
   const completedSocraticIdsRef = useRef<Set<string>>(new Set());
   const seenQuestionIdsRef = useRef<Set<string>>(
     new Set([
@@ -1032,7 +1071,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         const candidate = pool[i];
         if (
           candidate.id !== excludeQuestionId &&
-          !answeredQuestionIdsRef.current.has(candidate.id) &&
+          !isQuestionAnswered(candidate.id) &&
           getCategoryForQuestion(candidate) === targetCat &&
           isFalseConceptQuestion(candidate)
         ) {
@@ -1047,7 +1086,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       const candidate = pool[i];
       if (
         candidate.id !== excludeQuestionId &&
-        !answeredQuestionIdsRef.current.has(candidate.id) &&
+        !isQuestionAnswered(candidate.id) &&
         getCategoryForQuestion(candidate) === targetCat &&
         (!shouldPreferFalseConcept ? !isFalseConceptQuestion(candidate) : true)
       ) {
@@ -1060,7 +1099,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       const candidate = pool[i];
       if (
         candidate.id !== excludeQuestionId &&
-        !answeredQuestionIdsRef.current.has(candidate.id) &&
+        !isQuestionAnswered(candidate.id) &&
         getCategoryForQuestion(candidate) === targetCat
       ) {
         return sanitizeQuestionStructure(candidate, kit.questions);
@@ -1078,7 +1117,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       const candidate = pool[i];
       if (
         candidate.id !== excludeQuestionId &&
-        !answeredQuestionIdsRef.current.has(candidate.id) &&
+        !isQuestionAnswered(candidate.id) &&
         safeActiveCategories.includes(getCategoryForQuestion(candidate))
       ) {
         return sanitizeQuestionStructure(candidate, kit.questions);
@@ -1088,12 +1127,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Prioridad 2b: Buscar cualquier no respondida del nivel
     for (const i of shuffledIndices) {
       const candidate = pool[i];
-      if (candidate.id !== excludeQuestionId && !answeredQuestionIdsRef.current.has(candidate.id)) {
+      if (candidate.id !== excludeQuestionId && !isQuestionAnswered(candidate.id)) {
         return sanitizeQuestionStructure(candidate, kit.questions);
       }
     }
 
-    // Prioridad 3: Si ya se respondieron todas las del nivel, elegir al azar una del pool
+    // Prioridad 3: Si ya se respondieron todas las del nivel, activar prefetch IA y buscar en otros niveles preguntas no respondidas
+    checkAndPrefetchQuestions(targetLevel, targetIndex);
+    const unansInKit = kit.questions.find(q => q.id !== excludeQuestionId && !isQuestionAnswered(q.id));
+    if (unansInKit) {
+      return sanitizeQuestionStructure(unansInKit, kit.questions);
+    }
+
+    // Prioridad 4: Si absolutamente todas las preguntas del kit han sido respondidas, elegir la del pool distinta a la excluida
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (candidate.id !== excludeQuestionId) {
@@ -1101,8 +1147,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
     }
 
-    // Prioridad 4: En kit general
-    const randomKitQ = kit.questions[Math.floor(Math.random() * kit.questions.length)] || kit.questions[0];
+    // Prioridad 5: En kit general
+    const randomKitQ = kit.questions.find(q => q.id !== excludeQuestionId) || kit.questions[0];
     return sanitizeQuestionStructure(randomKitQ, kit.questions);
   }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory, isFalseConceptQuestion, checkAndPrefetchQuestions]);
 
@@ -1113,18 +1159,19 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
 
     const wasAnswered = Boolean(savedSession?.isAnswered);
+    const prevQId = savedSession?.currentQuestion?.id || savedSession?.currentQuestionId;
 
-    // Caso 1: La pregunta NO estaba respondida previamente.
+    // Caso 1: La pregunta NO estaba respondida previamente y NO está en el registro de respondidas.
     // Preservar exactamente la misma pregunta para que el usuario pueda continuar respondiendo justo donde se quedó.
-    if (!wasAnswered) {
+    if (!wasAnswered && prevQId && !isQuestionAnswered(prevQId)) {
       if (savedSession?.currentQuestion && savedSession.currentQuestion.id) {
         const currQ = savedSession.currentQuestion;
-        const rawId = currQ.id.replace(/^(tf-|sa-|mc-)/, '');
+        const rawId = normalizeQId(currQ.id);
         const found = kit.questions?.find(q => q.id === rawId || q.id === currQ.id);
         return sanitizeQuestionStructure(found || currQ, kit.questions);
       }
       if (savedSession?.currentQuestionId && kit.questions && kit.questions.length > 0) {
-        const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
+        const rawId = normalizeQId(savedSession.currentQuestionId);
         const found = kit.questions.find(q => q.id === rawId || q.id === savedSession.currentQuestionId);
         if (found) {
           return sanitizeQuestionStructure(found, kit.questions);
@@ -1146,20 +1193,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
 
     const practiceLevel = (savedSession as any)?.activePracticeLevel || (savedSession?.level as 1 | 2 | 3) || 1;
-    const prevQId = savedSession?.currentQuestion?.id || savedSession?.currentQuestionId;
 
-    // Caso 2: Si ya estaba respondida y conocemos la pregunta previa, avanzar automáticamente a la siguiente pregunta del nivel
-    if (wasAnswered && prevQId) {
-      const nextQ = resolveNextQuestion(
-        practiceLevel,
-        (savedSession?.currentIndex || 0) + 1,
-        false,
-        [],
-        prevQId
-      );
-      if (nextQ) {
-        return sanitizeQuestionStructure(nextQ, kit.questions);
-      }
+    // Caso 2: Si ya estaba respondida (o ya está registrada en answeredQuestionIds), avanzar automáticamente a una nueva pregunta no respondida
+    const nextQ = resolveNextQuestion(
+      practiceLevel,
+      (savedSession?.currentIndex || 0) + (wasAnswered ? 1 : 0),
+      false,
+      [],
+      prevQId
+    );
+    if (nextQ && nextQ.id !== 'thea-placeholder-loading') {
+      return sanitizeQuestionStructure(nextQ, kit.questions);
     }
 
     const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
@@ -1170,37 +1214,52 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     ).filter(cat => typeFilters[cat]);
     const safeActiveCategories = activeCategories.length > 0 ? activeCategories : (['multipleChoice'] as (keyof SmartStudyTypeFilters)[]);
 
-    // Aleatorio puro desde el primer segundo: barajar todo el banco y tipos sin restricciones
+    // Aleatorio puro no respondido desde el primer segundo
+    const unansPool = finalPool.filter(q => !isQuestionAnswered(q.id));
+    const candidatePool = unansPool.length > 0 ? unansPool : finalPool;
     const randomCat = safeActiveCategories[Math.floor(Math.random() * safeActiveCategories.length)];
-    const matchingCatQ = finalPool.find(q => getCategoryForQuestion(q) === randomCat);
-    const raw = matchingCatQ || finalPool[Math.floor(Math.random() * finalPool.length)] || kit.questions[0];
+    const matchingCatQ = candidatePool.find(q => getCategoryForQuestion(q) === randomCat);
+    const raw = matchingCatQ || candidatePool[Math.floor(Math.random() * candidatePool.length)] || kit.questions[0];
     return sanitizeQuestionStructure(raw, kit.questions);
   });
 
   // Hidratar pregunta activa si el kit llega asíncronamente con preguntas completas
   useEffect(() => {
     if (kit.questions && kit.questions.length > 0) {
-      if (!currentQuestion || currentQuestion.id === 'thea-placeholder-loading' || /^(tf-|sa-|mc-)/.test(currentQuestion?.id || '')) {
-        if (savedSession?.currentQuestion && savedSession.currentQuestion.id) {
-          const currQ = savedSession.currentQuestion;
-          const rawId = currQ.id.replace(/^(tf-|sa-|mc-)/, '');
-          const matched = kit.questions.find(q => q.id === rawId || q.id === currQ.id) || currQ;
-          setCurrentQuestion(sanitizeQuestionStructure(matched, kit.questions));
-          return;
-        }
-        if (savedSession?.currentQuestionId) {
-          const rawId = savedSession.currentQuestionId.replace(/^(tf-|sa-|mc-)/, '');
-          const found = kit.questions.find(q => q.id === rawId || q.id === savedSession.currentQuestionId);
-          if (found) {
-            setCurrentQuestion(sanitizeQuestionStructure(found, kit.questions));
+      if (!currentQuestion || currentQuestion.id === 'thea-placeholder-loading') {
+        const wasAnswered = Boolean(savedSession?.isAnswered);
+        const prevQId = savedSession?.currentQuestion?.id || savedSession?.currentQuestionId;
+
+        if (!wasAnswered && prevQId && !isQuestionAnswered(prevQId)) {
+          if (savedSession?.currentQuestion && savedSession.currentQuestion.id) {
+            const currQ = savedSession.currentQuestion;
+            const rawId = normalizeQId(currQ.id);
+            const matched = kit.questions.find(q => q.id === rawId || q.id === currQ.id) || currQ;
+            setCurrentQuestion(sanitizeQuestionStructure(matched, kit.questions));
             return;
           }
+          if (savedSession?.currentQuestionId) {
+            const rawId = normalizeQId(savedSession.currentQuestionId);
+            const found = kit.questions.find(q => q.id === rawId || q.id === savedSession.currentQuestionId);
+            if (found) {
+              setCurrentQuestion(sanitizeQuestionStructure(found, kit.questions));
+              return;
+            }
+          }
         }
+
         const practiceLevel = activePracticeLevel || level || 1;
+        const nextQ = resolveNextQuestion(practiceLevel, currentIndex, false, [], prevQId);
+        if (nextQ && nextQ.id !== 'thea-placeholder-loading') {
+          setCurrentQuestion(sanitizeQuestionStructure(nextQ, kit.questions));
+          return;
+        }
+
         const targetDiff = practiceLevel === 1 ? 'easy' : practiceLevel === 2 ? 'medium' : 'hard';
         const pool = kit.questions.filter(q => q.type !== 'image-labeling' && (q.difficulty || 'easy') === targetDiff);
         const finalPool = pool.length > 0 ? pool : kit.questions.filter(q => q.type !== 'image-labeling');
-        const first = finalPool[0] || kit.questions.find(q => q.type !== 'image-labeling') || kit.questions[0];
+        const unans = finalPool.find(q => !isQuestionAnswered(q.id));
+        const first = unans || finalPool[0] || kit.questions[0];
         if (first) {
           setCurrentQuestion(sanitizeQuestionStructure(first, kit.questions));
         }
@@ -1248,6 +1307,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (!q || !q.sourceAsset) return false;
     const hasData = Boolean(activeAssetDataUrl || q.sourceAsset.dataUrl || q.sourceAsset.id);
     if (!hasData) return false;
+
+    // Descartar fotos de páginas escaneadas o capturas de texto de libros (no son diagramas conceptuales nítidos)
+    const caption = (q.sourceAsset.caption || '').toLowerCase();
+    const isBookPageScan = caption.includes('capítulo') || caption.includes('capitulo') || caption.includes('página') || caption.includes('pagina') || caption.includes('texto') || caption.includes('documento') || caption.includes('sección') || (q.sourceAsset as any).type === 'page' || /p[aá]g|secci[oó]n|cap[ií]tulo|doc/i.test(caption);
+    if (isBookPageScan) return false;
+
     const combined = ((q.question || '') + ' ' + (q.explanation || '')).toLowerCase();
     return /\b(según el esquema|en la figura|observa la imagen|en el gráfico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test(combined);
   };
@@ -1743,6 +1808,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
     }
 
+    // Registrar permanentemente la pregunta respondida para evitar repeticiones futuras
+    if (currentQ?.id) {
+      markQuestionAsAnswered(currentQ.id);
+    }
+
     // PERSISTENCIA SÍNCRONA INMEDIATA:
     // Guarda el progreso en este milisegundo exacto en LocalStorage e IndexedDB,
     // y despacha el evento 'thea_session_saved' para que si el estudiante sale inmediatamente
@@ -1776,6 +1846,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       socraticProfile: updatedProfile,
       revealedQuestionIds,
       seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
+      answeredQuestionIds: Array.from(answeredQuestionIdsRef.current),
       lastUpdated: Date.now(),
       shuffleSeed,
     };
@@ -2083,7 +2154,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     let nextQ: Question = currentQ;
 
     // Registrar ID en el conjunto de preguntas respondidas
-    answeredQuestionIdsRef.current.add(currentQ.id);
+    markQuestionAsAnswered(currentQ.id);
 
       // 1. Si la pregunta que acaba de responderse era una intervención socrática, marcarla completada
       if (currentQ?.isSocraticReformulation) {
@@ -2169,7 +2240,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     // Salvaguarda final: NUNCA permitir que nextQ sea la misma pregunta actual si el kit tiene más preguntas
     if (nextQ && nextQ.id === currentQ.id && kit.questions.length > 1) {
-      const alt = kit.questions.find(q => q.id !== currentQ.id && !answeredQuestionIdsRef.current.has(q.id))
+      const alt = kit.questions.find(q => q.id !== currentQ.id && !isQuestionAnswered(q.id))
         || kit.questions.find(q => q.id !== currentQ.id);
       if (alt) {
         nextQ = alt;
@@ -2204,6 +2275,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         history: history.slice(0, 50),
         questionsAnsweredTotal,
         totalErrorsReinforced,
+        answeredQuestionIds: Array.from(answeredQuestionIdsRef.current),
         lastUpdated: Date.now(),
       };
       latestSessionRef.current = nextSession;
