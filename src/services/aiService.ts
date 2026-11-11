@@ -40,6 +40,10 @@ export interface AIPreset {
   freeTier: boolean;
 }
 
+export const GROQ_PRIMARY_MODEL = 'qwen/qwen3.8-27b';
+export const GROQ_SECONDARY_MODEL = 'openai/gpt-oss-120b';
+export const GROQ_WHISPER_MODEL = 'whisper-large-v3-turbo';
+
 export const AI_PRESETS: AIPreset[] = [
   {
     id: 'groq-general',
@@ -47,11 +51,11 @@ export const AI_PRESETS: AIPreset[] = [
     provider: 'openai-compatible',
     role: 'general',
     baseUrl: 'https://api.groq.com/openai/v1',
-    model: 'openai/gpt-oss-120b',
+    model: GROQ_PRIMARY_MODEL,
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
-    description: 'Motor general predeterminado para generación de kits, Chat Tutor, Smart Study, Podcasts, flashcards y exámenes.',
-    suggestedModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'allam-2-7b'],
+    description: 'Motor principal con Qwen para kits, Chat Tutor, Smart Study, Podcasts y exámenes. Rota API 1 → API 2 en Qwen y luego a GPT-OSS 120B.',
+    suggestedModels: [GROQ_PRIMARY_MODEL, GROQ_SECONDARY_MODEL, 'openai/gpt-oss-20b', 'allam-2-7b'],
     badge: 'Motor General',
     freeTier: true,
   },
@@ -61,11 +65,11 @@ export const AI_PRESETS: AIPreset[] = [
     provider: 'openai-compatible',
     role: 'oral',
     baseUrl: 'https://api.groq.com/openai/v1',
-    model: 'openai/gpt-oss-120b',
+    model: GROQ_PRIMARY_MODEL,
     keyPlaceholder: 'gsk_...',
     keyUrl: 'https://console.groq.com/keys',
-    description: 'Motor oral exclusivo para Lección Oral, Whisper y Conversación interactiva.',
-    suggestedModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'allam-2-7b'],
+    description: 'Lección Oral con Whisper (voz a texto) y respaldo automático en Qwen → GPT-OSS 120B (API 2 → API 1).',
+    suggestedModels: [GROQ_PRIMARY_MODEL, GROQ_SECONDARY_MODEL, 'openai/gpt-oss-20b', 'allam-2-7b'],
     badge: 'Motor de Voz Exclusivo',
     freeTier: true,
   },
@@ -115,7 +119,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   provider: 'openai-compatible',
   baseUrl: 'https://api.groq.com/openai/v1',
   apiKey: DEFAULT_GENERAL_GROQ_KEY,
-  model: 'openai/gpt-oss-120b',
+  model: GROQ_PRIMARY_MODEL,
   timeoutMs: 45000,
   verified: Boolean(DEFAULT_GENERAL_GROQ_KEY),
   ollamaBaseUrl: 'https://ollama.com/v1',
@@ -123,10 +127,10 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   ollamaModel: 'gemma4:31b',
   groqBaseUrl: 'https://api.groq.com/openai/v1',
   groqApiKey: DEFAULT_GROQ_KEY,
-  groqModel: 'openai/gpt-oss-120b',
+  groqModel: GROQ_PRIMARY_MODEL,
   grokBaseUrl: 'https://api.groq.com/openai/v1',
   grokApiKey: DEFAULT_GROQ_KEY,
-  grokModel: 'openai/gpt-oss-120b',
+  grokModel: GROQ_PRIMARY_MODEL,
 };
 
 export function getOllamaBaseUrl(): string {
@@ -293,14 +297,14 @@ export function getGroqModel(): string {
     try {
       const parsed = JSON.parse(saved);
       if (parsed.groqModel) return parsed.groqModel;
-      if (parsed.model && parsed.model.includes('gpt-oss')) return parsed.model;
+      if (parsed.model && (parsed.model.includes('qwen') || parsed.model.includes('gpt-oss'))) return parsed.model;
     } catch {}
   }
-  return 'openai/gpt-oss-120b';
+  return GROQ_PRIMARY_MODEL;
 }
 
 export function saveGroqModel(model: string): void {
-  const cleanModel = model.trim() || 'openai/gpt-oss-120b';
+  const cleanModel = model.trim() || GROQ_PRIMARY_MODEL;
   if (typeof localStorage !== 'undefined') {
     safeLocalStorageSetItem('thea_groq_model', cleanModel);
   }
@@ -357,7 +361,7 @@ function syncEnvGeneralGroqKeyIfUpdated(): void {
     const existingDirectBase = localStorage.getItem('thea_general_base_url');
     const existingDirectModel = localStorage.getItem('thea_general_model');
     const resolveModel = (base: unknown, model: unknown): string =>
-      isUsableGroqModel(base, model) ? model.trim() : 'openai/gpt-oss-120b';
+      isUsableGroqModel(base, model) ? model.trim() : GROQ_PRIMARY_MODEL;
 
     safeLocalStorageSetItem('thea_general_base_url', 'https://api.groq.com/openai/v1');
     safeLocalStorageSetItem('thea_general_api_key', DEFAULT_GENERAL_GROQ_KEY);
@@ -412,13 +416,106 @@ function syncEnvGeneralGroqKeyIfUpdated(): void {
   } catch {}
 }
 
+const QWEN_DEFAULT_MIGRATION_FLAG = 'thea_qwen_default_migrated_v1';
+
+/** Migra una única vez el predeterminado anterior (gpt-oss-120b) a Qwen en ambos motores sin sobreescribir elecciones futuras. */
+function migrateDefaultModelsToQwenOnce(): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    if (localStorage.getItem(QWEN_DEFAULT_MIGRATION_FLAG) === '1') {
+      return;
+    }
+    safeLocalStorageSetItem(QWEN_DEFAULT_MIGRATION_FLAG, '1');
+
+    const shouldUpgradeGeneral = (base: unknown, model: unknown): boolean => {
+      const m = typeof model === 'string' ? model.trim() : '';
+      const isGroq = typeof base !== 'string' || !base.trim() || base.includes('api.groq.com');
+      return isGroq && (!m || m === GROQ_SECONDARY_MODEL || m === 'gemma4:31b');
+    };
+    const shouldUpgradeOral = (key: unknown, model: unknown): boolean => {
+      const k = typeof key === 'string' ? key.trim() : '';
+      const isGrok = k.startsWith('grok_') || k.startsWith('xai-');
+      if (isGrok) return false;
+      const m = typeof model === 'string' ? model.trim() : '';
+      return !m || m === GROQ_SECONDARY_MODEL;
+    };
+
+    const existingGeneralBase = localStorage.getItem('thea_general_base_url');
+    const existingGeneralModel = localStorage.getItem('thea_general_model');
+    if (shouldUpgradeGeneral(existingGeneralBase, existingGeneralModel)) {
+      safeLocalStorageSetItem('thea_general_model', GROQ_PRIMARY_MODEL);
+    }
+
+    const existingOralKey = localStorage.getItem('thea_groq_api_key');
+    const existingOralModel = localStorage.getItem('thea_groq_model');
+    if (shouldUpgradeOral(existingOralKey, existingOralModel)) {
+      safeLocalStorageSetItem('thea_groq_model', GROQ_PRIMARY_MODEL);
+      safeLocalStorageSetItem('thea_grok_model', GROQ_PRIMARY_MODEL);
+    }
+
+    const upgradeRecord = (obj: Record<string, any>): Record<string, any> => {
+      const next = { ...obj };
+      if (shouldUpgradeGeneral(next.baseUrl, next.model)) {
+        next.model = GROQ_PRIMARY_MODEL;
+      }
+      if (shouldUpgradeOral(next.groqApiKey || existingOralKey, next.groqModel)) {
+        next.groqModel = GROQ_PRIMARY_MODEL;
+        if (!String(next.grokApiKey || '').startsWith('grok_') && !String(next.grokApiKey || '').startsWith('xai-')) {
+          next.grokModel = GROQ_PRIMARY_MODEL;
+        }
+      }
+      return next;
+    };
+
+    const savedRaw = localStorage.getItem(STORAGE_KEY);
+    if (savedRaw) {
+      try {
+        const parsed = JSON.parse(savedRaw);
+        if (parsed && typeof parsed === 'object') {
+          safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(upgradeRecord(parsed)));
+        }
+      } catch {}
+    }
+
+    const sessionId = localStorage.getItem('thea_auth_session');
+    if (sessionId) {
+      const userAiKeyStorage = `thea_user_ai_settings_${sessionId}`;
+      const userAiRaw = localStorage.getItem(userAiKeyStorage);
+      if (userAiRaw) {
+        try {
+          const parsedUserAi = JSON.parse(userAiRaw);
+          if (parsedUserAi && typeof parsedUserAi === 'object') {
+            safeLocalStorageSetItem(userAiKeyStorage, JSON.stringify(upgradeRecord(parsedUserAi)));
+          }
+        } catch {}
+      }
+
+      const authUsersRaw = localStorage.getItem('thea_auth_users');
+      if (authUsersRaw) {
+        try {
+          const users = JSON.parse(authUsersRaw);
+          if (Array.isArray(users)) {
+            const idx = users.findIndex((u: any) => u && u.id === sessionId);
+            if (idx >= 0 && users[idx]?.aiSettings) {
+              users[idx].aiSettings = upgradeRecord(users[idx].aiSettings);
+              safeLocalStorageSetItem('thea_auth_users', JSON.stringify(users));
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+}
+
 if (typeof window !== 'undefined') {
   syncEnvGeneralGroqKeyIfUpdated();
+  migrateDefaultModelsToQwenOnce();
 }
 
 /** Retorna la configuracion general de IA (Groq Cloud General) y la configuracion oral (Groq/Grok Voz) */
 export function getAISettings(): AISettings {
   syncEnvGeneralGroqKeyIfUpdated();
+  migrateDefaultModelsToQwenOnce();
   const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
   const ollamaKey = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_api_key') || '' : '';
   const directGeneralBase = typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_base_url') : null;
@@ -463,10 +560,10 @@ export function getAISettings(): AISettings {
   let generalModel = (
     (directGeneralModel && directGeneralModel.trim()) ||
     (parsed.model && typeof parsed.model === 'string' ? parsed.model.trim() : '') ||
-    'openai/gpt-oss-120b'
+    GROQ_PRIMARY_MODEL
   ).trim();
   if (generalBaseUrl.includes('api.groq.com') && (!generalModel || generalModel === 'gemma4:31b')) {
-    generalModel = 'openai/gpt-oss-120b';
+    generalModel = GROQ_PRIMARY_MODEL;
   }
 
   // 2. Resolver configuracion oral (GROQ / GROK - Motor Oral exclusivo para Voz)
@@ -496,7 +593,7 @@ export function getAISettings(): AISettings {
   const groqModel =
     (typeof localStorage !== 'undefined' ? (isGrok ? localStorage.getItem('thea_grok_model') : localStorage.getItem('thea_groq_model')) : null) ||
     (isGrok ? parsed.grokModel : parsed.groqModel) ||
-    (isGrok ? 'grok-2-mini' : 'openai/gpt-oss-120b');
+    (isGrok ? 'grok-2-mini' : GROQ_PRIMARY_MODEL);
 
   const isLocal = Boolean(generalBaseUrl.includes('localhost') || generalBaseUrl.includes('127.0.0.1'));
   const hasKey = Boolean(effectiveGeneralKey.length > 0);
@@ -544,7 +641,7 @@ export function getOralAISettings(): AISettings {
 
   const oralModel = isGrok
     ? (getGrokModel() || general.grokModel || 'grok-2-mini')
-    : (getGroqModel() || general.groqModel || 'openai/gpt-oss-120b');
+    : (getGroqModel() || general.groqModel || GROQ_PRIMARY_MODEL);
 
   const oralBaseUrl = isGrok
     ? (getGrokBaseUrl() || general.grokBaseUrl || 'https://api.x.ai/v1')
@@ -596,7 +693,7 @@ export function saveAISettings(
   let effectiveGeneralModel =
     (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_general_model') : null) ||
     existingParsed.model ||
-    'openai/gpt-oss-120b';
+    GROQ_PRIMARY_MODEL;
 
   let effectiveOllamaKey =
     cleanSettings.ollamaApiKey ||
@@ -666,7 +763,7 @@ export function saveAISettings(
     } else {
       localStorage.removeItem('thea_general_api_key');
     }
-    safeLocalStorageSetItem('thea_general_model', effectiveGeneralModel || 'openai/gpt-oss-120b');
+    safeLocalStorageSetItem('thea_general_model', effectiveGeneralModel || GROQ_PRIMARY_MODEL);
 
     if (effectiveOllamaKey) {
       safeLocalStorageSetItem('thea_ollama_api_key', effectiveOllamaKey);
@@ -697,14 +794,14 @@ export function saveAISettings(
 
   const isOralGrok = Boolean(effectiveOralKey && (effectiveOralKey.startsWith('grok_') || effectiveOralKey.startsWith('xai-')));
   const normalizedOralBase = effectiveOralBase || (isOralGrok ? 'https://api.x.ai/v1' : 'https://api.groq.com/openai/v1');
-  const normalizedOralModel = effectiveOralModel || (isOralGrok ? 'grok-2-mini' : 'openai/gpt-oss-120b');
+  const normalizedOralModel = effectiveOralModel || (isOralGrok ? 'grok-2-mini' : GROQ_PRIMARY_MODEL);
 
   const generalSettings: AISettings = {
     enabled: cleanSettings.enabled !== undefined ? cleanSettings.enabled : true,
     provider: isLocal ? 'ollama' : 'openai-compatible',
     baseUrl: normalizedGeneralBase,
     apiKey: effectiveGeneralKey,
-    model: effectiveGeneralModel || 'openai/gpt-oss-120b',
+    model: effectiveGeneralModel || GROQ_PRIMARY_MODEL,
     timeoutMs: cleanSettings.timeoutMs || 45000,
     verified: isLocal ? true : Boolean(effectiveGeneralKey),
     updatedAt: typeof cleanSettings.updatedAt === 'number' ? cleanSettings.updatedAt : Date.now(),
@@ -735,7 +832,9 @@ export function resetAISettingsToDefault(): void {
     } else {
       localStorage.removeItem('thea_general_api_key');
     }
-    safeLocalStorageSetItem('thea_general_model', 'openai/gpt-oss-120b');
+    safeLocalStorageSetItem('thea_general_model', GROQ_PRIMARY_MODEL);
+    safeLocalStorageSetItem('thea_groq_model', GROQ_PRIMARY_MODEL);
+    safeLocalStorageSetItem(QWEN_DEFAULT_MIGRATION_FLAG, '1');
   }
   safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(DEFAULT_AI_SETTINGS));
   if (typeof window !== 'undefined') {
@@ -1041,7 +1140,7 @@ export async function testAIConnection(override?: AISettings): Promise<{
     if (!res || !res.ok) {
       try {
         const pingPayload = {
-          model: settings.model || 'openai/gpt-oss-120b',
+          model: settings.model || GROQ_PRIMARY_MODEL,
           messages: [{ role: 'user', content: 'test' }],
           max_tokens: 1,
         };
@@ -1059,8 +1158,8 @@ export async function testAIConnection(override?: AISettings): Promise<{
           clearTimeout(timeout);
           return {
             success: true,
-            message: `Conexión establecida con éxito. Modelo activo: ${settings.model || 'openai/gpt-oss-120b'}.`,
-            models: [settings.model || 'openai/gpt-oss-120b'],
+            message: `Conexión establecida con éxito. Modelo activo: ${settings.model || GROQ_PRIMARY_MODEL}.`,
+            models: [settings.model || GROQ_PRIMARY_MODEL],
           };
         }
       } catch {
@@ -1340,7 +1439,8 @@ function compactMessagesForTokenCap(
 }
 
 const GROQ_OUTPUT_CAP_STORAGE_KEY = 'thea_groq_output_caps';
-const GROQ_KEY_COOLDOWN_STORAGE_KEY = 'thea_groq_key_cooldowns_v1';
+const GROQ_KEY_COOLDOWN_STORAGE_KEY = 'thea_groq_key_cooldowns_v2';
+const ALL_MODELS_WILDCARD = '*';
 export const GROQ_KEY_ROTATION_EVENT = 'thea_ai_key_rotation_changed';
 
 export type GroqKeyRole = 'general' | 'oral';
@@ -1349,6 +1449,37 @@ export interface GroqKeyEntry {
   role: GroqKeyRole;
   label: string;
   apiKey: string;
+}
+
+export interface GroqCascadeRoute {
+  stage: number;
+  totalStages: number;
+  role: GroqKeyRole;
+  roleLabel: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface GroqModelCooldownStatus {
+  model: string;
+  shortLabel: string;
+  isInCooldown: boolean;
+  remainingMs: number;
+  untilMs: number;
+  reason?: string;
+}
+
+export interface GroqCascadeStepStatus {
+  stage: number;
+  totalStages: number;
+  role: GroqKeyRole;
+  roleLabel: string;
+  model: string;
+  modelShortLabel: string;
+  isInCooldown: boolean;
+  cooldownRemainingMs: number;
+  reason?: string;
+  isActive: boolean;
 }
 
 export interface GroqRoleRuntimeStatus {
@@ -1361,17 +1492,27 @@ export interface GroqRoleRuntimeStatus {
   isEffectiveActiveForGeneral: boolean;
   isEffectiveActiveForOral: boolean;
   isActingAsBackupFor: GroqKeyRole | null;
+  models: {
+    qwen: GroqModelCooldownStatus;
+    gptOss120: GroqModelCooldownStatus;
+    whisper: GroqModelCooldownStatus;
+  };
 }
 
 export interface GroqRotationSummary {
   hasDistinctPair: boolean;
   general: GroqRoleRuntimeStatus;
   oral: GroqRoleRuntimeStatus;
+  generalCascade: GroqCascadeStepStatus[];
+  activeGeneralStep: GroqCascadeStepStatus | null;
+  oralCascade: GroqCascadeStepStatus[];
+  activeOralStep: GroqCascadeStepStatus | null;
 }
 
 interface GroqCooldownRecord {
   untilMs: number;
   status: number;
+  model: string;
   reason: string;
   updatedAt: number;
 }
@@ -1379,6 +1520,23 @@ interface GroqCooldownRecord {
 const groqOutputCapMemory = new Map<string, number>();
 const groqCooldownMemory = new Map<string, GroqCooldownRecord>();
 let lastSyncedCooldownRaw: string | null | undefined = undefined;
+
+function normalizeGroqModelId(model?: string | null): string {
+  return (model || '').trim().toLowerCase() || ALL_MODELS_WILDCARD;
+}
+
+function formatGroqModelShortLabel(model: string): string {
+  const clean = (model || '').trim().toLowerCase();
+  if (clean.includes('qwen')) return 'Qwen';
+  if (clean.includes('gpt-oss-120b')) return 'GPT-OSS 120B';
+  if (clean.includes('gpt-oss-20b')) return 'GPT-OSS 20B';
+  if (clean.includes('whisper')) return 'Whisper';
+  return model || 'Modelo';
+}
+
+function getGroqCooldownMapKey(apiKey: string, model?: string | null): string {
+  return `${getGroqKeyFingerprint(apiKey)}|${normalizeGroqModelId(model)}`;
+}
 
 /** Verifica que una clave de Groq sea estructuralmente válida y no esté revocada. */
 export function isUsableGroqApiKey(key?: string | null): key is string {
@@ -1415,9 +1573,12 @@ function syncGroqCooldownsFromStorage(): void {
     if (!raw) return;
     const parsed = JSON.parse(raw) as Record<string, GroqCooldownRecord>;
     const now = Date.now();
-    for (const [fp, rec] of Object.entries(parsed || {})) {
+    for (const [k, rec] of Object.entries(parsed || {})) {
       if (rec && typeof rec.untilMs === 'number' && rec.untilMs > now) {
-        groqCooldownMemory.set(fp, rec);
+        groqCooldownMemory.set(k, {
+          ...rec,
+          model: rec.model || ALL_MODELS_WILDCARD,
+        });
       }
     }
   } catch {
@@ -1434,8 +1595,8 @@ function persistGroqCooldowns(): void {
       return;
     }
     const obj: Record<string, GroqCooldownRecord> = {};
-    for (const [fp, rec] of groqCooldownMemory.entries()) {
-      obj[fp] = rec;
+    for (const [k, rec] of groqCooldownMemory.entries()) {
+      obj[k] = rec;
     }
     const serialized = JSON.stringify(obj);
     sessionStorage.setItem(GROQ_KEY_COOLDOWN_STORAGE_KEY, serialized);
@@ -1448,9 +1609,9 @@ function persistGroqCooldowns(): void {
 function pruneExpiredGroqCooldowns(now: number = Date.now()): boolean {
   syncGroqCooldownsFromStorage();
   let removedAny = false;
-  for (const [fp, rec] of groqCooldownMemory.entries()) {
+  for (const [k, rec] of groqCooldownMemory.entries()) {
     if (!rec || rec.untilMs <= now) {
-      groqCooldownMemory.delete(fp);
+      groqCooldownMemory.delete(k);
       removedAny = true;
     }
   }
@@ -1495,14 +1656,21 @@ export function parseGroqCooldownDurationMs(errText: string, status: number = 42
   return 60 * 1000;
 }
 
-/** Pone en enfriamiento una API key de Groq para ceder el paso automáticamente a la clave de respaldo. */
-export function markGroqKeyCooldown(apiKey: string, reasonText: string = '', status: number = 429): number {
+/** Pone en enfriamiento un par (API key + modelo), o la clave completa si falla 401/402. */
+export function markGroqKeyCooldown(
+  apiKey: string,
+  reasonText: string = '',
+  status: number = 429,
+  model?: string
+): number {
   const cleanKey = (apiKey || '').trim();
   if (!cleanKey) return 0;
   syncGroqCooldownsFromStorage();
   const durationMs = parseGroqCooldownDurationMs(reasonText, status);
   const now = Date.now();
   const untilMs = now + durationMs;
+  const isAccountWide = status === 401 || status === 402 || !model || !model.trim();
+  const targetModelKey = isAccountWide ? ALL_MODELS_WILDCARD : normalizeGroqModelId(model);
   const compactReason = status === 401
     ? 'Clave rechazada (HTTP 401)'
     : status === 402
@@ -1513,9 +1681,10 @@ export function markGroqKeyCooldown(apiKey: string, reasonText: string = '', sta
     ? 'Límite diario RPD alcanzado'
     : 'Límite temporal de tasa (HTTP 429)';
 
-  groqCooldownMemory.set(getGroqKeyFingerprint(cleanKey), {
+  groqCooldownMemory.set(getGroqCooldownMapKey(cleanKey, targetModelKey), {
     untilMs,
     status,
+    model: targetModelKey,
     reason: compactReason,
     updatedAt: now,
   });
@@ -1524,15 +1693,35 @@ export function markGroqKeyCooldown(apiKey: string, reasonText: string = '', sta
   return untilMs;
 }
 
-/** Limpia el enfriamiento de una API key de Groq (o de todas si se omite la clave). */
-export function clearGroqKeyCooldown(apiKey?: string): void {
+/** Limpia el enfriamiento: global, de una API key completa, o solo de un par (apiKey, model). */
+export function clearGroqKeyCooldown(apiKey?: string, model?: string): void {
   syncGroqCooldownsFromStorage();
   let changed = false;
-  if (apiKey && apiKey.trim()) {
-    changed = groqCooldownMemory.delete(getGroqKeyFingerprint(apiKey.trim()));
-  } else if (groqCooldownMemory.size > 0) {
-    groqCooldownMemory.clear();
-    changed = true;
+  if (!apiKey || !apiKey.trim()) {
+    if (groqCooldownMemory.size > 0) {
+      groqCooldownMemory.clear();
+      changed = true;
+    }
+  } else {
+    const cleanKey = apiKey.trim();
+    const fpPrefix = `${getGroqKeyFingerprint(cleanKey)}|`;
+    if (model && model.trim()) {
+      const normalized = normalizeGroqModelId(model);
+      if (normalized === ALL_MODELS_WILDCARD) {
+        changed = groqCooldownMemory.delete(`${fpPrefix}${ALL_MODELS_WILDCARD}`);
+      } else {
+        const deletedModel = groqCooldownMemory.delete(`${fpPrefix}${normalized}`);
+        const deletedWildcard = groqCooldownMemory.delete(`${fpPrefix}${ALL_MODELS_WILDCARD}`);
+        changed = deletedModel || deletedWildcard;
+      }
+    } else {
+      for (const mapKey of Array.from(groqCooldownMemory.keys())) {
+        if (mapKey.startsWith(fpPrefix)) {
+          groqCooldownMemory.delete(mapKey);
+          changed = true;
+        }
+      }
+    }
   }
   if (changed) {
     persistGroqCooldowns();
@@ -1540,25 +1729,46 @@ export function clearGroqKeyCooldown(apiKey?: string): void {
   }
 }
 
-/** Consulta si una clave de Groq específica está en pausa por cuota/error y cuántos ms le restan. */
+/** Limpia solo errores de cuenta/autenticación (HTTP 401/402) sin borrar pausas reales por cuota 429 de cada modelo. */
+export function clearGroqAuthCooldown(apiKey: string): void {
+  if (!apiKey || !apiKey.trim()) return;
+  clearGroqKeyCooldown(apiKey, ALL_MODELS_WILDCARD);
+}
+
+/** Consulta si una clave de Groq (y opcionalmente un modelo) está en pausa por cuota/error y cuántos ms le restan. */
 export function getGroqKeyCooldownInfo(
   apiKey: string,
-  now: number = Date.now()
+  model?: string | number,
+  nowArg?: number
 ): { isInCooldown: boolean; remainingMs: number; untilMs: number; reason?: string } {
+  const resolvedModel = typeof model === 'string' ? model : undefined;
+  const now = typeof model === 'number' ? model : (nowArg ?? Date.now());
   const cleanKey = (apiKey || '').trim();
   if (!cleanKey) {
     return { isInCooldown: false, remainingMs: 0, untilMs: 0 };
   }
   pruneExpiredGroqCooldowns(now);
-  const rec = groqCooldownMemory.get(getGroqKeyFingerprint(cleanKey));
-  if (!rec || rec.untilMs <= now) {
+  const wildcardRec = groqCooldownMemory.get(getGroqCooldownMapKey(cleanKey, ALL_MODELS_WILDCARD));
+  const modelRec = resolvedModel
+    ? groqCooldownMemory.get(getGroqCooldownMapKey(cleanKey, resolvedModel))
+    : undefined;
+
+  let activeRec: GroqCooldownRecord | undefined;
+  if (wildcardRec && wildcardRec.untilMs > now) {
+    activeRec = wildcardRec;
+  }
+  if (modelRec && modelRec.untilMs > now && (!activeRec || modelRec.untilMs > activeRec.untilMs)) {
+    activeRec = modelRec;
+  }
+
+  if (!activeRec) {
     return { isInCooldown: false, remainingMs: 0, untilMs: 0 };
   }
   return {
     isInCooldown: true,
-    remainingMs: Math.max(0, rec.untilMs - now),
-    untilMs: rec.untilMs,
-    reason: rec.reason,
+    remainingMs: Math.max(0, activeRec.untilMs - now),
+    untilMs: activeRec.untilMs,
+    reason: activeRec.reason,
   };
 }
 
@@ -1613,10 +1823,111 @@ export function getGroqKeyPool(
   return ordered;
 }
 
-/** Selecciona la clave Groq activa disponible para un rol dado, rotando si la primaria está en pausa. */
+/**
+ * Construye la cascada exacta de hasta 4 etapas:
+ * General: (API 1, Qwen) -> (API 2, Qwen) -> (API 1, GPT-OSS 120B) -> (API 2, GPT-OSS 120B).
+ * Oral:    (API 2, Qwen) -> (API 1, Qwen) -> (API 2, GPT-OSS 120B) -> (API 1, GPT-OSS 120B).
+ */
+export function buildGroqCascadeRoutes(
+  preferredRole: GroqKeyRole = 'general',
+  primaryModel: string = GROQ_PRIMARY_MODEL,
+  explicitPrimaryKey?: string
+): GroqCascadeRoute[] {
+  const pool = getGroqKeyPool(preferredRole, explicitPrimaryKey);
+  if (pool.length === 0) return [];
+
+  const cleanPrimary = (primaryModel || '').trim() || GROQ_PRIMARY_MODEL;
+  const modelSequence = /qwen/i.test(cleanPrimary)
+    ? [cleanPrimary, GROQ_SECONDARY_MODEL]
+    : [cleanPrimary];
+
+  const rawRoutes: Array<Omit<GroqCascadeRoute, 'stage' | 'totalStages'>> = [];
+  for (const modelId of modelSequence) {
+    for (const entry of pool) {
+      if (!rawRoutes.some(r => r.apiKey === entry.apiKey && r.model === modelId)) {
+        rawRoutes.push({
+          role: entry.role,
+          roleLabel: entry.label,
+          apiKey: entry.apiKey,
+          model: modelId,
+        });
+      }
+    }
+  }
+
+  const totalStages = rawRoutes.length;
+  return rawRoutes.map((route, idx) => ({
+    ...route,
+    stage: idx + 1,
+    totalStages,
+  }));
+}
+
+/** Selecciona la etapa activa de la cascada Groq (modelo + clave) disponible en orden estricto de prioridad. */
+export function pickActiveGroqRoute(
+  preferredRole: GroqKeyRole = 'general',
+  primaryModel: string = GROQ_PRIMARY_MODEL,
+  explicitPrimaryKey?: string
+): {
+  route: GroqCascadeRoute;
+  allInCooldown: boolean;
+  shortestWaitMs: number;
+  totalStages: number;
+} {
+  const now = Date.now();
+  pruneExpiredGroqCooldowns(now);
+  const routes = buildGroqCascadeRoutes(preferredRole, primaryModel, explicitPrimaryKey);
+  if (routes.length === 0) {
+    return {
+      route: {
+        stage: 1,
+        totalStages: 1,
+        role: preferredRole,
+        roleLabel: preferredRole === 'oral' ? 'Motor de Voz' : 'Motor General',
+        apiKey: (explicitPrimaryKey || '').trim(),
+        model: (primaryModel || '').trim() || GROQ_PRIMARY_MODEL,
+      },
+      allInCooldown: false,
+      shortestWaitMs: 0,
+      totalStages: 1,
+    };
+  }
+
+  for (const route of routes) {
+    const cd = getGroqKeyCooldownInfo(route.apiKey, route.model, now);
+    if (!cd.isInCooldown) {
+      return {
+        route,
+        allInCooldown: false,
+        shortestWaitMs: 0,
+        totalStages: routes.length,
+      };
+    }
+  }
+
+  let best = routes[0];
+  let shortestWaitMs = getGroqKeyCooldownInfo(best.apiKey, best.model, now).remainingMs;
+  for (let i = 1; i < routes.length; i++) {
+    const rem = getGroqKeyCooldownInfo(routes[i].apiKey, routes[i].model, now).remainingMs;
+    if (rem < shortestWaitMs) {
+      shortestWaitMs = rem;
+      best = routes[i];
+    }
+  }
+
+  return {
+    route: best,
+    allInCooldown: true,
+    shortestWaitMs,
+    totalStages: routes.length,
+  };
+}
+
+/** Selecciona la clave Groq activa disponible para un rol (y opcionalmente modelo, p. ej. Whisper STT). */
 export function pickActiveGroqKey(
   preferredRole: GroqKeyRole = 'general',
-  explicitPrimaryKey?: string
+  explicitPrimaryKey?: string,
+  model?: string
 ): {
   apiKey: string;
   role: GroqKeyRole;
@@ -1641,7 +1952,7 @@ export function pickActiveGroqKey(
 
   for (let i = 0; i < pool.length; i++) {
     const entry = pool[i];
-    const cd = getGroqKeyCooldownInfo(entry.apiKey, now);
+    const cd = getGroqKeyCooldownInfo(entry.apiKey, model, now);
     if (!cd.isInCooldown) {
       return {
         apiKey: entry.apiKey,
@@ -1656,9 +1967,9 @@ export function pickActiveGroqKey(
 
   // Si todas están en enfriamiento, elegir la que recupere primero
   let best = pool[0];
-  let shortestWaitMs = getGroqKeyCooldownInfo(best.apiKey, now).remainingMs;
+  let shortestWaitMs = getGroqKeyCooldownInfo(best.apiKey, model, now).remainingMs;
   for (let i = 1; i < pool.length; i++) {
-    const rem = getGroqKeyCooldownInfo(pool[i].apiKey, now).remainingMs;
+    const rem = getGroqKeyCooldownInfo(pool[i].apiKey, model, now).remainingMs;
     if (rem < shortestWaitMs) {
       shortestWaitMs = rem;
       best = pool[i];
@@ -1675,7 +1986,53 @@ export function pickActiveGroqKey(
   };
 }
 
-/** Devuelve el estado de rotación en tiempo real entre las 2 claves Groq configuradas para mostrar en UI. */
+function buildRoleModelStatuses(apiKey: string, now: number): GroqRoleRuntimeStatus['models'] {
+  const buildEntry = (modelId: string, shortLabel: string): GroqModelCooldownStatus => {
+    const cd = getGroqKeyCooldownInfo(apiKey, modelId, now);
+    return {
+      model: modelId,
+      shortLabel,
+      isInCooldown: Boolean(apiKey && cd.isInCooldown),
+      remainingMs: cd.remainingMs,
+      untilMs: cd.untilMs,
+      reason: cd.reason,
+    };
+  };
+  return {
+    qwen: buildEntry(GROQ_PRIMARY_MODEL, 'Qwen'),
+    gptOss120: buildEntry(GROQ_SECONDARY_MODEL, 'GPT-OSS 120B'),
+    whisper: buildEntry(GROQ_WHISPER_MODEL, 'Whisper'),
+  };
+}
+
+function buildCascadeStepStatuses(
+  preferredRole: GroqKeyRole,
+  primaryModel: string,
+  now: number
+): { steps: GroqCascadeStepStatus[]; activeStep: GroqCascadeStepStatus | null } {
+  const routes = buildGroqCascadeRoutes(preferredRole, primaryModel);
+  const picked = pickActiveGroqRoute(preferredRole, primaryModel);
+  const steps: GroqCascadeStepStatus[] = routes.map((r) => {
+    const cd = getGroqKeyCooldownInfo(r.apiKey, r.model, now);
+    const isActive = !picked.allInCooldown && picked.route.stage === r.stage;
+    return {
+      stage: r.stage,
+      totalStages: r.totalStages,
+      role: r.role,
+      roleLabel: r.roleLabel,
+      model: r.model,
+      modelShortLabel: formatGroqModelShortLabel(r.model),
+      isInCooldown: cd.isInCooldown,
+      cooldownRemainingMs: cd.remainingMs,
+      reason: cd.reason,
+      isActive,
+    };
+  });
+  const activeStep = steps.find(s => s.isActive) || steps[0] || null;
+  return { steps, activeStep };
+}
+
+/** Devuelve el estado de cascada y enfriamiento en tiempo real (por clave y por modelo) para mostrar en UI. */
 export function getGroqKeyRotationStatus(): GroqRotationSummary {
   const now = Date.now();
   pruneExpiredGroqCooldowns(now);
@@ -1685,17 +2042,33 @@ export function getGroqKeyRotationStatus(): GroqRotationSummary {
   const oralKey = isUsableGroqApiKey(oralRaw) ? oralRaw.trim() : '';
   const hasDistinctPair = Boolean(generalKey && oralKey && generalKey !== oralKey);
 
-  const generalCd = getGroqKeyCooldownInfo(generalKey, now);
-  const oralCd = getGroqKeyCooldownInfo(oralKey, now);
+  const generalModel = (generalSettings.model || GROQ_PRIMARY_MODEL).trim() || GROQ_PRIMARY_MODEL;
+  const oralModel = (getOralAISettings().model || GROQ_PRIMARY_MODEL).trim() || GROQ_PRIMARY_MODEL;
 
-  const generalActive = pickActiveGroqKey('general');
-  const oralActive = pickActiveGroqKey('oral');
+  const { steps: generalCascade, activeStep: activeGeneralStep } = buildCascadeStepStatuses('general', generalModel, now);
+  const { steps: oralCascade, activeStep: activeOralStep } = buildCascadeStepStatuses('oral', oralModel, now);
+
+  const genModels = buildRoleModelStatuses(generalKey, now);
+  const oralModels = buildRoleModelStatuses(oralKey, now);
+
+  // Estado efectivo de cada clave considerando el modelo primario de su flujo o bloqueo total de clave
+  const generalPrimaryCd = getGroqKeyCooldownInfo(generalKey, generalModel, now);
+  const oralPrimaryCd = getGroqKeyCooldownInfo(oralKey, oralModel, now);
+
+  const generalActive = pickActiveGroqRoute('general', generalModel);
+  const oralActive = pickActiveGroqRoute('oral', oralModel);
 
   const oralIsBackupForGeneral = Boolean(
-    hasDistinctPair && generalCd.isInCooldown && !oralCd.isInCooldown && generalActive.apiKey === oralKey
+    hasDistinctPair &&
+    !generalActive.allInCooldown &&
+    generalActive.route.apiKey === oralKey &&
+    generalActive.route.role === 'oral'
   );
   const generalIsBackupForOral = Boolean(
-    hasDistinctPair && oralCd.isInCooldown && !generalCd.isInCooldown && oralActive.apiKey === generalKey
+    hasDistinctPair &&
+    !oralActive.allInCooldown &&
+    oralActive.route.apiKey === generalKey &&
+    oralActive.route.role === 'general'
   );
 
   return {
@@ -1703,25 +2076,31 @@ export function getGroqKeyRotationStatus(): GroqRotationSummary {
     general: {
       role: 'general',
       hasKey: Boolean(generalKey),
-      isInCooldown: Boolean(generalKey && generalCd.isInCooldown),
-      cooldownRemainingMs: generalCd.remainingMs,
-      cooldownUntilMs: generalCd.untilMs,
-      reason: generalCd.reason,
-      isEffectiveActiveForGeneral: Boolean(generalKey && generalActive.apiKey === generalKey && !generalCd.isInCooldown),
-      isEffectiveActiveForOral: Boolean(generalKey && oralActive.apiKey === generalKey && !generalCd.isInCooldown),
+      isInCooldown: Boolean(generalKey && generalPrimaryCd.isInCooldown),
+      cooldownRemainingMs: generalPrimaryCd.remainingMs,
+      cooldownUntilMs: generalPrimaryCd.untilMs,
+      reason: generalPrimaryCd.reason,
+      isEffectiveActiveForGeneral: Boolean(generalKey && !generalActive.allInCooldown && generalActive.route.apiKey === generalKey),
+      isEffectiveActiveForOral: Boolean(generalKey && !oralActive.allInCooldown && oralActive.route.apiKey === generalKey),
       isActingAsBackupFor: generalIsBackupForOral ? 'oral' : null,
+      models: genModels,
     },
     oral: {
       role: 'oral',
       hasKey: Boolean(oralKey),
-      isInCooldown: Boolean(oralKey && oralCd.isInCooldown),
-      cooldownRemainingMs: oralCd.remainingMs,
-      cooldownUntilMs: oralCd.untilMs,
-      reason: oralCd.reason,
-      isEffectiveActiveForGeneral: Boolean(oralKey && generalActive.apiKey === oralKey && !oralCd.isInCooldown),
-      isEffectiveActiveForOral: Boolean(oralKey && oralActive.apiKey === oralKey && !oralCd.isInCooldown),
+      isInCooldown: Boolean(oralKey && oralPrimaryCd.isInCooldown),
+      cooldownRemainingMs: oralPrimaryCd.remainingMs,
+      cooldownUntilMs: oralPrimaryCd.untilMs,
+      reason: oralPrimaryCd.reason,
+      isEffectiveActiveForGeneral: Boolean(oralKey && !generalActive.allInCooldown && generalActive.route.apiKey === oralKey),
+      isEffectiveActiveForOral: Boolean(oralKey && !oralActive.allInCooldown && oralActive.route.apiKey === oralKey),
       isActingAsBackupFor: oralIsBackupForGeneral ? 'general' : null,
+      models: oralModels,
     },
+    generalCascade,
+    activeGeneralStep,
+    oralCascade,
+    activeOralStep,
   };
 }
 
@@ -1919,15 +2298,20 @@ function stitchContinuationText(prefix: string, suffix: string): string {
   return prefix + cleanSuffix;
 }
 
-function selectNextGroqCandidate(
-  pool: GroqKeyEntry[],
-  triedKeys: Set<string>
-): GroqKeyEntry | null {
+function getGroqRouteKey(apiKey: string, model: string): string {
+  return `${apiKey.trim()}|${model.trim().toLowerCase()}`;
+}
+
+function selectNextGroqRoute(
+  routes: GroqCascadeRoute[],
+  triedRouteKeys: Set<string>
+): GroqCascadeRoute | null {
   const now = Date.now();
-  for (const entry of pool) {
-    if (triedKeys.has(entry.apiKey)) continue;
-    if (!getGroqKeyCooldownInfo(entry.apiKey, now).isInCooldown) {
-      return entry;
+  for (const route of routes) {
+    const rk = getGroqRouteKey(route.apiKey, route.model);
+    if (triedRouteKeys.has(rk)) continue;
+    if (!getGroqKeyCooldownInfo(route.apiKey, route.model, now).isInCooldown) {
+      return route;
     }
   }
   return null;
@@ -1977,24 +2361,42 @@ async function executeGroqAwareCompletion(
   jsonMode: boolean,
   override?: AISettings,
   options?: QueryCompletionOptions,
-  preferredRole: GroqKeyRole = 'general'
-): Promise<{ rawContent: string; finishReason: string; usedKey: string }> {
+  preferredRole: GroqKeyRole = 'general',
+  initialRoute?: GroqCascadeRoute,
+  cascadeRoutesOverride?: GroqCascadeRoute[]
+): Promise<{ rawContent: string; finishReason: string; usedKey: string; usedModel: string }> {
   const isGroqEndpoint = cleanBase.includes('api.groq.com');
-  const candidatePool = isGroqEndpoint ? getGroqKeyPool(preferredRole, targetKey) : [];
-  const triedKeys = new Set<string>();
+  const candidateRoutes: GroqCascadeRoute[] = isGroqEndpoint
+    ? (cascadeRoutesOverride && cascadeRoutesOverride.length > 0
+      ? cascadeRoutesOverride
+      : buildGroqCascadeRoutes(preferredRole, targetModel, targetKey))
+    : [];
+  const triedRouteKeys = new Set<string>();
+  const triedDistinctKeys = new Set<string>();
   const desiredBaseMaxTokens = typeof options?.max_tokens === 'number'
     ? options.max_tokens
     : typeof body['max_tokens'] === 'number'
     ? (body['max_tokens'] as number)
     : undefined;
 
-  let activeKey = targetKey;
+  let activeRoute: GroqCascadeRoute = initialRoute || candidateRoutes[0] || {
+    stage: 1,
+    totalStages: 1,
+    role: preferredRole,
+    roleLabel: preferredRole === 'oral' ? 'Motor de Voz' : 'Motor General',
+    apiKey: targetKey,
+    model: targetModel,
+  };
   let lastErrorText = '';
   let lastResponse: Response | null = null;
-  const maxKeyRotations = Math.max(candidatePool.length, 1);
+  const maxRotations = Math.max(candidateRoutes.length, 1);
 
-  for (let keyIdx = 0; keyIdx < maxKeyRotations; keyIdx++) {
-    triedKeys.add(activeKey);
+  for (let rotIdx = 0; rotIdx < maxRotations; rotIdx++) {
+    const activeKey = activeRoute.apiKey;
+    const activeModel = activeRoute.model;
+    triedRouteKeys.add(getGroqRouteKey(activeKey, activeModel));
+    if (activeKey) triedDistinctKeys.add(activeKey);
+
     const attemptHeaders: Record<string, string> = {
       ...headers,
       ...(activeKey ? { Authorization: `Bearer ${activeKey}` } : {}),
@@ -2002,7 +2404,7 @@ async function executeGroqAwareCompletion(
     let currentBody = buildBodyWithKeyOutputCap(
       body,
       cleanBase,
-      targetModel,
+      activeModel,
       activeKey,
       desiredBaseMaxTokens
     );
@@ -2019,26 +2421,26 @@ async function executeGroqAwareCompletion(
     }
 
     if (isGroqEndpoint) {
-      for (let sameKeyRetryIdx = 0; sameKeyRetryIdx < 2 && (response.status === 413 || response.status === 429); sameKeyRetryIdx++) {
+      for (let sameRouteRetryIdx = 0; sameRouteRetryIdx < 2 && (response.status === 413 || response.status === 429); sameRouteRetryIdx++) {
         const failedStatus = response.status;
         lastErrorText = await response.clone().text().catch(() => '');
         const limitInfo = parseGroqTokenLimitInfo(lastErrorText);
         const isStaticOutputClamp =
           isPureStaticGroqOutputLimit(failedStatus, limitInfo) ||
-          (failedStatus === 413 && sameKeyRetryIdx === 0);
+          (failedStatus === 413 && sameRouteRetryIdx === 0);
 
-        const nextHealthyBackup = selectNextGroqCandidate(candidatePool, triedKeys);
+        const nextHealthyRoute = selectNextGroqRoute(candidateRoutes, triedRouteKeys);
         const cooldownMs = parseGroqCooldownDurationMs(lastErrorText, failedStatus);
 
-        // Si es cuota/tasa agotada (no un simple exceso estático de max_tokens) y hay respaldo listo, rotar en 0ms
-        if (!isStaticOutputClamp && nextHealthyBackup) {
-          markGroqKeyCooldown(activeKey, lastErrorText, failedStatus);
+        // Si se agotó cuota/tasa (no es simple rechazo estático de max_tokens) y existe siguiente etapa en la cascada, avanzar en 0ms
+        if (!isStaticOutputClamp && nextHealthyRoute) {
+          markGroqKeyCooldown(activeKey, lastErrorText, failedStatus, activeModel);
           break;
         }
 
-        // Si ni siquiera hay respaldo saludable y Groq pide pausa larga multi-minuto (TPD/RPD), no bloquear el navegador esperando 68s
-        if (!isStaticOutputClamp && !nextHealthyBackup && cooldownMs > 68000) {
-          markGroqKeyCooldown(activeKey, lastErrorText, failedStatus);
+        // Si ya no hay más etapas listas y Groq pide espera larga multi-minuto (TPD/RPD), marcar pausa y no congelar la UI
+        if (!isStaticOutputClamp && !nextHealthyRoute && cooldownMs > 68000) {
+          markGroqKeyCooldown(activeKey, lastErrorText, failedStatus, activeModel);
           break;
         }
 
@@ -2047,11 +2449,11 @@ async function executeGroqAwareCompletion(
           : undefined;
         const adjustedMaxTokens = computeNextRetryMaxTokens(
           failedStatus,
-          sameKeyRetryIdx,
+          sameRouteRetryIdx,
           currentMax,
           limitInfo,
           cleanBase,
-          targetModel,
+          activeModel,
           activeKey
         );
 
@@ -2063,18 +2465,18 @@ async function executeGroqAwareCompletion(
 
         if (shouldWait) {
           const waitMs = parseGroqRetryWaitMs(lastErrorText);
-          options?.onRetryWait?.(waitMs, failedStatus, sameKeyRetryIdx + 1);
+          options?.onRetryWait?.(waitMs, failedStatus, sameRouteRetryIdx + 1);
           await new Promise(r => setTimeout(r, waitMs));
         } else if (failedStatus === 429) {
           await new Promise(r => setTimeout(r, 100));
         }
 
-        const compactLimit = sameKeyRetryIdx === 0 ? 14000 : 8000;
+        const compactLimit = sameRouteRetryIdx === 0 ? 14000 : 8000;
         const shouldCompactInput = failedStatus === 413 || (!limitInfo.isOutputLimit && limitInfo.limit !== null);
 
         currentBody = {
           ...currentBody,
-          model: targetModel,
+          model: activeModel,
           ...(typeof adjustedMaxTokens === 'number' ? { max_tokens: adjustedMaxTokens } : {}),
           ...(shouldCompactInput
             ? { messages: compactMessagesForTokenCap(effectiveMessages, compactLimit) }
@@ -2086,24 +2488,11 @@ async function executeGroqAwareCompletion(
       }
     }
 
-    // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
-    if (
-      response.status >= 500 &&
-      isGroqEndpoint &&
-      targetModel === 'openai/gpt-oss-120b'
-    ) {
-      const retryBody = {
-        ...currentBody,
-        model: GROQ_FALLBACK_MODEL,
-      };
-      response = await runFetchAttemptWithTimeout(url, attemptHeaders, retryBody, perAttemptTimeoutMs);
-    }
-
     lastResponse = response;
 
     if (response.ok) {
       if (isGroqEndpoint && activeKey) {
-        clearGroqKeyCooldown(activeKey);
+        clearGroqKeyCooldown(activeKey, activeModel);
       }
       const json = await response.json();
       const choice = json.choices?.[0];
@@ -2116,6 +2505,7 @@ async function executeGroqAwareCompletion(
         rawContent,
         finishReason: String(choice?.finish_reason || 'stop'),
         usedKey: activeKey,
+        usedModel: activeModel,
       };
     }
 
@@ -2123,13 +2513,42 @@ async function executeGroqAwareCompletion(
       if (!lastErrorText) {
         lastErrorText = await response.clone().text().catch(() => '');
       }
-      markGroqKeyCooldown(activeKey, lastErrorText, response.status);
-      const nextBackup = selectNextGroqCandidate(candidatePool, triedKeys);
-      if (nextBackup) {
-        console.warn(`[aiService] Clave Groq (${preferredRole}) recibió HTTP ${response.status}; rotando a ${nextBackup.label} manteniendo el modelo ${targetModel}.`);
-        activeKey = nextBackup.apiKey;
+      markGroqKeyCooldown(activeKey, lastErrorText, response.status, activeModel);
+      const nextRoute = selectNextGroqRoute(candidateRoutes, triedRouteKeys);
+      if (nextRoute) {
+        console.warn(`[aiService] Cascada Groq (${preferredRole}) Paso ${activeRoute.stage}/${activeRoute.totalStages} (${activeRoute.roleLabel} · ${activeModel}) recibió HTTP ${response.status}; avanzando a Paso ${nextRoute.stage}/${nextRoute.totalStages} (${nextRoute.roleLabel} · ${nextRoute.model}).`);
+        activeRoute = nextRoute;
         continue;
       }
+    }
+
+    // Respaldo de emergencia 5xx solo si el modelo actual es gpt-oss-120b y no hay otra ruta en la cascada
+    if (
+      response.status >= 500 &&
+      isGroqEndpoint &&
+      activeModel === GROQ_SECONDARY_MODEL
+    ) {
+      const retryBody = {
+        ...currentBody,
+        model: GROQ_FALLBACK_MODEL,
+      };
+      const fallbackRes = await runFetchAttemptWithTimeout(url, attemptHeaders, retryBody, perAttemptTimeoutMs);
+      if (fallbackRes.ok) {
+        const json = await fallbackRes.json();
+        const choice = json.choices?.[0];
+        const rawContent =
+          choice?.message?.content ||
+          choice?.message?.reasoning ||
+          choice?.text ||
+          '';
+        return {
+          rawContent,
+          finishReason: String(choice?.finish_reason || 'stop'),
+          usedKey: activeKey,
+          usedModel: GROQ_FALLBACK_MODEL,
+        };
+      }
+      lastResponse = fallbackRes;
     }
 
     break;
@@ -2154,7 +2573,7 @@ async function executeGroqAwareCompletion(
         Authorization: `Bearer ${groqFallback.apiKey.trim()}`,
       };
       const groqBody: Record<string, unknown> = {
-        model: groqFallback.model || 'openai/gpt-oss-120b',
+        model: groqFallback.model || GROQ_PRIMARY_MODEL,
         messages: compactMessagesForTokenCap(effectiveMessages, 20000),
         temperature: body['temperature'],
       };
@@ -2177,6 +2596,7 @@ async function executeGroqAwareCompletion(
           rawContent,
           finishReason: String(choice?.finish_reason || 'stop'),
           usedKey: groqFallback.apiKey.trim(),
+          usedModel: String(groqBody['model']),
         };
       }
       response = groqRes;
@@ -2204,15 +2624,31 @@ async function executeGroqAwareCompletion(
     );
   }
   if (response.status === 429) {
-    const dualExhaustedNote = triedKeys.size > 1 ? ' (ambas API keys de Groq en pausa por cuota)' : '';
+    const allCascadePaused =
+      isGroqEndpoint &&
+      candidateRoutes.length > 0 &&
+      candidateRoutes.every(r => getGroqKeyCooldownInfo(r.apiKey, r.model).isInCooldown);
+    const hasQwenAndGpt =
+      candidateRoutes.some(r => /qwen/i.test(r.model)) &&
+      candidateRoutes.some(r => r.model === GROQ_SECONDARY_MODEL);
+    const distinctPoolCount = new Set(candidateRoutes.map(r => r.apiKey)).size;
+    const isFullDualCascadeExhausted = (triedRouteKeys.size > 2 || (allCascadePaused && hasQwenAndGpt)) && distinctPoolCount > 1;
+
+    const cascadeExhaustedNote = isFullDualCascadeExhausted
+      ? ' (ambas API keys de Groq en pausa por cuota: Qwen y GPT-OSS 120B)'
+      : triedRouteKeys.size > 2 || (allCascadePaused && hasQwenAndGpt)
+      ? ' (cuota agotada en Qwen y GPT-OSS 120B)'
+      : triedDistinctKeys.size > 1 || (allCascadePaused && distinctPoolCount > 1)
+      ? ' (ambas API keys de Groq en pausa por cuota)'
+      : '';
     throw new Error(
-      `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada${dualExhaustedNote}. ${detail ? `(${detail})` : ''}`
+      `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada${cascadeExhaustedNote}. ${detail ? `(${detail})` : ''}`
     );
   }
   throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
 }
 
-/** Ejecuta una llamada de chat completion con timeout por intento, auto-continuación ante truncamiento y rotación automática entre las 2 claves Groq */
+/** Ejecuta una llamada de chat completion con cascada automática Qwen -> GPT-OSS 120B en ambas API keys */
 export async function queryAICompletion(
   messages: ChatMessage[],
   jsonMode: boolean = false,
@@ -2239,11 +2675,16 @@ export async function queryAICompletion(
       ? 'oral'
       : 'general';
 
+  const configuredPrimaryModel = (settings.model || DEFAULT_AI_SETTINGS.model).trim() || GROQ_PRIMARY_MODEL;
+  const fullCascadeRoutes = isGroqEndpoint
+    ? buildGroqCascadeRoutes(preferredRole, configuredPrimaryModel, settings.apiKey)
+    : [];
   const groqSelection = isGroqEndpoint
-    ? pickActiveGroqKey(preferredRole, settings.apiKey)
+    ? pickActiveGroqRoute(preferredRole, configuredPrimaryModel, settings.apiKey)
     : null;
 
-  const targetKey = (groqSelection?.apiKey || settings.apiKey || '').trim();
+  const targetKey = (groqSelection?.route.apiKey || settings.apiKey || '').trim();
+  const targetModel = (groqSelection?.route.model || configuredPrimaryModel).trim();
   const hasPersonalKey = Boolean(targetKey.length > 0);
 
   if (!isLocal && !hasPersonalKey) {
@@ -2253,7 +2694,6 @@ export async function queryAICompletion(
   }
 
   const targetBase = cleanBase;
-  const targetModel = settings.model || DEFAULT_AI_SETTINGS.model;
   const effectiveMessages = messages;
   const url = `${targetBase}/chat/completions`;
   const perAttemptTimeoutMs = Math.max(settings.timeoutMs || 45000, 60000);
@@ -2311,7 +2751,9 @@ export async function queryAICompletion(
     jsonMode,
     override,
     options,
-    preferredRole
+    preferredRole,
+    groqSelection?.route,
+    fullCascadeRoutes
   );
 
   if (!firstAttempt.rawContent) {
@@ -2325,11 +2767,12 @@ export async function queryAICompletion(
   let accumulated = firstAttempt.rawContent;
   let finishReason = firstAttempt.finishReason;
   let currentUsedKey = firstAttempt.usedKey || targetKey;
+  let currentUsedModel = firstAttempt.usedModel || targetModel;
 
   // Continuar automáticamente hasta completar si el modelo cortó por max_tokens (finish_reason === 'length')
   for (let contIdx = 0; contIdx < 2 && finishReason === 'length'; contIdx++) {
     const systemSeed = effectiveMessages.find(m => m.role === 'system');
-    const isSmallCtxModel = /allam/i.test(targetModel);
+    const isSmallCtxModel = /allam/i.test(currentUsedModel);
     const tailSnippet = accumulated.slice(isSmallCtxModel ? -2500 : -7000);
     const contMessages: ChatMessage[] = [
       ...(systemSeed ? [{ role: 'system' as const, content: systemSeed.content }] : []),
@@ -2344,17 +2787,18 @@ export async function queryAICompletion(
       },
     ];
 
-    const contKeySelection = isGroqEndpoint
-      ? pickActiveGroqKey(preferredRole, currentUsedKey)
+    const contSelection = isGroqEndpoint
+      ? pickActiveGroqRoute(preferredRole, configuredPrimaryModel, settings.apiKey)
       : null;
-    const contKey = (contKeySelection?.apiKey || currentUsedKey || targetKey).trim();
+    const contKey = (contSelection?.route.apiKey || currentUsedKey || targetKey).trim();
+    const contModel = (contSelection?.route.model || currentUsedModel || targetModel).trim();
     const contHeaders: Record<string, string> = {
       ...headers,
       ...(contKey ? { Authorization: `Bearer ${contKey}` } : {}),
     };
 
     const activeGroqCap = isGroqEndpoint
-      ? getCachedGroqOutputCap(cleanBase, targetModel, contKey)
+      ? getCachedGroqOutputCap(cleanBase, contModel, contKey)
       : null;
     const desiredContMax = typeof body['max_tokens'] === 'number'
       ? Math.min(body['max_tokens'] as number, isSmallCtxModel ? 2000 : 6144)
@@ -2365,6 +2809,7 @@ export async function queryAICompletion(
 
     const contBody: Record<string, unknown> = {
       ...body,
+      model: contModel,
       messages: contMessages,
       ...(typeof boundedContMax === 'number' ? { max_tokens: boundedContMax } : {}),
     };
@@ -2377,17 +2822,20 @@ export async function queryAICompletion(
         contMessages,
         perAttemptTimeoutMs,
         cleanBase,
-        targetModel,
+        contModel,
         contKey,
         false,
         override,
         options,
-        preferredRole
+        preferredRole,
+        contSelection?.route,
+        fullCascadeRoutes
       );
       if (!nextAttempt.rawContent || nextAttempt.rawContent.trim().length === 0) {
         break;
       }
       currentUsedKey = nextAttempt.usedKey || contKey;
+      currentUsedModel = nextAttempt.usedModel || contModel;
       accumulated = stitchContinuationText(accumulated, nextAttempt.rawContent);
       finishReason = nextAttempt.finishReason;
     } catch (contErr) {

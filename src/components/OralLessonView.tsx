@@ -18,7 +18,7 @@ import {
   X,
   ArrowLeft,
 } from 'lucide-react';
-import { askTheaAI, getGroqApiKey } from '../services/aiService';
+import { askTheaAI, getGroqKeyPool, pickActiveGroqKey, GROQ_WHISPER_MODEL } from '../services/aiService';
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { FormattedText } from './FormattedText';
 import { startWhisperRecording, isWhisperMicSupported, isMeaningfulSpeech, type WhisperRecording } from '../services/whisperMic';
@@ -130,8 +130,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(getPreferredSpeechLang);
 
-  const groqKey = getGroqApiKey();
-  const useWhisper = Boolean(groqKey && groqKey.startsWith('gsk_')) && isWhisperMicSupported();
+  const whisperPool = getGroqKeyPool('oral');
+  const useWhisper = whisperPool.length > 0 && isWhisperMicSupported();
   const useWhisperRef = useRef(useWhisper);
   useWhisperRef.current = useWhisper;
   const whisperRef = useRef<WhisperRecording | null>(null);
@@ -417,7 +417,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
     setListening(true);
     try {
       const rec = await startWhisperRecording({
-        apiKey: getGroqApiKey(),
+        apiKey: pickActiveGroqKey('oral', undefined, GROQ_WHISPER_MODEL).apiKey,
         language: 'es',
         prompt: kit.title,                        // mejora términos técnicos
         autoStopOnSilence: true,                  // Auto-detección activa para responder solo

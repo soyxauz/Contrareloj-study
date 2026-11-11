@@ -12,6 +12,7 @@
 
 import {
   clearGroqKeyCooldown,
+  getGroqKeyCooldownInfo,
   getGroqKeyPool,
   isUsableGroqApiKey,
   markGroqKeyCooldown,
@@ -130,7 +131,7 @@ function buildWhisperFormData(blob: Blob, opts: WhisperMicOptions): FormData {
 }
 
 function resolveWhisperCandidateKeys(preferredKey?: string): string[] {
-  const active = pickActiveGroqKey('oral', preferredKey);
+  const active = pickActiveGroqKey('oral', preferredKey, STT_MODEL);
   const pool = getGroqKeyPool('oral', preferredKey);
   const ordered: string[] = [];
   const pushUnique = (k?: string | null) => {
@@ -143,6 +144,12 @@ function resolveWhisperCandidateKeys(preferredKey?: string): string[] {
 
   if (isUsableGroqApiKey(active.apiKey)) {
     pushUnique(active.apiKey);
+  }
+  // Priorizar claves cuyo modelo Whisper NO esté en enfriamiento
+  for (const entry of pool) {
+    if (isUsableGroqApiKey(entry.apiKey) && !getGroqKeyCooldownInfo(entry.apiKey, STT_MODEL).isInCooldown) {
+      pushUnique(entry.apiKey);
+    }
   }
   for (const entry of pool) {
     if (isUsableGroqApiKey(entry.apiKey)) {
@@ -176,7 +183,7 @@ export async function transcribeAudioWithGroqRotation(blob: Blob, opts: WhisperM
     });
 
     if (res.ok) {
-      clearGroqKeyCooldown(candidateKey);
+      clearGroqKeyCooldown(candidateKey, STT_MODEL);
       const json = await res.json();
       return String(json?.text || '').trim();
     }
@@ -193,7 +200,7 @@ export async function transcribeAudioWithGroqRotation(blob: Blob, opts: WhisperM
     lastDetail = detail;
 
     if (res.status === 401 || res.status === 402 || res.status === 429) {
-      markGroqKeyCooldown(candidateKey, errText || detail || `HTTP ${res.status}`, res.status);
+      markGroqKeyCooldown(candidateKey, errText || detail || `HTTP ${res.status}`, res.status, STT_MODEL);
       if (idx + 1 < candidates.length) {
         console.warn(`[WhisperMic] Clave ${idx + 1} recibió HTTP ${res.status}; rotando a clave de respaldo manteniendo ${STT_MODEL}.`);
         continue;

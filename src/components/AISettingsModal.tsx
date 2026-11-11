@@ -23,6 +23,8 @@ import {
   normalizeOpenAIBaseUrl,
   getGroqKeyRotationStatus,
   clearGroqKeyCooldown,
+  clearGroqAuthCooldown,
+  GROQ_PRIMARY_MODEL,
   GROQ_KEY_ROTATION_EVENT,
   type GroqRotationSummary,
 } from '../services/aiService';
@@ -55,7 +57,7 @@ function loadGeneralState(): AISettings {
   return {
     ...current,
     baseUrl: normalizeOpenAIBaseUrl(current.baseUrl || '') || 'https://api.groq.com/openai/v1',
-    model: (current.model || '').trim() || 'openai/gpt-oss-120b',
+    model: (current.model || '').trim() || GROQ_PRIMARY_MODEL,
     apiKey: (current.apiKey || '').trim(),
     verified: Boolean(current.apiKey && current.apiKey.trim().length > 0),
   };
@@ -124,19 +126,28 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     setRotationSummary(getGroqKeyRotationStatus());
   }, [isOpen]);
 
+  const hasAnyModelCooldown =
+    rotationSummary.general.isInCooldown ||
+    rotationSummary.oral.isInCooldown ||
+    rotationSummary.general.models.qwen.isInCooldown ||
+    rotationSummary.general.models.gptOss120.isInCooldown ||
+    rotationSummary.general.models.whisper.isInCooldown ||
+    rotationSummary.oral.models.qwen.isInCooldown ||
+    rotationSummary.oral.models.gptOss120.isInCooldown ||
+    rotationSummary.oral.models.whisper.isInCooldown;
+
   useEffect(() => {
     if (!isOpen || typeof window === 'undefined') return;
     const syncRotation = () => setRotationSummary(getGroqKeyRotationStatus());
     window.addEventListener(GROQ_KEY_ROTATION_EVENT, syncRotation);
     window.addEventListener('thea_ai_settings_changed', syncRotation);
-    const hasCooldown = rotationSummary.general.isInCooldown || rotationSummary.oral.isInCooldown;
-    const timer = hasCooldown ? window.setInterval(syncRotation, 1000) : null;
+    const timer = hasAnyModelCooldown ? window.setInterval(syncRotation, 1000) : null;
     return () => {
       window.removeEventListener(GROQ_KEY_ROTATION_EVENT, syncRotation);
       window.removeEventListener('thea_ai_settings_changed', syncRotation);
       if (timer !== null) window.clearInterval(timer);
     };
-  }, [isOpen, rotationSummary.general.isInCooldown, rotationSummary.oral.isInCooldown]);
+  }, [isOpen, hasAnyModelCooldown]);
 
   const isOral = selectedPresetId === 'groq';
 
@@ -168,7 +179,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   const persistSelectedPreset = (targetSettings: AISettings, presetId: string) => {
     const cleanKey = (targetSettings.apiKey || '').trim();
     const cleanUrl = normalizeOpenAIBaseUrl(targetSettings.baseUrl || '') || 'https://api.groq.com/openai/v1';
-    const cleanModel = (targetSettings.model || '').trim() || 'openai/gpt-oss-120b';
+    const cleanModel = (targetSettings.model || '').trim() || GROQ_PRIMARY_MODEL;
 
     const previousKeyForRole = presetId === 'groq'
       ? getGroqApiKey().trim()
@@ -248,7 +259,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         if (cancelled) return;
         setTestResult(res);
         if (res.success) {
-          clearGroqKeyCooldown(testedApiKey);
+          clearGroqAuthCooldown(testedApiKey);
           const currentLatest = latestSettingsRef.current;
           const verifiedSettings: AISettings = { ...currentLatest, verified: true };
           setSettings(prev => ({ ...prev, verified: true }));
@@ -296,7 +307,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       const res = await testAIConnection(settings);
       setTestResult(res);
       if (res.success) {
-        clearGroqKeyCooldown(settings.apiKey);
+        clearGroqAuthCooldown(settings.apiKey);
         const verifiedSettings = { ...settings, verified: true };
         setSettings(verifiedSettings);
         persistSelectedPreset(verifiedSettings, selectedPresetId);
@@ -503,8 +514,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Asignacion Fija de Motores por Area + Rotacion Inteligente */}
-          <div className={`p-3.5 rounded-2xl border text-xs flex flex-col gap-1.5 shadow-sm ${
+          {/* Asignacion Fija de Motores por Area + Cascada 4 Etapas Qwen -> GPT-OSS 120B */}
+          <div className={`p-3.5 rounded-2xl border text-xs flex flex-col gap-2 shadow-sm ${
             isDark
               ? 'bg-violet-950/35 border-violet-500/30 text-zinc-300'
               : isKitty
@@ -514,26 +525,82 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className={`flex items-center gap-1.5 font-bold ${isDark ? 'text-violet-300' : 'text-violet-700'}`}>
                 <Settings className="w-4 h-4 shrink-0" />
-                <span>Asignación y rotación automática de claves Groq:</span>
+                <span>Cascada automática Qwen → GPT-OSS 120B:</span>
               </div>
-              <span
-                data-testid="groq-rotation-pair-badge"
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                  rotationSummary.hasDistinctPair
-                    ? isDark
-                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : isDark
-                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
-                }`}
-              >
-                {rotationSummary.hasDistinctPair ? 'Rotación 2 claves activa' : 'Configura 2 claves distintas'}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {rotationSummary.activeGeneralStep && (
+                  <span
+                    data-testid="groq-active-cascade-step"
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 tabular-nums ${
+                      rotationSummary.activeGeneralStep.isInCooldown
+                        ? isDark
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                        : isDark
+                        ? 'bg-cyan-500/15 text-cyan-200 border-cyan-400/35'
+                        : 'bg-cyan-50 text-cyan-800 border-cyan-200'
+                    }`}
+                  >
+                    {rotationSummary.activeGeneralStep.isInCooldown
+                      ? 'Todas en pausa'
+                      : `Paso ${rotationSummary.activeGeneralStep.stage}/${rotationSummary.activeGeneralStep.totalStages} · ${rotationSummary.activeGeneralStep.modelShortLabel} (${rotationSummary.activeGeneralStep.role === 'general' ? 'API 1' : 'API 2'})`}
+                  </span>
+                )}
+                <span
+                  data-testid="groq-rotation-pair-badge"
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                    rotationSummary.hasDistinctPair
+                      ? isDark
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : isDark
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}
+                >
+                  {rotationSummary.hasDistinctPair ? 'Rotación 2 claves activa' : 'Configura 2 claves distintas'}
+                </span>
+              </div>
             </div>
             <p className={`text-[11px] leading-relaxed ${isDark ? 'text-zinc-300' : 'text-slate-600'}`}>
-              <strong className={strongText}>Groq Cloud (Motor General)</strong> procesa todo el estudio general (kits, Chat Tutor, Smart Study, Podcasts y exámenes). <strong className={strongText}>Groq Cloud (Motor de Voz)</strong> gestiona Lección Oral y Whisper. Si una agota su cuota, la otra entra en sustitución manteniendo tu modelo elegido.
+              Todo el kit (Smart Study, Guía, Podcast, flashcards, exámenes y Chat Tutor) arranca con <strong className={strongText}>Qwen</strong> en API 1 → API 2 y luego salta a <strong className={strongText}>GPT-OSS 120B</strong> en API 1 → API 2. Lección Oral usa <strong className={strongText}>Whisper</strong> para voz y la cascada inversa (API 2 → API 1).
             </p>
+            {rotationSummary.generalCascade.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-0.5">
+                {rotationSummary.generalCascade.map(step => (
+                  <div
+                    key={`${step.stage}-${step.role}-${step.model}`}
+                    data-testid={`groq-cascade-step-${step.stage}`}
+                    title={step.reason || `${step.model} (${step.roleLabel})`}
+                    className={`px-2 py-1 rounded-lg border text-[10px] leading-tight flex flex-col gap-0.5 tabular-nums ${
+                      step.isActive
+                        ? isDark
+                          ? 'bg-emerald-500/15 border-emerald-400/45 text-emerald-200'
+                          : 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
+                        : step.isInCooldown
+                        ? isDark
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-300/90'
+                          : 'bg-amber-50/90 border-amber-200 text-amber-800'
+                        : isDark
+                        ? 'bg-white/[0.03] border-white/10 text-zinc-400'
+                        : 'bg-white/80 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <span className="font-bold truncate">
+                      {step.stage}. {step.modelShortLabel}
+                    </span>
+                    <span className="text-[9px] opacity-85 truncate">
+                      {step.role === 'general' ? 'API 1 (Gen)' : 'API 2 (Voz)'}
+                      {step.isInCooldown
+                        ? ` · ${formatCooldownRemaining(step.cooldownRemainingMs)}`
+                        : step.isActive
+                        ? ' · En uso'
+                        : ' · Lista'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Provider Presets (Groq General + Groq Voz) */}
@@ -559,8 +626,20 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   ? savedGeneralSnapshot.model || preset.model
                   : (getGroqApiKey().startsWith('gsk_') ? getGroqModel() : getGrokModel());
 
+                const activeGeneral = rotationSummary.activeGeneralStep;
+                const isServingCascadeFallback = Boolean(
+                  activeGeneral &&
+                  !activeGeneral.isInCooldown &&
+                  activeGeneral.role === (isGeneral ? 'general' : 'oral') &&
+                  activeGeneral.stage > 1
+                );
+
                 const statusLabel = !roleStatus.hasKey
                   ? 'Sin clave'
+                  : isServingCascadeFallback && activeGeneral
+                  ? (activeGeneral.role === 'oral' && !isGeneral && activeGeneral.model === GROQ_PRIMARY_MODEL
+                      ? 'En uso (Sustituye a General)'
+                      : `En uso (${activeGeneral.modelShortLabel})`)
                   : roleStatus.isInCooldown
                   ? `Pausada · ${formatCooldownRemaining(roleStatus.cooldownRemainingMs)}`
                   : roleStatus.isActingAsBackupFor
@@ -571,14 +650,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   ? isDark
                     ? 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30'
                     : 'bg-slate-100 text-slate-600 border-slate-200'
+                  : isServingCascadeFallback || roleStatus.isActingAsBackupFor
+                  ? isDark
+                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40'
+                    : 'bg-cyan-50 text-cyan-800 border-cyan-200'
                   : roleStatus.isInCooldown
                   ? isDark
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/35'
                     : 'bg-amber-50 text-amber-800 border-amber-200'
-                  : roleStatus.isActingAsBackupFor
-                  ? isDark
-                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40'
-                    : 'bg-cyan-50 text-cyan-800 border-cyan-200'
                   : isDark
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                   : 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -638,6 +717,27 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                       <p className={`text-[11px] leading-snug ${mutedText}`}>
                         {preset.description}
                       </p>
+                      {roleStatus.hasKey && (
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          {[roleStatus.models.qwen, roleStatus.models.gptOss120, ...(isGeneral ? [] : [roleStatus.models.whisper])].map(m => (
+                            <span
+                              key={m.model}
+                              title={m.reason || m.model}
+                              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md border tabular-nums ${
+                                m.isInCooldown
+                                  ? isDark
+                                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                  : isDark
+                                  ? 'bg-white/[0.04] text-zinc-300 border-white/10'
+                                  : 'bg-white/90 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              {m.shortLabel}: {m.isInCooldown ? formatCooldownRemaining(m.remainingMs) : 'OK'}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex sm:flex-col items-end sm:items-end justify-between sm:justify-center gap-1.5 shrink-0">
                       <span className={`text-xs font-mono font-medium px-2.5 py-1 rounded-lg border ${
@@ -791,7 +891,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   const newModel = e.target.value;
                   setSettings(prev => ({ ...prev, model: newModel }));
                 }}
-                placeholder="openai/gpt-oss-120b"
+                placeholder={GROQ_PRIMARY_MODEL}
                 className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(modelValidation.isValid)}`}
               />
               {!modelValidation.isValid && (
@@ -893,7 +993,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-zinc-300 hover:text-white'
                   : 'border-slate-200 bg-slate-100 hover:bg-slate-200/70 text-slate-800'
               }`}
-              title="Restablecer a valores oficiales de Groq Cloud (https://api.groq.com/openai/v1, openai/gpt-oss-120b)"
+              title="Restablecer a valores oficiales de Groq Cloud (https://api.groq.com/openai/v1, qwen/qwen3.8-27b)"
             >
               <RefreshCw className="w-3.5 h-3.5 opacity-70" />
               <span>Restablecer</span>
