@@ -1018,6 +1018,15 @@ img[alt*="Gráfico"],
   background-color: rgba(253, 242, 248, 0.72) !important;
 }
 
+/* Permite que el tamaño tipográfico del contenedor QuestionPrompt prevalezca sobre <p>/<li> internos */
+.question-prompt p,
+.question-prompt li,
+[data-question-prompt] p,
+[data-question-prompt] li {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
 /* ── 9. Enunciados y Letras Enfatizadas en Modo Kitty (Rosa Intenso de Alto Contraste) ── */
 [data-theme="kitty"] .question-prompt strong,
 [data-theme="kitty"] .question-prompt b,

@@ -3718,7 +3718,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 : enforceQuestionLengthLimit(currentQ.question)
             }
             topic={currentQ.topic}
-            className="text-2xl sm:text-[1.75rem] tracking-tight mb-6 sm:mb-8 leading-snug"
+            className="text-xl sm:text-[23px] tracking-tight mb-6 sm:mb-8 leading-snug"
           />
 
           {/* ── QUESTION TYPE RENDERERS ────────────────────────────────────── */}
