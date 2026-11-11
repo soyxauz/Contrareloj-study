@@ -558,20 +558,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const isAdvancingRef = useRef<boolean>(false);
   const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
 
-  // ── Justificaciones desplegables bajo demanda (Historial) ───
-  const [expandedHistoryQuestions, setExpandedHistoryQuestions] = useState<Set<string>>(new Set());
+  // ── Acordeón de justificación única bajo demanda (Historial) para ahorrar recursos ───
+  const [expandedHistoryItemId, setExpandedHistoryItemId] = useState<string | null>(null);
 
-  const toggleHistoryJustification = (questionId: string) => {
-    setExpandedHistoryQuestions(prev => {
-      const next = new Set(prev);
-      if (next.has(questionId)) {
-        next.delete(questionId);
-      } else {
-        next.add(questionId);
-      }
-      return next;
-    });
+  const toggleHistoryJustification = (entryKey: string) => {
+    setExpandedHistoryItemId(prev => (prev === entryKey ? null : entryKey));
   };
+
+  useEffect(() => {
+    if (activeTab !== 'history') {
+      setExpandedHistoryItemId(null);
+    }
+  }, [activeTab]);
 
   // ── Tracking de Preguntas Respondidas y Vistas (para rotación dinámica y generación) ──
   const answeredQuestionIdsRef = useRef<Set<string>>((() => {
@@ -3463,29 +3461,34 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     </div>
                   </div>
 
-                  {/* Botón para desplegar / ocultar Justificación */}
-                  <div className="pt-1 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => toggleHistoryJustification(item.questionId)}
-                      className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
-                        expandedHistoryQuestions.has(item.questionId)
-                          ? 'bg-violet-600 text-white hover:bg-violet-500 ring-1 ring-violet-400/50 shadow-violet-900/30'
-                          : 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-violet-300 border border-violet-500/30'
-                      }`}
-                    >
-                      <FileText className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{expandedHistoryQuestions.has(item.questionId) ? 'Ocultar Justificación' : 'Justificación'}</span>
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                          expandedHistoryQuestions.has(item.questionId) ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-                  </div>
+                  {/* Botón para desplegar / ocultar Justificación (acordeón único) */}
+                  {(() => {
+                    const historyEntryKey = item.id || `${item.questionId}-${idx}`;
+                    const isJustificationOpen = expandedHistoryItemId === historyEntryKey;
+                    return (
+                      <>
+                        <div className="pt-1 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => toggleHistoryJustification(historyEntryKey)}
+                            className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                              isJustificationOpen
+                                ? 'bg-violet-600 text-white hover:bg-violet-500 ring-1 ring-violet-400/50 shadow-violet-900/30'
+                                : 'bg-thea-surfaceLight hover:bg-thea-surfaceLight/80 text-violet-300 border border-violet-500/30'
+                            }`}
+                          >
+                            <FileText className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{isJustificationOpen ? 'Ocultar Justificación' : 'Justificación'}</span>
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                isJustificationOpen ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
 
-                  {/* Explicación Pedagógica (solo visible al pulsar Justificación) */}
-                  {expandedHistoryQuestions.has(item.questionId) && (() => {
+                        {/* Explicación Pedagógica (solo una activa a la vez) */}
+                        {isJustificationOpen && (() => {
                     const cleanQId = (item.questionId || '').replace(/^(tf-|sa-|mc-|dd-|drag-drop-)/, '');
                     const matchedQ: Question = kit.questions.find(q => q.id === item.questionId || q.id === cleanQId) || {
                       id: item.questionId,
@@ -3544,6 +3547,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                           />
                         </div>
                       </div>
+                    );
+                  })()}
+                      </>
                     );
                   })()}
                 </div>
