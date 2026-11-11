@@ -733,7 +733,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                 selectedMateria === 'all'
                   ? theme === 'dark'
                     ? 'bg-white/[0.10] text-white border-white/15'
-                    : 'bg-white/25 text-white border-transparent'
+                    : 'bg-white/25 text-white keep-white border-transparent'
                   : theme === 'dark'
                   ? 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
                   : theme === 'kitty'
@@ -771,7 +771,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     isSelected
                       ? theme === 'dark'
                         ? 'bg-white/[0.10] text-white border-white/15'
-                        : 'bg-white/25 text-white border-transparent'
+                        : 'bg-white/25 text-white keep-white border-transparent'
                       : theme === 'dark'
                       ? 'bg-white/[0.05] text-slate-400 border-white/[0.06]'
                       : theme === 'kitty'

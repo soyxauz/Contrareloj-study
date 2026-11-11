@@ -933,13 +933,15 @@ img[alt*="Gráfico"],
 [data-theme="light"] button.bg-emerald-600,
 [data-theme="light"] button.bg-blue-600,
 [data-theme="light"] button.bg-slate-900,
+[data-theme="light"] button.bg-zinc-900,
 [data-theme="kitty"] button.bg-violet-600,
 [data-theme="kitty"] button.bg-rose-600,
 [data-theme="kitty"] button.bg-pink-500,
 [data-theme="kitty"] button.bg-pink-600,
 [data-theme="kitty"] button.bg-emerald-600,
 [data-theme="kitty"] button.bg-blue-600,
-[data-theme="kitty"] button.bg-slate-900 {
+[data-theme="kitty"] button.bg-slate-900,
+[data-theme="kitty"] button.bg-zinc-900 {
   color: #ffffff !important;
 }
 
@@ -947,9 +949,11 @@ img[alt*="Gráfico"],
 [data-theme="light"] button.bg-rose-600 *,
 [data-theme="light"] button.bg-rose-500 *,
 [data-theme="light"] button.bg-indigo-600 *,
+[data-theme="light"] button.bg-zinc-900 *,
 [data-theme="kitty"] button.bg-pink-500 *,
 [data-theme="kitty"] button.bg-pink-600 *,
-[data-theme="kitty"] button.bg-violet-600 * {
+[data-theme="kitty"] button.bg-violet-600 *,
+[data-theme="kitty"] button.bg-zinc-900 * {
   color: #ffffff !important;
 }
 
