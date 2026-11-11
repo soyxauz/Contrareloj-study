@@ -56,7 +56,7 @@
 
     --glass-surface: rgba(255, 255, 255, 0.78);
     --glass-surface-chrome: rgba(255, 255, 255, 0.84);
-    --glass-surface-strong: rgba(255, 255, 255, 0.97);
+    --glass-surface-strong: #ffffff;
     --glass-surface-subtle: rgba(255, 255, 255, 0.68);
     --glass-border: rgba(148, 163, 184, 0.30);
     --glass-border-strong: rgba(148, 163, 184, 0.44);
@@ -87,7 +87,7 @@
 
     --glass-surface: rgba(255, 248, 252, 0.80);
     --glass-surface-chrome: rgba(255, 246, 251, 0.86);
-    --glass-surface-strong: rgba(255, 250, 253, 0.97);
+    --glass-surface-strong: #fffafe;
     --glass-surface-subtle: rgba(255, 242, 249, 0.70);
     --glass-border: rgba(244, 114, 182, 0.30);
     --glass-border-strong: rgba(236, 72, 153, 0.44);
