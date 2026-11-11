@@ -1316,6 +1316,126 @@ function compactMessagesForTokenCap(
   });
 }
 
+const GROQ_OUTPUT_CAP_STORAGE_KEY = 'thea_groq_output_caps';
+const groqOutputCapMemory = new Map<string, number>();
+
+function getGroqModelCapKey(cleanBase: string, model: string, apiKey: string): string {
+  const keyTag = (apiKey || '').trim().slice(-8) || 'anon';
+  return `${cleanBase.toLowerCase()}|${model.trim().toLowerCase()}|${keyTag}`;
+}
+
+/** Obtiene el tope de max_tokens descubierto en esta sesión para modelos Groq con límite OTPM estricto. */
+export function getCachedGroqOutputCap(cleanBase: string, model: string, apiKey: string): number | null {
+  if (!cleanBase.includes('api.groq.com') || !model) return null;
+  const cacheKey = getGroqModelCapKey(cleanBase, model, apiKey);
+  const memVal = groqOutputCapMemory.get(cacheKey);
+  if (typeof memVal === 'number' && memVal > 0) return memVal;
+
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const raw = sessionStorage.getItem(GROQ_OUTPUT_CAP_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const stored = Number(parsed?.[cacheKey]);
+        if (Number.isFinite(stored) && stored > 0) {
+          groqOutputCapMemory.set(cacheKey, stored);
+          return stored;
+        }
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return null;
+}
+
+/** Almacena el tope seguro de max_tokens para un modelo Groq sin sobreescribir límites más bajos ya aprendidos. */
+function rememberGroqOutputCap(cleanBase: string, model: string, apiKey: string, capTokens: number): void {
+  if (!cleanBase.includes('api.groq.com') || !model || !Number.isFinite(capTokens) || capTokens <= 0) return;
+  const normalizedCap = Math.max(256, Math.floor(capTokens));
+  const cacheKey = getGroqModelCapKey(cleanBase, model, apiKey);
+  const existing = getCachedGroqOutputCap(cleanBase, model, apiKey);
+  const nextCap = existing !== null ? Math.min(existing, normalizedCap) : normalizedCap;
+  groqOutputCapMemory.set(cacheKey, nextCap);
+
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const raw = sessionStorage.getItem(GROQ_OUTPUT_CAP_STORAGE_KEY);
+      const map: Record<string, number> = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+      map[cacheKey] = nextCap;
+      sessionStorage.setItem(GROQ_OUTPUT_CAP_STORAGE_KEY, JSON.stringify(map));
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+/** Extrae información estructurada de límites TPM y OTPM (max_tokens) en respuestas 429/413 de Groq. */
+export function parseGroqTokenLimitInfo(errText: string): {
+  isOutputLimit: boolean;
+  limit: number | null;
+  used: number | null;
+  requested: number | null;
+  hasWaitHint: boolean;
+} {
+  if (!errText) {
+    return { isOutputLimit: false, limit: null, used: null, requested: null, hasWaitHint: false };
+  }
+  const isOutputLimit = /(?:output tokens per minute|OTPM|reduce\s+max_tokens|expected output tokens exceed)/i.test(errText);
+  const limitMatch = errText.match(/\bLimit\s+(\d+)/i);
+  const usedMatch = errText.match(/\bUsed\s+(\d+)/i);
+  const requestedMatch = errText.match(/\bRequested\s+(\d+)/i);
+  const hasWaitHint = /try again in\s+\d/i.test(errText);
+  return {
+    isOutputLimit,
+    limit: limitMatch ? Number(limitMatch[1]) : null,
+    used: usedMatch ? Number(usedMatch[1]) : null,
+    requested: requestedMatch ? Number(requestedMatch[1]) : null,
+    hasWaitHint,
+  };
+}
+
+function computeNextRetryMaxTokens(
+  failedStatus: number,
+  retryIdx: number,
+  currentMaxTokens: number | undefined,
+  info: ReturnType<typeof parseGroqTokenLimitInfo>,
+  cleanBase: string,
+  targetModel: string,
+  targetKey: string
+): number | undefined {
+  if (info.isOutputLimit) {
+    const safeSteadyCap = info.limit !== null
+      ? Math.max(256, Math.floor(info.limit * 0.9))
+      : Math.max(256, Math.floor((currentMaxTokens ?? info.requested ?? 2048) * 0.45));
+
+    rememberGroqOutputCap(cleanBase, targetModel, targetKey, safeSteadyCap);
+
+    // Si en el minuto actual aún queda cuota usable (>= 300 tokens) y no pide esperar, ajustar al saldo restante
+    if (info.limit !== null && info.used !== null && !info.hasWaitHint) {
+      const remaining = info.limit - info.used;
+      if (remaining >= 300) {
+        return Math.min(safeSteadyCap, Math.max(256, Math.floor(remaining * 0.85)));
+      }
+    }
+    return safeSteadyCap;
+  }
+
+  // En errores 413/429 por TPM global (ej. max_tokens: 8192 en plan Limit 6000), reducir también max_tokens
+  if (info.limit !== null && info.requested !== null && info.requested > info.limit) {
+    const baseline = currentMaxTokens ?? info.requested;
+    const bounded = Math.max(512, Math.floor(info.limit * 0.45));
+    if (baseline > bounded) {
+      return bounded;
+    }
+  }
+
+  if (failedStatus === 413 && retryIdx > 0 && typeof currentMaxTokens === 'number') {
+    return Math.min(currentMaxTokens, 3072);
+  }
+  return currentMaxTokens;
+}
+
 function parseGroqRetryWaitMs(errText: string): number {
   const minSecMatch = errText.match(/try again in\s+(\d+)m(\d+(?:\.\d+)?)s/i);
   if (minSecMatch) {
@@ -1394,48 +1514,68 @@ async function executeGroqAwareCompletion(
   override?: AISettings,
   options?: QueryCompletionOptions
 ): Promise<{ rawContent: string; finishReason: string }> {
-  let response = await runFetchAttemptWithTimeout(url, headers, body, perAttemptTimeoutMs);
+  let currentBody: Record<string, unknown> = { ...body };
+  let response = await runFetchAttemptWithTimeout(url, headers, currentBody, perAttemptTimeoutMs);
 
   // Si Groq rechaza strict response_format (p. ej. json_validate_failed por LaTeX/saltos), reintentar dejando que safeParseAIJSON parsee el JSON
   if (response.status === 400 && jsonMode && cleanBase.includes('api.groq.com')) {
-    const relaxedBody: Record<string, unknown> = { ...body };
+    const relaxedBody: Record<string, unknown> = { ...currentBody };
     delete relaxedBody['response_format'];
-    response = await runFetchAttemptWithTimeout(url, headers, relaxedBody, perAttemptTimeoutMs);
+    currentBody = relaxedBody;
+    response = await runFetchAttemptWithTimeout(url, headers, currentBody, perAttemptTimeoutMs);
   }
 
-  // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (8K TPM) o espera real de 429
+  // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (TPM) o 429 (OTPM / TPM / RPM)
   if (cleanBase.includes('api.groq.com')) {
-    for (let retryIdx = 0; retryIdx < 2 && (response.status === 413 || response.status === 429); retryIdx++) {
+    for (let retryIdx = 0; retryIdx < 3 && (response.status === 413 || response.status === 429); retryIdx++) {
       const failedStatus = response.status;
-      if (failedStatus === 429) {
-        let waitMs = 2600;
-        try {
-          const cloned = response.clone();
-          const errText = await cloned.text();
-          waitMs = parseGroqRetryWaitMs(errText);
-        } catch {
-          waitMs = 2600;
-        }
+      let errText = '';
+      try {
+        errText = await response.clone().text();
+      } catch {
+        errText = '';
+      }
+
+      const limitInfo = parseGroqTokenLimitInfo(errText);
+      const currentMax = typeof currentBody['max_tokens'] === 'number'
+        ? (currentBody['max_tokens'] as number)
+        : undefined;
+      const adjustedMaxTokens = computeNextRetryMaxTokens(
+        failedStatus,
+        retryIdx,
+        currentMax,
+        limitInfo,
+        cleanBase,
+        targetModel,
+        targetKey
+      );
+
+      // Si es rechazo estático por tamaño de max_tokens sin temporizador de espera, reintentar de inmediato
+      const shouldWait =
+        failedStatus === 429 &&
+        (!limitInfo.isOutputLimit || limitInfo.hasWaitHint || (limitInfo.used !== null && limitInfo.limit !== null && (limitInfo.limit - limitInfo.used) < 300));
+
+      if (shouldWait) {
+        const waitMs = parseGroqRetryWaitMs(errText);
         options?.onRetryWait?.(waitMs, failedStatus, retryIdx + 1);
         await new Promise(r => setTimeout(r, waitMs));
+      } else if (failedStatus === 429) {
+        await new Promise(r => setTimeout(r, 100));
       }
 
       const compactLimit = retryIdx === 0 ? 14000 : 8000;
-      const clampedMaxTokens =
-        failedStatus === 413 && retryIdx > 0 && typeof body['max_tokens'] === 'number'
-          ? Math.min(body['max_tokens'] as number, 3072)
-          : body['max_tokens'];
+      const shouldCompactInput = failedStatus === 413 || (!limitInfo.isOutputLimit && limitInfo.limit !== null);
 
-      const sameModelRetryBody: Record<string, unknown> = {
-        ...body,
+      currentBody = {
+        ...currentBody,
         model: targetModel,
-        ...(clampedMaxTokens ? { max_tokens: clampedMaxTokens } : {}),
-        ...(failedStatus === 413
+        ...(typeof adjustedMaxTokens === 'number' ? { max_tokens: adjustedMaxTokens } : {}),
+        ...(shouldCompactInput
           ? { messages: compactMessagesForTokenCap(effectiveMessages, compactLimit) }
           : {}),
       };
 
-      response = await runFetchAttemptWithTimeout(url, headers, sameModelRetryBody, perAttemptTimeoutMs);
+      response = await runFetchAttemptWithTimeout(url, headers, currentBody, perAttemptTimeoutMs);
     }
   }
 
@@ -1446,7 +1586,7 @@ async function executeGroqAwareCompletion(
     targetModel === 'openai/gpt-oss-120b'
   ) {
     const retryBody = {
-      ...body,
+      ...currentBody,
       model: GROQ_FALLBACK_MODEL,
     };
     response = await runFetchAttemptWithTimeout(url, headers, retryBody, perAttemptTimeoutMs);
@@ -1581,6 +1721,10 @@ export async function queryAICompletion(
     headers['Authorization'] = `Bearer ${targetKey}`;
   }
 
+  const cachedGroqCap = cleanBase.includes('api.groq.com')
+    ? getCachedGroqOutputCap(cleanBase, targetModel, targetKey)
+    : null;
+
   const body: Record<string, unknown> = {
     model: targetModel,
     messages: effectiveMessages,
@@ -1588,7 +1732,11 @@ export async function queryAICompletion(
   };
 
   if (options?.max_tokens) {
-    body['max_tokens'] = options.max_tokens;
+    body['max_tokens'] = cachedGroqCap !== null
+      ? Math.min(options.max_tokens, cachedGroqCap)
+      : options.max_tokens;
+  } else if (cachedGroqCap !== null) {
+    body['max_tokens'] = cachedGroqCap;
   }
 
   if (options?.frequency_penalty !== undefined) {
@@ -1650,12 +1798,20 @@ export async function queryAICompletion(
       },
     ];
 
+    const activeGroqCap = cleanBase.includes('api.groq.com')
+      ? getCachedGroqOutputCap(cleanBase, targetModel, targetKey)
+      : null;
+    const desiredContMax = typeof body['max_tokens'] === 'number'
+      ? Math.min(body['max_tokens'] as number, isSmallCtxModel ? 2000 : 6144)
+      : activeGroqCap;
+    const boundedContMax = desiredContMax !== null && desiredContMax !== undefined && activeGroqCap !== null
+      ? Math.min(desiredContMax, activeGroqCap)
+      : desiredContMax;
+
     const contBody: Record<string, unknown> = {
       ...body,
       messages: contMessages,
-      ...(typeof body['max_tokens'] === 'number'
-        ? { max_tokens: Math.min(body['max_tokens'] as number, isSmallCtxModel ? 2000 : 6144) }
-        : {}),
+      ...(typeof boundedContMax === 'number' ? { max_tokens: boundedContMax } : {}),
     };
 
     try {
@@ -1732,6 +1888,9 @@ export function repairTruncatedJSON(str: string): string | null {
   let result = str.trim();
   if (inString) {
     result += '"';
+  } else {
+    // Limpiar clave JSON truncada sin valor (ej: `, "clave":`) antes de cerrar delimitadores
+    result = result.replace(/,?\s*"[^"\\]*"\s*:\s*$/, '');
   }
   result = result.replace(/,\s*$/, '');
   while (stack.length > 0) {
