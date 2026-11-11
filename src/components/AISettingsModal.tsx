@@ -21,6 +21,10 @@ import {
   saveGrokModel,
   getOralAISettings,
   normalizeOpenAIBaseUrl,
+  getGroqKeyRotationStatus,
+  clearGroqKeyCooldown,
+  GROQ_KEY_ROTATION_EVENT,
+  type GroqRotationSummary,
 } from '../services/aiService';
 import { validateBaseUrl, validateOralApiKey } from '../utils/validation';
 import {
@@ -66,6 +70,17 @@ function buildSnapshot(presetId: string, s: AISettings): string {
   });
 }
 
+function formatCooldownRemaining(ms: number): string {
+  const totalSec = Math.max(1, Math.ceil(ms / 1000));
+  if (totalSec < 60) return `${totalSec}s`;
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+}
+
 export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   isOpen,
   onClose,
@@ -85,6 +100,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('groq-general');
+  const [rotationSummary, setRotationSummary] = useState<GroqRotationSummary>(() => getGroqKeyRotationStatus());
   const initialFormSnapshotRef = useRef<string>('');
   const latestSettingsRef = useRef<AISettings>(settings);
   const isLocalHost = typeof window !== 'undefined' &&
@@ -105,7 +121,22 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     const nextSettings = loadGeneralState();
     setSettings(nextSettings);
     initialFormSnapshotRef.current = buildSnapshot(presetId, nextSettings);
+    setRotationSummary(getGroqKeyRotationStatus());
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return;
+    const syncRotation = () => setRotationSummary(getGroqKeyRotationStatus());
+    window.addEventListener(GROQ_KEY_ROTATION_EVENT, syncRotation);
+    window.addEventListener('thea_ai_settings_changed', syncRotation);
+    const hasCooldown = rotationSummary.general.isInCooldown || rotationSummary.oral.isInCooldown;
+    const timer = hasCooldown ? window.setInterval(syncRotation, 1000) : null;
+    return () => {
+      window.removeEventListener(GROQ_KEY_ROTATION_EVENT, syncRotation);
+      window.removeEventListener('thea_ai_settings_changed', syncRotation);
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [isOpen, rotationSummary.general.isInCooldown, rotationSummary.oral.isInCooldown]);
 
   const isOral = selectedPresetId === 'groq';
 
@@ -139,6 +170,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     const cleanUrl = normalizeOpenAIBaseUrl(targetSettings.baseUrl || '') || 'https://api.groq.com/openai/v1';
     const cleanModel = (targetSettings.model || '').trim() || 'openai/gpt-oss-120b';
 
+    const previousKeyForRole = presetId === 'groq'
+      ? getGroqApiKey().trim()
+      : (getAISettings().apiKey || '').trim();
+    if (cleanKey && cleanKey !== previousKeyForRole) {
+      clearGroqKeyCooldown(cleanKey);
+    }
+
     if (presetId === 'groq') {
       if (cleanKey.startsWith('gsk_')) {
         saveGroqApiKey(cleanKey);
@@ -150,7 +188,22 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         saveGrokBaseUrl(cleanUrl || 'https://api.x.ai/v1');
         saveGrokModel(cleanModel);
       }
-      saveAISettings({ ...targetSettings, baseUrl: cleanUrl, apiKey: cleanKey, model: cleanModel }, 'oral');
+      saveAISettings(
+        {
+          ...targetSettings,
+          baseUrl: cleanUrl,
+          apiKey: cleanKey,
+          model: cleanModel,
+          groqBaseUrl: cleanUrl,
+          groqApiKey: cleanKey,
+          groqModel: cleanModel,
+          grokBaseUrl: cleanUrl,
+          grokApiKey: cleanKey,
+          grokModel: cleanModel,
+          updatedAt: Date.now(),
+        },
+        'oral'
+      );
     } else {
       savePresetApiKey('groq-general', cleanKey);
       saveAISettings(
@@ -165,6 +218,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         'general'
       );
     }
+    setRotationSummary(getGroqKeyRotationStatus());
   };
 
   // Auto-prueba silenciosa de conexión cuando la configuración ingresada es válida
@@ -194,6 +248,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         if (cancelled) return;
         setTestResult(res);
         if (res.success) {
+          clearGroqKeyCooldown(testedApiKey);
           const currentLatest = latestSettingsRef.current;
           const verifiedSettings: AISettings = { ...currentLatest, verified: true };
           setSettings(prev => ({ ...prev, verified: true }));
@@ -241,6 +296,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       const res = await testAIConnection(settings);
       setTestResult(res);
       if (res.success) {
+        clearGroqKeyCooldown(settings.apiKey);
         const verifiedSettings = { ...settings, verified: true };
         setSettings(verifiedSettings);
         persistSelectedPreset(verifiedSettings, selectedPresetId);
@@ -255,10 +311,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
   const handleResetDefaults = () => {
     resetAISettingsToDefault();
+    clearGroqKeyCooldown();
     const restored = loadGeneralState();
     setSettings(restored);
     setSelectedPresetId('groq-general');
     setTestResult(null);
+    setRotationSummary(getGroqKeyRotationStatus());
     initialFormSnapshotRef.current = buildSnapshot('groq-general', restored);
     const user = authService.getCurrentUser();
     if (user) {
@@ -445,7 +503,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Asignacion Fija de Motores por Area */}
+          {/* Asignacion Fija de Motores por Area + Rotacion Inteligente */}
           <div className={`p-3.5 rounded-2xl border text-xs flex flex-col gap-1.5 shadow-sm ${
             isDark
               ? 'bg-violet-950/35 border-violet-500/30 text-zinc-300'
@@ -453,12 +511,28 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               ? 'bg-pink-50/70 border-pink-200 text-zinc-800'
               : 'bg-violet-50/70 border-violet-200 text-slate-700'
           }`}>
-            <div className={`flex items-center gap-1.5 font-bold ${isDark ? 'text-violet-300' : 'text-violet-700'}`}>
-              <Settings className="w-4 h-4 shrink-0" />
-              <span>Asignación dedicada por clave de Groq:</span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className={`flex items-center gap-1.5 font-bold ${isDark ? 'text-violet-300' : 'text-violet-700'}`}>
+                <Settings className="w-4 h-4 shrink-0" />
+                <span>Asignación y rotación automática de claves Groq:</span>
+              </div>
+              <span
+                data-testid="groq-rotation-pair-badge"
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                  rotationSummary.hasDistinctPair
+                    ? isDark
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : isDark
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}
+              >
+                {rotationSummary.hasDistinctPair ? 'Rotación 2 claves activa' : 'Configura 2 claves distintas'}
+              </span>
             </div>
             <p className={`text-[11px] leading-relaxed ${isDark ? 'text-zinc-300' : 'text-slate-600'}`}>
-              <strong className={strongText}>Groq Cloud (Motor General)</strong> procesa todo el estudio general (kits, Chat Tutor, Smart Study, Podcasts y exámenes). <strong className={strongText}>Groq Cloud (Motor de Voz)</strong> conserva su clave independiente exclusivamente para Lección Oral y Conversación.
+              <strong className={strongText}>Groq Cloud (Motor General)</strong> procesa todo el estudio general (kits, Chat Tutor, Smart Study, Podcasts y exámenes). <strong className={strongText}>Groq Cloud (Motor de Voz)</strong> gestiona Lección Oral y Whisper. Si una agota su cuota, la otra entra en sustitución manteniendo tu modelo elegido.
             </p>
           </div>
 
@@ -478,11 +552,37 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               {AI_PRESETS.map(preset => {
                 const isSelected = selectedPresetId === preset.id;
                 const isGeneral = preset.id === 'groq-general';
+                const roleStatus = isGeneral ? rotationSummary.general : rotationSummary.oral;
                 const badgeModel = isSelected
                   ? (settings.model?.trim() || preset.model)
                   : isGeneral
                   ? savedGeneralSnapshot.model || preset.model
                   : (getGroqApiKey().startsWith('gsk_') ? getGroqModel() : getGrokModel());
+
+                const statusLabel = !roleStatus.hasKey
+                  ? 'Sin clave'
+                  : roleStatus.isInCooldown
+                  ? `Pausada · ${formatCooldownRemaining(roleStatus.cooldownRemainingMs)}`
+                  : roleStatus.isActingAsBackupFor
+                  ? `En uso (Sustituye a ${roleStatus.isActingAsBackupFor === 'general' ? 'General' : 'Voz'})`
+                  : 'Activa';
+
+                const statusClass = !roleStatus.hasKey
+                  ? isDark
+                    ? 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                  : roleStatus.isInCooldown
+                  ? isDark
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/35'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                  : roleStatus.isActingAsBackupFor
+                  ? isDark
+                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40'
+                    : 'bg-cyan-50 text-cyan-800 border-cyan-200'
+                  : isDark
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
                 return (
                   <button
                     key={preset.id}
@@ -518,6 +618,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                         }`}>
                           {preset.badge}
                         </span>
+                        <span
+                          data-testid={`groq-status-${preset.id}`}
+                          title={roleStatus.reason || statusLabel}
+                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 tabular-nums ${statusClass}`}
+                        >
+                          {statusLabel}
+                        </span>
                         {isSelected && (
                           <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
                             isDark
@@ -541,7 +648,11 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                         Modelo: {badgeModel}
                       </span>
                       <span className={`text-[10px] font-medium ${mutedText}`}>
-                        {isGeneral ? 'Aplica a todo el estudio general' : 'Aplica solo a Lección Oral'}
+                        {roleStatus.isInCooldown && rotationSummary.hasDistinctPair
+                          ? 'Respaldo automático en curso'
+                          : isGeneral
+                          ? 'Aplica a todo el estudio general'
+                          : 'Aplica solo a Lección Oral'}
                       </span>
                     </div>
                   </button>

@@ -278,6 +278,8 @@ export function saveGroqBaseUrl(url: string): void {
   saveAISettings({
     ...current,
     groqBaseUrl: cleanUrl,
+    grokBaseUrl: cleanUrl,
+    updatedAt: Date.now(),
   }, 'oral');
 }
 
@@ -306,6 +308,8 @@ export function saveGroqModel(model: string): void {
   saveAISettings({
     ...current,
     groqModel: cleanModel,
+    grokModel: cleanModel,
+    updatedAt: Date.now(),
   }, 'oral');
 }
 
@@ -607,14 +611,20 @@ export function saveAISettings(
     (typeof localStorage !== 'undefined' ? localStorage.getItem('thea_ollama_model') : '') ||
     'gemma4:31b';
 
-  let effectiveOralKey = cleanSettings.grokApiKey || cleanSettings.groqApiKey || '';
-  let effectiveOralBase = cleanSettings.grokBaseUrl || cleanSettings.groqBaseUrl || '';
-  let effectiveOralModel = cleanSettings.grokModel || cleanSettings.groqModel || '';
+  const incomingOralGroqKey = cleanSettings.groqApiKey?.trim() || '';
+  const incomingOralGrokKey = cleanSettings.grokApiKey?.trim() || '';
+  let effectiveOralKey =
+    (incomingOralGroqKey.startsWith('gsk_') ? incomingOralGroqKey : '') ||
+    incomingOralGroqKey ||
+    incomingOralGrokKey ||
+    '';
+  let effectiveOralBase = cleanSettings.groqBaseUrl || cleanSettings.grokBaseUrl || '';
+  let effectiveOralModel = cleanSettings.groqModel || cleanSettings.grokModel || '';
 
   if (typeof localStorage !== 'undefined') {
-    if (!effectiveOralKey) effectiveOralKey = localStorage.getItem('thea_grok_api_key') || localStorage.getItem('thea_groq_api_key') || '';
-    if (!effectiveOralBase) effectiveOralBase = localStorage.getItem('thea_grok_base_url') || localStorage.getItem('thea_groq_base_url') || '';
-    if (!effectiveOralModel) effectiveOralModel = localStorage.getItem('thea_grok_model') || localStorage.getItem('thea_groq_model') || '';
+    if (!effectiveOralKey) effectiveOralKey = localStorage.getItem('thea_groq_api_key') || localStorage.getItem('thea_grok_api_key') || '';
+    if (!effectiveOralBase) effectiveOralBase = localStorage.getItem('thea_groq_base_url') || localStorage.getItem('thea_grok_base_url') || '';
+    if (!effectiveOralModel) effectiveOralModel = localStorage.getItem('thea_groq_model') || localStorage.getItem('thea_grok_model') || '';
   }
 
   const isAutoOral =
@@ -627,9 +637,16 @@ export function saveAISettings(
     );
 
   if (targetRole === 'oral' || isAutoOral) {
-    if (incomingKey) effectiveOralKey = incomingKey;
-    if (incomingBase) effectiveOralBase = incomingBase;
-    if (incomingModel) effectiveOralModel = incomingModel;
+    // No sobrescribir el motor oral con las credenciales generales si el llamador solo envió groqApiKey/groqModel/... (ej. saveGroqApiKey)
+    if (isAutoOral || (!incomingOralGroqKey && incomingKey) || (incomingKey && incomingKey !== effectiveGeneralKey)) {
+      effectiveOralKey = incomingKey;
+    }
+    if (isAutoOral || (!cleanSettings.groqBaseUrl && incomingBase) || (incomingBase && incomingBase !== effectiveGeneralBase)) {
+      effectiveOralBase = incomingBase;
+    }
+    if (isAutoOral || (!cleanSettings.groqModel && incomingModel) || (incomingModel && incomingModel !== effectiveGeneralModel)) {
+      effectiveOralModel = incomingModel;
+    }
   } else {
     if (incomingBase) effectiveGeneralBase = incomingBase;
     effectiveGeneralKey = incomingKey;
@@ -678,6 +695,10 @@ export function saveAISettings(
   const normalizedGeneralBase = normalizeOpenAIBaseUrl(effectiveGeneralBase) || 'https://api.groq.com/openai/v1';
   const isLocal = Boolean(normalizedGeneralBase.includes('localhost') || normalizedGeneralBase.includes('127.0.0.1'));
 
+  const isOralGrok = Boolean(effectiveOralKey && (effectiveOralKey.startsWith('grok_') || effectiveOralKey.startsWith('xai-')));
+  const normalizedOralBase = effectiveOralBase || (isOralGrok ? 'https://api.x.ai/v1' : 'https://api.groq.com/openai/v1');
+  const normalizedOralModel = effectiveOralModel || (isOralGrok ? 'grok-2-mini' : 'openai/gpt-oss-120b');
+
   const generalSettings: AISettings = {
     enabled: cleanSettings.enabled !== undefined ? cleanSettings.enabled : true,
     provider: isLocal ? 'ollama' : 'openai-compatible',
@@ -690,12 +711,12 @@ export function saveAISettings(
     ollamaBaseUrl: effectiveOllamaBase || 'https://ollama.com/v1',
     ollamaApiKey: effectiveOllamaKey || '',
     ollamaModel: effectiveOllamaModel || 'gemma4:31b',
-    groqBaseUrl: effectiveOralBase || 'https://api.x.ai/v1',
+    groqBaseUrl: normalizedOralBase,
     groqApiKey: effectiveOralKey || DEFAULT_GROK_KEY,
-    groqModel: effectiveOralModel || 'grok-2-mini',
-    grokBaseUrl: effectiveOralBase || 'https://api.x.ai/v1',
+    groqModel: normalizedOralModel,
+    grokBaseUrl: normalizedOralBase,
     grokApiKey: effectiveOralKey || DEFAULT_GROK_KEY,
-    grokModel: effectiveOralModel || 'grok-2-mini',
+    grokModel: normalizedOralModel,
   };
 
   safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(generalSettings));
@@ -871,6 +892,8 @@ export function saveGroqApiKey(key: string): void {
   saveAISettings({
     ...current,
     groqApiKey: cleanKey,
+    grokApiKey: cleanKey,
+    updatedAt: Date.now(),
   }, 'oral');
 }
 
@@ -1317,10 +1340,393 @@ function compactMessagesForTokenCap(
 }
 
 const GROQ_OUTPUT_CAP_STORAGE_KEY = 'thea_groq_output_caps';
+const GROQ_KEY_COOLDOWN_STORAGE_KEY = 'thea_groq_key_cooldowns_v1';
+export const GROQ_KEY_ROTATION_EVENT = 'thea_ai_key_rotation_changed';
+
+export type GroqKeyRole = 'general' | 'oral';
+
+export interface GroqKeyEntry {
+  role: GroqKeyRole;
+  label: string;
+  apiKey: string;
+}
+
+export interface GroqRoleRuntimeStatus {
+  role: GroqKeyRole;
+  hasKey: boolean;
+  isInCooldown: boolean;
+  cooldownRemainingMs: number;
+  cooldownUntilMs: number;
+  reason?: string;
+  isEffectiveActiveForGeneral: boolean;
+  isEffectiveActiveForOral: boolean;
+  isActingAsBackupFor: GroqKeyRole | null;
+}
+
+export interface GroqRotationSummary {
+  hasDistinctPair: boolean;
+  general: GroqRoleRuntimeStatus;
+  oral: GroqRoleRuntimeStatus;
+}
+
+interface GroqCooldownRecord {
+  untilMs: number;
+  status: number;
+  reason: string;
+  updatedAt: number;
+}
+
 const groqOutputCapMemory = new Map<string, number>();
+const groqCooldownMemory = new Map<string, GroqCooldownRecord>();
+let lastSyncedCooldownRaw: string | null | undefined = undefined;
+
+/** Verifica que una clave de Groq sea estructuralmente válida y no esté revocada. */
+export function isUsableGroqApiKey(key?: string | null): key is string {
+  if (typeof key !== 'string') return false;
+  const trimmed = key.trim();
+  return trimmed.startsWith('gsk_') && !isRevokedGroqKey(trimmed);
+}
+
+/** Genera una huella determinista FNV-1a sin exponer la clave completa en almacenamiento o eventos. */
+function getGroqKeyFingerprint(apiKey: string): string {
+  const clean = (apiKey || '').trim();
+  if (!clean) return 'anon';
+  let hash = 2166136261;
+  for (let i = 0; i < clean.length; i++) {
+    hash ^= clean.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `gsk_${clean.length}_${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+function dispatchGroqRotationChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(GROQ_KEY_ROTATION_EVENT));
+  }
+}
+
+function syncGroqCooldownsFromStorage(): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    const raw = sessionStorage.getItem(GROQ_KEY_COOLDOWN_STORAGE_KEY);
+    if (raw === lastSyncedCooldownRaw) return;
+    lastSyncedCooldownRaw = raw;
+    groqCooldownMemory.clear();
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, GroqCooldownRecord>;
+    const now = Date.now();
+    for (const [fp, rec] of Object.entries(parsed || {})) {
+      if (rec && typeof rec.untilMs === 'number' && rec.untilMs > now) {
+        groqCooldownMemory.set(fp, rec);
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function persistGroqCooldowns(): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    if (groqCooldownMemory.size === 0) {
+      sessionStorage.removeItem(GROQ_KEY_COOLDOWN_STORAGE_KEY);
+      lastSyncedCooldownRaw = null;
+      return;
+    }
+    const obj: Record<string, GroqCooldownRecord> = {};
+    for (const [fp, rec] of groqCooldownMemory.entries()) {
+      obj[fp] = rec;
+    }
+    const serialized = JSON.stringify(obj);
+    sessionStorage.setItem(GROQ_KEY_COOLDOWN_STORAGE_KEY, serialized);
+    lastSyncedCooldownRaw = serialized;
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function pruneExpiredGroqCooldowns(now: number = Date.now()): boolean {
+  syncGroqCooldownsFromStorage();
+  let removedAny = false;
+  for (const [fp, rec] of groqCooldownMemory.entries()) {
+    if (!rec || rec.untilMs <= now) {
+      groqCooldownMemory.delete(fp);
+      removedAny = true;
+    }
+  }
+  if (removedAny) {
+    persistGroqCooldowns();
+    dispatchGroqRotationChanged();
+  }
+  return removedAny;
+}
+
+/** Calcula la duración de pausa recomendada cuando una API key de Groq agota cuota o falla autenticación. */
+export function parseGroqCooldownDurationMs(errText: string, status: number = 429): number {
+  if (status === 401 || status === 402) {
+    return 30 * 60 * 1000;
+  }
+  const hmsMatch = errText.match(/try again in\s+(\d+)h\s*(\d+)m(?:\s*(\d+(?:\.\d+)?)s)?/i);
+  if (hmsMatch) {
+    const totalMs =
+      (Number(hmsMatch[1]) * 3600 + Number(hmsMatch[2]) * 60 + Number(hmsMatch[3] || 0)) * 1000;
+    return Math.min(Math.max(Math.ceil(totalMs) + 500, 1200), 24 * 60 * 60 * 1000);
+  }
+  const msPairMatch = errText.match(/try again in\s+(\d+)m\s*(\d+(?:\.\d+)?)s/i);
+  if (msPairMatch) {
+    const totalMs = (Number(msPairMatch[1]) * 60 + Number(msPairMatch[2])) * 1000;
+    return Math.min(Math.max(Math.ceil(totalMs) + 500, 1200), 24 * 60 * 60 * 1000);
+  }
+  const minMatch = errText.match(/try again in\s+(\d+(?:\.\d+)?)m(?!s)/i);
+  if (minMatch) {
+    return Math.min(Math.max(Math.ceil(Number(minMatch[1]) * 60000) + 500, 1200), 24 * 60 * 60 * 1000);
+  }
+  const secMatch = errText.match(/try again in\s+(\d+(?:\.\d+)?)s/i);
+  if (secMatch) {
+    return Math.min(Math.max(Math.ceil(Number(secMatch[1]) * 1000) + 400, 1200), 24 * 60 * 60 * 1000);
+  }
+  const msMatch = errText.match(/try again in\s+(\d+(?:\.\d+)?)ms/i);
+  if (msMatch) {
+    return Math.min(Math.max(Math.ceil(Number(msMatch[1])) + 350, 1200), 60000);
+  }
+  if (/TPD|tokens per day|requests per day|RPD|daily/i.test(errText)) {
+    return 10 * 60 * 1000;
+  }
+  return 60 * 1000;
+}
+
+/** Pone en enfriamiento una API key de Groq para ceder el paso automáticamente a la clave de respaldo. */
+export function markGroqKeyCooldown(apiKey: string, reasonText: string = '', status: number = 429): number {
+  const cleanKey = (apiKey || '').trim();
+  if (!cleanKey) return 0;
+  syncGroqCooldownsFromStorage();
+  const durationMs = parseGroqCooldownDurationMs(reasonText, status);
+  const now = Date.now();
+  const untilMs = now + durationMs;
+  const compactReason = status === 401
+    ? 'Clave rechazada (HTTP 401)'
+    : status === 402
+    ? 'Créditos agotados (HTTP 402)'
+    : /TPD|tokens per day/i.test(reasonText)
+    ? 'Cuota diaria TPD agotada'
+    : /RPD|requests per day/i.test(reasonText)
+    ? 'Límite diario RPD alcanzado'
+    : 'Límite temporal de tasa (HTTP 429)';
+
+  groqCooldownMemory.set(getGroqKeyFingerprint(cleanKey), {
+    untilMs,
+    status,
+    reason: compactReason,
+    updatedAt: now,
+  });
+  persistGroqCooldowns();
+  dispatchGroqRotationChanged();
+  return untilMs;
+}
+
+/** Limpia el enfriamiento de una API key de Groq (o de todas si se omite la clave). */
+export function clearGroqKeyCooldown(apiKey?: string): void {
+  syncGroqCooldownsFromStorage();
+  let changed = false;
+  if (apiKey && apiKey.trim()) {
+    changed = groqCooldownMemory.delete(getGroqKeyFingerprint(apiKey.trim()));
+  } else if (groqCooldownMemory.size > 0) {
+    groqCooldownMemory.clear();
+    changed = true;
+  }
+  if (changed) {
+    persistGroqCooldowns();
+    dispatchGroqRotationChanged();
+  }
+}
+
+/** Consulta si una clave de Groq específica está en pausa por cuota/error y cuántos ms le restan. */
+export function getGroqKeyCooldownInfo(
+  apiKey: string,
+  now: number = Date.now()
+): { isInCooldown: boolean; remainingMs: number; untilMs: number; reason?: string } {
+  const cleanKey = (apiKey || '').trim();
+  if (!cleanKey) {
+    return { isInCooldown: false, remainingMs: 0, untilMs: 0 };
+  }
+  pruneExpiredGroqCooldowns(now);
+  const rec = groqCooldownMemory.get(getGroqKeyFingerprint(cleanKey));
+  if (!rec || rec.untilMs <= now) {
+    return { isInCooldown: false, remainingMs: 0, untilMs: 0 };
+  }
+  return {
+    isInCooldown: true,
+    remainingMs: Math.max(0, rec.untilMs - now),
+    untilMs: rec.untilMs,
+    reason: rec.reason,
+  };
+}
+
+/** Devuelve el pool ordenado y deduplicado con estrictamente las 2 claves Groq (Motor General y Motor de Voz). */
+export function getGroqKeyPool(
+  preferredRole: GroqKeyRole = 'general',
+  explicitPrimaryKey?: string
+): GroqKeyEntry[] {
+  const generalSettings = getAISettings();
+  const storedGeneralKey = isUsableGroqApiKey(generalSettings.apiKey) ? generalSettings.apiKey.trim() : '';
+  const oralRaw = getGroqApiKey();
+  const storedOralKey = isUsableGroqApiKey(oralRaw) ? oralRaw.trim() : '';
+
+  const generalEntry: GroqKeyEntry | null = storedGeneralKey
+    ? { role: 'general', label: 'Motor General', apiKey: storedGeneralKey }
+    : null;
+  const oralEntry: GroqKeyEntry | null = storedOralKey
+    ? { role: 'oral', label: 'Motor de Voz', apiKey: storedOralKey }
+    : null;
+
+  const ordered: GroqKeyEntry[] = [];
+  const pushUnique = (entry: GroqKeyEntry | null) => {
+    if (!entry || !entry.apiKey) return;
+    if (!ordered.some(existing => existing.apiKey === entry.apiKey)) {
+      ordered.push(entry);
+    }
+  };
+
+  const cleanExplicit = isUsableGroqApiKey(explicitPrimaryKey) ? explicitPrimaryKey.trim() : '';
+  if (cleanExplicit) {
+    const matchedRole: GroqKeyRole =
+      cleanExplicit === storedGeneralKey && cleanExplicit !== storedOralKey
+        ? 'general'
+        : cleanExplicit === storedOralKey && cleanExplicit !== storedGeneralKey
+        ? 'oral'
+        : preferredRole;
+    pushUnique({
+      role: matchedRole,
+      label: matchedRole === 'oral' ? 'Motor de Voz' : 'Motor General',
+      apiKey: cleanExplicit,
+    });
+  }
+
+  if (preferredRole === 'oral') {
+    pushUnique(oralEntry);
+    pushUnique(generalEntry);
+  } else {
+    pushUnique(generalEntry);
+    pushUnique(oralEntry);
+  }
+
+  return ordered;
+}
+
+/** Selecciona la clave Groq activa disponible para un rol dado, rotando si la primaria está en pausa. */
+export function pickActiveGroqKey(
+  preferredRole: GroqKeyRole = 'general',
+  explicitPrimaryKey?: string
+): {
+  apiKey: string;
+  role: GroqKeyRole;
+  label: string;
+  rotatedFromRole: GroqKeyRole | null;
+  allInCooldown: boolean;
+  shortestWaitMs: number;
+} {
+  const now = Date.now();
+  pruneExpiredGroqCooldowns(now);
+  const pool = getGroqKeyPool(preferredRole, explicitPrimaryKey);
+  if (pool.length === 0) {
+    return {
+      apiKey: (explicitPrimaryKey || '').trim(),
+      role: preferredRole,
+      label: preferredRole === 'oral' ? 'Motor de Voz' : 'Motor General',
+      rotatedFromRole: null,
+      allInCooldown: false,
+      shortestWaitMs: 0,
+    };
+  }
+
+  for (let i = 0; i < pool.length; i++) {
+    const entry = pool[i];
+    const cd = getGroqKeyCooldownInfo(entry.apiKey, now);
+    if (!cd.isInCooldown) {
+      return {
+        apiKey: entry.apiKey,
+        role: entry.role,
+        label: entry.label,
+        rotatedFromRole: i > 0 ? preferredRole : null,
+        allInCooldown: false,
+        shortestWaitMs: 0,
+      };
+    }
+  }
+
+  // Si todas están en enfriamiento, elegir la que recupere primero
+  let best = pool[0];
+  let shortestWaitMs = getGroqKeyCooldownInfo(best.apiKey, now).remainingMs;
+  for (let i = 1; i < pool.length; i++) {
+    const rem = getGroqKeyCooldownInfo(pool[i].apiKey, now).remainingMs;
+    if (rem < shortestWaitMs) {
+      shortestWaitMs = rem;
+      best = pool[i];
+    }
+  }
+
+  return {
+    apiKey: best.apiKey,
+    role: best.role,
+    label: best.label,
+    rotatedFromRole: best.role !== preferredRole ? preferredRole : null,
+    allInCooldown: true,
+    shortestWaitMs,
+  };
+}
+
+/** Devuelve el estado de rotación en tiempo real entre las 2 claves Groq configuradas para mostrar en UI. */
+export function getGroqKeyRotationStatus(): GroqRotationSummary {
+  const now = Date.now();
+  pruneExpiredGroqCooldowns(now);
+  const generalSettings = getAISettings();
+  const generalKey = isUsableGroqApiKey(generalSettings.apiKey) ? generalSettings.apiKey.trim() : '';
+  const oralRaw = getGroqApiKey();
+  const oralKey = isUsableGroqApiKey(oralRaw) ? oralRaw.trim() : '';
+  const hasDistinctPair = Boolean(generalKey && oralKey && generalKey !== oralKey);
+
+  const generalCd = getGroqKeyCooldownInfo(generalKey, now);
+  const oralCd = getGroqKeyCooldownInfo(oralKey, now);
+
+  const generalActive = pickActiveGroqKey('general');
+  const oralActive = pickActiveGroqKey('oral');
+
+  const oralIsBackupForGeneral = Boolean(
+    hasDistinctPair && generalCd.isInCooldown && !oralCd.isInCooldown && generalActive.apiKey === oralKey
+  );
+  const generalIsBackupForOral = Boolean(
+    hasDistinctPair && oralCd.isInCooldown && !generalCd.isInCooldown && oralActive.apiKey === generalKey
+  );
+
+  return {
+    hasDistinctPair,
+    general: {
+      role: 'general',
+      hasKey: Boolean(generalKey),
+      isInCooldown: Boolean(generalKey && generalCd.isInCooldown),
+      cooldownRemainingMs: generalCd.remainingMs,
+      cooldownUntilMs: generalCd.untilMs,
+      reason: generalCd.reason,
+      isEffectiveActiveForGeneral: Boolean(generalKey && generalActive.apiKey === generalKey && !generalCd.isInCooldown),
+      isEffectiveActiveForOral: Boolean(generalKey && oralActive.apiKey === generalKey && !generalCd.isInCooldown),
+      isActingAsBackupFor: generalIsBackupForOral ? 'oral' : null,
+    },
+    oral: {
+      role: 'oral',
+      hasKey: Boolean(oralKey),
+      isInCooldown: Boolean(oralKey && oralCd.isInCooldown),
+      cooldownRemainingMs: oralCd.remainingMs,
+      cooldownUntilMs: oralCd.untilMs,
+      reason: oralCd.reason,
+      isEffectiveActiveForGeneral: Boolean(oralKey && generalActive.apiKey === oralKey && !oralCd.isInCooldown),
+      isEffectiveActiveForOral: Boolean(oralKey && oralActive.apiKey === oralKey && !oralCd.isInCooldown),
+      isActingAsBackupFor: oralIsBackupForGeneral ? 'general' : null,
+    },
+  };
+}
 
 function getGroqModelCapKey(cleanBase: string, model: string, apiKey: string): string {
-  const keyTag = (apiKey || '').trim().slice(-8) || 'anon';
+  const keyTag = getGroqKeyFingerprint(apiKey);
   return `${cleanBase.toLowerCase()}|${model.trim().toLowerCase()}|${keyTag}`;
 }
 
@@ -1393,6 +1799,18 @@ export function parseGroqTokenLimitInfo(errText: string): {
     requested: requestedMatch ? Number(requestedMatch[1]) : null,
     hasWaitHint,
   };
+}
+
+function isPureStaticGroqOutputLimit(
+  status: number,
+  limitInfo: ReturnType<typeof parseGroqTokenLimitInfo>
+): boolean {
+  return (
+    status === 429 &&
+    limitInfo.isOutputLimit &&
+    !limitInfo.hasWaitHint &&
+    (limitInfo.used === null || (limitInfo.limit !== null && (limitInfo.limit - limitInfo.used) >= 300))
+  );
 }
 
 function computeNextRetryMaxTokens(
@@ -1501,6 +1919,52 @@ function stitchContinuationText(prefix: string, suffix: string): string {
   return prefix + cleanSuffix;
 }
 
+function selectNextGroqCandidate(
+  pool: GroqKeyEntry[],
+  triedKeys: Set<string>
+): GroqKeyEntry | null {
+  const now = Date.now();
+  for (const entry of pool) {
+    if (triedKeys.has(entry.apiKey)) continue;
+    if (!getGroqKeyCooldownInfo(entry.apiKey, now).isInCooldown) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+function extractGroqErrorDetail(errText: string): string {
+  if (!errText) return '';
+  try {
+    const errJson = JSON.parse(errText);
+    return errJson?.error?.message || errJson?.message || '';
+  } catch {
+    return '';
+  }
+}
+
+function buildBodyWithKeyOutputCap(
+  baseBody: Record<string, unknown>,
+  cleanBase: string,
+  targetModel: string,
+  activeKey: string,
+  desiredMaxTokens?: number
+): Record<string, unknown> {
+  const nextBody: Record<string, unknown> = {
+    ...baseBody,
+    model: targetModel,
+  };
+  const keyCap = cleanBase.includes('api.groq.com')
+    ? getCachedGroqOutputCap(cleanBase, targetModel, activeKey)
+    : null;
+  if (typeof desiredMaxTokens === 'number') {
+    nextBody['max_tokens'] = keyCap !== null ? Math.min(desiredMaxTokens, keyCap) : desiredMaxTokens;
+  } else if (keyCap !== null) {
+    nextBody['max_tokens'] = keyCap;
+  }
+  return nextBody;
+}
+
 async function executeGroqAwareCompletion(
   url: string,
   headers: Record<string, string>,
@@ -1512,85 +1976,166 @@ async function executeGroqAwareCompletion(
   targetKey: string,
   jsonMode: boolean,
   override?: AISettings,
-  options?: QueryCompletionOptions
-): Promise<{ rawContent: string; finishReason: string }> {
-  let currentBody: Record<string, unknown> = { ...body };
-  let response = await runFetchAttemptWithTimeout(url, headers, currentBody, perAttemptTimeoutMs);
+  options?: QueryCompletionOptions,
+  preferredRole: GroqKeyRole = 'general'
+): Promise<{ rawContent: string; finishReason: string; usedKey: string }> {
+  const isGroqEndpoint = cleanBase.includes('api.groq.com');
+  const candidatePool = isGroqEndpoint ? getGroqKeyPool(preferredRole, targetKey) : [];
+  const triedKeys = new Set<string>();
+  const desiredBaseMaxTokens = typeof options?.max_tokens === 'number'
+    ? options.max_tokens
+    : typeof body['max_tokens'] === 'number'
+    ? (body['max_tokens'] as number)
+    : undefined;
 
-  // Si Groq rechaza strict response_format (p. ej. json_validate_failed por LaTeX/saltos), reintentar dejando que safeParseAIJSON parsee el JSON
-  if (response.status === 400 && jsonMode && cleanBase.includes('api.groq.com')) {
-    const relaxedBody: Record<string, unknown> = { ...currentBody };
-    delete relaxedBody['response_format'];
-    currentBody = relaxedBody;
-    response = await runFetchAttemptWithTimeout(url, headers, currentBody, perAttemptTimeoutMs);
-  }
+  let activeKey = targetKey;
+  let lastErrorText = '';
+  let lastResponse: Response | null = null;
+  const maxKeyRotations = Math.max(candidatePool.length, 1);
 
-  // Reintento respetando SIEMPRE el modelo elegido por el usuario ante HTTP 413 (TPM) o 429 (OTPM / TPM / RPM)
-  if (cleanBase.includes('api.groq.com')) {
-    for (let retryIdx = 0; retryIdx < 3 && (response.status === 413 || response.status === 429); retryIdx++) {
-      const failedStatus = response.status;
-      let errText = '';
-      try {
-        errText = await response.clone().text();
-      } catch {
-        errText = '';
-      }
-
-      const limitInfo = parseGroqTokenLimitInfo(errText);
-      const currentMax = typeof currentBody['max_tokens'] === 'number'
-        ? (currentBody['max_tokens'] as number)
-        : undefined;
-      const adjustedMaxTokens = computeNextRetryMaxTokens(
-        failedStatus,
-        retryIdx,
-        currentMax,
-        limitInfo,
-        cleanBase,
-        targetModel,
-        targetKey
-      );
-
-      // Si es rechazo estático por tamaño de max_tokens sin temporizador de espera, reintentar de inmediato
-      const shouldWait =
-        failedStatus === 429 &&
-        (!limitInfo.isOutputLimit || limitInfo.hasWaitHint || (limitInfo.used !== null && limitInfo.limit !== null && (limitInfo.limit - limitInfo.used) < 300));
-
-      if (shouldWait) {
-        const waitMs = parseGroqRetryWaitMs(errText);
-        options?.onRetryWait?.(waitMs, failedStatus, retryIdx + 1);
-        await new Promise(r => setTimeout(r, waitMs));
-      } else if (failedStatus === 429) {
-        await new Promise(r => setTimeout(r, 100));
-      }
-
-      const compactLimit = retryIdx === 0 ? 14000 : 8000;
-      const shouldCompactInput = failedStatus === 413 || (!limitInfo.isOutputLimit && limitInfo.limit !== null);
-
-      currentBody = {
-        ...currentBody,
-        model: targetModel,
-        ...(typeof adjustedMaxTokens === 'number' ? { max_tokens: adjustedMaxTokens } : {}),
-        ...(shouldCompactInput
-          ? { messages: compactMessagesForTokenCap(effectiveMessages, compactLimit) }
-          : {}),
-      };
-
-      response = await runFetchAttemptWithTimeout(url, headers, currentBody, perAttemptTimeoutMs);
-    }
-  }
-
-  // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
-  if (
-    response.status >= 500 &&
-    cleanBase.includes('api.groq.com') &&
-    targetModel === 'openai/gpt-oss-120b'
-  ) {
-    const retryBody = {
-      ...currentBody,
-      model: GROQ_FALLBACK_MODEL,
+  for (let keyIdx = 0; keyIdx < maxKeyRotations; keyIdx++) {
+    triedKeys.add(activeKey);
+    const attemptHeaders: Record<string, string> = {
+      ...headers,
+      ...(activeKey ? { Authorization: `Bearer ${activeKey}` } : {}),
     };
-    response = await runFetchAttemptWithTimeout(url, headers, retryBody, perAttemptTimeoutMs);
+    let currentBody = buildBodyWithKeyOutputCap(
+      body,
+      cleanBase,
+      targetModel,
+      activeKey,
+      desiredBaseMaxTokens
+    );
+
+    let response = await runFetchAttemptWithTimeout(url, attemptHeaders, currentBody, perAttemptTimeoutMs);
+    lastErrorText = '';
+
+    // Si Groq rechaza strict response_format (p. ej. json_validate_failed por LaTeX/saltos), reintentar dejando que safeParseAIJSON parsee el JSON
+    if (response.status === 400 && jsonMode && isGroqEndpoint) {
+      const relaxedBody: Record<string, unknown> = { ...currentBody };
+      delete relaxedBody['response_format'];
+      currentBody = relaxedBody;
+      response = await runFetchAttemptWithTimeout(url, attemptHeaders, currentBody, perAttemptTimeoutMs);
+    }
+
+    if (isGroqEndpoint) {
+      for (let sameKeyRetryIdx = 0; sameKeyRetryIdx < 2 && (response.status === 413 || response.status === 429); sameKeyRetryIdx++) {
+        const failedStatus = response.status;
+        lastErrorText = await response.clone().text().catch(() => '');
+        const limitInfo = parseGroqTokenLimitInfo(lastErrorText);
+        const isStaticOutputClamp =
+          isPureStaticGroqOutputLimit(failedStatus, limitInfo) ||
+          (failedStatus === 413 && sameKeyRetryIdx === 0);
+
+        const nextHealthyBackup = selectNextGroqCandidate(candidatePool, triedKeys);
+        const cooldownMs = parseGroqCooldownDurationMs(lastErrorText, failedStatus);
+
+        // Si es cuota/tasa agotada (no un simple exceso estático de max_tokens) y hay respaldo listo, rotar en 0ms
+        if (!isStaticOutputClamp && nextHealthyBackup) {
+          markGroqKeyCooldown(activeKey, lastErrorText, failedStatus);
+          break;
+        }
+
+        // Si ni siquiera hay respaldo saludable y Groq pide pausa larga multi-minuto (TPD/RPD), no bloquear el navegador esperando 68s
+        if (!isStaticOutputClamp && !nextHealthyBackup && cooldownMs > 68000) {
+          markGroqKeyCooldown(activeKey, lastErrorText, failedStatus);
+          break;
+        }
+
+        const currentMax = typeof currentBody['max_tokens'] === 'number'
+          ? (currentBody['max_tokens'] as number)
+          : undefined;
+        const adjustedMaxTokens = computeNextRetryMaxTokens(
+          failedStatus,
+          sameKeyRetryIdx,
+          currentMax,
+          limitInfo,
+          cleanBase,
+          targetModel,
+          activeKey
+        );
+
+        const shouldWait =
+          failedStatus === 429 &&
+          (!limitInfo.isOutputLimit ||
+            limitInfo.hasWaitHint ||
+            (limitInfo.used !== null && limitInfo.limit !== null && (limitInfo.limit - limitInfo.used) < 300));
+
+        if (shouldWait) {
+          const waitMs = parseGroqRetryWaitMs(lastErrorText);
+          options?.onRetryWait?.(waitMs, failedStatus, sameKeyRetryIdx + 1);
+          await new Promise(r => setTimeout(r, waitMs));
+        } else if (failedStatus === 429) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+
+        const compactLimit = sameKeyRetryIdx === 0 ? 14000 : 8000;
+        const shouldCompactInput = failedStatus === 413 || (!limitInfo.isOutputLimit && limitInfo.limit !== null);
+
+        currentBody = {
+          ...currentBody,
+          model: targetModel,
+          ...(typeof adjustedMaxTokens === 'number' ? { max_tokens: adjustedMaxTokens } : {}),
+          ...(shouldCompactInput
+            ? { messages: compactMessagesForTokenCap(effectiveMessages, compactLimit) }
+            : {}),
+        };
+
+        response = await runFetchAttemptWithTimeout(url, attemptHeaders, currentBody, perAttemptTimeoutMs);
+        lastErrorText = '';
+      }
+    }
+
+    // Respaldo solo si el usuario no eligió un modelo distinto al predeterminado 120B y sigue dando 5xx
+    if (
+      response.status >= 500 &&
+      isGroqEndpoint &&
+      targetModel === 'openai/gpt-oss-120b'
+    ) {
+      const retryBody = {
+        ...currentBody,
+        model: GROQ_FALLBACK_MODEL,
+      };
+      response = await runFetchAttemptWithTimeout(url, attemptHeaders, retryBody, perAttemptTimeoutMs);
+    }
+
+    lastResponse = response;
+
+    if (response.ok) {
+      if (isGroqEndpoint && activeKey) {
+        clearGroqKeyCooldown(activeKey);
+      }
+      const json = await response.json();
+      const choice = json.choices?.[0];
+      const rawContent =
+        choice?.message?.content ||
+        choice?.message?.reasoning ||
+        choice?.text ||
+        '';
+      return {
+        rawContent,
+        finishReason: String(choice?.finish_reason || 'stop'),
+        usedKey: activeKey,
+      };
+    }
+
+    if (isGroqEndpoint && (response.status === 429 || response.status === 413 || response.status === 401 || response.status === 402)) {
+      if (!lastErrorText) {
+        lastErrorText = await response.clone().text().catch(() => '');
+      }
+      markGroqKeyCooldown(activeKey, lastErrorText, response.status);
+      const nextBackup = selectNextGroqCandidate(candidatePool, triedKeys);
+      if (nextBackup) {
+        console.warn(`[aiService] Clave Groq (${preferredRole}) recibió HTTP ${response.status}; rotando a ${nextBackup.label} manteniendo el modelo ${targetModel}.`);
+        activeKey = nextBackup.apiKey;
+        continue;
+      }
+    }
+
+    break;
   }
+
+  let response = lastResponse!;
 
   // Failover automático cuando Ollama Cloud devuelve HTTP 402 (sin créditos): usar Groq si está disponible
   if (response.status === 402 && cleanBase.includes('ollama.com') && !override) {
@@ -1621,64 +2166,53 @@ async function executeGroqAwareCompletion(
       }
       const groqRes = await runFetchAttemptWithTimeout(groqUrl, groqHeaders, groqBody, perAttemptTimeoutMs);
       if (groqRes.ok) {
-        response = groqRes;
+        const json = await groqRes.json();
+        const choice = json.choices?.[0];
+        const rawContent =
+          choice?.message?.content ||
+          choice?.message?.reasoning ||
+          choice?.text ||
+          '';
+        return {
+          rawContent,
+          finishReason: String(choice?.finish_reason || 'stop'),
+          usedKey: groqFallback.apiKey.trim(),
+        };
       }
+      response = groqRes;
     }
   }
 
-  if (!response.ok) {
-    const isOralExplicit = Boolean(override && override.groqApiKey && override.apiKey === override.groqApiKey);
-    if (isOralExplicit && response.status === 401 && cleanBase.includes('api.groq.com') && targetKey !== DEFAULT_GROQ_KEY && DEFAULT_GROQ_KEY) {
-      console.warn('[aiService] Groq oral 401 detectado, auto-recuperando con DEFAULT_GROQ_KEY...');
-      if (typeof localStorage !== 'undefined') {
-        safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
-      }
-      const retryHeaders = { ...headers, Authorization: `Bearer ${DEFAULT_GROQ_KEY}` };
-      response = await runFetchAttemptWithTimeout(url, retryHeaders, body, perAttemptTimeoutMs);
-    }
-  }
-
-  if (!response.ok) {
-    let detail = '';
+  let detail = lastErrorText ? extractGroqErrorDetail(lastErrorText) : '';
+  if (!detail) {
     try {
       const errJson = await response.json();
       detail = errJson.error?.message || errJson.message || '';
     } catch {
       // text fallback
     }
-
-    if (response.status === 402) {
-      throw new Error(
-        `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en Ollama Cloud'}. Agrega saldo en ollama.com/plans o actualiza tu API Key en Configurar IA.`
-      );
-    }
-    if (response.status === 401) {
-      throw new Error(
-        `Error de autenticación (HTTP 401): Clave de API no válida o expirada. ${detail ? `(${detail})` : ''}`
-      );
-    }
-    if (response.status === 429) {
-      throw new Error(
-        `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada. ${detail ? `(${detail})` : ''}`
-      );
-    }
-    throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
   }
 
-  const json = await response.json();
-  const choice = json.choices?.[0];
-  const rawContent =
-    choice?.message?.content ||
-    choice?.message?.reasoning ||
-    choice?.text ||
-    '';
-  return {
-    rawContent,
-    finishReason: String(choice?.finish_reason || 'stop'),
-  };
+  if (response.status === 402) {
+    throw new Error(
+      `Créditos agotados (HTTP 402): ${detail || 'Sin saldo en el proveedor'}. Actualiza tu API Key en Configurar IA.`
+    );
+  }
+  if (response.status === 401) {
+    throw new Error(
+      `Error de autenticación (HTTP 401): Clave de API no válida o expirada. ${detail ? `(${detail})` : ''}`
+    );
+  }
+  if (response.status === 429) {
+    const dualExhaustedNote = triedKeys.size > 1 ? ' (ambas API keys de Groq en pausa por cuota)' : '';
+    throw new Error(
+      `Límite de tasa excedido (HTTP 429): Cuota de peticiones agotada o saturada${dualExhaustedNote}. ${detail ? `(${detail})` : ''}`
+    );
+  }
+  throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
 }
 
-/** Ejecuta una llamada de chat completion con timeout por intento, auto-continuación ante truncamiento y fallback seguro */
+/** Ejecuta una llamada de chat completion con timeout por intento, auto-continuación ante truncamiento y rotación automática entre las 2 claves Groq */
 export async function queryAICompletion(
   messages: ChatMessage[],
   jsonMode: boolean = false,
@@ -1699,7 +2233,18 @@ export async function queryAICompletion(
     );
   }
 
-  const hasPersonalKey = Boolean(settings.apiKey && settings.apiKey.trim().length > 0);
+  const isGroqEndpoint = cleanBase.includes('api.groq.com');
+  const preferredRole: GroqKeyRole =
+    override && override.groqApiKey && override.apiKey === override.groqApiKey
+      ? 'oral'
+      : 'general';
+
+  const groqSelection = isGroqEndpoint
+    ? pickActiveGroqKey(preferredRole, settings.apiKey)
+    : null;
+
+  const targetKey = (groqSelection?.apiKey || settings.apiKey || '').trim();
+  const hasPersonalKey = Boolean(targetKey.length > 0);
 
   if (!isLocal && !hasPersonalKey) {
     throw new Error(
@@ -1709,7 +2254,6 @@ export async function queryAICompletion(
 
   const targetBase = cleanBase;
   const targetModel = settings.model || DEFAULT_AI_SETTINGS.model;
-  const targetKey = settings.apiKey.trim();
   const effectiveMessages = messages;
   const url = `${targetBase}/chat/completions`;
   const perAttemptTimeoutMs = Math.max(settings.timeoutMs || 45000, 60000);
@@ -1721,7 +2265,7 @@ export async function queryAICompletion(
     headers['Authorization'] = `Bearer ${targetKey}`;
   }
 
-  const cachedGroqCap = cleanBase.includes('api.groq.com')
+  const cachedGroqCap = isGroqEndpoint
     ? getCachedGroqOutputCap(cleanBase, targetModel, targetKey)
     : null;
 
@@ -1741,13 +2285,13 @@ export async function queryAICompletion(
 
   if (options?.frequency_penalty !== undefined) {
     body['frequency_penalty'] = options.frequency_penalty;
-  } else if (!jsonMode && cleanBase.includes('api.groq.com')) {
+  } else if (!jsonMode && isGroqEndpoint) {
     body['frequency_penalty'] = 0.25;
   }
 
   if (options?.presence_penalty !== undefined) {
     body['presence_penalty'] = options.presence_penalty;
-  } else if (!jsonMode && cleanBase.includes('api.groq.com')) {
+  } else if (!jsonMode && isGroqEndpoint) {
     body['presence_penalty'] = 0.1;
   }
 
@@ -1766,7 +2310,8 @@ export async function queryAICompletion(
     targetKey,
     jsonMode,
     override,
-    options
+    options,
+    preferredRole
   );
 
   if (!firstAttempt.rawContent) {
@@ -1779,6 +2324,7 @@ export async function queryAICompletion(
 
   let accumulated = firstAttempt.rawContent;
   let finishReason = firstAttempt.finishReason;
+  let currentUsedKey = firstAttempt.usedKey || targetKey;
 
   // Continuar automáticamente hasta completar si el modelo cortó por max_tokens (finish_reason === 'length')
   for (let contIdx = 0; contIdx < 2 && finishReason === 'length'; contIdx++) {
@@ -1798,8 +2344,17 @@ export async function queryAICompletion(
       },
     ];
 
-    const activeGroqCap = cleanBase.includes('api.groq.com')
-      ? getCachedGroqOutputCap(cleanBase, targetModel, targetKey)
+    const contKeySelection = isGroqEndpoint
+      ? pickActiveGroqKey(preferredRole, currentUsedKey)
+      : null;
+    const contKey = (contKeySelection?.apiKey || currentUsedKey || targetKey).trim();
+    const contHeaders: Record<string, string> = {
+      ...headers,
+      ...(contKey ? { Authorization: `Bearer ${contKey}` } : {}),
+    };
+
+    const activeGroqCap = isGroqEndpoint
+      ? getCachedGroqOutputCap(cleanBase, targetModel, contKey)
       : null;
     const desiredContMax = typeof body['max_tokens'] === 'number'
       ? Math.min(body['max_tokens'] as number, isSmallCtxModel ? 2000 : 6144)
@@ -1817,20 +2372,22 @@ export async function queryAICompletion(
     try {
       const nextAttempt = await executeGroqAwareCompletion(
         url,
-        headers,
+        contHeaders,
         contBody,
         contMessages,
         perAttemptTimeoutMs,
         cleanBase,
         targetModel,
-        targetKey,
+        contKey,
         false,
         override,
-        options
+        options,
+        preferredRole
       );
       if (!nextAttempt.rawContent || nextAttempt.rawContent.trim().length === 0) {
         break;
       }
+      currentUsedKey = nextAttempt.usedKey || contKey;
       accumulated = stitchContinuationText(accumulated, nextAttempt.rawContent);
       finishReason = nextAttempt.finishReason;
     } catch (contErr) {
@@ -3851,15 +4408,18 @@ export async function askTheaAI(
   history: Array<{ sender: 'thea' | 'user'; text: string }>,
   enginePreference: 'ollama' | 'grok' | 'groq' | 'auto' = 'auto'
 ): Promise<string> {
-  const generalSettings = getAISettings(); // SIEMPRE Ollama
-  const oralSettings = getOralAISettings(); // SIEMPRE Groq
+  const generalSettings = getAISettings();
+  const oralSettings = getOralAISettings();
 
-  // Enrutamiento desacoplado estricto:
-  // - Para Leccion Oral y Conversacion Oral ('groq' o 'grok'): Groq Cloud es el motor principal obligatorio.
-  // - Para Chat Tutor / Ask Thea y cualquier otra consulta general ('ollama' o 'auto'): Ollama Cloud es el motor principal obligatorio.
   const isOral = enginePreference === 'groq' || enginePreference === 'grok';
   const targetSettings: AISettings = isOral ? oralSettings : generalSettings;
-  const fallbackSettings: AISettings | null = isOral ? generalSettings : null;
+  // queryAICompletion ya rota automáticamente entre ambas claves Groq manteniendo el modelo del destino.
+  // Solo usar fallbackSettings si apunta a otro proveedor/endpoint o a un modelo diferente con cuota disponible.
+  const canUseCrossModelFallback =
+    isOral &&
+    (normalizeOpenAIBaseUrl(generalSettings.baseUrl) !== normalizeOpenAIBaseUrl(oralSettings.baseUrl) ||
+      generalSettings.model !== oralSettings.model);
+  const fallbackSettings: AISettings | null = canUseCrossModelFallback ? generalSettings : null;
 
   if (targetSettings.enabled) {
     try {

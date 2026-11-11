@@ -480,6 +480,8 @@ function computeAISettingsDigest(settings: AISettings): string {
     geminiApiKey: settings.geminiApiKey || '',
     grokApiKey: settings.grokApiKey || '',
     groqApiKey: settings.groqApiKey || '',
+    groqBaseUrl: settings.groqBaseUrl || '',
+    groqModel: settings.groqModel || '',
     verified: Boolean(settings.verified),
   });
 }
@@ -2043,7 +2045,8 @@ export const googleDriveService = {
               const currentSettings = getAISettings();
               const currHasKey = Boolean(
                 (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
-                (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0)
+                (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0) ||
+                (currentSettings.groqApiKey && currentSettings.groqApiKey.trim().length > 0)
               );
               const remoteTs = typeof u.aiSettings.updatedAt === 'number' ? u.aiSettings.updatedAt : 0;
               const localTs = typeof currentSettings.updatedAt === 'number' ? currentSettings.updatedAt : 0;
@@ -2164,7 +2167,8 @@ export const googleDriveService = {
           }
         } else if (
           (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
-          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0)
+          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0) ||
+          (localAISettings.groqApiKey && localAISettings.groqApiKey.trim().length > 0)
         ) {
           this.uploadOrUpdateJson(token!, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
         }
@@ -2514,11 +2518,12 @@ export const googleDriveService = {
         }
       }
 
-      // 3. Guardar configuración de IA y API propia en Google Drive si tiene clave personal o Gemini
+      // 3. Guardar configuración de IA y API propia en Google Drive si tiene clave personal, de voz o Gemini
       const currentAISettings = getAISettings();
       const hasAiKey = Boolean(
         (currentAISettings.apiKey && currentAISettings.apiKey.trim().length > 0) ||
-        (currentAISettings.geminiApiKey && currentAISettings.geminiApiKey.trim().length > 0)
+        (currentAISettings.geminiApiKey && currentAISettings.geminiApiKey.trim().length > 0) ||
+        (currentAISettings.groqApiKey && currentAISettings.groqApiKey.trim().length > 0)
       );
       if (hasAiKey) {
         await this.uploadOrUpdateJson(token, rootFolderId, 'thea_ai_settings.json', currentAISettings);

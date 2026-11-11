@@ -10,8 +10,13 @@
  * ~20 peticiones/min y ~2.000/día, archivo máx. 25 MB.
  */
 
-import { DEFAULT_GROQ_KEY } from './aiService';
-import { safeLocalStorageSetItem } from './storageService';
+import {
+  clearGroqKeyCooldown,
+  getGroqKeyPool,
+  isUsableGroqApiKey,
+  markGroqKeyCooldown,
+  pickActiveGroqKey,
+} from './aiService';
 
 const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const STT_MODEL = 'whisper-large-v3-turbo';
@@ -112,7 +117,7 @@ export function isWhisperMicSupported(): boolean {
   );
 }
 
-async function transcribe(blob: Blob, opts: WhisperMicOptions): Promise<string> {
+function buildWhisperFormData(blob: Blob, opts: WhisperMicOptions): FormData {
   const ext = extensionFor(blob.type || 'audio/webm');
   const form = new FormData();
   form.append('file', blob, `audio.${ext}`);
@@ -121,39 +126,95 @@ async function transcribe(blob: Blob, opts: WhisperMicOptions): Promise<string> 
   form.append('response_format', 'json');
   form.append('temperature', '0');
   if (opts.prompt) form.append('prompt', opts.prompt.slice(0, 600));
+  return form;
+}
 
-  const res = await fetch(GROQ_STT_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${opts.apiKey}` }, // NO fijar Content-Type: el navegador añade el boundary
-    body: form,
-  });
+function resolveWhisperCandidateKeys(preferredKey?: string): string[] {
+  const active = pickActiveGroqKey('oral', preferredKey);
+  const pool = getGroqKeyPool('oral', preferredKey);
+  const ordered: string[] = [];
+  const pushUnique = (k?: string | null) => {
+    const clean = (k || '').trim();
+    if (!clean) return;
+    if (!ordered.includes(clean)) {
+      ordered.push(clean);
+    }
+  };
 
-  if (!res.ok) {
-    let detail = '';
-    try {
-      const j = await res.json();
-      detail = j?.error?.message || '';
-    } catch {
-      /* sin detalle */
+  if (isUsableGroqApiKey(active.apiKey)) {
+    pushUnique(active.apiKey);
+  }
+  for (const entry of pool) {
+    if (isUsableGroqApiKey(entry.apiKey)) {
+      pushUnique(entry.apiKey);
     }
-    if (res.status === 401) {
-      if (DEFAULT_GROQ_KEY && opts.apiKey !== DEFAULT_GROQ_KEY) {
-        console.warn('[WhisperMic] Clave 401 rechazada, auto-recuperando con DEFAULT_GROQ_KEY...');
-        try {
-          if (typeof localStorage !== 'undefined') {
-            safeLocalStorageSetItem('thea_groq_api_key', DEFAULT_GROQ_KEY);
-          }
-        } catch {}
-        return transcribe(blob, { ...opts, apiKey: DEFAULT_GROQ_KEY });
-      }
-      throw new Error('La API key de Groq no es válida (debe empezar por gsk_).');
-    }
-    if (res.status === 429) throw new Error('Límite de Groq alcanzado (demasiadas peticiones). Espera un minuto e inténtalo de nuevo.');
-    throw new Error(`Error de transcripción (HTTP ${res.status}). ${detail}`.trim());
+  }
+  if (ordered.length === 0 && preferredKey && preferredKey.trim()) {
+    pushUnique(preferredKey);
+  }
+  return ordered;
+}
+
+/** Transcribe audio usando Whisper en Groq con rotación automática entre ambas claves si una agota cuota. */
+export async function transcribeAudioWithGroqRotation(blob: Blob, opts: WhisperMicOptions): Promise<string> {
+  const candidates = resolveWhisperCandidateKeys(opts.apiKey);
+  if (candidates.length === 0) {
+    throw new Error('La API key de Groq no es válida (debe empezar por gsk_).');
   }
 
-  const json = await res.json();
-  return String(json?.text || '').trim();
+  let lastStatus = 0;
+  let lastDetail = '';
+
+  for (let idx = 0; idx < candidates.length; idx++) {
+    const candidateKey = candidates[idx];
+    const form = buildWhisperFormData(blob, opts);
+
+    const res = await fetch(GROQ_STT_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${candidateKey}` }, // NO fijar Content-Type: el navegador añade el boundary
+      body: form,
+    });
+
+    if (res.ok) {
+      clearGroqKeyCooldown(candidateKey);
+      const json = await res.json();
+      return String(json?.text || '').trim();
+    }
+
+    const errText = await res.clone().text().catch(() => '');
+    let detail = '';
+    try {
+      const j = JSON.parse(errText);
+      detail = j?.error?.message || '';
+    } catch {
+      detail = errText.trim();
+    }
+    lastStatus = res.status;
+    lastDetail = detail;
+
+    if (res.status === 401 || res.status === 402 || res.status === 429) {
+      markGroqKeyCooldown(candidateKey, errText || detail || `HTTP ${res.status}`, res.status);
+      if (idx + 1 < candidates.length) {
+        console.warn(`[WhisperMic] Clave ${idx + 1} recibió HTTP ${res.status}; rotando a clave de respaldo manteniendo ${STT_MODEL}.`);
+        continue;
+      }
+    }
+
+    break;
+  }
+
+  if (lastStatus === 401) {
+    throw new Error('La API key de Groq no es válida (debe empezar por gsk_).');
+  }
+  if (lastStatus === 429) {
+    const dualNote = candidates.length > 1 ? ' en ambas claves' : '';
+    throw new Error(`Límite de Groq alcanzado${dualNote} (demasiadas peticiones). Espera un minuto e inténtalo de nuevo.`);
+  }
+  throw new Error(`Error de transcripción (HTTP ${lastStatus || 'desconocido'}). ${lastDetail}`.trim());
+}
+
+async function transcribe(blob: Blob, opts: WhisperMicOptions): Promise<string> {
+  return transcribeAudioWithGroqRotation(blob, opts);
 }
 
 /**
