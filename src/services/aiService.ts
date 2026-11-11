@@ -3184,8 +3184,36 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   return [];
 }
 
+const STUDY_GUIDE_EMOJI_SOURCE = String.raw`(?:[\u{1F1E6}-\u{1F1FF}]{2}|[0-9#*]\uFE0F?\u20E3|\p{Extended_Pictographic}[\uFE0E\uFE0F\u200D\u{1F3FB}-\u{1F3FF}\p{Extended_Pictographic}]*|[✓✔✕✗✖❖🔹🔸🔺🔻🔷🔶])`;
+const STUDY_GUIDE_EMOJI_TEST_RE = new RegExp(STUDY_GUIDE_EMOJI_SOURCE, 'u');
+const STUDY_GUIDE_EMOJI_REPLACE_RE = new RegExp(STUDY_GUIDE_EMOJI_SOURCE, 'gu');
+
 /**
- * Remueve resúmenes ejecutivos, visiones epistémicas y preámbulos meta-analíticos
+ * Elimina emojis y pictogramas decorativos de las guías de estudio conservando sangrías Markdown, tablas y KaTeX.
+ */
+export function stripStudyGuideEmojis(markdownText: string): string {
+  if (!markdownText) return '';
+  return markdownText
+    .split('\n')
+    .map((line) => {
+      if (!STUDY_GUIDE_EMOJI_TEST_RE.test(line)) return line;
+      const indentMatch = line.match(/^([ \t]*)/);
+      const leadingIndent = indentMatch ? indentMatch[1] : '';
+      const body = line
+        .slice(leadingIndent.length)
+        .replace(STUDY_GUIDE_EMOJI_REPLACE_RE, '')
+        .replace(/ {2,}/g, ' ')
+        .replace(/\s+\|(\s*)$/gm, ' |$1')
+        .replace(/\s+([,.;:!?])/g, '$1')
+        .trimEnd();
+      return `${leadingIndent}${body}`;
+    })
+    .join('\n')
+    .replace(/^(#{1,6}|>|[-*+])\s*$/gm, '');
+}
+
+/**
+ * Remueve resúmenes ejecutivos, visiones epistémicas, preámbulos meta-analíticos y emojis
  * de las guías de estudio para entrar directamente en la materia.
  */
 export function stripExecutiveSummaryPreamble(markdownText: string): string {
@@ -3209,6 +3237,7 @@ export function stripExecutiveSummaryPreamble(markdownText: string): string {
   cleaned = cleaned.replace(/^(#\s+[^\n]+\n+)(?:(?:El presente tratado|Este documento analiza|En esta gu[íi]a de estudio)[^\n]+\n+)+/gi, '$1\n');
 
   cleaned = sanitizeRepetitionLoops(cleaned);
+  cleaned = stripStudyGuideEmojis(cleaned);
 
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -3221,7 +3250,8 @@ const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO OBLIGATORIO (Mark
   Sin líneas en blanco entre filas y SIN encerrar tablas en bloques \`\`\`.
 - INCLUYE bloques de perla/alerta usando citas: \`> **Perla Clave:** ...\` o \`> **Error Frecuente:** ...\`.
 - USA KaTeX en fórmulas, parámetros numéricos o flechas causales (ej. \`$\\text{Estímulo} \\rightarrow \\text{Mecanismo} \\rightarrow \\text{Efecto}$\`).
-- Combina negritas (**término**), listas jerárquicas y diferenciaciones claras.`;
+- Combina negritas (**término**), listas jerárquicas y diferenciaciones claras.
+- PROHIBIDO usar emojis, pictogramas ni íconos Unicode (ej. 🟢, 📘, 🔴, 🟡, 💡, 📌, ⚠️, ✅, ❌, 🎯, 🚀) en títulos, listas, tablas o párrafos; utiliza únicamente texto académico formal en español.`;
 
 function buildBalancedStudyExcerpt(text: string, maxChars: number): string {
   if (!text || text.length <= maxChars) return text;

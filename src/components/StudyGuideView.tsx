@@ -284,7 +284,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(markdown);
+    navigator.clipboard.writeText(stripExecutiveSummaryPreamble(markdown));
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
@@ -345,7 +345,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       return;
     }
 
-    const sentences = splitSentences(markdown.slice(0, 2500));
+    const sentences = splitSentences(stripExecutiveSummaryPreamble(markdown).slice(0, 2500));
     if (sentences.length === 0) return;
 
     audioStopRequestedRef.current = false;
