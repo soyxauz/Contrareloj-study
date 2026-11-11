@@ -243,7 +243,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('thea_materias_cloud_sync_request', (event: any) => {
     const detail = event?.detail;
     if (detail?.userId) {
-      googleDriveService.pushMateriasToDrive(detail.userId, detail.materias).catch(() => {});
+      googleDriveService.scheduleMateriasSync(detail.userId, 0);
     }
   });
 }
@@ -296,6 +296,7 @@ let latestUploadedServerModifiedMs = 0;
 
 const lastSyncedProgressDigests = new Map<string, string>();
 const lastSyncedKitsDigests = new Map<string, string>();
+const lastSyncedMateriasDigests = new Map<string, string>();
 let lastSyncedAIDigest: string | null = null;
 let lastSyncedPodcastDigest: string | null = null;
 
@@ -307,13 +308,19 @@ function recordUploadServerModifiedTime(modifiedTime?: string): void {
   }
 }
 
-function getDigestStorageKey(kind: 'progress' | 'kits', userId: string): string {
+function getDigestStorageKey(kind: 'progress' | 'kits' | 'materias', userId: string): string {
   return `thea_drive_${kind}_digest_${userId}`;
 }
 
-function getStoredSyncDigest(kind: 'progress' | 'kits', userId: string): string | null {
+function getSyncDigestCache(kind: 'progress' | 'kits' | 'materias'): Map<string, string> {
+  if (kind === 'progress') return lastSyncedProgressDigests;
+  if (kind === 'kits') return lastSyncedKitsDigests;
+  return lastSyncedMateriasDigests;
+}
+
+function getStoredSyncDigest(kind: 'progress' | 'kits' | 'materias', userId: string): string | null {
   if (!userId) return null;
-  const cache = kind === 'progress' ? lastSyncedProgressDigests : lastSyncedKitsDigests;
+  const cache = getSyncDigestCache(kind);
   const cached = cache.get(userId);
   if (cached) return cached;
   try {
@@ -328,9 +335,9 @@ function getStoredSyncDigest(kind: 'progress' | 'kits', userId: string): string 
   return null;
 }
 
-function setStoredSyncDigest(kind: 'progress' | 'kits', userId: string, digest: string): void {
+function setStoredSyncDigest(kind: 'progress' | 'kits' | 'materias', userId: string, digest: string): void {
   if (!userId || !digest) return;
-  const cache = kind === 'progress' ? lastSyncedProgressDigests : lastSyncedKitsDigests;
+  const cache = getSyncDigestCache(kind);
   cache.set(userId, digest);
   try {
     safeLocalStorageSetItem(getDigestStorageKey(kind, userId), digest);
@@ -446,6 +453,22 @@ function computeKitsDigest(kits: StudyKit[], tombstones?: Record<string, number>
     .map(([id, ts]) => `${id}=${ts}`);
 
   return `K[${kitParts.join(';')}]|T[${tombParts.join(',')}]`;
+}
+
+function computeMateriasDigest(
+  materias: CustomMateria[],
+  deletedMap?: Record<string, number>
+): string {
+  const matParts = [...(materias || [])]
+    .filter(m => m && typeof m.name === 'string')
+    .sort((a, b) => a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase()))
+    .map(m => `${m.name.trim().toLowerCase()}:${m.colorId || ''}:${m.updatedAt || 0}`);
+
+  const delParts = Object.entries(deletedMap || {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, ts]) => `${k}=${ts}`);
+
+  return `M[${matParts.join(';')}]|D[${delParts.join(',')}]`;
 }
 
 function computeAISettingsDigest(settings: AISettings): string {
@@ -1008,15 +1031,29 @@ export const googleDriveService = {
       const hasRemoteKitsFiles = relevantRemoteFiles.some(
         f => f.name.startsWith('thea_kits_') || f.name.startsWith('thea_study_kits')
       );
+      const hasRemoteMateriasFiles = relevantRemoteFiles.some(
+        f => f.name.startsWith('thea_materias_') || f.name === 'thea_custom_materias.json'
+      );
+      const localMaterias = getStoredCustomMaterias(userId);
+      const localDeletedMaterias = getDeletedCustomMaterias(userId);
+      const hasLocalMaterias = localMaterias.length > 0 || Object.keys(localDeletedMaterias).length > 0;
       const hasRemoteFiles = relevantRemoteFiles.length > 0;
       const needsPull =
         (localKits.length === 0 && hasRemoteKitsFiles) ||
         (!hasLocalProgress && hasRemoteProgressFiles) ||
+        (!hasLocalMaterias && hasRemoteMateriasFiles) ||
         (remoteMaxMs > 0 && remoteMaxMs > localWatermark) ||
         (hasRemoteFiles && localWatermark === 0);
 
       if (needsPull) {
         return await this.pullFromDrive(userId);
+      }
+
+      if (
+        hasLocalMaterias &&
+        computeMateriasDigest(localMaterias, localDeletedMaterias) !== getStoredSyncDigest('materias', userId)
+      ) {
+        this.scheduleMateriasSync(userId, 0);
       }
 
       if (
@@ -2159,8 +2196,30 @@ export const googleDriveService = {
         }
 
         // 9. Procesar e integrar materias personalizadas y tombstones
-        if (Array.isArray(pulledMateriasList) && pulledMateriasList.some(Boolean)) {
-          mergeAndPersistRemoteMaterias(userId, pulledMateriasList);
+        const localMatPre = getStoredCustomMaterias(userId);
+        const localDelPre = getDeletedCustomMaterias(userId);
+        const hasRemoteMat = Array.isArray(pulledMateriasList) && pulledMateriasList.some(Boolean);
+        const mergedMat = hasRemoteMat
+          ? mergeAndPersistRemoteMaterias(userId, pulledMateriasList, localMatPre)
+          : { materias: localMatPre, deletedMaterias: localDelPre };
+
+        const mergedMatDigest = computeMateriasDigest(mergedMat.materias, mergedMat.deletedMaterias);
+        const userMatIdx = allMateriasFiles.findIndex(f => f.name === `thea_materias_${userId}.json`);
+        const remoteUserMatRaw = userMatIdx >= 0 ? pulledMateriasList[userMatIdx] : null;
+        const parsedUserRemote = remoteUserMatRaw ? parseRemoteMateriasPayload(remoteUserMatRaw) : null;
+        const remoteUserMatDigest = parsedUserRemote
+          ? computeMateriasDigest(parsedUserRemote.materias, parsedUserRemote.deletedMaterias)
+          : null;
+
+        if (
+          (mergedMat.materias.length > 0 || Object.keys(mergedMat.deletedMaterias).length > 0) &&
+          mergedMatDigest !== remoteUserMatDigest
+        ) {
+          setTimeout(() => {
+            this.pushMateriasToDrive(userId).catch(() => {});
+          }, 350);
+        } else {
+          setStoredSyncDigest('materias', userId, mergedMatDigest);
         }
 
         // 10. Notificar inmediatamente a toda la interfaz (incluyendo App.tsx para kits y Analytics/Home para progreso)
@@ -2276,7 +2335,16 @@ export const googleDriveService = {
     }
 
     const prePushKitsDigest = computeKitsDigest(cleanKits, localTombstonesPre);
+    const localMatForPreCheck = getStoredCustomMaterias(userId);
+    const localDelForPreCheck = getDeletedCustomMaterias(userId);
+    const hasDirtyMaterias =
+      (localMatForPreCheck.length > 0 || Object.keys(localDelForPreCheck).length > 0) &&
+      computeMateriasDigest(localMatForPreCheck, localDelForPreCheck) !== getStoredSyncDigest('materias', userId);
+
     if (!options?.force && prePushKitsDigest === getStoredSyncDigest('kits', userId)) {
+      if (hasDirtyMaterias) {
+        this.pushMateriasToDrive(userId).catch(() => {});
+      }
       return;
     }
 
@@ -2459,6 +2527,7 @@ export const googleDriveService = {
 
       lastSyncedPodcastDigest = computePodcastSettingsDigest(currentPodcastSettings);
       setStoredSyncDigest('kits', userId, computeKitsDigest(driveMergedKits, mergedTombstones));
+      setStoredSyncDigest('materias', userId, computeMateriasDigest(mergedMatState.materias, mergedMatState.deletedMaterias));
       if (hasAnyProgressToUpload) {
         setStoredSyncDigest(
           'progress',
@@ -3004,16 +3073,26 @@ export const googleDriveService = {
   async pushMateriasToDrive(userId: string, materias?: CustomMateria[]): Promise<void> {
     if (!userId || userId === 'guest') return;
 
+    if (isPushMateriasInFlight) {
+      pendingMateriasAfterInFlightUserId = userId;
+      return;
+    }
+
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
     }
     if (!token) return;
 
+    isPushMateriasInFlight = true;
+
     try {
       const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
       const userMateriasFileName = `thea_materias_${userId}.json`;
-      const localMaterias = materias || getStoredCustomMaterias(userId);
+      const storedLatest = getStoredCustomMaterias(userId);
+      const localMaterias = materias
+        ? mergeCustomMaterias(materias, storedLatest, getDeletedCustomMaterias(userId))
+        : storedLatest;
 
       // Descargar materias y tombstones previos de Drive para fusión por fecha y hora
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
@@ -3044,6 +3123,7 @@ export const googleDriveService = {
       };
 
       await this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, uploadPayload);
+      setStoredSyncDigest('materias', userId, computeMateriasDigest(mergedState.materias, mergedState.deletedMaterias));
       setRemoteWatermark(userId, Math.max(getRemoteWatermark(userId), latestUploadedServerModifiedMs, now));
       updateState({ status: 'synced', lastSyncTime: now, errorMessage: null });
       console.log('[GoogleDriveService] Materias y colores sincronizados con Google Drive inmediatamente.');
@@ -3054,10 +3134,57 @@ export const googleDriveService = {
         this.clearAccessToken();
         const refreshedToken = await this.attemptSilentTokenRefresh();
         if (refreshedToken) {
+          isPushMateriasInFlight = false;
           return this.pushMateriasToDrive(userId, materias);
         }
       }
+    } finally {
+      isPushMateriasInFlight = false;
+      if (pendingMateriasAfterInFlightUserId) {
+        const nextUser = pendingMateriasAfterInFlightUserId;
+        pendingMateriasAfterInFlightUserId = null;
+        setTimeout(() => {
+          this.pushMateriasToDrive(nextUser).catch(() => {});
+        }, 250);
+      }
     }
+  },
+
+  /**
+   * Programa la sincronización debounced/coalesced de colores y materias hacia Google Drive.
+   */
+  scheduleMateriasSync(userId: string, delayMs: number = 0): void {
+    if (!userId || userId === 'guest') return;
+    pendingMateriasUserId = userId;
+    hasPendingMateriasSync = true;
+    if (globalMateriasDebounceTimer) clearTimeout(globalMateriasDebounceTimer);
+    const waitMs = delayMs <= 0 ? 40 : delayMs;
+    globalMateriasDebounceTimer = setTimeout(() => {
+      this.flushMateriasSync(userId);
+    }, waitMs);
+  },
+
+  flushMateriasSync(userId?: string): void {
+    if (globalMateriasDebounceTimer) {
+      clearTimeout(globalMateriasDebounceTimer);
+      globalMateriasDebounceTimer = null;
+    }
+    const targetUserId = userId || pendingMateriasUserId || authService.getCurrentUser()?.id;
+    const shouldPushScheduled = hasPendingMateriasSync;
+    pendingMateriasUserId = null;
+    hasPendingMateriasSync = false;
+
+    if (!targetUserId || targetUserId === 'guest') return;
+    const localMat = getStoredCustomMaterias(targetUserId);
+    const localDel = getDeletedCustomMaterias(targetUserId);
+    const hasDirty =
+      (localMat.length > 0 || Object.keys(localDel).length > 0) &&
+      computeMateriasDigest(localMat, localDel) !== getStoredSyncDigest('materias', targetUserId);
+
+    if (!shouldPushScheduled && !hasDirty) return;
+    this.pushMateriasToDrive(targetUserId).catch(err => {
+      console.warn('[GoogleDriveService] Error en flushMateriasSync:', err);
+    });
   },
 
   /**
@@ -3146,6 +3273,7 @@ export const googleDriveService = {
     flashcardProgressService.flushPendingSaves();
     this.flushAutoSync(userId);
     this.flushProgressSync(userId);
+    this.flushMateriasSync(userId);
   },
 };
 
@@ -3157,6 +3285,12 @@ let hasPendingAutoSync = false;
 let globalProgressDebounceTimer: any = null;
 let globalProgressPendingUserId: string | null = null;
 let hasPendingProgressSync = false;
+
+let globalMateriasDebounceTimer: any = null;
+let pendingMateriasUserId: string | null = null;
+let hasPendingMateriasSync = false;
+let isPushMateriasInFlight = false;
+let pendingMateriasAfterInFlightUserId: string | null = null;
 
 // Registrar el descargador prioritario de activos en storageService para hidratar imágenes automáticamente
 registerDriveAssetDownloader((assetIds) => googleDriveService.prioritizeAssetsDownload(assetIds));

@@ -269,6 +269,7 @@ export const App: React.FC = () => {
       if (isCancelled) return;
       if (restoredUser && (!currentUser || currentUser.id !== restoredUser.id)) {
         setCurrentUser(restoredUser);
+        restoreCustomMateriasAsync(restoredUser.id).catch(() => {});
         const secondKits = await authService.restoreUserKitsAsync(restoredUser.id);
         if (isCancelled) return;
         const cleanKits = secondKits.filter(k => !isCorruptedKit(k));
@@ -600,6 +601,8 @@ export const App: React.FC = () => {
   // Sincronización bidireccional reactiva: subida inmediata ante cambios reales + chequeo remoto silencioso (>30s) al volver a enfocar pestaña
   useEffect(() => {
     if (!currentUser?.id) return;
+
+    restoreCustomMateriasAsync(currentUser.id).catch(() => {});
 
     const handleProgressSaved = (event: Event) => {
       const source = (event as CustomEvent)?.detail?.source;

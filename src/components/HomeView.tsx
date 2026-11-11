@@ -415,7 +415,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
       map.set(m.name.trim().toLowerCase(), getMateriaTheme(m.name, kits, userId));
     }
     return map;
-  }, [availableMateriasList, kits, userId]);
+  }, [availableMateriasList, kits, userId, materiaVersion]);
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6">
@@ -1310,9 +1310,16 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         <MateriaManagerModal
           kits={kits}
           userId={userId}
+          materiaVersion={materiaVersion}
           onClose={() => setShowMateriaManagerModal(false)}
           onMateriasChanged={() => setMateriaVersion(v => v + 1)}
           onUpdateKit={onUpdateKit}
+          onChangeCategoryBatch={onChangeCategoryBatch}
+          onRenameSelectedFilter={(oldName, newName) => {
+            if (selectedMateria.trim().toLowerCase() === oldName.trim().toLowerCase()) {
+              setSelectedMateria(newName);
+            }
+          }}
         />,
         document.body
       )}
@@ -1704,20 +1711,26 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 interface MateriaManagerModalProps {
   kits: StudyKit[];
   userId?: string | null;
+  materiaVersion: number;
   onClose: () => void;
   onMateriasChanged: () => void;
   onUpdateKit?: (kit: StudyKit) => void;
+  onChangeCategoryBatch?: (kitIds: string[], newCategory: string) => void;
+  onRenameSelectedFilter?: (oldName: string, newName: string) => void;
 }
 
 const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
   kits,
   userId = null,
+  materiaVersion,
   onClose,
   onMateriasChanged,
   onUpdateKit,
+  onChangeCategoryBatch,
+  onRenameSelectedFilter,
 }) => {
   const { theme } = useTheme();
-  const activeMaterias = React.useMemo(() => getAllAvailableMaterias(kits, userId), [kits, userId]);
+  const activeMaterias = React.useMemo(() => getAllAvailableMaterias(kits, userId), [kits, userId, materiaVersion]);
   const [editingMateriaName, setEditingMateriaName] = React.useState<string | null>(null);
   const [editingName, setEditingName] = React.useState('');
   const [editingColor, setEditingColor] = React.useState('blue');
@@ -1735,12 +1748,24 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
     if (!trimmed) return;
     updateCustomMateria(oldName, trimmed, editingColor, userId);
 
-    if (trimmed.toLowerCase() !== oldName.toLowerCase() && onUpdateKit) {
-      kits.forEach(k => {
-        if ((k.category || '').toLowerCase() === oldName.toLowerCase()) {
-          onUpdateKit({ ...k, category: trimmed });
+    if (trimmed.toLowerCase() !== oldName.toLowerCase()) {
+      const matchingIds = kits
+        .filter(k => (k.category || 'General').trim().toLowerCase() === oldName.trim().toLowerCase())
+        .map(k => k.id);
+
+      if (matchingIds.length > 0) {
+        if (onChangeCategoryBatch) {
+          onChangeCategoryBatch(matchingIds, trimmed);
+        } else if (onUpdateKit) {
+          const matchingSet = new Set(matchingIds);
+          kits.forEach(k => {
+            if (matchingSet.has(k.id)) {
+              onUpdateKit({ ...k, category: trimmed });
+            }
+          });
         }
-      });
+      }
+      onRenameSelectedFilter?.(oldName, trimmed);
     }
 
     setEditingMateriaName(null);
@@ -1749,14 +1774,19 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
 
   const handleDelete = (materiaName: string) => {
     const kitsWithMateria = kits.filter(k => (k.category || '').toLowerCase() === materiaName.toLowerCase());
-    let confirmMsg = `¿Deseas reasignar los libros de "${materiaName}" a la materia "General"?`;
+    const confirmMsg = `¿Deseas reasignar los libros de "${materiaName}" a la materia "General"?`;
     if (window.confirm(confirmMsg)) {
       deleteCustomMateria(materiaName, userId);
-      if (kitsWithMateria.length > 0 && onUpdateKit) {
-        kitsWithMateria.forEach(k => {
-          onUpdateKit({ ...k, category: 'General' });
-        });
+      if (kitsWithMateria.length > 0) {
+        if (onChangeCategoryBatch) {
+          onChangeCategoryBatch(kitsWithMateria.map(k => k.id), 'General');
+        } else if (onUpdateKit) {
+          kitsWithMateria.forEach(k => {
+            onUpdateKit({ ...k, category: 'General' });
+          });
+        }
       }
+      onRenameSelectedFilter?.(materiaName, 'General');
       onMateriasChanged();
     }
   };
@@ -1885,8 +1915,8 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                                 editingColor === key ? 'border-amber-400 ring-1 ring-amber-400' : 'border-white/10'
                               }`}
                             >
-                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.hex }} />
-                              <span className="text-white">{p.name}</span>
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.hex }} />
+                              <span className="text-white keep-white">{p.name}</span>
                             </button>
                           );
                         })}
@@ -1894,6 +1924,8 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                     </div>
                   );
                 }
+
+                const palDef = OPAQUE_DARK_PALETTES[m.colorId] || OPAQUE_DARK_PALETTES.slate;
 
                 return (
                   <div
@@ -1907,6 +1939,11 @@ const MateriaManagerModal: React.FC<MateriaManagerModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0 ring-1 ring-white/20"
+                        style={{ backgroundColor: palDef.hex }}
+                        title={palDef.name}
+                      />
                       <span className={`text-xs sm:text-sm font-semibold truncate ${
                         theme === 'dark' ? 'text-white' : 'text-zinc-950 font-bold'
                       }`}>
@@ -2204,7 +2241,7 @@ const ReassignMateriaModal: React.FC<ReassignMateriaModalProps> = ({
                         }`}
                       >
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pal.hex }} />
-                        <span className="text-white truncate">{pal.name}</span>
+                        <span className="text-white keep-white truncate">{pal.name}</span>
                       </button>
                     );
                   })}

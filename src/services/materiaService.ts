@@ -513,19 +513,19 @@ export function getStoredCustomMaterias(userId?: string | null): CustomMateria[]
   try {
     const key = getMateriaStorageKey(userId);
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed.filter(m => m && typeof m.name === 'string' && m.name.trim().length > 0);
       }
     }
-    // Si es usuario autenticado pero aún no tiene clave con userId, leer la clave global de respaldo
-    if (userId && typeof localStorage !== 'undefined') {
+    // Si es usuario autenticado pero aún no tiene clave con userId, migrar desde clave global de respaldo si existe
+    if (userId && raw === null && typeof localStorage !== 'undefined') {
       const fallbackRaw = localStorage.getItem('thea_custom_materias');
       if (fallbackRaw) {
         const parsedFallback = JSON.parse(fallbackRaw);
         if (Array.isArray(parsedFallback) && parsedFallback.length > 0) {
-          return parsedFallback;
+          return parsedFallback.filter(m => m && typeof m.name === 'string' && m.name.trim().length > 0);
         }
       }
     }
@@ -806,7 +806,13 @@ export function updateCustomMateria(oldName: string, newName: string, colorId: s
   const now = Date.now();
   const cleanOld = oldName.trim().toLowerCase();
   const cleanNew = newName.trim();
+  if (!cleanNew) return;
+
   const cleanNewLower = cleanNew.toLowerCase();
+  const assignedColor = (colorId && colorId in OPAQUE_DARK_PALETTES)
+    ? colorId
+    : getDistinctColorForCategory(cleanNew, [], userId);
+
   const deletedMap = getDeletedCustomMaterias(userId);
   if (cleanOld && cleanOld !== cleanNewLower) {
     deletedMap[cleanOld] = now;
@@ -816,13 +822,36 @@ export function updateCustomMateria(oldName: string, newName: string, colorId: s
   }
   saveDeletedCustomMaterias(deletedMap, userId);
 
-  const updated = current.map(m => {
-    if (m.name.toLowerCase() === cleanOld) {
-      return { ...m, name: cleanNew, colorId, updatedAt: now };
+  let foundOld = false;
+  const deduped: CustomMateria[] = [];
+
+  for (const m of current) {
+    const mLower = (m.name || '').trim().toLowerCase();
+    if (mLower === cleanOld) {
+      if (!foundOld) {
+        foundOld = true;
+        deduped.push({ ...m, name: cleanNew, colorId: assignedColor, updatedAt: now });
+      }
+      continue;
     }
-    return m;
-  });
-  saveCustomMaterias(updated, userId, true);
+    // Si ya existía una materia con el nuevo nombre destino, fusionarla preservando el color elegido
+    if (mLower === cleanNewLower) {
+      continue;
+    }
+    deduped.push(m);
+  }
+
+  // Upsert: las materias auto-detectadas desde StudyKits aún no estaban guardadas como CustomMateria
+  if (!foundOld) {
+    deduped.push({
+      id: 'mat-' + now.toString(36),
+      name: cleanNew,
+      colorId: assignedColor,
+      updatedAt: now,
+    });
+  }
+
+  saveCustomMaterias(deduped, userId, true);
 }
 
 export function deleteCustomMateria(name: string, userId?: string | null): void {
