@@ -3498,9 +3498,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     };
 
                     const effectiveExplanation = item.explanation || matchedQ.explanation || 'Respuesta fundamentada en el material de estudio analizado.';
-                    const cleanedExplanation = effectiveExplanation
-                      .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '')
-                      .trim() || effectiveExplanation;
+                    const explanationQuestion: Question = matchedQ.explanation
+                      ? matchedQ
+                      : { ...matchedQ, explanation: effectiveExplanation };
 
                     return (
                       <div className="p-4 rounded-2xl bg-thea-surfaceLight/60 border border-thea-border/80 text-xs sm:text-sm text-slate-300 animate-fadeIn space-y-2 mt-2">
@@ -3538,14 +3538,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
                         <div className="my-2">
                           <TheaExplanationView
-                            question={matchedQ}
+                            question={explanationQuestion}
                             kitAssets={kit.assets || []}
                             onZoomImage={(asset) => setZoomAsset(asset)}
                           />
-                        </div>
-
-                        <div className="leading-relaxed text-slate-300">
-                          <FormattedText text={cleanedExplanation} />
                         </div>
                       </div>
                     );
