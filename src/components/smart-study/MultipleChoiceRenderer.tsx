@@ -82,7 +82,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
             }}
             className={`animate-stagger-item active-press w-full text-left p-4 sm:p-5 rounded-2xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center gap-3.5 sm:gap-4 group cursor-pointer ${cardClasses}`}
           >
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 tabular-nums transition-[transform,background-color,border-color] duration-150 shadow-sm ${badgeClasses}`}>
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm sm:text-[15px] shrink-0 tabular-nums transition-[transform,background-color,border-color] duration-150 shadow-sm ${badgeClasses}`}>
               {isAnswered && isCorrect ? (
                 <Check className="w-4 h-4 stroke-[3]" />
               ) : isAnswered && isSelected ? (
@@ -91,7 +91,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
                 <span>{idx + 1}</span>
               )}
             </div>
-            <span className={`font-medium text-sm sm:text-base leading-snug flex-1 transition-colors ${textClasses}`}>
+            <span className={`font-medium text-base sm:text-[17px] leading-snug flex-1 transition-colors ${textClasses}`}>
               <FormattedText text={option} inlineOnly={true} />
             </span>
           </button>
