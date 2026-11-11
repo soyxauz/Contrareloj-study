@@ -3426,7 +3426,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   </div>
 
                   {/* Enunciado de la Pregunta */}
-                  <div className="text-base sm:text-lg mb-4 leading-relaxed">
+                  <div className="text-[15px] sm:text-[17px] mb-4 leading-relaxed">
                     <QuestionPrompt text={item.questionText} topic={item.topic} />
                   </div>
 
@@ -3718,7 +3718,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 : enforceQuestionLengthLimit(currentQ.question)
             }
             topic={currentQ.topic}
-            className="text-xl sm:text-[23px] tracking-tight mb-6 sm:mb-8 leading-snug"
+            className="text-lg sm:text-[21px] tracking-tight mb-6 sm:mb-8 leading-snug"
           />
 
           {/* ── QUESTION TYPE RENDERERS ────────────────────────────────────── */}
@@ -3832,7 +3832,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="font-extrabold text-base sm:text-lg text-white">
+                  <p className="font-extrabold text-[15px] sm:text-[17px] text-white">
                     {isManuallyOverridden
                       ? '¡Respuesta Reclasificada! (¡Tenía razón!)'
                       : isCurrentCorrect
@@ -3841,15 +3841,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   </p>
 
                   {isCurrentCorrect ? (
-                    <p className="text-sm sm:text-base text-emerald-200/90 mt-1">
+                    <p className="text-[13px] sm:text-[15px] text-emerald-200/90 mt-1">
                       {qType === 'matching' && correctMatchingFormula
                         ? `Has emparejado todos los conceptos con exactitud: ${correctMatchingFormula}.`
                         : 'Tu respuesta coincide conceptualmente con la solución esperada.'}
                     </p>
                   ) : (
-                    <div className="text-sm sm:text-base text-slate-200 mt-1.5 space-y-2">
+                    <div className="text-[13px] sm:text-[15px] text-slate-200 mt-1.5 space-y-2">
                       {qType === 'matching' && correctMatchingFormula && (
-                        <div className="text-sm text-rose-300">
+                        <div className="text-[13px] text-rose-300">
                           <span className="font-semibold opacity-90">Emparejamientos correctos: </span>
                           <span className="text-white font-bold">{correctMatchingFormula}</span>
                         </div>

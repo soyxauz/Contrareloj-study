@@ -87,7 +87,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
                   <span className="w-7 h-7 rounded-xl bg-violet-600/30 border border-violet-500/40 text-violet-200 font-extrabold text-xs flex items-center justify-center shrink-0">
                     {leftNum}
                   </span>
-                  <span className="font-semibold text-base text-white truncate sm:text-wrap leading-snug">
+                  <span className="font-semibold text-[15px] text-white truncate sm:text-wrap leading-snug">
                     <FormattedText text={pair.term} inlineOnly={true} />
                   </span>
                 </div>
@@ -162,7 +162,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
                   <span className="w-7 h-7 rounded-xl bg-purple-600/30 border border-purple-500/40 text-purple-200 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">
                     {rightNum}
                   </span>
-                  <span className="text-sm sm:text-[15px] text-slate-200 leading-relaxed">
+                  <span className="text-[13px] sm:text-sm text-slate-200 leading-relaxed">
                     <FormattedText text={def} inlineOnly={true} />
                   </span>
                 </div>

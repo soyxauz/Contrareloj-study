@@ -82,7 +82,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
                 <X className={`w-7 h-7 stroke-[2.5] ${iconClasses}`} />
               )}
             </div>
-            <span className={`font-bold text-xl sm:text-2xl tracking-tight ${
+            <span className={`font-bold text-[19px] sm:text-[22px] tracking-tight ${
               theme === 'dark' ? 'text-white' : 'text-zinc-950'
             }`}>
               {label}

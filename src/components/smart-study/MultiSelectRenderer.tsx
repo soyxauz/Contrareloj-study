@@ -24,7 +24,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
 
   return (
     <div className="space-y-4 mb-8">
-      <p className={`text-sm font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+      <p className={`text-[13px] font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
         Selecciona una o más respuestas válidas y presiona &quot;Comprobar Selección&quot;:
       </p>
       <div className="space-y-3">
@@ -84,7 +84,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
                 }`}>
                   {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
-                <span className="text-base sm:text-[17px] font-medium leading-snug">
+                <span className="text-[15px] sm:text-base font-medium leading-snug">
                   <FormattedText text={option} inlineOnly={true} />
                 </span>
               </div>
@@ -105,7 +105,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           type="button"
           disabled={selectedMultiIndices.length === 0}
           onClick={onCheckSelection}
-          className={`active-press w-full py-3 rounded-xl font-bold text-[15px] sm:text-base shadow-md transition-[transform,background-color] duration-150 cursor-pointer tabular-nums disabled:opacity-40 ${
+          className={`active-press w-full py-3 rounded-xl font-bold text-sm sm:text-[15px] shadow-md transition-[transform,background-color] duration-150 cursor-pointer tabular-nums disabled:opacity-40 ${
             theme === 'dark'
               ? 'bg-white hover:bg-zinc-200 text-zinc-950 glass-specular'
               : theme === 'kitty'

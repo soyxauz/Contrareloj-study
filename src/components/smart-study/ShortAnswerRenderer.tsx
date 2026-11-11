@@ -40,7 +40,7 @@ export const ShortAnswerRenderer: React.FC<ShortAnswerRendererProps> = ({
           value={shortAnswerInput}
           onChange={e => onInputChange(e.target.value)}
           placeholder="Escribe una respuesta fundamentada de 1 a 4 líneas. La IA evaluará la similitud conceptual y los puntos clave con la respuesta modelo..."
-          className="w-full bg-[#12030a]/60 border border-[#881337]/35 focus:border-[#be123c]/60 rounded-2xl p-4 text-base sm:text-[17px] text-white placeholder-slate-500 focus:outline-none transition-colors resize-y disabled:opacity-60"
+          className="w-full bg-[#12030a]/60 border border-[#881337]/35 focus:border-[#be123c]/60 rounded-2xl p-4 text-[15px] sm:text-base text-white placeholder-slate-500 focus:outline-none transition-colors resize-y disabled:opacity-60"
         />
         <div className="flex items-center justify-between text-xs text-slate-400 tabular-nums">
           <span>{wordCount} palabras</span>
@@ -69,7 +69,7 @@ export const ShortAnswerRenderer: React.FC<ShortAnswerRendererProps> = ({
 
       {/* Desglose de Evaluación de IA */}
       {isAnswered && shortAnswerEvalResult && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] text-sm space-y-3 animate-fadeIn">
+        <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] text-[13px] space-y-3 animate-fadeIn">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-slate-300">Similitud Conceptual con el Modelo:</span>
             <span
@@ -82,14 +82,14 @@ export const ShortAnswerRenderer: React.FC<ShortAnswerRendererProps> = ({
               {shortAnswerEvalResult.similarity}% de coincidencia
             </span>
           </div>
-          <p className="text-slate-300 text-sm sm:text-[15px] leading-relaxed">
+          <p className="text-slate-300 text-[13px] sm:text-sm leading-relaxed">
             <strong className="text-white">Diagnóstico de la IA:</strong> {shortAnswerEvalResult.feedback}
           </p>
           <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
-            <span className="text-[11px] uppercase font-bold text-emerald-400 block tracking-wider">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
               Respuesta modelo de referencia:
             </span>
-            <span className="text-slate-200 text-sm sm:text-[15px] font-medium">
+            <span className="text-slate-200 text-[13px] sm:text-sm font-medium">
               {idealAnswerOrExplanation}
             </span>
           </div>
