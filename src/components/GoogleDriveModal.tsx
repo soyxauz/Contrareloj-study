@@ -167,9 +167,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       <div className={`w-full max-w-lg border rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col animate-modal-card ${
         theme === 'dark'
           ? 'bg-[#0e0b16] border-white/10 text-white shadow-[0_20px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)]'
-          : theme === 'kitty'
-          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
-          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+          : 'thea-glass-modal text-zinc-950'
       }`}>
 
         {/* Close Button */}

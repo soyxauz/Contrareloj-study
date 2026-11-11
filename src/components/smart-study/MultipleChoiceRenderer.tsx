@@ -27,9 +27,9 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
         const isCorrect = idx === safeCorrectIndex;
 
         let cardClasses = theme === 'light'
-          ? 'bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-zinc-950 shadow-sm hover:-translate-y-0.5'
+          ? 'thea-glass-pill thea-glass-pill-hover border text-zinc-950 hover:-translate-y-0.5'
           : theme === 'kitty'
-          ? 'bg-white hover:bg-pink-50/60 border border-pink-200 hover:border-pink-300 text-zinc-950 shadow-sm shadow-pink-100/50 hover:-translate-y-0.5'
+          ? 'thea-glass-pill thea-glass-pill-hover border text-zinc-950 hover:-translate-y-0.5'
           : 'bg-[#1e0711]/75 hover:bg-[#2c0b19]/90 border border-[#881337]/40 hover:border-[#be123c]/60 text-slate-100 shadow-md shadow-[#28030d]/30 hover:-translate-y-0.5';
 
         let badgeClasses = theme === 'light'

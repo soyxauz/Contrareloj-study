@@ -25,17 +25,15 @@ export const PodcastReplacingCard: React.FC<PodcastReplacingCardProps> = ({
   const isError = Boolean(error) && !isGenerating;
 
   const surfaceClass =
-    theme === 'light'
-      ? 'bg-white border-slate-200 text-zinc-950 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_12px_28px_-4px_rgba(15,23,42,0.08)]'
-      : theme === 'kitty'
-      ? 'bg-white border-pink-200 text-zinc-950 shadow-[0_2px_8px_-1px_rgba(244,114,182,0.22),0_12px_28px_-4px_rgba(244,114,182,0.16)]'
-      : 'bg-[#0e0b16]/95 border-white/[0.08] text-white shadow-[0_1px_2px_rgba(0,0,0,0.5),0_12px_32px_-4px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]';
+    theme === 'dark'
+      ? 'bg-[#0e0b16]/95 border-white/[0.08] text-white shadow-[0_1px_2px_rgba(0,0,0,0.5),0_12px_32px_-4px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
+      : 'thea-glass-card text-zinc-950';
 
   const pillClass =
     theme === 'light'
-      ? 'bg-slate-100 border-slate-200 text-slate-700'
+      ? 'thea-glass-pill text-slate-700'
       : theme === 'kitty'
-      ? 'bg-pink-50 border-pink-200 text-pink-700'
+      ? 'thea-glass-pill text-pink-700'
       : 'bg-white/[0.05] border-white/[0.1] text-zinc-300';
 
   const waveColorClass =

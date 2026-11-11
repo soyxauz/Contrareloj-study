@@ -109,13 +109,11 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
       <div className={`flex-1 min-h-0 flex flex-col rounded-3xl border shadow-xl overflow-hidden relative ${
         theme === 'dark'
           ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.08)]'
-          : theme === 'kitty'
-          ? 'bg-white border-pink-200 shadow-pink-100/50'
-          : 'bg-white border-slate-200 shadow-slate-200/50'
+          : 'thea-glass-card text-zinc-950'
       }`}>
         {/* Cabecera Flotante */}
         <div className={`flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-2.5 sm:py-3 border-b shrink-0 ${
-          theme === 'dark' ? 'border-white/[0.06] bg-white/[0.02]' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/40' : 'border-slate-100 bg-slate-50/60'
+          theme === 'dark' ? 'border-white/[0.06] bg-white/[0.02]' : theme === 'kitty' ? 'border-pink-200/60 bg-pink-50/35' : 'border-slate-200/70 bg-white/35'
         }`}>
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl border flex items-center justify-center shadow-sm shrink-0 ${
@@ -161,12 +159,12 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
               <button
                 type="button"
                 onClick={onNavigateToOral}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-95 ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-[transform,background-color,border-color,color] duration-150 cursor-pointer shadow-sm active:scale-95 ${
                   theme === 'dark'
                     ? 'border-white/15 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200'
                     : theme === 'kitty'
-                    ? 'border-pink-200 bg-white hover:bg-pink-50 text-pink-900'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-800'
+                    ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                    : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
                 }`}
                 title="Cambiar al módulo de lección oral y práctica por voz"
               >
@@ -183,8 +181,8 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
                 theme === 'dark'
                   ? 'border-white/[0.08] bg-white/[0.025] text-zinc-400 hover:text-white hover:bg-white/[0.06]'
                   : theme === 'kitty'
-                  ? 'border-pink-200 bg-white text-pink-700 hover:bg-pink-50'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  ? 'thea-glass-pill thea-glass-pill-hover text-pink-700'
+                  : 'thea-glass-pill thea-glass-pill-hover text-slate-600'
               }`}
               title="Reiniciar chat"
             >
@@ -268,7 +266,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
 
         {/* Sugerencias Rápidas de Estudio */}
         <div className={`px-4 py-2 border-t flex gap-2 overflow-x-auto scrollbar-none shrink-0 ${
-          theme === 'dark' ? 'border-white/[0.06] bg-white/[0.015]' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/30' : 'border-slate-100 bg-slate-50/50'
+          theme === 'dark' ? 'border-white/[0.06] bg-white/[0.015]' : theme === 'kitty' ? 'border-pink-200/60 bg-pink-50/25' : 'border-slate-200/70 bg-white/30'
         }`}>
           {quickPrompts.map((item, idx) => (
             <button
@@ -280,8 +278,8 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
                 theme === 'dark'
                   ? 'bg-white/[0.025] hover:bg-white/[0.06] border-white/[0.08] text-zinc-300 hover:text-white'
                   : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs'
+                  ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                  : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
               }`}
             >
               {item.icon}
@@ -297,7 +295,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
             handleSend(input);
           }}
           className={`flex items-center gap-2 p-2.5 sm:p-3 border-t shrink-0 ${
-            theme === 'dark' ? 'border-white/[0.06] bg-white/[0.02]' : theme === 'kitty' ? 'border-pink-100 bg-pink-50/40' : 'border-slate-100 bg-slate-50/60'
+            theme === 'dark' ? 'border-white/[0.06] bg-white/[0.02]' : theme === 'kitty' ? 'border-pink-200/60 bg-pink-50/35' : 'border-slate-200/70 bg-white/35'
           }`}
         >
           <input

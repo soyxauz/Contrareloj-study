@@ -1148,12 +1148,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <button
               type="button"
               onClick={() => setGameMode('study')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-[transform,background-color,border-color,color] duration-150 cursor-pointer shadow-sm active:scale-95 ${
                 theme === 'dark'
                   ? 'bg-thea-surface hover:bg-thea-surfaceLight border-thea-border text-slate-300 hover:text-white'
                   : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900'
-                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800'
+                  ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                  : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
               }`}
               title="Volver a la vista de estudio de Flashcards"
             >
@@ -1273,11 +1273,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
             <div className="shrink-0 my-1">
               {!isCaseSolved ? (
                 <div className={`h-20 sm:h-22 rounded-2xl p-2.5 sm:p-3.5 flex items-center justify-between relative overflow-hidden border ${
-                  theme === 'light'
-                    ? 'border-slate-200 bg-white text-zinc-950 shadow-sm'
-                    : theme === 'kitty'
-                    ? 'border-pink-200 bg-white text-zinc-950 shadow-sm shadow-pink-100/50'
-                    : 'border-violet-500/40 bg-gradient-to-r from-thea-surface via-thea-surfaceLight to-thea-surface shadow-lg text-white'
+                  theme === 'dark'
+                    ? 'border-violet-500/40 bg-gradient-to-r from-thea-surface via-thea-surfaceLight to-thea-surface shadow-lg text-white'
+                    : 'thea-glass-card text-zinc-950'
                 }`}>
                   <div className="flex items-center gap-2.5 sm:gap-3.5 z-10">
                     <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center border shadow-inner shrink-0 ${
@@ -1382,11 +1380,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                     <div
                       key={clue.level}
                       className={`h-full min-h-0 rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between shadow-sm animate-fadeIn border ${
-                        theme === 'light'
-                          ? 'border-slate-200 bg-white text-zinc-950'
-                          : theme === 'kitty'
-                          ? 'border-pink-200 bg-white text-zinc-950 shadow-pink-100/30'
-                          : 'border-violet-500/40 bg-thea-surface/95 text-white'
+                        theme === 'dark'
+                          ? 'border-violet-500/40 bg-thea-surface/95 text-white'
+                          : 'thea-glass-card text-zinc-950'
                       }`}
                     >
                       <div className={`flex items-center justify-between pb-0.5 border-b shrink-0 ${
@@ -1473,11 +1469,9 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 const isCorrect = isCaseSolved && option === currentCase.targetTerm;
                 const isChosenWinner = selectedGuessOption === option;
 
-                let btnStyle = theme === 'light'
-                  ? 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-zinc-950 cursor-pointer active:scale-[0.99] shadow-xs'
-                  : theme === 'kitty'
-                  ? 'border-pink-200 bg-white hover:border-pink-300 hover:bg-pink-50/60 text-zinc-950 cursor-pointer active:scale-[0.99] shadow-xs'
-                  : 'border-thea-border/80 bg-thea-surface/90 hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 cursor-pointer active:scale-[0.99]';
+                let btnStyle = theme === 'dark'
+                  ? 'border-thea-border/80 bg-thea-surface/90 hover:border-violet-500/60 hover:bg-thea-surfaceLight text-slate-200 cursor-pointer active:scale-[0.99]'
+                  : 'thea-glass-pill thea-glass-pill-hover text-zinc-950 cursor-pointer active:scale-[0.99]';
 
                 if (isWrong) {
                   btnStyle = theme === 'dark'
@@ -1840,12 +1834,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group h-full rounded-2xl sm:rounded-3xl`}
               >
                 {/* CARA FRONTAL (TÉRMINO O PREGUNTA CONCRETA) */}
-                <div className={`card-face rounded-2xl sm:rounded-3xl transition-all p-4 sm:p-7 shadow-2xl flex flex-col items-center justify-between text-center border ${
+                <div className={`card-face rounded-2xl sm:rounded-3xl transition-[transform,border-color,box-shadow] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] p-4 sm:p-7 shadow-2xl flex flex-col items-center justify-between text-center border glass-specular ${
                   theme === 'dark'
-                    ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#140e26] via-[#0d0918] to-[#090314] text-white glass-specular'
+                    ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#140e26] via-[#0d0918] to-[#090314] text-white'
                     : theme === 'kitty'
-                    ? 'border-pink-200/90 hover:border-pink-300 bg-white text-zinc-950 shadow-pink-200/40'
-                    : 'border-slate-200/90 hover:border-slate-300 bg-white text-zinc-950 shadow-slate-200/70'
+                    ? 'border-pink-300/70 hover:border-pink-400/80 text-zinc-950'
+                    : 'border-white/80 hover:border-slate-300/80 text-zinc-950'
                 }`}>
                   <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                     {isQuestionCard ? (
@@ -1936,12 +1930,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 </div>
 
                 {/* CARA POSTERIOR (DEFINICIÓN O RESPUESTA) */}
-                <div className={`card-face card-back rounded-2xl sm:rounded-3xl transition-all p-4 sm:p-7 shadow-2xl flex flex-col items-center justify-between text-center border ${
+                <div className={`card-face card-back rounded-2xl sm:rounded-3xl transition-[transform,border-color,box-shadow] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] p-4 sm:p-7 shadow-2xl flex flex-col items-center justify-between text-center border glass-specular ${
                   theme === 'dark'
-                    ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#16102c] via-[#0e0a1b] to-[#090314] text-white glass-specular'
+                    ? 'border-white/[0.1] hover:border-white/25 bg-gradient-to-b from-[#16102c] via-[#0e0a1b] to-[#090314] text-white'
                     : theme === 'kitty'
-                    ? 'border-pink-200/90 hover:border-pink-300 bg-white text-zinc-950 shadow-pink-200/40'
-                    : 'border-slate-200/90 hover:border-slate-300 bg-white text-zinc-950 shadow-slate-200/70'
+                    ? 'border-pink-300/70 hover:border-pink-400/80 text-zinc-950'
+                    : 'border-white/80 hover:border-slate-300/80 text-zinc-950'
                 }`}>
                   <div className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
                     {isQuestionCard ? (
@@ -2042,8 +2036,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   theme === 'dark'
                     ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
                     : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                    ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                    : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
                 }`}
                 title="Tarjeta anterior"
               >
@@ -2054,7 +2048,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
               <button
                 type="button"
                 onClick={handleNextCard}
-                className={`active-press flex-1 py-2 px-5 min-h-[38px] rounded-xl font-bold text-xs sm:text-sm transition-all text-center cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
+                className={`active-press flex-1 py-2 px-5 min-h-[38px] rounded-xl font-bold text-xs sm:text-sm transition-[transform,background-color] duration-150 text-center cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
                   theme === 'kitty'
                     ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
                     : theme === 'light'
@@ -2076,8 +2070,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   theme === 'dark'
                     ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
                     : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                    ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                    : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
                 }`}
                 title="Tarjeta anterior"
               >
@@ -2090,16 +2084,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 <button
                   type="button"
                   onClick={() => handleUpdateMastery('to-learn')}
-                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-[transform,background-color,border-color,color] duration-150 text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
                     currentCard?.mastery === 'to-learn'
                       ? theme === 'dark'
                         ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950/30'
-                        : 'bg-rose-100 border-rose-400 text-rose-900 font-bold ring-2 ring-rose-400/30'
+                        : 'bg-rose-100/90 border-rose-400 text-rose-900 font-bold ring-2 ring-rose-400/30 backdrop-blur-md'
                       : theme === 'dark'
                       ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
                       : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                      ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                      : 'thea-glass-pill thea-glass-pill-hover text-slate-700'
                   }`}
                 >
                   Aún no la sé
@@ -2107,16 +2101,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 <button
                   type="button"
                   onClick={() => handleUpdateMastery('known')}
-                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-[transform,background-color,border-color,color] duration-150 text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
                     currentCard?.mastery === 'known'
                       ? theme === 'dark'
                         ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold shadow-md shadow-amber-950/30'
-                        : 'bg-amber-100 border-amber-400 text-amber-900 font-bold ring-2 ring-amber-400/30'
+                        : 'bg-amber-100/90 border-amber-400 text-amber-900 font-bold ring-2 ring-amber-400/30 backdrop-blur-md'
                       : theme === 'dark'
                       ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
                       : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                      ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                      : 'thea-glass-pill thea-glass-pill-hover text-slate-700'
                   }`}
                 >
                   La conozco
@@ -2124,12 +2118,12 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                 <button
                   type="button"
                   onClick={() => handleUpdateMastery('mastered')}
-                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-all text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
+                  className={`active-press flex-1 py-2 px-2 sm:px-3 min-h-[38px] rounded-xl transition-[transform,background-color,border-color,color] duration-150 text-center cursor-pointer flex items-center justify-center text-xs font-medium border ${
                     theme === 'dark'
                       ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-white'
                       : theme === 'kitty'
-                      ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                      ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                      : 'thea-glass-pill thea-glass-pill-hover text-slate-700'
                   }`}
                 >
                   ¡Dominada!
@@ -2143,8 +2137,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
                   theme === 'dark'
                     ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white'
                     : theme === 'kitty'
-                    ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                    ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                    : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
                 }`}
                 title="Siguiente tarjeta"
               >
@@ -2162,9 +2156,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({ kit, userId = nu
           <div className={`rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative overflow-hidden border ${
             theme === 'dark'
               ? 'bg-thea-surface border-thea-border text-white'
-              : theme === 'kitty'
-              ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/30'
-              : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/50'
+              : 'thea-glass-modal text-zinc-950'
           }`}>
             {/* Cabecera del Modal */}
             <div className={`flex items-start justify-between gap-4 mb-5 pb-3 border-b ${

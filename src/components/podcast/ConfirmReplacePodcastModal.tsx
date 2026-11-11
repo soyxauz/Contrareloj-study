@@ -26,9 +26,7 @@ export const ConfirmReplacePodcastModal: React.FC<ConfirmReplacePodcastModalProp
       <div className={`border rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-md w-full shadow-2xl text-center space-y-4 relative animate-modal-card ${
         theme === 'dark'
           ? 'bg-[#0e0b16] border-white/10 text-white'
-          : theme === 'kitty'
-          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/30'
-          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/50'
+          : 'thea-glass-modal text-zinc-950'
       }`}>
         <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center mx-auto ${
           theme === 'dark' ? 'bg-white/[0.04] border-white/10 text-zinc-300' : 'bg-rose-50 border-rose-200 text-rose-600'

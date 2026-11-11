@@ -630,11 +630,9 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
             />
           ) : !markdown || markdown.trim().length === 0 ? (
             <div className={`py-10 px-6 sm:px-10 rounded-3xl max-w-4xl mx-auto border animate-fadeIn space-y-8 ${
-              theme === 'light'
-                ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
-                : theme === 'kitty'
-                ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
-                : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+              theme === 'dark'
+                ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+                : 'thea-glass-card text-zinc-950'
             }`}>
               <div className="text-center max-w-2xl mx-auto">
                 <span className={`text-xs font-bold uppercase tracking-widest block mb-2 ${
@@ -663,18 +661,16 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                     <div
                       key={opt.id}
                       onClick={() => !isGenerating && setSelectedDepth(opt.id)}
-                      className={`relative p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group active:scale-[0.985] ${
+                      className={`relative p-5 rounded-2xl border transition-[transform,background-color,border-color,box-shadow] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer flex flex-col justify-between group active:scale-[0.985] ${
                         isSelected
                           ? theme === 'dark'
                             ? 'bg-white/[0.06] border-white/40 shadow-sm'
                             : theme === 'kitty'
-                            ? 'bg-pink-50 border-pink-500 shadow-md ring-1 ring-pink-500'
-                            : 'bg-slate-50 border-zinc-900 shadow-md ring-1 ring-zinc-900'
+                            ? 'bg-pink-50/80 backdrop-blur-md border-pink-500 shadow-md ring-1 ring-pink-500'
+                            : 'bg-white/85 backdrop-blur-md border-zinc-900 shadow-md ring-1 ring-zinc-900'
                           : theme === 'dark'
                           ? 'bg-white/[0.025] border-white/[0.08] hover:border-white/20 hover:bg-white/[0.05]'
-                          : theme === 'kitty'
-                          ? 'bg-white border-pink-200 hover:border-pink-300 hover:bg-pink-50/50'
-                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          : 'thea-glass-card thea-glass-pill-hover'
                       }`}
                     >
                       <div>
@@ -763,22 +759,18 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
           ) : (
             <div className="space-y-4">
               <div className={`rounded-3xl p-6 sm:p-10 border ${
-                theme === 'light'
-                  ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
-                  : theme === 'kitty'
-                  ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
-                  : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+                theme === 'dark'
+                  ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+                  : 'thea-glass-card text-zinc-950'
               }`}>
                 <FormattedText text={stripExecutiveSummaryPreamble(markdown)} />
               </div>
 
               {/* Banner inferior para Rehacer con diferente extensión */}
               <div className={`p-6 sm:p-8 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-5 ${
-                theme === 'light'
-                  ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
-                  : theme === 'kitty'
-                  ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
-                  : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-xl'
+                theme === 'dark'
+                  ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-xl'
+                  : 'thea-glass-card text-zinc-950'
               }`}>
                 <div className="space-y-1 text-center sm:text-left">
                   <h4 className={`text-sm sm:text-base font-bold flex items-center justify-center sm:justify-start gap-2 ${

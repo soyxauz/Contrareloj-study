@@ -3943,7 +3943,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             } ${
               currentLevelCorrect >= levelTarget
                 ? 'bg-gradient-to-r from-amber-400 to-amber-300 text-zinc-950 shadow-amber-500/20 font-extrabold hover:from-amber-300 hover:to-amber-200'
-                : 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-black/40'
+                : theme === 'dark'
+                ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-black/40'
+                : theme === 'kitty'
+                ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+                : 'thea-glass-card thea-glass-pill-hover border text-zinc-950'
             }`}
           >
             <span>

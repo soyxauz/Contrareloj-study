@@ -25,9 +25,7 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
       <div className={`border rounded-3xl max-w-lg w-full shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden animate-modal-card ${
         theme === 'dark'
           ? 'bg-thea-surface border-thea-border text-white'
-          : theme === 'kitty'
-          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
-          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+          : 'thea-glass-modal text-zinc-950'
       }`}>
         {/* Header fijo */}
         <div className={`p-6 pb-4 border-b shrink-0 flex items-center justify-between ${
@@ -127,7 +125,7 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
 
         {/* Footer fijo */}
         <div className={`p-6 py-4 border-t shrink-0 flex items-center justify-between ${
-          theme === 'dark' ? 'border-thea-border bg-thea-surface' : theme === 'kitty' ? 'border-pink-100 bg-white' : 'border-slate-100 bg-white'
+          theme === 'dark' ? 'border-thea-border bg-thea-surface' : theme === 'kitty' ? 'border-pink-200/60 bg-pink-50/35' : 'border-slate-200/70 bg-white/35'
         }`}>
           {onResetKits && (
             <button

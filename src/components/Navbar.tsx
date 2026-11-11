@@ -97,7 +97,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="sticky top-0 z-50 bg-thea-surface/95 border-b border-thea-border/60 shadow-sm backdrop-blur-md">
+    <header className="sticky top-0 z-50 bg-thea-surface/95 border-b border-thea-border/60 shadow-sm backdrop-blur-md thea-glass-chrome">
       {/* Top Brand & Status Bar */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 sm:gap-4">
         {/* Left Side: Logo & Minimal Wordmark + 3-Button Theme Switcher */}
@@ -153,8 +153,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : theme === 'dark'
                   ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
                   : theme === 'kitty'
-                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                  : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                  ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                  : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -170,11 +170,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? theme === 'dark'
                     ? 'bg-white/[0.12] text-white border-white/20'
                     : theme === 'kitty'
-                    ? 'bg-pink-100 text-pink-900 border-pink-200'
-                    : 'bg-slate-100 text-slate-900 border-slate-200'
+                    ? 'bg-pink-100/80 text-pink-900 border-pink-300 shadow-xs'
+                    : 'bg-slate-200/75 text-slate-900 border-slate-300/80 shadow-xs'
                   : theme === 'dark'
                   ? 'bg-transparent text-slate-400 hover:text-white hover:bg-white/[0.04] border-transparent'
-                  : 'bg-transparent text-slate-500 hover:text-zinc-950 hover:bg-slate-100 border-transparent'
+                  : 'bg-transparent text-slate-600 hover:text-zinc-950 hover:bg-white/60 border-transparent'
               }`}
             >
               <Home className="w-4 h-4" />
@@ -191,8 +191,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               theme === 'dark'
                 ? 'bg-transparent border-transparent text-slate-400'
                 : theme === 'kitty'
-                ? 'bg-pink-50 border-pink-200 text-pink-900'
-                : 'bg-slate-50 border-slate-200 text-slate-800'
+                ? 'thea-glass-pill text-pink-900'
+                : 'thea-glass-pill text-slate-800'
             }`}
           >
             <Flame className="w-3.5 h-3.5 text-amber-500 shrink-0" />
@@ -221,8 +221,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
                   : 'bg-transparent hover:bg-white/[0.04] border-transparent text-slate-400 hover:text-white'
                 : theme === 'kitty'
-                ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
             }`}
           >
             {driveState.status === 'syncing' ? (
@@ -272,8 +272,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               theme === 'dark'
                 ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-300 hover:text-white'
                 : theme === 'kitty'
-                ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs'
+                ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                : 'thea-glass-pill thea-glass-pill-hover text-slate-800'
             }`}
           >
             <Bot className={`w-3.5 h-3.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
@@ -292,8 +292,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     theme === 'dark'
                       ? 'bg-white/[0.04] border-white/[0.08] text-slate-300'
                       : theme === 'kitty'
-                      ? 'bg-white border-pink-200 text-pink-900 shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-800 shadow-xs'
+                      ? 'thea-glass-pill text-pink-900'
+                      : 'thea-glass-pill text-slate-800'
                   }`}
                 >
                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-semibold ${
@@ -325,7 +325,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onOpenAuth}
                 title="Iniciar Sesión o Crear Cuenta"
-                className="active-press flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-zinc-950 font-medium text-xs hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer"
+                className={`active-press flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-colors shadow-sm cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-white text-zinc-950 hover:bg-zinc-200'
+                    : theme === 'kitty'
+                    ? 'bg-pink-500 text-white hover:bg-pink-600 shadow-pink-500/20'
+                    : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                }`}
               >
                 <UserIcon className="w-3.5 h-3.5" />
                 <span>Ingresar</span>

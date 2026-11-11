@@ -91,9 +91,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
       <div className={`border rounded-2xl sm:rounded-3xl max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative text-left overflow-hidden animate-modal-card ${
         theme === 'dark'
           ? 'bg-thea-surface border-thea-border text-white'
-          : theme === 'kitty'
-          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/30'
-          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/50'
+          : 'thea-glass-modal text-zinc-950'
       }`}>
         {/* Encabezado fijo del Modal */}
         <div className={`p-4 sm:p-6 pb-3.5 border-b shrink-0 flex items-center justify-between ${
@@ -945,8 +943,8 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
           theme === 'dark'
             ? 'border-thea-border bg-thea-surface'
             : theme === 'kitty'
-            ? 'border-pink-100 bg-white'
-            : 'border-slate-100 bg-white'
+            ? 'border-pink-200/60 bg-pink-50/40'
+            : 'border-slate-200/70 bg-white/40'
         }`}>
           {voiceModalTab === 'new_episode' ? (
             <>

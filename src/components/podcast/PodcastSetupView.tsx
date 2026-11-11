@@ -70,26 +70,24 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
 
   const surfaceClass = isDark
     ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.5),0_12px_32px_-4px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
-    : isKitty
-    ? 'bg-white border-pink-200 shadow-[0_2px_8px_-1px_rgba(244,114,182,0.18),0_12px_28px_-4px_rgba(244,114,182,0.14)]'
-    : 'bg-white border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_12px_28px_-4px_rgba(15,23,42,0.08)]';
+    : 'thea-glass-card text-zinc-950';
 
   const headingText = isDark ? 'text-white' : isKitty ? 'text-pink-950' : 'text-zinc-950';
   const mutedText = isDark ? 'text-zinc-400' : isKitty ? 'text-pink-900/75' : 'text-slate-600';
-  const dividerBorder = isDark ? 'border-white/[0.07]' : isKitty ? 'border-pink-100' : 'border-slate-200/80';
+  const dividerBorder = isDark ? 'border-white/[0.07]' : isKitty ? 'border-pink-200/60' : 'border-slate-200/70';
 
   const cardClasses = (selected: boolean) =>
     selected
       ? isDark
         ? 'border-white/40 bg-white/[0.07] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
         : isKitty
-        ? 'border-pink-500 bg-pink-50/75 text-pink-950 shadow-xs ring-1 ring-pink-500'
-        : 'border-zinc-900 bg-slate-50 text-zinc-950 shadow-xs ring-1 ring-zinc-900'
+        ? 'border-pink-500 bg-pink-50/75 backdrop-blur-md text-pink-950 shadow-xs ring-1 ring-pink-500'
+        : 'border-zinc-900 bg-white/85 backdrop-blur-md text-zinc-950 shadow-xs ring-1 ring-zinc-900'
       : isDark
       ? 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 text-zinc-300'
       : isKitty
-      ? 'border-pink-200/80 bg-white hover:bg-pink-50/40 hover:border-pink-300 text-pink-950'
-      : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-zinc-800';
+      ? 'thea-glass-pill thea-glass-pill-hover text-pink-950'
+      : 'thea-glass-pill thea-glass-pill-hover text-zinc-800';
 
   const sofiaName = (AZURE_EDGE_VOICES.find((v) => v.id === edgeSofiaVoice)?.name || 'Elvira').replace(/\s*Neural\b/i, '');
   const mateoName = (AZURE_EDGE_VOICES.find((v) => v.id === edgeMateoVoice)?.name || 'Álvaro').replace(/\s*Neural\b/i, '');

@@ -280,9 +280,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
         <div className={`max-w-xl mx-auto my-12 p-8 rounded-3xl border text-center space-y-4 shadow-xl ${
           theme === 'dark'
             ? 'bg-[#0e0b16]/95 border-white/[0.08] text-white'
-            : theme === 'kitty'
-            ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/30'
-            : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/50'
+            : 'thea-glass-card text-zinc-950'
         }`}>
           <div className="w-16 h-16 mx-auto rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500">
             <ImageIcon className="w-8 h-8" />
@@ -320,9 +318,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                   className={`group border rounded-2xl overflow-hidden transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col hover:scale-[1.015] active:scale-[0.985] ${
                     theme === 'dark'
                       ? 'bg-[#0e0b16]/95 border-white/[0.08] hover:border-white/25 hover:shadow-2xl'
-                      : theme === 'kitty'
-                      ? 'bg-white border-pink-200 hover:border-pink-300 shadow-sm shadow-pink-100/50 hover:shadow-md'
-                      : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'
+                      : 'thea-glass-card thea-glass-pill-hover text-zinc-950'
                   }`}
                 >
                   {/* Image Box - Pure White Background in all themes per user request */}

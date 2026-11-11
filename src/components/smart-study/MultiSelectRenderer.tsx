@@ -33,16 +33,16 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           const isCorrect = safeCorrectIndices.includes(idx);
 
           let optionStyles = theme === 'light'
-            ? 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-zinc-950 shadow-sm hover:-translate-y-0.5'
+            ? 'thea-glass-pill thea-glass-pill-hover border text-zinc-950 hover:-translate-y-0.5'
             : theme === 'kitty'
-            ? 'border-pink-200 bg-white hover:bg-pink-50/60 hover:border-pink-300 text-zinc-950 shadow-sm shadow-pink-100/50 hover:-translate-y-0.5'
+            ? 'thea-glass-pill thea-glass-pill-hover border text-zinc-950 hover:-translate-y-0.5'
             : 'border-[#881337]/40 bg-[#1e0711]/75 hover:bg-[#2c0b19]/90 hover:border-[#be123c]/60 text-slate-100 shadow-md shadow-[#28030d]/30 hover:-translate-y-0.5';
 
           if (isSelected && !isAnswered) {
             optionStyles = theme === 'light'
-              ? 'border-zinc-900 bg-slate-50 text-zinc-950 ring-2 ring-zinc-900 shadow-md'
+              ? 'border-zinc-900 bg-white/85 backdrop-blur-md text-zinc-950 ring-2 ring-zinc-900 shadow-md'
               : theme === 'kitty'
-              ? 'border-pink-500 bg-pink-50 text-pink-950 ring-2 ring-pink-500 shadow-md'
+              ? 'border-pink-500 bg-pink-50/80 backdrop-blur-md text-pink-950 ring-2 ring-pink-500 shadow-md'
               : 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white shadow-lg shadow-[#4c0519]/40 ring-1 ring-[#be123c]/50';
           }
           if (isAnswered) {

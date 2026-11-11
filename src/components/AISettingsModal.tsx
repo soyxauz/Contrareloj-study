@@ -371,9 +371,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       <div className={`border rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl relative overflow-hidden max-h-[88vh] sm:max-h-[92vh] flex flex-col animate-modal-card ${
         isDark
           ? 'bg-[#0e0b16] border-white/10 text-white shadow-[0_24px_60px_-12px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.1)]'
-          : isKitty
-          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
-          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+          : 'thea-glass-modal text-zinc-950'
       }`}>
 
         {/* Modal Header */}
@@ -500,8 +498,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                         : isDark
                         ? 'border-white/10 bg-white/[0.025] text-zinc-300 hover:bg-white/[0.05] hover:border-white/20'
                         : isKitty
-                        ? 'border-pink-200/80 bg-white text-zinc-800 hover:bg-pink-50/50'
-                        : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'
+                        ? 'thea-glass-pill thea-glass-pill-hover text-zinc-800'
+                        : 'thea-glass-pill thea-glass-pill-hover text-slate-700'
                     }`}
                   >
                     <div className="flex-1">

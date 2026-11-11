@@ -31,6 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onOpenGoogleDriveSetup,
   initialMode = 'login',
 }) => {
+  const { theme } = useTheme();
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -113,7 +114,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const { theme } = useTheme();
   const appName = theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study';
 
   if (!isOpen || typeof document === 'undefined') return null;
@@ -123,9 +123,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       <div className={`w-full max-w-md border rounded-2xl sm:rounded-3xl shadow-2xl relative overflow-hidden max-h-[90vh] sm:max-h-[92vh] flex flex-col animate-modal-card ${
         theme === 'dark'
           ? 'bg-[#0e0b16] border-white/10 text-white'
-          : theme === 'kitty'
-          ? 'bg-white border-pink-200 text-zinc-950 shadow-pink-200/40'
-          : 'bg-white border-slate-200 text-zinc-950 shadow-slate-200/70'
+          : 'thea-glass-modal text-zinc-950'
       }`}>
         {/* Close button */}
         <button

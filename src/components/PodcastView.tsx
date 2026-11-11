@@ -1931,19 +1931,17 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       <div className="mb-2 sm:mb-3 pb-2 border-b border-thea-border shrink-0 flex items-center justify-between gap-3">
         {/* Selector de Pestañas [Reproductor | Transcripción] */}
         <div className={`flex items-center gap-1 rounded-xl p-1 text-xs shrink-0 border ${
-          theme === 'light'
-            ? 'bg-slate-100/80 border-slate-200'
-            : theme === 'kitty'
-            ? 'bg-pink-100/60 border-pink-200'
-            : 'bg-thea-surface border-thea-border'
+          theme === 'dark'
+            ? 'bg-thea-surface border-thea-border'
+            : 'thea-glass-pill'
         }`}>
           <button
             type="button"
             onClick={() => setActiveTab('player')}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer text-xs ${
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-[transform,background-color,color,box-shadow] duration-150 cursor-pointer text-xs ${
               activeTab === 'player'
-                ? (theme === 'light' ? 'bg-white text-zinc-950 shadow-xs border border-slate-200' : theme === 'kitty' ? 'bg-white text-pink-700 shadow-xs border border-pink-200' : 'bg-white/10 text-white shadow-sm border border-white/10')
-                : (theme === 'light' ? 'text-slate-600 hover:text-zinc-950' : theme === 'kitty' ? 'text-pink-600/80 hover:text-pink-950' : 'text-zinc-400 hover:text-white')
+                ? (theme === 'light' ? 'bg-white/90 text-zinc-950 shadow-xs border border-white/80' : theme === 'kitty' ? 'bg-white/90 text-pink-700 shadow-xs border border-pink-200/90' : 'bg-white/10 text-white shadow-sm border border-white/10')
+                : (theme === 'light' ? 'text-slate-600 hover:text-zinc-950' : theme === 'kitty' ? 'text-pink-700/80 hover:text-pink-950' : 'text-zinc-400 hover:text-white')
             }`}
           >
             Reproductor
@@ -1951,10 +1949,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           <button
             type="button"
             onClick={() => setActiveTab('transcript')}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer text-xs ${
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-[transform,background-color,color,box-shadow] duration-150 cursor-pointer text-xs ${
               activeTab === 'transcript'
-                ? (theme === 'light' ? 'bg-white text-zinc-950 shadow-xs border border-slate-200' : theme === 'kitty' ? 'bg-white text-pink-700 shadow-xs border border-pink-200' : 'bg-white/10 text-white shadow-sm border border-white/10')
-                : (theme === 'light' ? 'text-slate-600 hover:text-zinc-950' : theme === 'kitty' ? 'text-pink-600/80 hover:text-pink-950' : 'text-zinc-400 hover:text-white')
+                ? (theme === 'light' ? 'bg-white/90 text-zinc-950 shadow-xs border border-white/80' : theme === 'kitty' ? 'bg-white/90 text-pink-700 shadow-xs border border-pink-200/90' : 'bg-white/10 text-white shadow-sm border border-white/10')
+                : (theme === 'light' ? 'text-slate-600 hover:text-zinc-950' : theme === 'kitty' ? 'text-pink-700/80 hover:text-pink-950' : 'text-zinc-400 hover:text-white')
             }`}
           >
             Transcripción
@@ -1969,12 +1967,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
               setVoiceModalTab('new_episode');
               setShowVoiceModal(true);
             }}
-            className={`px-3.5 py-1.5 rounded-xl border font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.985] ${
-              theme === 'light'
-                ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900 shadow-xs'
+            className={`px-3.5 py-1.5 rounded-xl border font-semibold text-xs flex items-center gap-1.5 transition-[transform,background-color,border-color,color] duration-150 cursor-pointer active:scale-[0.985] ${
+              theme === 'dark'
+                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.12] text-zinc-200 hover:text-white'
                 : theme === 'kitty'
-                ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.12] text-zinc-200 hover:text-white'
+                ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                : 'thea-glass-pill thea-glass-pill-hover text-slate-900'
             }`}
             title="Crear un nuevo episodio con otras configuraciones de formato y duración"
           >
@@ -1988,11 +1986,9 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         <div className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
           {/* Main Visual Player Card */}
           <div className={`flex-1 min-h-0 flex flex-col justify-between rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-7 relative overflow-hidden border ${
-            theme === 'light'
-              ? 'bg-white border-slate-200 text-zinc-950 shadow-sm'
-              : theme === 'kitty'
-              ? 'bg-white border-pink-200 text-zinc-950 shadow-sm shadow-pink-100/50'
-              : 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+            theme === 'dark'
+              ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
+              : 'thea-glass-card text-zinc-950'
           }`}>
             {/* Background Glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -2380,14 +2376,14 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   <button
                     type="button"
                     onClick={handleToggleMute}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-colors cursor-pointer text-xs sm:text-sm active:scale-95 ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-[transform,background-color,border-color,color] duration-150 cursor-pointer text-xs sm:text-sm active:scale-95 ${
                       isMuted
                         ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
                         : theme === 'dark'
                         ? 'bg-white/[0.03] hover:bg-white/[0.08] border-white/[0.08] text-zinc-400 hover:text-white'
                         : theme === 'kitty'
-                        ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900 shadow-xs'
-                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
+                        ? 'thea-glass-pill thea-glass-pill-hover text-pink-900'
+                        : 'thea-glass-pill thea-glass-pill-hover text-slate-700'
                     }`}
                     title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
                   >
@@ -2400,7 +2396,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                   </button>
 
                   <div className={`flex items-center gap-1 rounded-xl p-1 text-xs border ${
-                    theme === 'dark' ? 'bg-white/[0.025] border-white/[0.08]' : theme === 'kitty' ? 'bg-pink-50 border-pink-200' : 'bg-slate-100 border-slate-200'
+                    theme === 'dark' ? 'bg-white/[0.025] border-white/[0.08]' : 'thea-glass-pill'
                   }`}>
                     {speeds.map(s => (
                       <button
