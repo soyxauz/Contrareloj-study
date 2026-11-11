@@ -54,15 +54,13 @@
     --thea-border-hex: #e2e8f0;
     --thea-accent-hex: #e11d48;
 
-    --glass-surface: rgba(255, 255, 255, 0.68);
-    --glass-surface-chrome: rgba(255, 255, 255, 0.72);
-    --glass-surface-strong: rgba(255, 255, 255, 0.87);
-    --glass-surface-subtle: rgba(255, 255, 255, 0.54);
+    --glass-surface: rgba(255, 255, 255, 0.78);
+    --glass-surface-chrome: rgba(255, 255, 255, 0.84);
+    --glass-surface-strong: rgba(255, 255, 255, 0.97);
+    --glass-surface-subtle: rgba(255, 255, 255, 0.68);
     --glass-border: rgba(148, 163, 184, 0.30);
     --glass-border-strong: rgba(148, 163, 184, 0.44);
-    --glass-blur: blur(18px) saturate(175%);
-    --glass-blur-subtle: blur(12px) saturate(150%);
-    --shadow-glass: 0 2px 6px -1px rgba(15, 23, 42, 0.05), 0 10px 26px -4px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    --shadow-glass: 0 2px 6px -1px rgba(15, 23, 42, 0.05), 0 10px 26px -4px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.94);
     --shadow-glass-hover: 0 6px 14px -2px rgba(15, 23, 42, 0.08), 0 18px 36px -6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98);
     --shadow-glass-active: 0 1px 3px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 
@@ -87,14 +85,12 @@
     --thea-border-hex: #fbcfe8;
     --thea-accent-hex: #ec4899;
 
-    --glass-surface: rgba(255, 248, 252, 0.68);
-    --glass-surface-chrome: rgba(255, 246, 251, 0.74);
-    --glass-surface-strong: rgba(255, 250, 253, 0.87);
-    --glass-surface-subtle: rgba(255, 240, 248, 0.56);
+    --glass-surface: rgba(255, 248, 252, 0.80);
+    --glass-surface-chrome: rgba(255, 246, 251, 0.86);
+    --glass-surface-strong: rgba(255, 250, 253, 0.97);
+    --glass-surface-subtle: rgba(255, 242, 249, 0.70);
     --glass-border: rgba(244, 114, 182, 0.30);
     --glass-border-strong: rgba(236, 72, 153, 0.44);
-    --glass-blur: blur(18px) saturate(180%);
-    --glass-blur-subtle: blur(12px) saturate(155%);
     --shadow-glass: 0 2px 8px -1px rgba(236, 72, 153, 0.12), 0 10px 26px -4px rgba(244, 114, 182, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95);
     --shadow-glass-hover: 0 6px 14px -2px rgba(236, 72, 153, 0.18), 0 18px 36px -6px rgba(244, 114, 182, 0.2), inset 0 1px 0 rgba(255, 255, 255, 1);
     --shadow-glass-active: 0 1px 4px rgba(236, 72, 153, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.85);
@@ -406,10 +402,8 @@ html {
 [data-theme="light"] body {
   background-color: #f3f6fb;
   background-image:
-    radial-gradient(ellipse 80% 55% at 12% -8%, rgba(225, 29, 72, 0.09), transparent 62%),
-    radial-gradient(ellipse 75% 55% at 92% 8%, rgba(99, 102, 241, 0.12), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 52% 105%, rgba(14, 165, 233, 0.09), transparent 62%);
-  background-attachment: fixed;
+    radial-gradient(ellipse 80% 55% at 12% -8%, rgba(225, 29, 72, 0.08), transparent 62%),
+    radial-gradient(ellipse 75% 55% at 92% 8%, rgba(99, 102, 241, 0.10), transparent 60%);
   color: #09090b;
 }
 
@@ -420,10 +414,8 @@ html {
 [data-theme="kitty"] body {
   background-color: #fff0f7;
   background-image:
-    radial-gradient(ellipse 85% 55% at 10% -6%, rgba(236, 72, 153, 0.18), transparent 60%),
-    radial-gradient(ellipse 80% 55% at 90% 10%, rgba(251, 113, 133, 0.15), transparent 60%),
-    radial-gradient(ellipse 75% 55% at 50% 104%, rgba(244, 114, 182, 0.14), transparent 62%);
-  background-attachment: fixed;
+    radial-gradient(ellipse 85% 55% at 10% -6%, rgba(236, 72, 153, 0.16), transparent 60%),
+    radial-gradient(ellipse 80% 55% at 90% 10%, rgba(251, 113, 133, 0.13), transparent 60%);
   color: #09090b;
 }
 
@@ -441,7 +433,7 @@ html {
   color: #831843;
 }
 
-/* ── 2. Superficies y Tarjetas Glassmorphism (Apple / visionOS Pearl & Rose Quartz) ── */
+/* ── 2. Superficies y Tarjetas Glass Equivalentes al Modo Oscuro (Sin Blur Pesado) ── */
 [data-theme="light"] [class*="bg-[#0e0b16]"],
 [data-theme="light"] [class*="bg-[#0d0408]"],
 [data-theme="light"] [class*="bg-[#090314]"],
@@ -457,8 +449,6 @@ html {
 [data-theme="light"] [class*="bg-[#070106]"],
 [data-theme="light"] [class*="bg-thea-surface"]:not([class*="bg-thea-surfaceLight"]) {
   background-color: var(--glass-surface) !important;
-  -webkit-backdrop-filter: var(--glass-blur) !important;
-  backdrop-filter: var(--glass-blur) !important;
   border-color: var(--glass-border) !important;
   box-shadow: var(--shadow-glass) !important;
 }
@@ -478,81 +468,57 @@ html {
 [data-theme="kitty"] [class*="bg-[#070106]"],
 [data-theme="kitty"] [class*="bg-thea-surface"]:not([class*="bg-thea-surfaceLight"]) {
   background-color: var(--glass-surface) !important;
-  -webkit-backdrop-filter: var(--glass-blur) !important;
-  backdrop-filter: var(--glass-blur) !important;
   border-color: var(--glass-border) !important;
   box-shadow: var(--shadow-glass) !important;
 }
 
-/* Caras de Flashcards en modo claro y kitty (Cristal Translúcido) */
+/* Caras de Flashcards en modo claro y kitty (Degradado Glass con Specular) */
 [data-theme="light"] .perspective-card .card-face,
 [data-theme="light"] .card-face {
-  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.80) 0%, rgba(248, 250, 255, 0.62) 100%) !important;
+  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.90) 0%, rgba(244, 247, 255, 0.78) 100%) !important;
   background-color: var(--glass-surface) !important;
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   color: #09090b !important;
-  border-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(148, 163, 184, 0.34) !important;
   box-shadow: var(--shadow-glass) !important;
 }
 
 [data-theme="kitty"] .perspective-card .card-face,
 [data-theme="kitty"] .card-face {
-  background-image: linear-gradient(155deg, rgba(255, 250, 253, 0.82) 0%, rgba(255, 236, 246, 0.64) 100%) !important;
+  background-image: linear-gradient(155deg, rgba(255, 250, 253, 0.90) 0%, rgba(255, 236, 246, 0.78) 100%) !important;
   background-color: var(--glass-surface) !important;
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   color: #09090b !important;
   border-color: rgba(244, 114, 182, 0.34) !important;
   box-shadow: var(--shadow-glass) !important;
 }
 
 /* Tarjetas de Study Kits en HomeView en modo claro y kitty: preservan el tinte radial por materia */
-[data-theme="light"] .study-kit-card {
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--shadow-glass);
-}
-
+[data-theme="light"] .study-kit-card,
 [data-theme="kitty"] .study-kit-card {
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-glass);
 }
 
-[data-theme="light"] .glass-specular {
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--shadow-glass) !important;
-}
-
+[data-theme="light"] .glass-specular,
 [data-theme="kitty"] .glass-specular {
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-glass) !important;
 }
 
-/* Superficies composables Apple Frosted Glass para Light y Kitty */
+/* Superficies composables Glass ligeras para Light y Kitty */
 :is([data-theme="light"], [data-theme="kitty"]) .thea-glass-card {
   background-color: var(--glass-surface);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   border-color: var(--glass-border);
   box-shadow: var(--shadow-glass);
 }
 
 :is([data-theme="light"], [data-theme="kitty"]) .thea-glass-modal {
-  background-color: var(--glass-surface-strong);
-  -webkit-backdrop-filter: blur(24px) saturate(185%);
-  backdrop-filter: blur(24px) saturate(185%);
+  background-color: var(--glass-surface-strong) !important;
   border-color: var(--glass-border-strong);
   box-shadow: var(--shadow-glass-hover);
 }
 
 :is([data-theme="light"], [data-theme="kitty"]) .thea-glass-chrome {
-  background-color: var(--glass-surface-chrome);
-  -webkit-backdrop-filter: blur(22px) saturate(185%);
-  backdrop-filter: blur(22px) saturate(185%);
+  background-color: var(--glass-surface-chrome) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.72), 0 4px 20px -6px rgba(15, 23, 42, 0.08);
 }
 
@@ -562,10 +528,8 @@ html {
 
 :is([data-theme="light"], [data-theme="kitty"]) .thea-glass-pill {
   background-color: var(--glass-surface-subtle);
-  -webkit-backdrop-filter: var(--glass-blur-subtle);
-  backdrop-filter: var(--glass-blur-subtle);
   border-color: var(--glass-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), 0 2px 8px -2px rgba(15, 23, 42, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), 0 2px 8px -2px rgba(15, 23, 42, 0.05);
 }
 
 [data-theme="kitty"] .thea-glass-pill {
@@ -573,13 +537,13 @@ html {
 }
 
 [data-theme="light"] .thea-glass-pill-hover:hover {
-  background-color: rgba(255, 255, 255, 0.78);
+  background-color: rgba(255, 255, 255, 0.88);
   border-color: var(--glass-border-strong);
   box-shadow: var(--shadow-glass);
 }
 
 [data-theme="kitty"] .thea-glass-pill-hover:hover {
-  background-color: rgba(255, 240, 248, 0.82);
+  background-color: rgba(255, 240, 248, 0.90);
   border-color: var(--glass-border-strong);
   box-shadow: var(--shadow-glass);
 }
@@ -588,10 +552,8 @@ html {
 [data-theme="light"] [class*="from-[#140e26]"],
 [data-theme="light"] [class*="from-[#16102c]"],
 [data-theme="light"] [class*="from-[#161224]"] {
-  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.80) 0%, rgba(248, 250, 255, 0.64) 100%) !important;
+  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.90) 0%, rgba(244, 247, 255, 0.78) 100%) !important;
   background-color: var(--glass-surface) !important;
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   border-color: var(--glass-border) !important;
   box-shadow: var(--shadow-glass) !important;
 }
@@ -599,10 +561,8 @@ html {
 [data-theme="kitty"] [class*="from-[#140e26]"],
 [data-theme="kitty"] [class*="from-[#16102c]"],
 [data-theme="kitty"] [class*="from-[#161224]"] {
-  background-image: linear-gradient(155deg, rgba(255, 250, 253, 0.82) 0%, rgba(255, 236, 246, 0.64) 100%) !important;
+  background-image: linear-gradient(155deg, rgba(255, 250, 253, 0.90) 0%, rgba(255, 236, 246, 0.78) 100%) !important;
   background-color: var(--glass-surface) !important;
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   border-color: var(--glass-border) !important;
   box-shadow: var(--shadow-glass) !important;
 }
@@ -890,15 +850,13 @@ img[alt*="Gráfico"],
   color: #64748b !important;
 }
 
-/* ── 4. Translucidez Adaptada (Apple Frosted Glass Hierarchy) ── */
+/* ── 4. Translucidez Adaptada (Equivalente al Modo Oscuro) ── */
 [data-theme="light"] .bg-white\/\[0\.02\],
 [data-theme="light"] .bg-white\/\[0\.025\],
 [data-theme="light"] .bg-white\/\[0\.03\],
 [data-theme="light"] .bg-white\/\[0\.04\] {
-  background-color: rgba(255, 255, 255, 0.60) !important;
-  -webkit-backdrop-filter: var(--glass-blur-subtle);
-  backdrop-filter: var(--glass-blur-subtle);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), 0 2px 10px -2px rgba(15, 23, 42, 0.04);
+  background-color: rgba(255, 255, 255, 0.70) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), 0 2px 10px -2px rgba(15, 23, 42, 0.04);
 }
 
 [data-theme="light"] .bg-white\/\[0\.05\],
@@ -912,9 +870,7 @@ img[alt*="Gráfico"],
 [data-theme="kitty"] .bg-white\/\[0\.025\],
 [data-theme="kitty"] .bg-white\/\[0\.03\],
 [data-theme="kitty"] .bg-white\/\[0\.04\] {
-  background-color: rgba(255, 246, 251, 0.64) !important;
-  -webkit-backdrop-filter: var(--glass-blur-subtle);
-  backdrop-filter: var(--glass-blur-subtle);
+  background-color: rgba(255, 246, 251, 0.72) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 2px 12px -2px rgba(236, 72, 153, 0.09);
 }
 
@@ -1086,25 +1042,23 @@ img[alt*="Gráfico"],
   color: #be185d !important;
 }
 
-/* ── 10. Accesibilidad Apple Material: Transparencia Reducida y Alto Contraste ── */
+/* ── 10. Accesibilidad: Transparencia Reducida y Alto Contraste ── */
 @media (prefers-reduced-transparency: reduce) {
   [data-theme="light"] {
     --glass-surface: rgba(255, 255, 255, 0.96);
+    --glass-surface-chrome: rgba(255, 255, 255, 0.98);
     --glass-surface-strong: rgba(255, 255, 255, 0.98);
     --glass-surface-subtle: rgba(248, 250, 252, 0.96);
-    --glass-blur: none;
-    --glass-blur-subtle: none;
   }
 
   [data-theme="kitty"] {
     --glass-surface: rgba(255, 248, 252, 0.96);
+    --glass-surface-chrome: rgba(255, 246, 251, 0.98);
     --glass-surface-strong: rgba(255, 250, 253, 0.98);
     --glass-surface-subtle: rgba(255, 240, 248, 0.96);
-    --glass-blur: none;
-    --glass-blur-subtle: none;
   }
 
-  :is([data-theme="light"], [data-theme="kitty"]) :is(.thea-glass-modal, .thea-glass-chrome, .glass-specular) {
+  :is([data-theme="light"], [data-theme="kitty"]) .thea-glass-chrome {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }

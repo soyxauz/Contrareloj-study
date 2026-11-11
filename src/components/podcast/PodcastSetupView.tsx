@@ -81,8 +81,8 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
       ? isDark
         ? 'border-white/40 bg-white/[0.07] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
         : isKitty
-        ? 'border-pink-500 bg-pink-50/75 backdrop-blur-md text-pink-950 shadow-xs ring-1 ring-pink-500'
-        : 'border-zinc-900 bg-white/85 backdrop-blur-md text-zinc-950 shadow-xs ring-1 ring-zinc-900'
+        ? 'border-pink-500 bg-pink-50/90 text-pink-950 shadow-xs ring-1 ring-pink-500'
+        : 'border-zinc-900 bg-white/95 text-zinc-950 shadow-xs ring-1 ring-zinc-900'
       : isDark
       ? 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 text-zinc-300'
       : isKitty

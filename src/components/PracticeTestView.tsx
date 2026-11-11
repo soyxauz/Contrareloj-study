@@ -422,8 +422,8 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                   let btnClasses = theme === 'dark'
                     ? (isSelected ? 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white ring-1 ring-[#be123c]/50 shadow-md' : 'border-[#881337]/40 bg-[#1e0711]/75 text-slate-200 hover:border-[#be123c]/60 hover:bg-[#2c0b19]/90 shadow-sm')
                     : theme === 'kitty'
-                    ? (isSelected ? 'border-pink-500 bg-pink-50/80 backdrop-blur-md text-pink-950 ring-2 ring-pink-500/40 font-bold shadow-md' : 'thea-glass-pill thea-glass-pill-hover text-zinc-950')
-                    : (isSelected ? 'border-rose-600 bg-rose-50/80 backdrop-blur-md text-rose-950 ring-2 ring-rose-500/40 font-bold shadow-md' : 'thea-glass-pill thea-glass-pill-hover text-zinc-950');
+                    ? (isSelected ? 'border-pink-500 bg-pink-50/90 text-pink-950 ring-2 ring-pink-500/40 font-bold shadow-md' : 'thea-glass-pill thea-glass-pill-hover text-zinc-950')
+                    : (isSelected ? 'border-rose-600 bg-rose-50/90 text-rose-950 ring-2 ring-rose-500/40 font-bold shadow-md' : 'thea-glass-pill thea-glass-pill-hover text-zinc-950');
 
                   let letterClasses = theme === 'dark'
                     ? (isSelected ? 'bg-[#be123c] text-white border border-[#e11d48]' : 'bg-[#881337]/30 border border-[#9f1239]/45 text-rose-200')

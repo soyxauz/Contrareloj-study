@@ -40,9 +40,9 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
 
           if (isSelected && !isAnswered) {
             optionStyles = theme === 'light'
-              ? 'border-zinc-900 bg-white/85 backdrop-blur-md text-zinc-950 ring-2 ring-zinc-900 shadow-md'
+              ? 'border-zinc-900 bg-white/95 text-zinc-950 ring-2 ring-zinc-900 shadow-md'
               : theme === 'kitty'
-              ? 'border-pink-500 bg-pink-50/80 backdrop-blur-md text-pink-950 ring-2 ring-pink-500 shadow-md'
+              ? 'border-pink-500 bg-pink-50/90 text-pink-950 ring-2 ring-pink-500 shadow-md'
               : 'border-[#be123c]/70 bg-[#3d0e23]/90 text-white shadow-lg shadow-[#4c0519]/40 ring-1 ring-[#be123c]/50';
           }
           if (isAnswered) {
