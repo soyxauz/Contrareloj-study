@@ -6,6 +6,7 @@ export interface PodcastReplacingCardProps {
   formatTitle: string;
   durationSubtitle: string;
   isGenerating: boolean;
+  generationStatus?: string;
   error: string | null;
   onRetry: () => void;
   onCancelRestore: () => void;
@@ -17,6 +18,7 @@ export const PodcastReplacingCard: React.FC<PodcastReplacingCardProps> = ({
   formatTitle,
   durationSubtitle,
   isGenerating,
+  generationStatus,
   error,
   onRetry,
   onCancelRestore,
@@ -148,7 +150,7 @@ export const PodcastReplacingCard: React.FC<PodcastReplacingCardProps> = ({
                 theme === 'dark' ? 'text-zinc-400' : 'text-slate-600'
               }`}
             >
-              Sofía y Alex están redactando un guion completamente nuevo. Aparecerá aquí en cuanto esté listo.
+              {generationStatus || 'Sofía y Alex están redactando un guion completamente nuevo. Aparecerá aquí en cuanto esté listo.'}
             </p>
 
             <div

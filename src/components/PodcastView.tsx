@@ -124,6 +124,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => getPodcastSettings().playbackSpeed || 1);
   const [activeTab, setActiveTab] = useState<'player' | 'transcript'>('player');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState<string>('');
   const [isReplacingEpisode, setIsReplacingEpisode] = useState(false);
   const lastReplacementOptsRef = useRef<{
     format?: PodcastFormat;
@@ -1321,13 +1322,15 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     isReplacement?: boolean;
   }) => {
     setIsGenerating(true);
+    setGenerationStatus('Preparando guion y extensión...');
     setSynthesisError(null);
 
     const activeFormat = overrideOptions?.format || selectedFormat;
     const activeDuration = overrideOptions?.duration || selectedDuration;
-    const activeOrientation =
-      (overrideOptions?.orientation !== undefined ? overrideOptions.orientation : orientationInput) ||
-      getPodcastSettings().orientation;
+    const activeOrientation = (
+      overrideOptions?.orientation !== undefined ? overrideOptions.orientation : orientationInput
+    ).trim();
+    savePodcastSettings({ orientation: activeOrientation });
 
     if (overrideOptions?.isReplacement) {
       lastReplacementOptsRef.current = {
@@ -1374,6 +1377,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
           duration: activeDuration,
           orientation: activeOrientation,
           previousPodcast: kit.podcast || undefined,
+          onProgress: (status) => setGenerationStatus(status),
         }
       );
       if (generated) {
@@ -1415,6 +1419,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       setSynthesisError(formatPodcastGenerationError(e));
     } finally {
       setIsGenerating(false);
+      setGenerationStatus('');
     }
   };
 
@@ -1476,6 +1481,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         formatTitle={replaceFormatTitle}
         durationSubtitle={replaceDurationSubtitle}
         isGenerating={isGenerating}
+        generationStatus={generationStatus}
         error={synthesisError}
         onRetry={() =>
           handleGeneratePodcast({
@@ -1503,6 +1509,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         edgeSofiaVoice={edgeSofiaVoice}
         edgeMateoVoice={edgeMateoVoice}
         isGenerating={isGenerating}
+        generationStatus={generationStatus}
         error={synthesisError}
         onOpenVoiceModal={() => {
           setVoiceModalTab('azure');

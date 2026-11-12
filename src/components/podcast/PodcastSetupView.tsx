@@ -22,6 +22,7 @@ export interface PodcastSetupViewProps {
   edgeSofiaVoice: string;
   edgeMateoVoice: string;
   isGenerating: boolean;
+  generationStatus?: string;
   error?: string | null;
   onOpenVoiceModal: () => void;
   onGeneratePodcast: () => void;
@@ -56,6 +57,7 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
   edgeSofiaVoice,
   edgeMateoVoice,
   isGenerating,
+  generationStatus,
   error,
   onOpenVoiceModal,
   onGeneratePodcast,
@@ -277,7 +279,7 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
                   rows={3}
                   value={orientationInput}
                   onChange={(e) => onOrientationChange(e.target.value)}
-                  placeholder="Ej.: prioriza mecanismos clave, contrasta ventajas/desventajas o enfócate en preguntas de examen..."
+                  placeholder="Ej.: hazlo de 20 min, prioriza mecanismos clave, contrasta ventajas/desventajas o enfócate en preguntas de examen..."
                   className={`w-full flex-1 min-h-[88px] lg:min-h-[140px] rounded-2xl border p-3 text-base sm:text-xs leading-relaxed resize-none focus:outline-none transition-colors duration-160 ${
                     isDark
                       ? 'bg-[#090314]/90 border-white/[0.09] text-white placeholder-zinc-500 focus:border-white/35'
@@ -365,7 +367,7 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
                   {isGenerating ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Generando Guión y Diálogo de Podcast con IA...</span>
+                      <span>{generationStatus || 'Generando Guión y Diálogo de Podcast con IA...'}</span>
                     </>
                   ) : (
                     <>

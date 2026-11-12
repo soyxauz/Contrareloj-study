@@ -162,6 +162,7 @@ export interface PodcastGenerationOptions {
   duration?: PodcastDuration;
   orientation?: string;
   previousPodcast?: PodcastEpisode;
+  onProgress?: (statusText: string) => void;
 }
 
 export interface PodcastEpisode {
