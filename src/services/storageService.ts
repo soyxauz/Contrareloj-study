@@ -544,6 +544,7 @@ function stripHeavyAssetsFromKit(
               format: kit.podcast.format,
               durationMode: kit.podcast.durationMode,
               orientation: kit.podcast.orientation,
+              updatedAt: kit.podcast.updatedAt,
             }
           : null),
     sourceMaterials: kit.sourceMaterials?.map(m => ({
@@ -1032,8 +1033,20 @@ function getSavedFlashcardMasteryInfo(
   return null;
 }
 
+function getPodcastTimestamp(pod: PodcastEpisode, fallbackTime: number): number {
+  if (typeof pod.updatedAt === 'number' && Number.isFinite(pod.updatedAt) && pod.updatedAt > 0) {
+    return pod.updatedAt;
+  }
+  const idMatch = typeof pod.id === 'string' ? pod.id.match(/^pod-ai-(\d{10,})$/) : null;
+  if (idMatch) {
+    const parsed = Number(idMatch[1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return fallbackTime;
+}
+
 /** Selecciona el episodio de podcast más completo para el mismo id, o el más reciente si fue regenerado. */
-function selectMergedPodcast(
+export function selectMergedPodcast(
   existPod: PodcastEpisode | null | undefined,
   incPod: PodcastEpisode | null | undefined,
   existTime: number,
@@ -1054,7 +1067,9 @@ function selectMergedPodcast(
     }
   }
 
-  return incTime >= existTime ? incPod : existPod;
+  return getPodcastTimestamp(incPod, incTime) >= getPodcastTimestamp(existPod, existTime)
+    ? incPod
+    : existPod;
 }
 
 /**

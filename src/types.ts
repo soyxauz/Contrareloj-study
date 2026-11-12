@@ -174,6 +174,7 @@ export interface PodcastEpisode {
   format?: PodcastFormat;
   durationMode?: PodcastDuration;
   orientation?: string;
+  updatedAt?: number;
 }
 
 export interface StudyKit {

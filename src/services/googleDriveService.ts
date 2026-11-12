@@ -1,4 +1,4 @@
-import type { StudyKit, DocumentAsset, User, PodcastSettings, SmartStudySessionState, FlashcardProgressState } from '../types';
+import type { StudyKit, DocumentAsset, User, PodcastEpisode, PodcastSettings, SmartStudySessionState, FlashcardProgressState } from '../types';
 import { authService } from './authService';
 import { flashcardProgressService } from './flashcardProgressService';
 import {
@@ -11,6 +11,7 @@ import {
   removeSessionItem,
   isCorruptedKit,
   mergeKitsByUpdatedAt,
+  selectMergedPodcast,
   getDeletedKitTombstones,
   restoreDeletedKitTombstonesAsync,
   mergeDeletedKitTombstones,
@@ -443,6 +444,8 @@ function computeKitsDigest(kits: StudyKit[], tombstones?: Record<string, number>
         k.archivedFlashcards?.length || 0,
         fcStates,
         k.studyGuideMarkdown?.length || 0,
+        k.podcast?.id || '',
+        k.podcast?.updatedAt || 0,
         k.podcast?.dialogue?.length || 0,
         k.assets?.length || 0,
       ].join(':');
@@ -454,6 +457,164 @@ function computeKitsDigest(kits: StudyKit[], tombstones?: Record<string, number>
     .map(([id, ts]) => `${id}=${ts}`);
 
   return `K[${kitParts.join(';')}]|T[${tombParts.join(',')}]`;
+}
+
+interface CloudPodcastPosition {
+  lineIndex: number;
+  wordIndexInSegment: number;
+  globalIndex: number;
+  playbackSecs?: number;
+  updatedAt: number;
+}
+
+interface CloudPodcastsPayload {
+  version: number;
+  updatedAt: number;
+  userId: string;
+  episodes: Record<string, PodcastEpisode>;
+  positions: Record<string, CloudPodcastPosition>;
+}
+
+function kitsHaveMeaningfulDifference(beforeKits: StudyKit[], afterKits: StudyKit[]): boolean {
+  if (beforeKits.length !== afterKits.length) return true;
+  const beforeMap = new Map(beforeKits.map(k => [k.id, k]));
+  const afterIds = new Set(afterKits.map(k => k.id));
+  if (beforeKits.some(k => !afterIds.has(k.id))) return true;
+  return afterKits.some(ak => {
+    const bk = beforeMap.get(ak.id);
+    if (!bk) return true;
+    return (
+      (ak.podcast?.id || '') !== (bk.podcast?.id || '') ||
+      (ak.podcast?.dialogue?.length || 0) !== (bk.podcast?.dialogue?.length || 0) ||
+      (ak.podcast?.updatedAt || 0) !== (bk.podcast?.updatedAt || 0) ||
+      (ak.studyGuideMarkdown?.length || 0) !== (bk.studyGuideMarkdown?.length || 0) ||
+      (ak.questions?.length || 0) !== (bk.questions?.length || 0) ||
+      (ak.flashcards?.length || 0) !== (bk.flashcards?.length || 0) ||
+      (ak.updatedAt || 0) > (bk.updatedAt || 0) + 1000
+    );
+  });
+}
+
+function readLocalPodcastPositions(kitIds: string[]): Record<string, CloudPodcastPosition> {
+  const positions: Record<string, CloudPodcastPosition> = {};
+  if (typeof localStorage === 'undefined') return positions;
+  const ids = new Set<string>(kitIds);
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('thea_podcast_pos_')) {
+      ids.add(key.slice('thea_podcast_pos_'.length));
+    }
+  }
+  for (const kitId of ids) {
+    try {
+      const raw = localStorage.getItem(`thea_podcast_pos_${kitId}`);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.lineIndex === 'number') {
+        positions[kitId] = {
+          lineIndex: parsed.lineIndex,
+          wordIndexInSegment: Number(parsed.wordIndexInSegment || 0),
+          globalIndex: Number(parsed.globalIndex || 0),
+          playbackSecs: typeof parsed.playbackSecs === 'number' ? parsed.playbackSecs : undefined,
+          updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0,
+        };
+      }
+    } catch {}
+  }
+  return positions;
+}
+
+function buildLocalPodcastsPayload(userId: string, kits: StudyKit[]): CloudPodcastsPayload {
+  const episodes: Record<string, PodcastEpisode> = {};
+  const kitIds: string[] = [];
+  for (const kit of kits) {
+    if (!kit?.id) continue;
+    kitIds.push(kit.id);
+    if (kit.podcast && Array.isArray(kit.podcast.dialogue) && kit.podcast.dialogue.length > 0) {
+      episodes[kit.id] = {
+        ...kit.podcast,
+        updatedAt: kit.podcast.updatedAt || kit.updatedAt || Date.now(),
+      };
+    }
+  }
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    userId,
+    episodes,
+    positions: readLocalPodcastPositions(kitIds),
+  };
+}
+
+function mergeCloudPodcastsPayload(
+  userId: string,
+  localKits: StudyKit[],
+  remotePayload: CloudPodcastsPayload | null
+): { mergedKits: StudyKit[]; mergedPayload: CloudPodcastsPayload; positionsUpdated: boolean } {
+  const localPayload = buildLocalPodcastsPayload(userId, localKits);
+  const remoteEpisodes = (remotePayload && typeof remotePayload.episodes === 'object' && remotePayload.episodes) || {};
+  const remotePositions = (remotePayload && typeof remotePayload.positions === 'object' && remotePayload.positions) || {};
+
+  const mergedEpisodes: Record<string, PodcastEpisode> = { ...localPayload.episodes };
+  for (const [kitId, remEp] of Object.entries(remoteEpisodes)) {
+    if (!remEp || !Array.isArray(remEp.dialogue) || remEp.dialogue.length === 0) continue;
+    const locEp = mergedEpisodes[kitId];
+    const kitMatch = localKits.find(k => k.id === kitId);
+    const chosen = selectMergedPodcast(
+      locEp,
+      remEp,
+      locEp?.updatedAt || kitMatch?.updatedAt || 0,
+      remEp.updatedAt || remotePayload?.updatedAt || 0
+    );
+    if (chosen) mergedEpisodes[kitId] = chosen;
+  }
+
+  const mergedKits = localKits.map(kit => {
+    const bestEp = mergedEpisodes[kit.id];
+    if (!bestEp) return kit;
+    const curEp = kit.podcast;
+    if (
+      !curEp ||
+      curEp.id !== bestEp.id ||
+      (curEp.dialogue?.length || 0) !== (bestEp.dialogue?.length || 0) ||
+      (bestEp.updatedAt || 0) > (curEp.updatedAt || 0)
+    ) {
+      return {
+        ...kit,
+        podcast: bestEp,
+        updatedAt: Math.max(kit.updatedAt || 0, bestEp.updatedAt || 0),
+      };
+    }
+    return kit;
+  });
+
+  const mergedPositions: Record<string, CloudPodcastPosition> = { ...localPayload.positions };
+  let positionsUpdated = false;
+  for (const [kitId, remPos] of Object.entries(remotePositions)) {
+    if (!remPos || typeof remPos.lineIndex !== 'number') continue;
+    const locPos = mergedPositions[kitId];
+    const remTs = typeof remPos.updatedAt === 'number' ? remPos.updatedAt : 0;
+    const locTs = typeof locPos?.updatedAt === 'number' ? locPos.updatedAt : 0;
+    if (!locPos || remTs > locTs) {
+      mergedPositions[kitId] = remPos;
+      positionsUpdated = true;
+      try {
+        safeLocalStorageSetItem(`thea_podcast_pos_${kitId}`, JSON.stringify(remPos));
+      } catch {}
+    }
+  }
+
+  return {
+    mergedKits,
+    mergedPayload: {
+      version: 1,
+      updatedAt: Date.now(),
+      userId,
+      episodes: mergedEpisodes,
+      positions: mergedPositions,
+    },
+    positionsUpdated,
+  };
 }
 
 function computeMateriasDigest(
@@ -1046,6 +1207,12 @@ export const googleDriveService = {
       const hasRemoteAiSettings = relevantRemoteFiles.some(
         f => f.name === 'thea_ai_settings.json'
       );
+      const hasRemotePodcastsFile = relevantRemoteFiles.some(
+        f => f.name === `thea_podcasts_${userId}.json`
+      );
+      const hasAnyLocalPodcast = localKits.some(
+        k => Boolean(k.podcast && Array.isArray(k.podcast.dialogue) && k.podcast.dialogue.length > 0)
+      );
       const localAi = getAISettings();
       const hasLocalAiKeys = Boolean(localAi.apiKey?.trim() || localAi.groqApiKey?.trim());
       const hasRemoteFiles = relevantRemoteFiles.length > 0;
@@ -1054,6 +1221,7 @@ export const googleDriveService = {
         (!hasLocalProgress && hasRemoteProgressFiles) ||
         (!hasLocalMaterias && hasRemoteMateriasFiles) ||
         (!hasLocalAiKeys && hasRemoteAiSettings) ||
+        (!hasAnyLocalPodcast && hasRemotePodcastsFile) ||
         (remoteMaxMs > 0 && remoteMaxMs > localWatermark) ||
         (hasRemoteFiles && localWatermark === 0);
 
@@ -2014,12 +2182,15 @@ export const googleDriveService = {
         const deletedKitsFile = rootFilesMap.get(DELETED_KITS_DRIVE_FILE);
         const usersFile = rootFilesMap.get('thea_auth_users.json');
         const aiSettingsFile = rootFilesMap.get('thea_ai_settings.json');
+        const userPodcastsFileName = `thea_podcasts_${userId}.json`;
+        const podcastsFile = rootFilesMap.get(userPodcastsFileName) ||
+                             Array.from(rootFilesMap.values()).find(f => f.name.startsWith('thea_podcasts_'));
         const userPodcastSettingsFileName = `thea_podcast_settings_${userId}.json`;
         const podcastSettingsFile = rootFilesMap.get(userPodcastSettingsFileName) ||
                                     Array.from(rootFilesMap.values()).find(f => f.name.startsWith('thea_podcast_settings'));
 
         // 2. Descargar todos los archivos esenciales en paralelo ultrarrápido
-        const [remoteDeletedPayload, remoteUsers, pulledKitsLists, pulledProgressList, remoteAISettings, remotePodcastSettings, pulledMateriasList] = await Promise.all([
+        const [remoteDeletedPayload, remoteUsers, pulledKitsLists, pulledProgressList, remoteAISettings, remotePodcastSettings, pulledMateriasList, remotePodcastsPayload] = await Promise.all([
           deletedKitsFile ? this.readJsonFromDrive<any>(token!, deletedKitsFile.id).catch(() => null) : null,
           usersFile ? this.readJsonFromDrive<any[]>(token!, usersFile.id).catch(() => null) : null,
           Promise.all(allKitsFiles.map(f => this.readJsonFromDrive<StudyKit[]>(token!, f.id).catch(() => null))),
@@ -2027,6 +2198,7 @@ export const googleDriveService = {
           aiSettingsFile ? this.readJsonFromDrive<AISettings>(token!, aiSettingsFile.id).catch(() => null) : null,
           podcastSettingsFile ? this.readJsonFromDrive<PodcastSettings>(token!, podcastSettingsFile.id).catch(() => null) : null,
           Promise.all(allMateriasFiles.map(f => this.readJsonFromDrive<any>(token!, f.id).catch(() => null))),
+          podcastsFile ? this.readJsonFromDrive<CloudPodcastsPayload>(token!, podcastsFile.id).catch(() => null) : null,
         ]);
 
         // 3. Procesar tombstones de kits eliminados antes de fusionar kits
@@ -2100,15 +2272,21 @@ export const googleDriveService = {
         const localKits = restoredLocalKits.filter(
           k => !isCorruptedKit(k) && !isKitDeletedByTombstone(k, deletedIds, mergedTombstones)
         );
-        const mergedKits = mergeKitsByUpdatedAt(localKits, remoteKitsAccumulated, deletedIds, mergedTombstones);
+        const baseMergedKits = mergeKitsByUpdatedAt(localKits, remoteKitsAccumulated, deletedIds, mergedTombstones);
+        const podcastSyncResult = mergeCloudPodcastsPayload(userId, baseMergedKits, remotePodcastsPayload);
+        const mergedKits = podcastSyncResult.mergedKits;
+
+        if (podcastSyncResult.positionsUpdated && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('contrareloj_podcast_position_synced', { detail: { userId } }));
+        }
 
         let validPulledKits: StudyKit[] | null = null;
-        if (mergedKits.length > 0 || allKitsFiles.length > 0) {
+        if (mergedKits.length > 0 || allKitsFiles.length > 0 || Boolean(podcastsFile)) {
           validPulledKits = mergedKits;
           await authService.saveUserKitsAsync(userId, mergedKits);
           authService.markKitsSyncedWithDrive(userId, mergedKits.map(k => k.id));
 
-          // Si el dispositivo local aportó kits nuevos, cambios más recientes (>1s), o reparó un podcast truncado en Drive, subir la consolidación
+          // Si el dispositivo local aportó kits nuevos, cambios más recientes (>1s), o podcasts aún no respaldados en Drive, subir la consolidación
           const remoteById = new Map(remoteKitsAccumulated.map(r => [r.id, r]));
           const localHasExtraKits = localKits.some(k => {
             const remoteKit = remoteById.get(k.id);
@@ -2117,7 +2295,10 @@ export const googleDriveService = {
           const remotePodcastRepaired = mergedKits.some(m => {
             const remoteKit = remoteById.get(m.id);
             if (!m.podcast) return false;
-            return (m.podcast.dialogue?.length || 0) > (remoteKit?.podcast?.dialogue?.length || 0);
+            const localPodCount = m.podcast.dialogue?.length || 0;
+            const remotePodCount = remoteKit?.podcast?.dialogue?.length || 0;
+            const remotePodcastFileHasEp = Boolean(remotePodcastsPayload?.episodes?.[m.id]);
+            return localPodCount > remotePodCount || (localPodCount > 0 && !remotePodcastFileHasEp);
           });
           const localHasExtraTombstones = Object.keys(mergedTombstones).some(id =>
             !RETIRED_TEST_KIT_IDS.includes(id) && (!remoteTombMap || (mergedTombstones[id] > (remoteTombMap[id] || 0)))
@@ -2125,7 +2306,7 @@ export const googleDriveService = {
           if (localHasExtraKits || localHasExtraTombstones || remotePodcastRepaired) {
             setTimeout(() => {
               this.pushToDrive(userId, mergedKits, { force: true }).catch(() => {});
-            }, 800);
+            }, 400);
           }
         }
 
@@ -2419,11 +2600,14 @@ export const googleDriveService = {
 
       // 1. Listar archivos existentes y descargar tombstones, kits, progreso y materias remotos para fusionar antes de escribir
       const userKitsFileName = `thea_kits_${userId}.json`;
+      const userPodcastsFileName = `thea_podcasts_${userId}.json`;
       const userProgressFileName = `thea_progress_${userId}.json`;
       const userMateriasFileName = `thea_materias_${userId}.json`;
 
       const rootFiles = await this.listFilesInFolder(token, rootFolderId);
       const deletedFile = rootFiles.find(f => f.name === DELETED_KITS_DRIVE_FILE);
+      const podcastsFile = rootFiles.find(f => f.name === userPodcastsFileName) ||
+                           rootFiles.find(f => f.name.startsWith('thea_podcasts_'));
       const allDriveKitsFiles = rootFiles.filter(f =>
         f.name.startsWith('thea_kits_') || f.name === 'thea_study_kits.json' || f.name === 'thea_study_kits_v2.json'
       );
@@ -2432,11 +2616,12 @@ export const googleDriveService = {
         f.name.startsWith('thea_materias_') || f.name === 'thea_custom_materias.json'
       );
 
-      const [remoteDeletedPayload, remoteKitsLists, remoteProgressLists, remoteMateriasLists] = await Promise.all([
+      const [remoteDeletedPayload, remoteKitsLists, remoteProgressLists, remoteMateriasLists, remotePodcastsPayload] = await Promise.all([
         deletedFile ? this.readJsonFromDrive<any>(token, deletedFile.id).catch(() => null) : null,
         Promise.all(allDriveKitsFiles.map(f => this.readJsonFromDrive<StudyKit[]>(token, f.id).catch(() => null))),
         Promise.all(allProgressFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))),
         Promise.all(allMateriasFiles.map(f => this.readJsonFromDrive<any>(token, f.id).catch(() => null))),
+        podcastsFile ? this.readJsonFromDrive<CloudPodcastsPayload>(token, podcastsFile.id).catch(() => null) : null,
       ]);
 
       const remoteTombMap = remoteDeletedPayload?.tombstones && typeof remoteDeletedPayload.tombstones === 'object'
@@ -2458,21 +2643,22 @@ export const googleDriveService = {
       const localMaterias = getStoredCustomMaterias(userId);
       const mergedMatState = mergeAndPersistRemoteMaterias(userId, remoteMateriasLists, localMaterias);
 
-      // Integrar kits remotos respetando tombstones y updatedAt
+      // Integrar kits y podcasts remotos respetando tombstones y updatedAt
       let driveMergedKits: StudyKit[] = cleanKits.filter(k => !isKitDeletedByTombstone(k, mergedDelSet, mergedTombstones));
       for (const remoteKits of remoteKitsLists) {
         if (Array.isArray(remoteKits) && remoteKits.length > 0) {
           driveMergedKits = mergeKitsByUpdatedAt(remoteKits, driveMergedKits, mergedDelSet, mergedTombstones);
         }
       }
+      const podcastMergeRes = mergeCloudPodcastsPayload(userId, driveMergedKits, remotePodcastsPayload);
+      driveMergedKits = podcastMergeRes.mergedKits;
 
-      // Si los kits locales difieren por fusión remota o eliminaciones remotas, sincronizar estado local + UI
-      const cleanLocalIds = new Set(cleanKits.map(k => k.id));
-      const mergedIds = new Set(driveMergedKits.map(k => k.id));
-      const kitsChangedByMerge =
-        driveMergedKits.length !== cleanKits.length ||
-        driveMergedKits.some(k => !cleanLocalIds.has(k.id)) ||
-        cleanKits.some(k => !mergedIds.has(k.id));
+      if (podcastMergeRes.positionsUpdated && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('contrareloj_podcast_position_synced', { detail: { userId } }));
+      }
+
+      // Si los kits o podcasts locales difieren tras la fusión remota, sincronizar IndexedDB + UI
+      const kitsChangedByMerge = kitsHaveMeaningfulDifference(cleanKits, driveMergedKits);
 
       if (kitsChangedByMerge) {
         await authService.saveUserKitsAsync(userId, driveMergedKits);
@@ -2506,6 +2692,7 @@ export const googleDriveService = {
       const uploadPromises: Promise<any>[] = [
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_auth_users.json', localUsers),
         this.uploadOrUpdateJson(token, rootFolderId, userKitsFileName, lightweightKits),
+        this.uploadOrUpdateJson(token, rootFolderId, userPodcastsFileName, podcastMergeRes.mergedPayload),
         this.uploadOrUpdateJson(token, rootFolderId, DELETED_KITS_DRIVE_FILE, deletedPayload),
         this.uploadOrUpdateJson(token, rootFolderId, userMateriasFileName, materiasPayload),
         this.uploadOrUpdateJson(token, rootFolderId, 'thea_podcast_settings.json', currentPodcastSettings),
@@ -2625,7 +2812,7 @@ export const googleDriveService = {
         pendingPushToDriveUserId = null;
         setTimeout(() => {
           this.pushToDrive(nextUser, nextKits).catch(() => {});
-        }, 1200);
+        }, 250);
       }
     }
   },
@@ -3315,15 +3502,96 @@ export const googleDriveService = {
   },
 
   /**
-   * Vacía de inmediato todos los respaldos pendientes (flashcards IDB, progreso y kits) al ocultar pestaña o salir.
+   * Sube de inmediato los podcasts y posiciones de reproducción al archivo dedicado en Google Drive
+   * (`thea_podcasts_<userId>.json`) sin esperar el escaneo de imágenes ni perder episodios ante cierres rápidos.
+   */
+  async syncPodcastsToDrive(userId: string, kitsOverride?: StudyKit[]): Promise<boolean> {
+    if (!userId || userId === 'guest') return false;
+
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) return false;
+
+    try {
+      const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+      const fileName = `thea_podcasts_${userId}.json`;
+      const existingFile = await this.findFileInFolder(token, rootFolderId, fileName);
+      const remotePayload = existingFile
+        ? await this.readJsonFromDrive<CloudPodcastsPayload>(token, existingFile.id).catch(() => null)
+        : null;
+
+      const sourceKits = Array.isArray(kitsOverride) && kitsOverride.length > 0
+        ? kitsOverride
+        : await authService.restoreUserKitsAsync(userId);
+      const mergeRes = mergeCloudPodcastsPayload(userId, sourceKits, remotePayload);
+
+      await this.uploadOrUpdateJson(token, rootFolderId, fileName, mergeRes.mergedPayload);
+
+      const hasNewRemotePodcast = kitsHaveMeaningfulDifference(sourceKits, mergeRes.mergedKits);
+      if (hasNewRemotePodcast) {
+        await authService.saveUserKitsAsync(userId, mergeRes.mergedKits);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('thea_drive_kits_updated', {
+            detail: { userId, kits: mergeRes.mergedKits, deletedIds: [] }
+          }));
+        }
+      }
+      if (mergeRes.positionsUpdated && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('contrareloj_podcast_position_synced', { detail: { userId } }));
+      }
+      const now = Date.now();
+      setRemoteWatermark(userId, Math.max(getRemoteWatermark(userId), latestUploadedServerModifiedMs, now));
+      return true;
+    } catch (e) {
+      console.warn('[GoogleDriveService] Error sincronizando podcasts con Drive:', e);
+      return false;
+    }
+  },
+
+  schedulePodcastSync(userId: string, kitsOverride?: StudyKit[], delayMs: number = 1200): void {
+    if (!userId || userId === 'guest') return;
+    pendingPodcastSyncUserId = userId;
+    if (kitsOverride) pendingPodcastSyncKits = kitsOverride;
+    hasPendingPodcastSync = true;
+    if (globalPodcastDebounceTimer) clearTimeout(globalPodcastDebounceTimer);
+    globalPodcastDebounceTimer = setTimeout(() => {
+      this.flushPodcastSync(userId, kitsOverride);
+    }, Math.max(20, delayMs));
+  },
+
+  flushPodcastSync(userId?: string, kitsOverride?: StudyKit[]): void {
+    if (globalPodcastDebounceTimer) {
+      clearTimeout(globalPodcastDebounceTimer);
+      globalPodcastDebounceTimer = null;
+    }
+    const hadPending = hasPendingPodcastSync;
+    const targetUser = userId || pendingPodcastSyncUserId || authService.getCurrentUser()?.id;
+    const targetKits = kitsOverride || pendingPodcastSyncKits || undefined;
+    pendingPodcastSyncUserId = null;
+    pendingPodcastSyncKits = null;
+    hasPendingPodcastSync = false;
+    if (!hadPending || !targetUser || targetUser === 'guest') return;
+    this.syncPodcastsToDrive(targetUser, targetKits).catch(() => {});
+  },
+
+  /**
+   * Vacía de inmediato todos los respaldos pendientes (flashcards IDB, progreso, podcasts y kits) al ocultar pestaña o salir.
    */
   flushAllPendingSyncs(userId?: string): void {
     flashcardProgressService.flushPendingSaves();
+    this.flushPodcastSync(userId);
     this.flushAutoSync(userId);
     this.flushProgressSync(userId);
     this.flushMateriasSync(userId);
   },
 };
+
+let globalPodcastDebounceTimer: any = null;
+let pendingPodcastSyncUserId: string | null = null;
+let pendingPodcastSyncKits: StudyKit[] | null = null;
+let hasPendingPodcastSync = false;
 
 let globalDriveDebounceTimer: any = null;
 let globalDrivePendingKits: StudyKit[] | null = null;

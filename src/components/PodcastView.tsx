@@ -280,7 +280,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         wordIndexInSegment: wordInSegIdx,
         globalIndex: globalIdx,
         playbackSecs: safeSecs,
+        updatedAt: Date.now(),
       }));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('contrareloj_podcast_pos_changed'));
+      }
     } catch (_) {}
   }, [kit.id]);
 
@@ -291,6 +295,32 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   useEffect(() => {
     currentGlobalWordIndexRef.current = currentGlobalWordIndex;
   }, [currentGlobalWordIndex]);
+
+  // Escuchar sincronización reactiva de episodios y posición de reproducción desde Google Drive
+  useEffect(() => {
+    loadedAudioSegmentRef.current = -1;
+    const syncPosFromStorage = () => {
+      if (isPlayingRef.current) return;
+      try {
+        const raw = localStorage.getItem(`thea_podcast_pos_${kit.id}`);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.lineIndex === 'number') {
+          const maxLine = Math.max(0, (kit.podcast?.dialogue?.length || 1) - 1);
+          const safeLine = Math.max(0, Math.min(maxLine, parsed.lineIndex));
+          setCurrentLineIndex(safeLine);
+          currentLineIndexRef.current = safeLine;
+          setCurrentWordIndexInSegment(Math.max(0, parsed.wordIndexInSegment || 0));
+          setCurrentGlobalWordIndex(Math.max(0, parsed.globalIndex || 0));
+        }
+      } catch {}
+    };
+
+    window.addEventListener('contrareloj_podcast_position_synced', syncPosFromStorage);
+    return () => {
+      window.removeEventListener('contrareloj_podcast_position_synced', syncPosFromStorage);
+    };
+  }, [kit.id, kit.podcast?.id, kit.podcast?.dialogue?.length]);
 
   // Escuchar sincronización reactiva en tiempo real (desde la nube o ajustes)
   useEffect(() => {

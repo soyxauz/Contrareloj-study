@@ -4773,8 +4773,9 @@ export async function generateAIPodcast(
       const computedSecs = totalSecs % 60;
       const finalDuration = `${computedMins}:${computedSecs < 10 ? '0' : ''}${computedSecs} min`;
 
+      const nowTs = Date.now();
       return {
-        id: `pod-ai-${Date.now()}`,
+        id: `pod-ai-${nowTs}`,
         title: episodeTitle || `Repaso: ${title}`,
         duration: finalDuration,
         hosts: [
@@ -4785,6 +4786,7 @@ export async function generateAIPodcast(
         format: selectedFormat,
         durationMode: plan.durationMode,
         orientation: customOrientation,
+        updatedAt: nowTs,
       };
     }
 

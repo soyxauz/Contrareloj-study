@@ -656,8 +656,16 @@ export const App: React.FC = () => {
       checkCloudChanges();
     };
 
+    const handlePodcastPosChanged = () => {
+      if (isLoggingOutRef.current) return;
+      if (!googleDriveService.isLinked() && !googleDriveService.getValidAccessToken()) return;
+      if (googleDriveService.getState().status === 'needs_reauth') return;
+      googleDriveService.schedulePodcastSync(currentUser.id);
+    };
+
     window.addEventListener('thea_session_saved', handleProgressSaved);
     window.addEventListener('thea_flashcard_saved', handleProgressSaved);
+    window.addEventListener('contrareloj_podcast_pos_changed', handlePodcastPosChanged);
     window.addEventListener('thea_drive_kits_updated', handleDriveKitsUpdated);
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', checkCloudChanges);
@@ -670,6 +678,7 @@ export const App: React.FC = () => {
       flushAll();
       window.removeEventListener('thea_session_saved', handleProgressSaved);
       window.removeEventListener('thea_flashcard_saved', handleProgressSaved);
+      window.removeEventListener('contrareloj_podcast_pos_changed', handlePodcastPosChanged);
       window.removeEventListener('thea_drive_kits_updated', handleDriveKitsUpdated);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', checkCloudChanges);
@@ -932,6 +941,12 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateKit = (updatedKit: StudyKit) => {
+    const previousKit = kits.find(k => k.id === updatedKit.id) || (currentKit?.id === updatedKit.id ? currentKit : null);
+    const podcastChanged =
+      (previousKit?.podcast?.id || '') !== (updatedKit.podcast?.id || '') ||
+      (previousKit?.podcast?.updatedAt || 0) !== (updatedKit.podcast?.updatedAt || 0) ||
+      (previousKit?.podcast?.dialogue?.length || 0) !== (updatedKit.podcast?.dialogue?.length || 0);
+
     const kitWithTime: StudyKit = {
       ...updatedKit,
       updatedAt: Date.now(),
@@ -955,12 +970,18 @@ export const App: React.FC = () => {
     const userId = currentUser ? currentUser.id : null;
     try {
       authService.saveUserKits(userId, updated);
+      authService.saveUserKitsAsync(userId, updated).catch(() => {});
     } catch (e) {
       console.error('Error al persistir Study Kits tras actualizar:', e);
     }
 
     try {
       if (userId) {
+        if (podcastChanged) {
+          googleDriveService.syncPodcastsToDrive(userId, updated).catch(err => {
+            console.warn('[App] Error sincronizando podcast con Drive:', err);
+          });
+        }
         googleDriveService.scheduleAutoSync(userId, updated, 0);
       }
     } catch (e) {
