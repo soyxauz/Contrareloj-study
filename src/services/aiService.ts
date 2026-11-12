@@ -992,6 +992,7 @@ async function fetchWithProxyFallback(
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: options.signal,
         body: JSON.stringify({
           url,
           method: options.method || 'GET',
@@ -1004,7 +1005,10 @@ async function fetchWithProxyFallback(
       if (proxyRes.status !== 404 && proxyRes.status !== 405) {
         return proxyRes;
       }
-    } catch {
+    } catch (proxyErr) {
+      if (options.signal?.aborted) {
+        throw proxyErr;
+      }
       // Continuar con llamada directa si el proxy no responde
     }
   }
@@ -1013,6 +1017,9 @@ async function fetchWithProxyFallback(
     const res = await fetch(url, options);
     return res;
   } catch (err: unknown) {
+    if (options.signal?.aborted) {
+      throw err;
+    }
     // Si la llamada directa falló (por ejemplo por CORS), intentar /api/ai-proxy
     try {
       const proxyRes = await fetch('/api/ai-proxy', {
@@ -1020,6 +1027,7 @@ async function fetchWithProxyFallback(
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: options.signal,
         body: JSON.stringify({
           url,
           method: options.method || 'GET',
@@ -2241,6 +2249,7 @@ interface QueryCompletionOptions {
   max_tokens?: number;
   frequency_penalty?: number;
   presence_penalty?: number;
+  maxRetryWaitMs?: number;
   onRetryWait?: (waitMs: number, status: number, attempt: number) => void;
 }
 
@@ -2425,6 +2434,10 @@ async function executeGroqAwareCompletion(
 
         if (shouldWait) {
           const waitMs = parseGroqRetryWaitMs(lastErrorText);
+          if (typeof options?.maxRetryWaitMs === 'number' && waitMs > options.maxRetryWaitMs) {
+            markGroqKeyCooldown(activeKey, lastErrorText, failedStatus, activeModel);
+            break;
+          }
           options?.onRetryWait?.(waitMs, failedStatus, sameRouteRetryIdx + 1);
           await new Promise(r => setTimeout(r, waitMs));
         } else if (failedStatus === 429) {
@@ -4620,27 +4633,57 @@ export async function generateAIPodcast(
     return { titleCandidate, turns };
   };
 
+  const runBoundedCompletion = async (
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    maxTokens: number,
+    stageLabel: string,
+    maxWaitMs: number,
+    wallTimeoutMs: number
+  ): Promise<string> => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        queryAICompletion(messages, true, undefined, {
+          temperature: 0.75,
+          max_tokens: maxTokens,
+          maxRetryWaitMs: maxWaitMs,
+          onRetryWait: (waitMs) => {
+            const waitSecs = Math.max(1, Math.ceil(waitMs / 1000));
+            onProgress?.(`${stageLabel} (pausa Groq ${waitSecs}s por límite TPM)...`);
+          },
+        }),
+        new Promise<string>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`Tiempo máximo agotado en ${stageLabel}`));
+          }, wallTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
+  };
+
   try {
     let episodeTitle = `Repaso: ${title}`;
     const accumulatedTurns: DialogueTurnDraft[] = [];
 
     for (let actIdx = 0; actIdx < plan.actsCount; actIdx++) {
-      if (plan.actsCount > 1) {
-        onProgress?.(`Redactando parte ${actIdx + 1} de ${plan.actsCount} (${plan.targetMinutes} min aprox.)...`);
-      } else {
-        onProgress?.('Redactando guion de podcast con IA...');
-      }
+      const stageLabel = plan.actsCount > 1
+        ? `Redactando parte ${actIdx + 1} de ${plan.actsCount} (${plan.targetMinutes} min aprox.)`
+        : 'Redactando guion de podcast con IA';
+      onProgress?.(`${stageLabel}...`);
 
       const { systemPrompt, userPrompt } = buildPodcastActPrompts(promptCtx, actIdx, accumulatedTurns);
       try {
-        const res = await queryAICompletion(
+        const res = await runBoundedCompletion(
           [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          true,
-          undefined,
-          { temperature: 0.75, max_tokens: plan.maxTokensPerAct }
+          plan.maxTokensPerAct,
+          stageLabel,
+          actIdx === 0 ? 18000 : 10000,
+          actIdx === 0 ? 65000 : 48000
         );
         const extracted = extractTurns(res);
         if (actIdx === 0 && extracted.titleCandidate) {
@@ -4675,9 +4718,8 @@ export async function generateAIPodcast(
         break;
       }
 
-      onProgress?.(
-        `Ampliando desarrollo (${Math.floor(currentSecs / 60)} min -> mínimo ${Math.round(minSecsFloor / 60)} min)...`
-      );
+      const contLabel = `Ampliando desarrollo (${Math.floor(currentSecs / 60)} min -> mínimo ${Math.round(minSecsFloor / 60)} min)`;
+      onProgress?.(`${contLabel}...`);
       const { systemPrompt, userPrompt } = buildDeficitContinuationPrompts(
         promptCtx,
         accumulatedTurns,
@@ -4687,14 +4729,15 @@ export async function generateAIPodcast(
       );
 
       try {
-        const contRes = await queryAICompletion(
+        const contRes = await runBoundedCompletion(
           [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          true,
-          undefined,
-          { temperature: 0.75, max_tokens: plan.maxTokensPerAct }
+          plan.maxTokensPerAct,
+          contLabel,
+          10000,
+          45000
         );
         const extracted = extractTurns(contRes);
         if (extracted.turns.length === 0) break;

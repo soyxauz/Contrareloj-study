@@ -271,13 +271,13 @@ export function computePodcastLengthPlan(
 export function sliceMaterialForAct(fullMaterial: string, actIndex: number, actsCount: number): string {
   const clean = (fullMaterial || '').trim();
   if (!clean) return '';
-  const maxSliceChars = 15000;
+  const maxSliceChars = actsCount >= 4 ? 5200 : actsCount >= 2 ? 6800 : 12000;
   if (actsCount <= 1 || clean.length <= maxSliceChars) {
     return clean.slice(0, maxSliceChars);
   }
 
   const chunkSpan = Math.ceil(clean.length / actsCount);
-  const overlap = Math.min(1800, Math.round(chunkSpan * 0.2));
+  const overlap = Math.min(700, Math.round(chunkSpan * 0.15));
   const rawStart = Math.max(0, actIndex * chunkSpan - (actIndex > 0 ? overlap : 0));
   const rawEnd = Math.min(clean.length, (actIndex + 1) * chunkSpan + (actIndex < actsCount - 1 ? overlap : 0));
   return clean.slice(rawStart, Math.min(rawStart + maxSliceChars, rawEnd));
@@ -442,10 +442,10 @@ export function buildDeficitContinuationPrompts(
 
   // Elegir una ventana distinta del material para no repetir conceptos previos
   const sliceOffset = Math.min(
-    Math.max(0, fullMaterial.length - 12000),
+    Math.max(0, fullMaterial.length - 6200),
     Math.round((fullMaterial.length * ((continuationIndex % 3) + 1)) / 4)
   );
-  const focusSlice = fullMaterial.slice(sliceOffset, sliceOffset + 14000);
+  const focusSlice = fullMaterial.slice(sliceOffset, sliceOffset + 6200);
   const orientationBlock = buildOrientationBlock(customOrientation);
 
   const systemPrompt = `Eres el guionista principal del podcast Contrareloj Review (Sofia y Alex).
