@@ -4,6 +4,7 @@ import { calculateRealStreak, getGlobalStatsSnapshot } from '../services/statsSe
 import { authService } from '../services/authService';
 import { googleDriveService, type DriveSyncState } from '../services/googleDriveService';
 import { useTheme } from '../services/themeService';
+import { hasPersonalApiKey } from '../services/aiService';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { HELLO_KITTY_PNG_DATA_URL } from '../utils/kittyAsset';
 import {
@@ -60,16 +61,20 @@ export const Navbar: React.FC<NavbarProps> = ({
     });
   }, []);
   const [navStatsVersion, setNavStatsVersion] = useState(0);
+  const [aiConfigured, setAiConfigured] = useState<boolean>(() => hasPersonalApiKey());
 
   useEffect(() => {
     const onSessionSaved = () => setNavStatsVersion(v => v + 1);
+    const onAiChanged = () => setAiConfigured(hasPersonalApiKey());
     window.addEventListener('thea_session_saved', onSessionSaved);
     window.addEventListener('thea_flashcard_saved', onSessionSaved);
     window.addEventListener('thea_progress_synced', onSessionSaved);
+    window.addEventListener('thea_ai_settings_changed', onAiChanged);
     return () => {
       window.removeEventListener('thea_session_saved', onSessionSaved);
       window.removeEventListener('thea_flashcard_saved', onSessionSaved);
       window.removeEventListener('thea_progress_synced', onSessionSaved);
+      window.removeEventListener('thea_ai_settings_changed', onAiChanged);
     };
   }, []);
 
@@ -278,7 +283,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Bot className={`w-3.5 h-3.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
             <span>IA Engine</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" />
+            <span
+              className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors duration-150 ${
+                aiConfigured ? 'bg-emerald-500' : 'bg-amber-400'
+              }`}
+            />
           </button>
 
           {/* User Profile */}

@@ -1371,6 +1371,28 @@ export const authService = {
   },
 
   /**
+   * Elimina del dispositivo (localStorage e IndexedDB) las API keys vinculadas a un usuario al cerrar sesión,
+   * sin afectar las claves guardadas en Google Drive.
+   */
+  clearUserAISettings(userId: string | null): void {
+    if (!userId) return;
+    try {
+      const key = `thea_user_ai_settings_${userId}`;
+      localStorage.removeItem(key);
+      removeSessionItem(key).catch(() => {});
+
+      const users = getStoredUsers();
+      const userIndex = users.findIndex(u => u.id === userId);
+      if (userIndex >= 0 && users[userIndex].aiSettings) {
+        delete users[userIndex].aiSettings;
+        saveStoredUsers(users);
+      }
+    } catch (e) {
+      console.error('Error al limpiar configuración de IA del usuario', e);
+    }
+  },
+
+  /**
    * Obtiene la configuración de Podcast guardada para un usuario específico.
    */
   getUserPodcastSettings(userId: string | null): PodcastSettings | null {

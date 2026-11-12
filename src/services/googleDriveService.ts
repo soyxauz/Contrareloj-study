@@ -20,7 +20,7 @@ import {
   safeLocalStorageSetItem
 } from './storageService';
 import { isSmoothScrollActive } from '../utils/smoothScroll';
-import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
+import { getAISettings, saveAISettings, resetAISettingsToDefault, GROQ_PRIMARY_MODEL, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
 import { normalizePodcastSettings } from './podcastSettingsNormalizer';
 import {
@@ -1043,11 +1043,17 @@ export const googleDriveService = {
       const localMaterias = getStoredCustomMaterias(userId);
       const localDeletedMaterias = getDeletedCustomMaterias(userId);
       const hasLocalMaterias = localMaterias.length > 0 || Object.keys(localDeletedMaterias).length > 0;
+      const hasRemoteAiSettings = relevantRemoteFiles.some(
+        f => f.name === 'thea_ai_settings.json'
+      );
+      const localAi = getAISettings();
+      const hasLocalAiKeys = Boolean(localAi.apiKey?.trim() || localAi.groqApiKey?.trim());
       const hasRemoteFiles = relevantRemoteFiles.length > 0;
       const needsPull =
         (localKits.length === 0 && hasRemoteKitsFiles) ||
         (!hasLocalProgress && hasRemoteProgressFiles) ||
         (!hasLocalMaterias && hasRemoteMateriasFiles) ||
+        (!hasLocalAiKeys && hasRemoteAiSettings) ||
         (remoteMaxMs > 0 && remoteMaxMs > localWatermark) ||
         (hasRemoteFiles && localWatermark === 0);
 
@@ -1158,7 +1164,10 @@ export const googleDriveService = {
     removeSessionItem(STORAGE_PROFILE_KEY).catch(() => {});
     removeSessionItem(STORAGE_LAST_SYNC_KEY).catch(() => {});
 
-    // Limpiar la API personal del almacenamiento local por privacidad al desconectar la cuenta
+    // Limpiar digests sincronizados y APIs locales por privacidad al desconectar/cerrar sesión (sin borrar de Drive)
+    lastSyncedAIDigest = null;
+    lastSyncedPodcastDigest = null;
+    lastRemoteCheckTime = 0;
     resetAISettingsToDefault();
 
     updateState({
@@ -2046,17 +2055,17 @@ export const googleDriveService = {
             );
             if (uHasAiKey && u.aiSettings) {
               u.aiSettings.verified = true;
-              const currentSettings = getAISettings();
-              const currHasKey = Boolean(
-                (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
-                (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0) ||
-                (currentSettings.groqApiKey && currentSettings.groqApiKey.trim().length > 0)
+              const existingUserAI = authService.getUserAISettings(u.id);
+              const existingUserHasKey = Boolean(
+                (existingUserAI?.apiKey && existingUserAI.apiKey.trim().length > 0) ||
+                (existingUserAI?.geminiApiKey && existingUserAI.geminiApiKey.trim().length > 0) ||
+                (existingUserAI?.grokApiKey && existingUserAI.grokApiKey.trim().length > 0) ||
+                (existingUserAI?.groqApiKey && existingUserAI.groqApiKey.trim().length > 0)
               );
               const remoteTs = typeof u.aiSettings.updatedAt === 'number' ? u.aiSettings.updatedAt : 0;
-              const localTs = typeof currentSettings.updatedAt === 'number' ? currentSettings.updatedAt : 0;
-              if (!currHasKey || remoteTs > localTs) {
+              const existingTs = typeof existingUserAI?.updatedAt === 'number' ? existingUserAI.updatedAt : 0;
+              if (!existingUserHasKey || remoteTs >= existingTs) {
                 authService.saveUserAISettings(u.id, u.aiSettings);
-                saveAISettings(u.aiSettings);
               }
             }
             const normalizedUserPodcast = u.podcastSettings
@@ -2135,32 +2144,54 @@ export const googleDriveService = {
           }
         }
 
-        // 7. Procesar ajustes de IA
+        // 7. Procesar ajustes de IA (importando ambas API keys guardadas en Drive al iniciar sesión)
         const localAISettings = getAISettings();
-        let effectiveRemoteAI = remoteAISettings;
-        if (effectiveRemoteAI && typeof effectiveRemoteAI === 'object') {
-          const remoteHasKey = Boolean(
-            (effectiveRemoteAI.apiKey && effectiveRemoteAI.apiKey.trim().length > 0) ||
-            (effectiveRemoteAI.geminiApiKey && effectiveRemoteAI.geminiApiKey.trim().length > 0) ||
-            (effectiveRemoteAI.grokApiKey && effectiveRemoteAI.grokApiKey.trim().length > 0) ||
-            (effectiveRemoteAI.groqApiKey && effectiveRemoteAI.groqApiKey.trim().length > 0)
-          );
-          const localHasKey = Boolean(
-            (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
-            (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0) ||
-            (localAISettings.grokApiKey && localAISettings.grokApiKey.trim().length > 0) ||
-            (localAISettings.groqApiKey && localAISettings.groqApiKey.trim().length > 0)
+        const hasAnyKeyInSettings = (s?: Partial<AISettings> | null): boolean =>
+          Boolean(
+            (s?.apiKey && s.apiKey.trim().length > 0) ||
+            (s?.geminiApiKey && s.geminiApiKey.trim().length > 0) ||
+            (s?.grokApiKey && s.grokApiKey.trim().length > 0) ||
+            (s?.groqApiKey && s.groqApiKey.trim().length > 0)
           );
 
+        const remoteUserMatchAI = Array.isArray(remoteUsers)
+          ? (remoteUsers.find((u: any) => u?.id === userId)?.aiSettings as AISettings | undefined)
+          : undefined;
+        let effectiveRemoteAI: AISettings | null = null;
+        if (remoteAISettings && typeof remoteAISettings === 'object' && hasAnyKeyInSettings(remoteAISettings)) {
+          effectiveRemoteAI = remoteAISettings;
+        }
+        if (remoteUserMatchAI && typeof remoteUserMatchAI === 'object' && hasAnyKeyInSettings(remoteUserMatchAI)) {
+          const fileTs = typeof effectiveRemoteAI?.updatedAt === 'number' ? effectiveRemoteAI.updatedAt : -1;
+          const userTs = typeof remoteUserMatchAI.updatedAt === 'number' ? remoteUserMatchAI.updatedAt : 0;
+          if (!effectiveRemoteAI || userTs > fileTs) {
+            effectiveRemoteAI = remoteUserMatchAI;
+          }
+        }
+
+        const localHasKey = hasAnyKeyInSettings(localAISettings);
+        if (effectiveRemoteAI) {
+          const remoteHasKey = hasAnyKeyInSettings(effectiveRemoteAI);
           const remoteTs = typeof effectiveRemoteAI.updatedAt === 'number' ? effectiveRemoteAI.updatedAt : 0;
           const localTs = typeof localAISettings.updatedAt === 'number' ? localAISettings.updatedAt : 0;
 
-          if (remoteHasKey && (!localHasKey || remoteTs > localTs)) {
+          if (remoteHasKey && (!localHasKey || remoteTs >= localTs)) {
+            const mergedApiKey = (effectiveRemoteAI.apiKey || '').trim();
+            const mergedOralKey = (effectiveRemoteAI.groqApiKey || effectiveRemoteAI.grokApiKey || '').trim();
+            const isGroqGeneral = !effectiveRemoteAI.baseUrl || effectiveRemoteAI.baseUrl.includes('api.groq.com');
+            const isGroqOral = !effectiveRemoteAI.groqBaseUrl || effectiveRemoteAI.groqBaseUrl.includes('api.groq.com');
             const merged: AISettings = {
               ...effectiveRemoteAI,
+              baseUrl: isGroqGeneral ? 'https://api.groq.com/openai/v1' : effectiveRemoteAI.baseUrl,
+              model: isGroqGeneral ? GROQ_PRIMARY_MODEL : effectiveRemoteAI.model,
+              apiKey: mergedApiKey,
+              groqBaseUrl: isGroqOral ? 'https://api.groq.com/openai/v1' : effectiveRemoteAI.groqBaseUrl,
+              groqModel: isGroqOral ? GROQ_PRIMARY_MODEL : effectiveRemoteAI.groqModel,
+              groqApiKey: mergedOralKey,
+              grokApiKey: mergedOralKey,
               verified: true,
             };
-            saveAISettings(merged);
+            saveAISettings(merged, 'both');
             lastSyncedAIDigest = computeAISettingsDigest(merged);
             if (effectiveRemoteAI.geminiApiKey?.trim()) {
               safeLocalStorageSetItem('contrareloj_gemini_api_key', effectiveRemoteAI.geminiApiKey.trim());
@@ -2170,17 +2201,13 @@ export const googleDriveService = {
               authService.saveUserAISettings(userId, merged);
             }
             const activeUser = authService.getCurrentUser();
-            if (activeUser) {
+            if (activeUser && activeUser.id !== userId) {
               authService.saveUserAISettings(activeUser.id, merged);
             }
           } else if (localHasKey) {
             this.uploadOrUpdateJson(token!, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
           }
-        } else if (
-          (localAISettings.apiKey && localAISettings.apiKey.trim().length > 0) ||
-          (localAISettings.geminiApiKey && localAISettings.geminiApiKey.trim().length > 0) ||
-          (localAISettings.groqApiKey && localAISettings.groqApiKey.trim().length > 0)
-        ) {
+        } else if (localHasKey) {
           this.uploadOrUpdateJson(token!, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
         }
 

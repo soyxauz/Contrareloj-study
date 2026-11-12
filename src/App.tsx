@@ -19,7 +19,7 @@ import { recoverAndPurgeCorruptedKeys } from './utils/storageKeys';
 import { revokeAllAzureAudioUrls } from './services/azureEdgeTtsService';
 import { revokeAllPodcastAudioUrls, savePodcastSettings } from './services/geminiAudioService';
 import { googleDriveService } from './services/googleDriveService';
-import { resetAISettingsToDefault, saveAISettings, getAISettings } from './services/aiService';
+import { resetAISettingsToDefault, saveAISettings } from './services/aiService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { HomeView } from './components/HomeView';
@@ -370,55 +370,51 @@ export const App: React.FC = () => {
   const [createInitialTab, setCreateInitialTab] = useState<InputTab>('topic');
 
   // Modales sincronizados con el historial del navegador para permitir volver atrás
+  const pushModalHistory = (modal: 'ai' | 'auth' | 'drive') => {
+    if (window.history.state?.modal !== modal) {
+      window.history.pushState({
+        mode: currentMode,
+        kitId: currentKit?.id || null,
+        modal,
+      }, '');
+    }
+  };
+
+  const closeModalHistory = (
+    modal: 'ai' | 'auth' | 'drive',
+    setOpen: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    setOpen(false);
+    if (window.history.state?.modal === modal) {
+      window.history.back();
+    }
+  };
+
   const handleOpenAIModal = () => {
     setShowAIModal(true);
-    window.history.pushState({
-      mode: currentMode,
-      kitId: currentKit?.id || null,
-      modal: 'ai',
-    }, '');
+    pushModalHistory('ai');
   };
 
   const handleCloseAIModal = () => {
-    if (window.history.state?.modal === 'ai') {
-      window.history.back();
-    } else {
-      setShowAIModal(false);
-    }
+    closeModalHistory('ai', setShowAIModal);
   };
 
   const handleOpenAuthModal = () => {
     setShowAuthModal(true);
-    window.history.pushState({
-      mode: currentMode,
-      kitId: currentKit?.id || null,
-      modal: 'auth',
-    }, '');
+    pushModalHistory('auth');
   };
 
   const handleCloseAuthModal = () => {
-    if (window.history.state?.modal === 'auth') {
-      window.history.back();
-    } else {
-      setShowAuthModal(false);
-    }
+    closeModalHistory('auth', setShowAuthModal);
   };
 
   const handleOpenGoogleDriveModal = () => {
     setShowGoogleDriveModal(true);
-    window.history.pushState({
-      mode: currentMode,
-      kitId: currentKit?.id || null,
-      modal: 'drive',
-    }, '');
+    pushModalHistory('drive');
   };
 
   const handleCloseGoogleDriveModal = () => {
-    if (window.history.state?.modal === 'drive') {
-      window.history.back();
-    } else {
-      setShowGoogleDriveModal(false);
-    }
+    closeModalHistory('drive', setShowGoogleDriveModal);
   };
 
   const handleSelectMode = (mode: StudyMode, pushToHistory = true) => {
@@ -470,8 +466,12 @@ export const App: React.FC = () => {
       kitId: currentKit?.id || null,
       modal: null,
     };
-    if (!window.history.state) {
-      window.history.replaceState(initialState, '');
+    if (!window.history.state || window.history.state?.modal) {
+      window.history.replaceState({
+        ...initialState,
+        ...(window.history.state || {}),
+        modal: null,
+      }, '');
     }
 
     const handlePopState = (e: PopStateEvent) => {
@@ -710,16 +710,13 @@ export const App: React.FC = () => {
     // 0. Borrado total e inmediato de datos de invitado (aislamiento estricto)
     authService.clearGuestData();
 
-    // 1. Restaurar ajustes de IA asociados a esta cuenta
+    // 1. Restaurar ajustes de IA asociados a esta cuenta; las cuentas nuevas o sin claves propias inician vacías
     const userAISettings = authService.getUserAISettings(user.id);
-    const currentSettings = getAISettings();
     const userHasAiKey = Boolean(
       (userAISettings?.apiKey && userAISettings.apiKey.trim().length > 0) ||
-      (userAISettings?.geminiApiKey && userAISettings.geminiApiKey.trim().length > 0)
-    );
-    const currentHasAiKey = Boolean(
-      (currentSettings.apiKey && currentSettings.apiKey.trim().length > 0) ||
-      (currentSettings.geminiApiKey && currentSettings.geminiApiKey.trim().length > 0)
+      (userAISettings?.geminiApiKey && userAISettings.geminiApiKey.trim().length > 0) ||
+      (userAISettings?.groqApiKey && userAISettings.groqApiKey.trim().length > 0) ||
+      (userAISettings?.grokApiKey && userAISettings.grokApiKey.trim().length > 0)
     );
 
     if (userAISettings && userHasAiKey) {
@@ -727,8 +724,8 @@ export const App: React.FC = () => {
       if (userAISettings.geminiApiKey?.trim()) {
         safeLocalStorageSetItem('contrareloj_gemini_api_key', userAISettings.geminiApiKey.trim());
       }
-    } else if (currentHasAiKey) {
-      authService.saveUserAISettings(user.id, currentSettings);
+    } else {
+      resetAISettingsToDefault();
     }
 
     // 1.1 Restaurar ajustes de Podcast asociados a esta cuenta
@@ -825,11 +822,27 @@ export const App: React.FC = () => {
 
   const handleLogout = () => {
     isLoggingOutRef.current = true;
+    const prevUserId = currentUser?.id || null;
+    const wasDriveLinked = Boolean(
+      googleDriveService.isLinked() ||
+      googleDriveService.getValidAccessToken() ||
+      currentUser?.googleId
+    );
     try {
       googleDriveService.disconnect();
       authService.logout();
       authService.clearGuestData();
+      if (wasDriveLinked && prevUserId) {
+        // Las API keys quedan respaldadas en Google Drive y se borran de este navegador al cerrar sesión
+        authService.clearUserAISettings(prevUserId);
+      }
       resetAISettingsToDefault();
+      setShowAIModal(false);
+      setShowAuthModal(false);
+      setShowGoogleDriveModal(false);
+      if (window.history.state?.modal) {
+        window.history.replaceState({ ...window.history.state, modal: null }, '');
+      }
       setCurrentUser(null);
       // Al cerrar sesión, cargar los kits limpios de fábrica para invitado en lugar de dejar la pantalla vacía
       const guestKits = authService.getUserKits(null).filter(k => !isCorruptedKit(k)).map((k, idx) => stripAssetDataUrlsFromKit(k, idx === 0));

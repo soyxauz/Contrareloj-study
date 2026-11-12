@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit } from '../types';
 import { useTheme } from '../services/themeService';
@@ -130,7 +130,17 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(getPreferredSpeechLang);
 
-  const whisperPool = getGroqKeyPool('oral');
+  const [aiSettingsVersion, setAiSettingsVersion] = useState(0);
+  useEffect(() => {
+    const refreshKeys = () => setAiSettingsVersion(v => v + 1);
+    window.addEventListener('thea_ai_settings_changed', refreshKeys);
+    return () => window.removeEventListener('thea_ai_settings_changed', refreshKeys);
+  }, []);
+
+  const whisperPool = useMemo(() => {
+    void aiSettingsVersion;
+    return getGroqKeyPool('oral');
+  }, [aiSettingsVersion]);
   const useWhisper = whisperPool.length > 0 && isWhisperMicSupported();
   const useWhisperRef = useRef(useWhisper);
   useWhisperRef.current = useWhisper;
