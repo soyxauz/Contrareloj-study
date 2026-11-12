@@ -1,6 +1,7 @@
 import { extractCleanKitId, isCorruptedStorageKey } from '../utils/storageKeys';
 import type { User, StudyKit, SmartStudySessionState, PodcastSettings, FlashcardProgressState } from '../types';
 import type { AISettings } from './aiService';
+import { normalizePodcastSettings } from './podcastSettingsNormalizer';
 import {
   saveSessionItem,
   getSessionItem,
@@ -1378,11 +1379,25 @@ export const authService = {
       const key = `thea_user_podcast_settings_${userId}`;
       const raw = localStorage.getItem(key);
       if (raw) {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        const normalized = normalizePodcastSettings(parsed);
+        if ((parsed as { voiceEngine?: string })?.voiceEngine !== 'edge') {
+          safeLocalStorageSetItem(key, JSON.stringify(normalized));
+        }
+        return normalized;
       }
       const users = getStoredUsers();
       const user = users.find(u => u.id === userId);
-      return user?.podcastSettings || null;
+      if (!user?.podcastSettings) return null;
+      const normalized = normalizePodcastSettings(user.podcastSettings);
+      if ((user.podcastSettings as { voiceEngine?: string }).voiceEngine !== 'edge') {
+        const userIndex = users.findIndex(u => u.id === userId);
+        if (userIndex >= 0) {
+          users[userIndex].podcastSettings = normalized;
+          saveStoredUsers(users);
+        }
+      }
+      return normalized;
     } catch (e) {
       console.error('Error al leer configuración de podcast del usuario', e);
       return null;
@@ -1395,13 +1410,14 @@ export const authService = {
   saveUserPodcastSettings(userId: string | null, settings: PodcastSettings): void {
     if (!userId) return;
     try {
+      const normalized = normalizePodcastSettings(settings);
       const key = `thea_user_podcast_settings_${userId}`;
-      safeLocalStorageSetItem(key, JSON.stringify(settings));
+      safeLocalStorageSetItem(key, JSON.stringify(normalized));
 
       const users = getStoredUsers();
       const userIndex = users.findIndex(u => u.id === userId);
       if (userIndex >= 0) {
-        users[userIndex].podcastSettings = settings;
+        users[userIndex].podcastSettings = normalized;
         saveStoredUsers(users);
       }
     } catch (e) {

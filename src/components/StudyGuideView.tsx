@@ -17,7 +17,8 @@ import {
   ZoomIn,
   X,
   BookOpen,
-  RotateCcw
+  RotateCcw,
+  AlertCircle
 } from 'lucide-react';
 
 export const DEPTH_OPTIONS: Array<{
@@ -103,6 +104,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [guideError, setGuideError] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<{ message: string; percent: number }>({
     message: '',
     percent: 0,
@@ -111,6 +113,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   useEffect(() => {
     setCurrentKitState(kit);
     setGuideError(null);
+    setAudioError(null);
     setMarkdown(kit.studyGuideMarkdown ? stripExecutiveSummaryPreamble(kit.studyGuideMarkdown) : '');
     if (kit.studyGuideDepth) {
       setSelectedDepth(kit.studyGuideDepth);
@@ -324,11 +327,6 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       activeAudioRef.current.pause();
       activeAudioRef.current = null;
     }
-    if ('speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (_) {}
-    }
     setIsSpeaking(false);
     setIsAudioLoading(false);
   };
@@ -340,6 +338,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   }, []);
 
   const handleReadAloud = async () => {
+    setAudioError(null);
     if (isSpeaking || isAudioLoading) {
       stopAudio();
       return;
@@ -354,39 +353,17 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
     const voice = 'es-ES-ElviraNeural';
 
-    let fallbackTimer: any = null;
-
-    const playWithLocalFallback = () => {
+    const failAzurePlayback = (message: string) => {
       if (audioStopRequestedRef.current) return;
+      activeAudioRef.current = null;
       setIsAudioLoading(false);
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(sentences.join(' '));
-        utterance.lang = 'es-ES';
-        utterance.rate = 1.05;
-        utterance.onend = () => {
-          setIsSpeaking(false);
-        };
-        utterance.onerror = () => {
-          setIsSpeaking(false);
-        };
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsSpeaking(false);
-      }
+      setIsSpeaking(false);
+      setAudioError(message);
     };
 
-    // Disparar síntesis local si Azure Edge se demora más de 1800ms
-    fallbackTimer = setTimeout(() => {
-      console.warn('[StudyGuideView] Azure Edge tardó más de 1800ms; reproduciendo de inmediato con síntesis local.');
-      playWithLocalFallback();
-    }, 1800);
-
     try {
-      // 1. Sintetizar la primera frase inmediatamente (sub-300ms)
+      // 1. Esperar a que Microsoft Azure Neural sintetice la primera frase (con reintentos automáticos integrados)
       const firstUrl = await synthesizeAzureEdgeSpeech(sentences[0], voice);
-      clearTimeout(fallbackTimer);
-
       if (audioStopRequestedRef.current) return;
 
       const firstAudio = new Audio(firstUrl);
@@ -424,22 +401,20 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
           const nextAudio = new Audio(nextUrl);
           activeAudioRef.current = nextAudio;
           nextAudio.onended = playNextSentence;
-          nextAudio.onerror = playNextSentence;
+          nextAudio.onerror = () =>
+            failAzurePlayback('Se interrumpió el audio con Azure Neural. Verifica tu conexión para reintentar.');
           await nextAudio.play();
         } catch {
-          playNextSentence();
+          failAzurePlayback('Se interrumpió el audio con Azure Neural. Verifica tu conexión para reintentar.');
         }
       };
 
       firstAudio.onended = playNextSentence;
-      firstAudio.onerror = () => {
-        clearTimeout(fallbackTimer);
-        playWithLocalFallback();
-      };
+      firstAudio.onerror = () =>
+        failAzurePlayback('No se pudo reproducir el audio con Azure Neural. Verifica tu conexión para reintentar.');
       await firstAudio.play();
     } catch {
-      clearTimeout(fallbackTimer);
-      playWithLocalFallback();
+      failAzurePlayback('No se pudo cargar el audio con Azure Neural. Verifica tu conexión e inténtalo de nuevo.');
     }
   };
 
@@ -514,7 +489,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
 
               <button
                 onClick={handleReadAloud}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-all active:scale-95 ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 cursor-pointer active:scale-[0.97] ${
                   isSpeaking ? 'bg-white/10 text-white border-white/20 shadow-md' : 'bg-white/[0.03] text-zinc-300 hover:text-white hover:bg-white/[0.06] border-white/[0.08]'
                 }`}
               >
@@ -525,12 +500,12 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 ) : (
                   <Volume2 className="w-4 h-4" />
                 )}
-                <span>{isAudioLoading ? 'Iniciando voz...' : isSpeaking ? 'Detener Voz' : 'Leer en Voz Alta'}</span>
+                <span>{isAudioLoading ? 'Cargando audio...' : isSpeaking ? 'Detener Voz' : 'Leer en Voz Alta'}</span>
               </button>
 
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition-[background-color,border-color,color,transform] duration-150 cursor-pointer active:scale-[0.97]"
               >
                 {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                 <span>{isCopied ? 'Copiado' : 'Copiar'}</span>
@@ -539,6 +514,42 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
           )}
         </div>
       </div>
+
+      {audioError && activeTab === 'guide' && (
+        <div className={`mb-4 px-3.5 py-2.5 rounded-2xl border text-xs flex items-center justify-between gap-3 animate-fadeIn ${
+          theme === 'dark'
+            ? 'bg-rose-950/35 border-rose-500/35 text-rose-200'
+            : theme === 'kitty'
+            ? 'bg-rose-50 border-rose-200 text-rose-900'
+            : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span className="truncate font-medium">{audioError}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleReadAloud}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-transform duration-150 active:scale-[0.97] ${
+                theme === 'dark'
+                  ? 'bg-white text-zinc-950 hover:bg-zinc-200'
+                  : 'bg-zinc-950 text-white hover:bg-zinc-800'
+              }`}
+            >
+              Reintentar
+            </button>
+            <button
+              type="button"
+              onClick={() => setAudioError(null)}
+              className="p-1 rounded-lg opacity-70 hover:opacity-100 cursor-pointer"
+              aria-label="Cerrar aviso"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Subtabs: Guía Teórica vs Galería Visual ────────────────────────── */}
       <div className={`flex items-center gap-2 mb-8 p-1.5 rounded-2xl border shadow-sm ${

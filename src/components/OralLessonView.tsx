@@ -327,11 +327,6 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       audioResolveRef.current();
       audioResolveRef.current = null;
     }
-    if (typeof speechSynthesis !== 'undefined') {
-      try {
-        speechSynthesis.cancel();
-      } catch {}
-    }
     setSpeaking(false);
   };
 
@@ -354,22 +349,12 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       });
     });
 
-  const speakWithBrowser = (text: string) =>
-    new Promise<void>((resolve) => {
-      if (typeof speechSynthesis === 'undefined') return resolve();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'es-ES';
-      u.rate = 1.25; // Sincronizado a +25% de agilidad
-      u.onend = () => resolve();
-      u.onerror = () => resolve();
-      speechSynthesis.speak(u);
-    });
-
   const speak = async (text: string): Promise<boolean> => {
     stopSpeaking();
     const token = ++speakToken.current;
     const chunks = splitForSpeech(text).slice(0, 6);
     if (chunks.length === 0) return false;
+    setVoiceError('');
     setSpeaking(true);
 
     // Pre-sintetizar de inmediato todas las frases posteriores en paralelo mientras se arranca la primera
@@ -388,15 +373,19 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         let url: string | null = null;
         try {
           url = await synthesizeAzureEdgeSpeech(chunks[i], VOICE, TTS_RATE);
-        } catch {
+        } catch (err) {
+          console.warn('[OralLesson] Error al sintetizar audio con Azure Neural:', err);
           url = null;
         }
         if (token !== speakToken.current) {
           stopBargeInListener();
           return false;
         }
-        if (url) await playUrl(url);
-        else await speakWithBrowser(chunks[i]);
+        if (!url) {
+          setVoiceError('No se pudo conectar con la voz Azure Neural. Verifica tu conexión e inténtalo de nuevo.');
+          return false;
+        }
+        await playUrl(url);
       }
       return token === speakToken.current;
     } finally {

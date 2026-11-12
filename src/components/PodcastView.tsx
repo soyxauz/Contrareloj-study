@@ -50,11 +50,6 @@ function estimateSegmentDurationSecs(text: string): number {
   return Math.max(2.5, words.length * 0.415 + pauseCount * 0.22 + 0.35);
 }
 
-function getAzureVoiceForSpeaker(speaker: string, sofiaVoice: string, mateoVoice: string): string {
-  const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(speaker || '');
-  return isFemale ? (sofiaVoice || 'es-ES-ElviraNeural') : (mateoVoice || 'es-ES-AlvaroNeural');
-}
-
 function formatPodcastGenerationError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err || '');
   if (/402|usage credits|ollama\.com\/plans/i.test(raw)) {
@@ -72,6 +67,8 @@ import {
 import {
   AZURE_EDGE_VOICES,
   type AzureEdgeVoiceOption,
+  isFemalePodcastSpeaker,
+  getAzureVoiceForSpeaker,
   synthesizeAzureEdgeSpeech,
   prefetchAzureEdgeSpeech,
   preloadEntireAzurePodcast,
@@ -135,20 +132,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   } | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isAudioActive, setIsAudioActive] = useState(false);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  // Motor de voz: 'edge' (Azure Neural Oficial) | 'browser' (Voz Local)
-  const [voiceEngine, setVoiceEngine] = useState<'edge' | 'browser'>(() => {
-    const ps = getPodcastSettings();
-    return ps.voiceEngine === 'browser' ? 'browser' : 'edge';
-  });
+  // Motor de voz exclusivo: Microsoft Azure Neural ('edge')
   const [edgeSofiaVoice, setEdgeSofiaVoice] = useState<string>(() => getPodcastSettings().edgeSofiaVoice || 'es-ES-ElviraNeural');
   const [edgeMateoVoice, setEdgeMateoVoice] = useState<string>(() => getPodcastSettings().edgeMateoVoice || 'es-ES-AlvaroNeural');
-  const [localSofiaVoice, setLocalSofiaVoice] = useState<string>(() => getPodcastSettings().localSofiaVoice || '');
-  const [localMateoVoice, setLocalMateoVoice] = useState<string>(() => getPodcastSettings().localMateoVoice || '');
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const [voiceModalTab, setVoiceModalTab] = useState<'azure' | 'browser' | 'new_episode'>('azure');
+  const [voiceModalTab, setVoiceModalTab] = useState<'azure' | 'new_episode'>('azure');
   const [showConfirmReplaceModal, setShowConfirmReplaceModal] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<PodcastFormat>('detailed');
   const [selectedDuration, setSelectedDuration] = useState<PodcastDuration>('normal');
@@ -162,9 +152,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   const isMutedRef = useRef(isMuted);
   const isManualInterruptionRef = useRef(false);
   const isMountedRef = useRef(true);
-  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
-  const voiceEngineRef = useRef(voiceEngine);
   const synthesisRetryCountRef = useRef(0);
 
   useEffect(() => {
@@ -183,14 +171,10 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
-  useEffect(() => {
-    voiceEngineRef.current = voiceEngine;
-  }, [voiceEngine]);
-
   // Duraciones reales medidas por segmento (seg) desde los audios sintetizados; sin estimación inflada
   const [realSegmentDurations, setRealSegmentDurations] = useState<Record<number, number>>(() => {
     const initialMap: Record<number, number> = {};
-    if (kit.podcast?.dialogue && getPodcastSettings().voiceEngine !== 'browser') {
+    if (kit.podcast?.dialogue) {
       const sVoice = getPodcastSettings().edgeSofiaVoice || 'es-ES-ElviraNeural';
       const mVoice = getPodcastSettings().edgeMateoVoice || 'es-ES-AlvaroNeural';
       kit.podcast.dialogue.forEach((item, idx) => {
@@ -315,13 +299,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         setPlaybackSpeed(fresh.playbackSpeed);
         playbackSpeedRef.current = fresh.playbackSpeed;
       }
-      if (fresh.voiceEngine) {
-        setVoiceEngine(fresh.voiceEngine === 'browser' ? 'browser' : 'edge');
-      }
       if (fresh.edgeSofiaVoice) setEdgeSofiaVoice(fresh.edgeSofiaVoice);
       if (fresh.edgeMateoVoice) setEdgeMateoVoice(fresh.edgeMateoVoice);
-      if (fresh.localSofiaVoice !== undefined) setLocalSofiaVoice(fresh.localSofiaVoice);
-      if (fresh.localMateoVoice !== undefined) setLocalMateoVoice(fresh.localMateoVoice);
       if (fresh.orientation !== undefined) setOrientationInput(fresh.orientation);
     };
 
@@ -333,7 +312,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     };
   }, []);
 
-  // Detener de forma limpia y unificada cualquier reproducción (HTML5 Audio o SpeechSynthesis)
+  // Detener de forma limpia y unificada la reproducción de audio HTML5 (Azure Neural)
   const stopCurrentAudio = useCallback((dismantle: boolean = false) => {
     if (audioPlayerRef.current) {
       const audio = audioPlayerRef.current;
@@ -362,20 +341,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         nextAudio.load();
         preloadedNextAudioRef.current = null;
       }
-    }
-    if (currentUtteranceRef.current) {
-      currentUtteranceRef.current.onstart = null;
-      currentUtteranceRef.current.onend = null;
-      currentUtteranceRef.current.onerror = null;
-      currentUtteranceRef.current.onboundary = null;
-      if (dismantle) {
-        currentUtteranceRef.current = null;
-      }
-    }
-    if ('speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (_) {}
     }
     setIsAudioActive(false);
     setIsSynthesizing(false);
@@ -415,11 +380,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   // Pre-sintetizar turno 0 y medir en segundo plano la duración real de todos los segmentos de audio (sin retener Blobs en RAM)
   useEffect(() => {
     if (!podcast?.dialogue || podcast.dialogue.length === 0 || isReplacingEpisode) return;
-
-    if (voiceEngine !== 'edge') {
-      setRealSegmentDurations({});
-      return;
-    }
 
     let cancelled = false;
     const initialMap: Record<number, number> = {};
@@ -487,7 +447,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     return () => {
       cancelled = true;
     };
-  }, [podcast?.id, podcast?.dialogue, voiceEngine, edgeSofiaVoice, edgeMateoVoice, recordRealSegmentDuration, isReplacingEpisode]);
+  }, [podcast?.id, podcast?.dialogue, edgeSofiaVoice, edgeMateoVoice, recordRealSegmentDuration, isReplacingEpisode]);
 
   // Mapeo exhaustivo de todas las palabras del podcast para scrubber palabra por palabra
   const allWords = useMemo(() => {
@@ -593,31 +553,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     setCurrentPlaybackSecs(updatedSecs);
   }, [segmentTimelines, totalDurationSecs, podcast?.dialogue]);
 
-  // Cargar catálogo de voces del sintetizador del navegador
-  useEffect(() => {
-    if (!('speechSynthesis' in window)) return;
-
-    const populateVoices = () => {
-      const available = window.speechSynthesis.getVoices();
-      if (available && available.length > 0) {
-        setVoices(available);
-      }
-    };
-
-    populateVoices();
-    window.speechSynthesis.onvoiceschanged = populateVoices;
-    const timer1 = setTimeout(populateVoices, 200);
-    const timer2 = setTimeout(populateVoices, 800);
-
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
-
   // Timbre armónico de introducción al estilo radio/podcast con Web Audio API
   const playIntroChime = useCallback(() => {
     try {
@@ -661,109 +596,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
   }, []);
 
-  // Seleccionar la voz y modulación acústica adecuada con emotividad y máxima diferenciación
-  const getSpeakerAcoustics = useCallback((speakerName: string, text: string = '') => {
-    const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(speakerName);
-    const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
-    const candidateVoices = esVoices.length > 0 ? esVoices : voices;
-
-    const isQuestion = text.includes('?');
-    const isExclamatory = text.includes('!');
-
-    const normalizeStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    const femaleKeywords = [
-      'helena', 'elena', 'laura', 'elvira', 'dalia', 'salome', 'paloma',
-      'sabina', 'monica', 'lucia', 'marta', 'victoria', 'female', 'mujer',
-      'zira', 'maria', 'conchita', 'penelope', 'sofia', 'carmen'
-    ];
-    const maleKeywords = [
-      'pablo', 'alvaro', 'jorge', 'gonzalo', 'alonso', 'carlos', 'diego',
-      'david', 'raul', 'enrique', 'miguel', 'manuel', 'antonio', 'male', 'hombre'
-    ];
-
-    if (isFemale) {
-      let selectedVoice: SpeechSynthesisVoice | undefined;
-
-      // 1. Si el usuario seleccionó una voz local específica para Sofía
-      if (localSofiaVoice) {
-        selectedVoice = candidateVoices.find(v => v.name === localSofiaVoice);
-      }
-
-      // 2. Si se había seleccionado una voz de Edge que esté presente en el navegador
-      if (!selectedVoice && edgeSofiaVoice) {
-        const edgeBase = normalizeStr(edgeSofiaVoice.replace(/^es-[A-Z]{2}-/, '').replace('Neural', ''));
-        selectedVoice = candidateVoices.find(v => normalizeStr(v.name).includes(edgeBase));
-      }
-
-      // 3. Buscar cualquier voz femenina identificada por palabras clave
-      if (!selectedVoice) {
-        selectedVoice = candidateVoices.find(v => femaleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
-      }
-
-      // 4. Si aún no hay match, tomar la primera voz disponible
-      if (!selectedVoice && candidateVoices.length > 0) {
-        selectedVoice = candidateVoices[0];
-      }
-
-      // Modulación acústica femenina: tono alto, brillante y vivaz (pitch 1.25)
-      const basePitch = 1.25;
-      const pitchMod = isQuestion ? 0.05 : isExclamatory ? 0.04 : 0;
-      const rateMod = isExclamatory ? 1.05 : 1.02;
-
-      return {
-        voice: selectedVoice,
-        pitch: Math.min(1.6, basePitch + pitchMod),
-        rateFactor: rateMod,
-        voiceName: selectedVoice?.name ? `${selectedVoice.name.replace(/^(Microsoft|Google)\s*/i, '').split('-')[0].trim()} (Sofía)` : 'Voz Femenina (Sofía)',
-      };
-    } else {
-      let selectedVoice: SpeechSynthesisVoice | undefined;
-
-      // 1. Si el usuario seleccionó una voz local específica para Mateo
-      if (localMateoVoice) {
-        selectedVoice = candidateVoices.find(v => v.name === localMateoVoice);
-      }
-
-      // 2. Si se había seleccionado una voz de Edge que esté presente en el navegador
-      if (!selectedVoice && edgeMateoVoice) {
-        const edgeBase = normalizeStr(edgeMateoVoice.replace(/^es-[A-Z]{2}-/, '').replace('Neural', ''));
-        selectedVoice = candidateVoices.find(v => normalizeStr(v.name).includes(edgeBase));
-      }
-
-      // 3. Buscar cualquier voz masculina identificada por palabras clave
-      if (!selectedVoice) {
-        selectedVoice = candidateVoices.find(v => maleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
-      }
-
-      // 4. Si no hay voz masculina dedicada pero hay más de una voz en el sistema, usar una voz diferente a la de Sofía
-      if (!selectedVoice && candidateVoices.length > 1) {
-        const sofiaVoiceMatch = localSofiaVoice
-          ? candidateVoices.find(v => v.name === localSofiaVoice)
-          : candidateVoices.find(v => femaleKeywords.some(kw => normalizeStr(v.name).includes(kw)));
-        const alternative = candidateVoices.find(v => v !== sofiaVoiceMatch);
-        if (alternative) selectedVoice = alternative;
-      }
-
-      // 5. Fallback a la primera voz disponible
-      if (!selectedVoice && candidateVoices.length > 0) {
-        selectedVoice = candidateVoices[0];
-      }
-
-      // Modulación acústica masculina: tono grave, barítono profundo (pitch 0.68)
-      const basePitch = 0.68;
-      const pitchMod = isQuestion ? 0.04 : isExclamatory ? 0.03 : 0;
-      const rateMod = isExclamatory ? 0.98 : 0.93;
-
-      return {
-        voice: selectedVoice,
-        pitch: Math.max(0.55, basePitch + pitchMod),
-        rateFactor: rateMod,
-        voiceName: selectedVoice?.name ? `${selectedVoice.name.replace(/^(Microsoft|Google)\s*/i, '').split('-')[0].trim()} (Mateo)` : 'Voz Masculina (Mateo)',
-      };
-    }
-  }, [voices, localSofiaVoice, localMateoVoice, edgeSofiaVoice, edgeMateoVoice]);
-
   // Avanzar a la siguiente intervención de diálogo
   const advanceToNextLine = useCallback((fromIndex: number) => {
     if (!isMountedRef.current || isManualInterruptionRef.current || !isPlayingRef.current) return;
@@ -777,10 +609,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       setCurrentPlaybackSecs(nextStartSecs);
       setWordPosition(nextGlobal, nextSeg, 0, nextStartSecs);
 
-      // Deslizar ventana de precarga para los próximos turnos de diálogo
-      if (voiceEngineRef.current === 'edge') {
-        preloadEntireAzurePodcast(podcast.dialogue, edgeSofiaVoice, edgeMateoVoice, nextSeg);
-      }
+      // Deslizar ventana de precarga para los próximos turnos de diálogo con Azure Neural
+      preloadEntireAzurePodcast(podcast.dialogue, edgeSofiaVoice, edgeMateoVoice, nextSeg);
 
       speakDialogueLineRef.current?.(nextSeg, 0);
     } else {
@@ -792,99 +622,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       setWordPosition(0, 0, 0, 0);
     }
   }, [podcast?.dialogue, segmentStartGlobalIndices, setWordPosition, edgeSofiaVoice, edgeMateoVoice]);
-
-  // Reproducir vocalmente mediante el motor del navegador (fallback local) con inicio por palabra
-  const speakBrowserDialogueLine = useCallback((
-    index: number,
-    cleanText: string,
-    speakerName: string,
-    startWordIdx: number = 0
-  ) => {
-    if (!isMountedRef.current || !isPlayingRef.current || isManualInterruptionRef.current) return;
-    if (!('speechSynthesis' in window)) return;
-    if (currentUtteranceRef.current) {
-      currentUtteranceRef.current.onstart = null;
-      currentUtteranceRef.current.onend = null;
-      currentUtteranceRef.current.onerror = null;
-      currentUtteranceRef.current.onboundary = null;
-    }
-    window.speechSynthesis.cancel();
-
-    const rawWords = cleanText.split(/\s+/).filter(Boolean);
-    const safeWordIdx = Math.max(0, Math.min(rawWords.length - 1, startWordIdx));
-    const textToSpeak = rawWords.slice(safeWordIdx).join(' ');
-
-    if (!textToSpeak.trim()) {
-      advanceToNextLine(index);
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    currentUtteranceRef.current = utterance;
-    loadedAudioSegmentRef.current = index;
-
-    const { voice, pitch, rateFactor } = getSpeakerAcoustics(speakerName, cleanText);
-
-    if (voice) {
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
-    } else {
-      utterance.lang = 'es-ES';
-    }
-
-    utterance.pitch = pitch;
-    utterance.rate = Math.max(0.6, Math.min(2.5, playbackSpeedRef.current * rateFactor));
-
-    utterance.onstart = () => {
-      setIsAudioActive(true);
-    };
-
-    // Seguimiento sincronizado palabra por palabra y tiempo continuo en el navegador
-    utterance.onboundary = (e) => {
-      if (!isMountedRef.current || isScrubbingRef.current || isManualInterruptionRef.current || !isPlayingRef.current) return;
-      if (e.name === 'word') {
-        const textSoFar = textToSpeak.slice(0, e.charIndex);
-        const spokenWordCount = textSoFar.trim() ? textSoFar.trim().split(/\s+/).length : 0;
-        const currentWord = Math.min(rawWords.length - 1, safeWordIdx + spokenWordCount);
-        const baseGlobal = segmentStartGlobalIndices[index] || 0;
-        const tl = segmentTimelinesRef.current[index];
-        const ratio = rawWords.length > 0 ? Math.min(0.99, currentWord / rawWords.length) : 0;
-        const approxSecs = tl ? tl.startSecs + ratio * tl.durationSecs : currentPlaybackSecsRef.current;
-        currentPlaybackSecsRef.current = approxSecs;
-        setCurrentPlaybackSecs(approxSecs);
-        setWordPosition(baseGlobal + currentWord, index, currentWord, approxSecs);
-      }
-    };
-
-    utterance.onend = () => {
-      setIsAudioActive(false);
-      if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-        setTimeout(() => {
-          if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-            advanceToNextLine(index);
-          }
-        }, 250);
-      }
-    };
-
-    utterance.onerror = (e) => {
-      setIsAudioActive(false);
-      if (e.error === 'interrupted' || e.error === 'canceled' || isManualInterruptionRef.current || !isMountedRef.current) return;
-      console.warn('[Podcast TTS] Error en síntesis de voz local:', e);
-      if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-        setTimeout(() => {
-          if (isMountedRef.current && isPlayingRef.current && !isManualInterruptionRef.current) {
-            advanceToNextLine(index);
-          }
-        }, 600);
-      }
-    };
-
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-    window.speechSynthesis.speak(utterance);
-  }, [getSpeakerAcoustics, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
 
   // Reproducir vocalmente una línea del diálogo con soporte para Azure Neural TTS y Fallback local
   const speakDialogueLine = useCallback(async (index: number, startWordIdx: number = 0) => {
@@ -934,9 +671,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       return () => clearTimeout(timer);
     }
 
-    // Ruta 1: Motor Neuronal Azure (Edge Neural TTS)
-    if (voiceEngineRef.current === 'edge') {
-      const targetVoice = getAzureVoiceForSpeaker(item.speaker, edgeSofiaVoice, edgeMateoVoice);
+    // Motor exclusivo: Microsoft Azure Neural (Edge Neural TTS)
+    const targetVoice = getAzureVoiceForSpeaker(item.speaker, edgeSofiaVoice, edgeMateoVoice);
 
       try {
         let audio: HTMLAudioElement;
@@ -1119,14 +855,11 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         } else {
           setSynthesisError('No se pudo conectar con Azure Neural. Haz clic en Reproducir para reintentar.');
           setIsPlaying(false);
+          isPlayingRef.current = false;
         }
         return;
       }
-    }
-
-    // Ruta 2: Motor del Navegador (SpeechSynthesis) solo si el usuario seleccionó expresamente 'browser'
-    speakBrowserDialogueLine(index, cleanText, item.speaker, safeWordIdx);
-  }, [podcast, edgeSofiaVoice, edgeMateoVoice, stopCurrentAudio, speakBrowserDialogueLine, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
+  }, [podcast, edgeSofiaVoice, edgeMateoVoice, stopCurrentAudio, advanceToNextLine, segmentStartGlobalIndices, setWordPosition]);
 
   // Mantener referencia mutable siempre actualizada
   speakDialogueLineRef.current = speakDialogueLine;
@@ -1144,76 +877,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (audioPlayerRef.current) {
       audioPlayerRef.current.playbackRate = newSpeed;
     }
-
-    // Si está usando el sintetizador del navegador local (SpeechSynthesis), recrear el utterance con la nueva velocidad
-    if (voiceEngineRef.current === 'browser' && isPlayingRef.current) {
-      isManualInterruptionRef.current = true;
-      stopCurrentAudio();
-      setTimeout(() => {
-        isManualInterruptionRef.current = false;
-        speakDialogueLineRef.current?.(currentLineIndexRef.current, currentWordIndexRef.current);
-      }, 50);
-    }
-  };
-
-  // Cambiar motor de voz de forma dinámica y reactiva
-  const handleSwitchEngine = (newEngine: 'edge' | 'browser') => {
-    setVoiceEngine(newEngine);
-    voiceEngineRef.current = newEngine;
-    stopCurrentAudio();
-    setSynthesisError(null);
-    const updated = savePodcastSettings({ voiceEngine: newEngine });
-    if (googleDriveService.isLinked() || googleDriveService.getValidAccessToken()) {
-      googleDriveService.syncPodcastSettingsToDrive(updated).catch(console.warn);
-    }
-    if (isPlayingRef.current) {
-      setTimeout(() => {
-        speakDialogueLineRef.current?.(currentLineIndexRef.current, currentWordIndexRef.current);
-      }, 80);
-    }
-  };
-
-  // Preescucha de una voz con su modulación correspondiente (Sofía: aguda 1.25x / Mateo: grave 0.68x)
-  const previewLocalVoice = (e: React.MouseEvent, voice: SpeechSynthesisVoice, gender: 'female' | 'male') => {
-    e.stopPropagation();
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    stopCurrentAudio();
-    const isSofia = gender === 'female';
-    const cleanName = voice.name.replace(/^(Microsoft|Google)\s*/i, '').split('-')[0].trim();
-    const sampleText = isSofia
-      ? `¡Hola! Soy Sofía con la voz de ${cleanName}. Vamos a repasar juntos hoy.`
-      : `¡Y yo soy Mateo con la voz de ${cleanName}! Profundizaremos en cada concepto.`;
-    const utt = new SpeechSynthesisUtterance(sampleText);
-    utt.voice = voice;
-    utt.lang = voice.lang;
-    utt.pitch = isSofia ? 1.25 : 0.68;
-    utt.rate = isSofia ? 1.05 : 0.93;
-    window.speechSynthesis.speak(utt);
-  };
-
-  // Preescucha para la asignación automática inteligente
-  const previewAutomaticLocalSample = (e: React.MouseEvent, gender: 'female' | 'male') => {
-    e.stopPropagation();
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    stopCurrentAudio();
-    const isSofia = gender === 'female';
-    const speakerName = isSofia ? 'Sofía' : 'Mateo';
-    const acoustics = getSpeakerAcoustics(speakerName, isSofia ? '¡Hola!' : '¡Y yo soy Mateo!');
-    const sampleText = isSofia
-      ? '¡Hola! Soy Sofía con modulación automática inteligente. ¡Vamos a repasar juntos hoy!'
-      : '¡Y yo soy Mateo con modulación automática inteligente! Profundizaremos en cada concepto.';
-    const utt = new SpeechSynthesisUtterance(sampleText);
-    if (acoustics.voice) {
-      utt.voice = acoustics.voice;
-      utt.lang = acoustics.voice.lang;
-    } else {
-      utt.lang = 'es-ES';
-    }
-    utt.pitch = acoustics.pitch;
-    utt.rate = acoustics.rateFactor;
-    window.speechSynthesis.speak(utt);
   };
 
   // Preescucha individual de una voz de Azure Neural en el catálogo
@@ -1221,11 +884,8 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     e.stopPropagation();
     setIsTestingVoice(true);
     stopCurrentAudio();
-    const isFemale = voiceOption.gender === 'female';
     const cleanName = voiceOption.name.replace(' Neural', '');
-    const sampleText = isFemale
-      ? `¡Hola! Soy ${cleanName} con la voz natural y emotiva de Microsoft Azure.`
-      : `¡Hola! Soy ${cleanName} con la voz natural y emotiva de Microsoft Azure.`;
+    const sampleText = `¡Hola! Soy ${cleanName} con la voz natural y emotiva de Microsoft Azure.`;
     try {
       const testUrl = await synthesizeAzureEdgeSpeech(sampleText, voiceOption.id);
       let audio = audioPlayerRef.current;
@@ -1245,7 +905,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     }
   };
 
-  // Probar la voz configurada activa (para Sofía o Mateo) en el modal
+  // Probar la voz Azure Neural configurada activa (para Sofía o Mateo) en el modal
   const testVoiceSample = async (speaker: 'sofia' | 'mateo') => {
     setIsTestingVoice(true);
     stopCurrentAudio();
@@ -1255,46 +915,23 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       ? `¡Hola! Soy Sofía en ${theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study'}. ¡Me alegra mucho que estemos repasando juntos hoy!`
       : '¡Y yo soy Mateo! Vamos a profundizar en cada concepto para que apruebes con la máxima nota.';
 
-    if (voiceEngine === 'edge') {
-      try {
-        const voice = isSofia ? edgeSofiaVoice : edgeMateoVoice;
-        const testUrl = await synthesizeAzureEdgeSpeech(text, voice);
-        let audio = audioPlayerRef.current;
-        if (!audio) {
-          audio = new Audio();
-          audioPlayerRef.current = audio;
-        }
-        audio.src = testUrl;
-        audio.playbackRate = 1;
-        audio.onended = () => setIsTestingVoice(false);
-        audio.onerror = () => setIsTestingVoice(false);
-        await audio.play();
-      } catch (err: unknown) {
-        setIsTestingVoice(false);
-        const msg = err instanceof Error ? err.message : String(err);
-        alert('Fallo al probar la voz de Azure Neural: ' + (msg || 'Error de conexión'));
+    try {
+      const voice = isSofia ? edgeSofiaVoice : edgeMateoVoice;
+      const testUrl = await synthesizeAzureEdgeSpeech(text, voice);
+      let audio = audioPlayerRef.current;
+      if (!audio) {
+        audio = new Audio();
+        audioPlayerRef.current = audio;
       }
-    } else {
-      if (!('speechSynthesis' in window)) {
-        setIsTestingVoice(false);
-        alert('Tu navegador no soporta síntesis de voz.');
-        return;
-      }
-      const speakerName = isSofia ? 'Sofía' : 'Mateo';
-      const acoustics = getSpeakerAcoustics(speakerName, text);
-      const utt = new SpeechSynthesisUtterance(text);
-      if (acoustics.voice) {
-        utt.voice = acoustics.voice;
-        utt.lang = acoustics.voice.lang;
-      } else {
-        utt.lang = 'es-ES';
-      }
-      utt.pitch = acoustics.pitch;
-      utt.rate = acoustics.rateFactor;
-      utt.onend = () => setIsTestingVoice(false);
-      utt.onerror = () => setIsTestingVoice(false);
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utt);
+      audio.src = testUrl;
+      audio.playbackRate = 1;
+      audio.onended = () => setIsTestingVoice(false);
+      audio.onerror = () => setIsTestingVoice(false);
+      await audio.play();
+    } catch (err: unknown) {
+      setIsTestingVoice(false);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert('Fallo al probar la voz de Azure Neural: ' + (msg || 'Error de conexión'));
     }
   };
 
@@ -1322,7 +959,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     // Si estamos en el mismo segmento ya cargado y tenemos audio HTML5 ya disponible con duración
     const audio = audioPlayerRef.current;
-    if (voiceEngineRef.current === 'edge' && audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
+    if (audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
       const segmentWords = podcast?.dialogue[target.segmentIndex]
         ? cleanPodcastDialogueText(podcast.dialogue[target.segmentIndex].text).split(/\s+/).filter(Boolean)
         : [];
@@ -1363,7 +1000,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       return;
     }
 
-    // Si cambiamos de segmento o estamos con SpeechSynthesis
+    // Si cambiamos de segmento o recargamos audio Azure Neural
     isManualInterruptionRef.current = true;
     stopCurrentAudio();
     loadedAudioSegmentRef.current = -1;
@@ -1418,7 +1055,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     const audio = audioPlayerRef.current;
     const isSameLoadedSegment = loadedAudioSegmentRef.current === targetSegIdx;
 
-    if (voiceEngineRef.current === 'edge' && audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
+    if (audio && isSameLoadedSegment && audio.duration && Number.isFinite(audio.duration)) {
       isManualInterruptionRef.current = true;
       isAudioSeekingRef.current = true;
 
@@ -1484,9 +1121,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
 
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
     }
     setIsAudioActive(false);
   }, []);
@@ -1569,18 +1203,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       handleSeek(currentLineIndexRef.current + 1);
     }
   };
-
-  // Temporizador anti-congelamiento de SpeechSynthesis en Chromium
-  useEffect(() => {
-    if (!isPlaying || voiceEngineRef.current !== 'browser') return;
-    const interval = setInterval(() => {
-      if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-      }
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [isPlaying]);
 
   // Alternar reproducción
   const handleTogglePlay = useCallback(() => {
@@ -1680,19 +1302,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
     if (audioPlayerRef.current) {
       audioPlayerRef.current.muted = nextMuted;
     }
-    if (isPlaying) {
-      if (nextMuted) {
-        if (voiceEngineRef.current === 'browser') {
-          if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-          }
-        }
-      } else {
-        if (voiceEngineRef.current === 'browser') {
-          speakDialogueLineRef.current?.(currentLineIndexRef.current, currentWordIndexRef.current);
-        }
-      }
-    }
   };
 
   const handleCloseVoiceModal = () => {
@@ -1779,29 +1388,27 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       if (generated?.dialogue && generated.dialogue.length > 0) {
         setRealSegmentDurations({});
         const firstItem = generated.dialogue[0];
-        if (voiceEngine === 'edge') {
-          const voice = getAzureVoiceForSpeaker(firstItem.speaker, edgeSofiaVoice, edgeMateoVoice);
-          synthesizeAzureEdgeSpeech(firstItem.text, voice)
-            .then((url) => {
-              if (isMountedRef.current) {
-                const firstAudio = new Audio();
-                firstAudio.preload = 'auto';
-                firstAudio.src = url;
-                firstAudio.onloadedmetadata = () => {
-                  recordRealSegmentDuration(0, firstAudio.duration);
-                };
-                firstAudio.load();
-                preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
+        const voice = getAzureVoiceForSpeaker(firstItem.speaker, edgeSofiaVoice, edgeMateoVoice);
+        synthesizeAzureEdgeSpeech(firstItem.text, voice)
+          .then((url) => {
+            if (isMountedRef.current) {
+              const firstAudio = new Audio();
+              firstAudio.preload = 'auto';
+              firstAudio.src = url;
+              firstAudio.onloadedmetadata = () => {
+                recordRealSegmentDuration(0, firstAudio.duration);
+              };
+              firstAudio.load();
+              preloadedNextAudioRef.current = { index: 0, audio: firstAudio };
 
-                if (generated.dialogue[1]) {
-                  const secondItem = generated.dialogue[1];
-                  const secondVoice = getAzureVoiceForSpeaker(secondItem.speaker, edgeSofiaVoice, edgeMateoVoice);
-                  prefetchAzureEdgeSpeech(secondItem.text, secondVoice);
-                }
+              if (generated.dialogue[1]) {
+                const secondItem = generated.dialogue[1];
+                const secondVoice = getAzureVoiceForSpeaker(secondItem.speaker, edgeSofiaVoice, edgeMateoVoice);
+                prefetchAzureEdgeSpeech(secondItem.text, secondVoice);
               }
-            })
-            .catch(() => {});
-        }
+            }
+          })
+          .catch(() => {});
       }
     } catch (e) {
       console.error(e);
@@ -1835,22 +1442,13 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
       show={showVoiceModal}
       voiceModalTab={voiceModalTab}
       onTabChange={setVoiceModalTab}
-      voiceEngine={voiceEngine}
-      onSwitchEngine={handleSwitchEngine}
       onClose={handleCloseVoiceModal}
-      voices={voices}
       edgeSofiaVoice={edgeSofiaVoice}
       onSelectEdgeSofiaVoice={setEdgeSofiaVoice}
       edgeMateoVoice={edgeMateoVoice}
       onSelectEdgeMateoVoice={setEdgeMateoVoice}
-      localSofiaVoice={localSofiaVoice}
-      onSelectLocalSofiaVoice={setLocalSofiaVoice}
-      localMateoVoice={localMateoVoice}
-      onSelectLocalMateoVoice={setLocalMateoVoice}
       isTestingVoice={isTestingVoice}
       onPreviewAzureVoice={previewAzureVoiceSample}
-      onPreviewLocalVoice={previewLocalVoice}
-      onPreviewAutomaticLocalSample={previewAutomaticLocalSample}
       onTestVoiceSample={testVoiceSample}
       selectedFormat={selectedFormat}
       onSelectFormat={setSelectedFormat}
@@ -1902,13 +1500,12 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
         onSelectDuration={setSelectedDuration}
         orientationInput={orientationInput}
         onOrientationChange={setOrientationInput}
-        voiceEngine={voiceEngine}
         edgeSofiaVoice={edgeSofiaVoice}
         edgeMateoVoice={edgeMateoVoice}
         isGenerating={isGenerating}
         error={synthesisError}
         onOpenVoiceModal={() => {
-          setVoiceModalTab(voiceEngine === "edge" ? "azure" : "browser");
+          setVoiceModalTab('azure');
           setShowVoiceModal(true);
         }}
         onGeneratePodcast={() => handleGeneratePodcast()}
@@ -1920,7 +1517,6 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   }
 
   if (!currentItem) return null;
-  const speakerAcoustics = getSpeakerAcoustics(currentItem.speaker, currentItem.text);
 
   return (
     <div
@@ -2153,28 +1749,19 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
                       {currentItem.speaker}
                     </span>
                     <div className="flex items-center gap-2">
-                      {voiceEngine === 'edge' ? (
-                        isSynthesizing ? (
-                          <span className={`text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 animate-pulse ${
-                            theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-pink-100 border-pink-200 text-pink-700'
-                          }`}>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            <span>Sintetizando...</span>
-                          </span>
-                        ) : (
-                          <span className={`text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 font-medium ${
-                            theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-                          }`}>
-                            <Headphones className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                            <span>Azure ({/(sofia|chica|mujer|host\b|estudiante)/i.test(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})</span>
-                          </span>
-                        )
+                      {isSynthesizing ? (
+                        <span className={`text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 animate-pulse ${
+                          theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-pink-100 border-pink-200 text-pink-700'
+                        }`}>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Sintetizando...</span>
+                        </span>
                       ) : (
                         <span className={`text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 font-medium ${
                           theme === 'dark' ? 'bg-white/[0.05] border-white/10 text-zinc-300' : 'bg-slate-100 border-slate-200 text-slate-700'
                         }`}>
                           <Headphones className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                          <span className="truncate max-w-[120px]">{speakerAcoustics.voiceName}</span>
+                          <span>Azure ({isFemalePodcastSpeaker(currentItem.speaker) ? (AZURE_EDGE_VOICES.find(v => v.id === edgeSofiaVoice)?.name || 'Elvira') : (AZURE_EDGE_VOICES.find(v => v.id === edgeMateoVoice)?.name || 'Álvaro')})</span>
                         </span>
                       )}
                       <span className={`text-xs font-mono tabular-nums ${

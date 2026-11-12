@@ -4,7 +4,6 @@ import {
   Sparkles,
   Clock,
   Headphones,
-  Volume2,
   Settings2,
   Loader2,
   Check,
@@ -20,7 +19,6 @@ export interface PodcastSetupViewProps {
   onSelectDuration: (d: PodcastDuration) => void;
   orientationInput: string;
   onOrientationChange: (val: string) => void;
-  voiceEngine: 'edge' | 'browser';
   edgeSofiaVoice: string;
   edgeMateoVoice: string;
   isGenerating: boolean;
@@ -55,7 +53,6 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
   onSelectDuration,
   orientationInput,
   onOrientationChange,
-  voiceEngine,
   edgeSofiaVoice,
   edgeMateoVoice,
   isGenerating,
@@ -312,20 +309,14 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
                           : 'bg-white border-slate-200 text-zinc-800'
                       }`}
                     >
-                      {voiceEngine === 'edge' ? (
-                        <Headphones className="w-4 h-4" />
-                      ) : (
-                        <Volume2 className="w-4 h-4" />
-                      )}
+                      <Headphones className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
                       <span className={`text-xs font-bold block truncate ${headingText}`}>
-                        {voiceEngine === 'edge' ? 'Azure Neural (Edge)' : 'Voces del Navegador'}
+                        Azure Neural (Edge)
                       </span>
                       <p className={`text-[11px] truncate ${mutedText}`}>
-                        {voiceEngine === 'edge'
-                          ? `Sofía: ${sofiaName} • Mateo: ${mateoName}`
-                          : 'Sofía (1.25x) • Mateo (0.68x)'}
+                        {`Sofía: ${sofiaName} • Mateo: ${mateoName}`}
                       </p>
                     </div>
                   </div>

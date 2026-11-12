@@ -517,11 +517,6 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (currentMode !== 'podcast') {
       window.dispatchEvent(new CustomEvent('thea_podcast_stop_request'));
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-        } catch (_) {}
-      }
     }
   }, [currentMode]);
 

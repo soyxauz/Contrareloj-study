@@ -547,6 +547,21 @@ export function prefetchAzureEdgeSpeech(text: string, voice: string, rate?: stri
   });
 }
 
+export function isFemalePodcastSpeaker(speaker: string): boolean {
+  const normalized = (speaker || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return /(sofia|chica|mujer|host\b|estudiante)/i.test(normalized);
+}
+
+export function getAzureVoiceForSpeaker(
+  speaker: string,
+  sofiaVoice: string = 'es-ES-ElviraNeural',
+  mateoVoice: string = 'es-ES-AlvaroNeural'
+): string {
+  return isFemalePodcastSpeaker(speaker)
+    ? (sofiaVoice || 'es-ES-ElviraNeural')
+    : (mateoVoice || 'es-ES-AlvaroNeural');
+}
+
 /**
  * Ventana deslizante de pre-carga para todo el podcast.
  * Pre-sintetiza los siguientes turnos de diálogo para garantizar cero pausas entre Sofía y Mateo.
@@ -564,8 +579,7 @@ export function preloadEntireAzurePodcast(
   for (let i = fromIndex; i < endIndex; i++) {
     const item = dialogue[i];
     if (!item || !item.text) continue;
-    const isFemale = /(sofia|chica|mujer|host\b|estudiante)/i.test(item.speaker);
-    const voice = isFemale ? sofiaVoice : mateoVoice;
+    const voice = getAzureVoiceForSpeaker(item.speaker, sofiaVoice, mateoVoice);
     prefetchAzureEdgeSpeech(item.text, voice);
   }
 }

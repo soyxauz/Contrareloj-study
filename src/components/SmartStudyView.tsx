@@ -451,6 +451,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [isAnswered, setIsAnswered] = useState(false);
   const [isCurrentCorrect, setIsCurrentCorrect] = useState<boolean | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isReadAloudLoading, setIsReadAloudLoading] = useState(false);
+  const [readAloudError, setReadAloudError] = useState<string | null>(null);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
 
   // ── Preguntas Reveladas Previamente en Banco ────────────────────────────
@@ -2704,10 +2706,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setIsCurrentCorrect(null);
     setFeedbackGiven(null);
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+    if (activeReadAloudAudioRef.current) {
+      activeReadAloudAudioRef.current.pause();
+      activeReadAloudAudioRef.current = null;
     }
+    setIsReadAloudLoading(false);
+    setIsSpeaking(false);
+    setReadAloudError(null);
   };
 
   /** Persiste de forma atómica y síncrona la transición a la siguiente pregunta o nivel. */
@@ -2942,10 +2947,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setIsCurrentCorrect(null);
     setFeedbackGiven(null);
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+    if (activeReadAloudAudioRef.current) {
+      activeReadAloudAudioRef.current.pause();
+      activeReadAloudAudioRef.current = null;
     }
+    setIsReadAloudLoading(false);
+    setIsSpeaking(false);
+    setReadAloudError(null);
 
     // Actualizar almacenamiento manteniendo las respuestas previas en Historial y marcando resetAt explícito para sync multi-dispositivo
     hasUserInteractedRef.current = true;
@@ -3021,45 +3029,52 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   const activeReadAloudAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Text-to-speech helper con voz Azure Neural de alta fidelidad
-  const handleReadAloud = async (text: string) => {
-    if (isSpeaking) {
+  useEffect(() => {
+    return () => {
       if (activeReadAloudAudioRef.current) {
         activeReadAloudAudioRef.current.pause();
         activeReadAloudAudioRef.current = null;
       }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  // Text-to-speech helper exclusivamente con voz Microsoft Azure Neural
+  const handleReadAloud = async (text: string) => {
+    setReadAloudError(null);
+    if (isSpeaking || isReadAloudLoading) {
+      if (activeReadAloudAudioRef.current) {
+        activeReadAloudAudioRef.current.pause();
+        activeReadAloudAudioRef.current = null;
       }
+      setIsReadAloudLoading(false);
       setIsSpeaking(false);
       return;
     }
 
+    setIsReadAloudLoading(true);
     setIsSpeaking(true);
     try {
       const url = await synthesizeAzureEdgeSpeech(text, 'es-ES-ElviraNeural');
       const audio = new Audio(url);
       activeReadAloudAudioRef.current = audio;
+      setIsReadAloudLoading(false);
       audio.onended = () => {
         setIsSpeaking(false);
         activeReadAloudAudioRef.current = null;
       };
       audio.onerror = () => {
+        setIsReadAloudLoading(false);
         setIsSpeaking(false);
         activeReadAloudAudioRef.current = null;
+        setReadAloudError('No se pudo reproducir el audio con Azure Neural. Verifica tu conexión e inténtalo de nuevo.');
       };
       await audio.play();
     } catch (e) {
-      console.warn('[SmartStudy] Fallo en Azure Neural, usando voz local:', e);
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'es-ES';
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsSpeaking(false);
-      }
+      console.warn('[SmartStudy] Fallo en síntesis Azure Neural:', e);
+      activeReadAloudAudioRef.current = null;
+      setIsReadAloudLoading(false);
+      setIsSpeaking(false);
+      setReadAloudError('No se pudo conectar con la voz Azure Neural. Verifica tu conexión e inténtalo de nuevo.');
     }
   };
 
@@ -3531,13 +3546,34 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                             </button>
                             <button
                               onClick={() => handleReadAloud(effectiveExplanation)}
-                              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-thea-surfaceLight transition-colors"
-                              title="Escuchar explicación"
+                              className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                                isSpeaking || isReadAloudLoading
+                                  ? 'text-white bg-violet-600/80'
+                                  : 'text-slate-400 hover:text-white hover:bg-thea-surfaceLight'
+                              }`}
+                              title={isReadAloudLoading ? 'Cargando audio Azure...' : 'Escuchar explicación con Azure Neural'}
                             >
-                              <Volume2 className="w-4 h-4" />
+                              {isReadAloudLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Volume2 className="w-4 h-4" />
+                              )}
                             </button>
                           </div>
                         </div>
+
+                        {readAloudError && (
+                          <div className="px-2.5 py-1.5 rounded-xl bg-rose-950/50 border border-rose-500/35 text-rose-200 text-[11px] flex items-center justify-between gap-2">
+                            <span className="truncate">{readAloudError}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleReadAloud(effectiveExplanation)}
+                              className="px-2 py-0.5 rounded-md bg-white text-zinc-950 font-bold text-[10px] shrink-0 cursor-pointer active:scale-95"
+                            >
+                              Reintentar
+                            </button>
+                          </div>
+                        )}
 
                         <div className="my-2">
                           <TheaExplanationView
@@ -3988,13 +4024,40 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               <button
                 onClick={() => handleReadAloud(currentQ.explanation)}
                 className={`p-1.5 rounded-lg border border-white/10 text-xs flex items-center transition-colors cursor-pointer ${
-                  isSpeaking ? 'bg-violet-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                  isSpeaking || isReadAloudLoading ? 'bg-violet-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
                 }`}
-                title="Escuchar explicación con voz neural"
+                title={isReadAloudLoading ? 'Cargando audio Azure...' : 'Escuchar explicación con Azure Neural'}
               >
-                <Volume2 className="w-3.5 h-3.5" />
+                {isReadAloudLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5" />
+                )}
               </button>
             </div>
+
+            {readAloudError && (
+              <div className="mb-3 px-3 py-1.5 rounded-xl bg-rose-950/50 border border-rose-500/35 text-rose-200 text-xs flex items-center justify-between gap-2">
+                <span className="truncate">{readAloudError}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleReadAloud(currentQ.explanation)}
+                    className="px-2 py-0.5 rounded-md bg-white text-zinc-950 font-bold text-[11px] cursor-pointer active:scale-95"
+                  >
+                    Reintentar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReadAloudError(null)}
+                    className="p-0.5 rounded opacity-70 hover:opacity-100 cursor-pointer"
+                    aria-label="Cerrar aviso"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Componente réplica exacta Thea: 3 viñetas limpias + imagen con Crédito: Enlace a la fuente */}
             <TheaExplanationView

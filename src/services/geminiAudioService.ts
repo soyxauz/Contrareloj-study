@@ -2,8 +2,10 @@ import { getAISettings, saveAISettings } from './aiService';
 import type { PodcastSettings } from '../types';
 import { authService } from './authService';
 import { safeLocalStorageSetItem } from './storageService';
+import { DEFAULT_PODCAST_SETTINGS, normalizePodcastSettings } from './podcastSettingsNormalizer';
 
 export type { PodcastSettings };
+export { DEFAULT_PODCAST_SETTINGS, normalizePodcastSettings };
 
 /**
  * Servicio de síntesis de voz neuronal con emociones impulsado por Google Gemini Flash Audio.
@@ -202,42 +204,35 @@ export const EDGE_VOICES: EdgeVoiceOption[] = [
   },
 ];
 
-export const DEFAULT_PODCAST_SETTINGS: PodcastSettings = {
-  voiceEngine: 'edge',
-  sofiaVoice: 'Aoede',
-  mateoVoice: 'Puck',
-  edgeSofiaVoice: 'es-ES-ElviraNeural',
-  edgeMateoVoice: 'es-ES-AlvaroNeural',
-  localSofiaVoice: '',
-  localMateoVoice: '',
-  playbackSpeed: 1,
-  geminiApiKey: '',
-  orientation: '',
-};
-
 const PODCAST_SETTINGS_KEY = 'contrareloj_podcast_settings';
 const PODCAST_SETTINGS_LEGACY_KEY = 'thea_podcast_settings';
 
 /**
  * Obtiene la configuración de Podcast persistida (local y compatible con multicuenta).
+ * Garantiza que voiceEngine sea siempre 'edge' (Azure Neural).
  */
 export function getPodcastSettings(): PodcastSettings {
-  let settings: PodcastSettings = { ...DEFAULT_PODCAST_SETTINGS };
+  let rawParsed: Record<string, unknown> | null = null;
+  let hadLegacyEngine = false;
   try {
     const raw = typeof localStorage !== 'undefined'
       ? (localStorage.getItem(PODCAST_SETTINGS_KEY) || localStorage.getItem(PODCAST_SETTINGS_LEGACY_KEY))
       : null;
     if (raw) {
-      const parsed = JSON.parse(raw);
-      settings = { ...settings, ...parsed };
+      rawParsed = JSON.parse(raw);
+      hadLegacyEngine = Boolean(rawParsed && typeof rawParsed === 'object' && rawParsed.voiceEngine !== 'edge');
     }
   } catch (e) {
     console.warn('[GeminiAudio] Error al leer ajustes de podcast locales:', e);
   }
 
-  // Si el ajuste almacenado era 'gemini', migrar automáticamente a 'edge' (Azure Neural)
-  if (settings.voiceEngine === 'gemini') {
-    settings.voiceEngine = 'edge';
+  const settings = normalizePodcastSettings(rawParsed);
+
+  // Migrar en disco cualquier ajuste antiguo ('browser' o 'gemini') a 'edge'
+  if (hadLegacyEngine) {
+    try {
+      safeLocalStorageSetItem(PODCAST_SETTINGS_KEY, JSON.stringify(settings));
+    } catch {}
   }
 
   // Si no tiene apiKey pero existe en AISettings o standalone, integrarla
@@ -250,13 +245,15 @@ export function getPodcastSettings(): PodcastSettings {
 
 /**
  * Guarda la configuración de Podcast de forma reactiva y multicuenta.
+ * Fuerza siempre Azure Neural ('edge') como único motor de voz disponible.
  */
 export function savePodcastSettings(partial: Partial<PodcastSettings>): PodcastSettings {
   const current = getPodcastSettings();
-  const updated: PodcastSettings = {
+  const updated: PodcastSettings = normalizePodcastSettings({
     ...current,
     ...partial,
-  };
+    voiceEngine: 'edge',
+  });
 
   try {
     safeLocalStorageSetItem(PODCAST_SETTINGS_KEY, JSON.stringify(updated));

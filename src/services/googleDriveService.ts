@@ -22,6 +22,7 @@ import {
 import { isSmoothScrollActive } from '../utils/smoothScroll';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, type AISettings } from './aiService';
 import { getPodcastSettings, savePodcastSettings } from './geminiAudioService';
+import { normalizePodcastSettings } from './podcastSettingsNormalizer';
 import {
   getStoredCustomMaterias,
   saveCustomMaterias,
@@ -487,13 +488,16 @@ function computeAISettingsDigest(settings: AISettings): string {
 }
 
 function computePodcastSettingsDigest(settings: PodcastSettings): string {
+  const normalized = normalizePodcastSettings(settings);
   return JSON.stringify({
-    voiceEngine: settings.voiceEngine || '',
-    playbackSpeed: settings.playbackSpeed || 1,
-    sofiaVoice: settings.sofiaVoice || '',
-    mateoVoice: settings.mateoVoice || '',
-    geminiApiKey: settings.geminiApiKey || '',
-    orientation: settings.orientation || '',
+    voiceEngine: normalized.voiceEngine,
+    playbackSpeed: normalized.playbackSpeed || 1,
+    sofiaVoice: normalized.sofiaVoice || '',
+    mateoVoice: normalized.mateoVoice || '',
+    edgeSofiaVoice: normalized.edgeSofiaVoice || '',
+    edgeMateoVoice: normalized.edgeMateoVoice || '',
+    geminiApiKey: normalized.geminiApiKey || '',
+    orientation: normalized.orientation || '',
   });
 }
 
@@ -2055,10 +2059,17 @@ export const googleDriveService = {
                 saveAISettings(u.aiSettings);
               }
             }
-            if (u.podcastSettings) {
-              authService.saveUserPodcastSettings(u.id, u.podcastSettings);
+            const normalizedUserPodcast = u.podcastSettings
+              ? normalizePodcastSettings(u.podcastSettings)
+              : undefined;
+            if (normalizedUserPodcast) {
+              authService.saveUserPodcastSettings(u.id, normalizedUserPodcast);
             }
-            mergedMap.set(u.id, { ...localU, ...u });
+            mergedMap.set(u.id, {
+              ...localU,
+              ...u,
+              ...(normalizedUserPodcast ? { podcastSettings: normalizedUserPodcast } : {}),
+            });
           }
           authService.setRawStoredUsers(Array.from(mergedMap.values()));
         }
@@ -2173,19 +2184,24 @@ export const googleDriveService = {
           this.uploadOrUpdateJson(token!, rootFolderId, 'thea_ai_settings.json', localAISettings).catch(() => {});
         }
 
-        // 8. Procesar ajustes de Podcast
+        // 8. Procesar ajustes de Podcast (normalizando cualquier 'browser'/'gemini' heredado a 'edge')
         if (remotePodcastSettings && typeof remotePodcastSettings === 'object') {
-          savePodcastSettings(remotePodcastSettings);
-          lastSyncedPodcastDigest = computePodcastSettingsDigest(getPodcastSettings());
+          const hadLegacyEngine = (remotePodcastSettings as { voiceEngine?: string }).voiceEngine !== 'edge';
+          const normalizedRemote = savePodcastSettings(remotePodcastSettings);
+          lastSyncedPodcastDigest = computePodcastSettingsDigest(normalizedRemote);
           if (userId) {
-            authService.saveUserPodcastSettings(userId, remotePodcastSettings);
+            authService.saveUserPodcastSettings(userId, normalizedRemote);
           }
-          if (remotePodcastSettings.geminiApiKey && remotePodcastSettings.geminiApiKey.trim().length > 0) {
-            safeLocalStorageSetItem('contrareloj_gemini_api_key', remotePodcastSettings.geminiApiKey.trim());
+          if (hadLegacyEngine && token && rootFolderId) {
+            const targetFileName = podcastSettingsFile?.name || 'thea_podcast_settings.json';
+            this.uploadOrUpdateJson(token, rootFolderId, targetFileName, normalizedRemote).catch(() => {});
+          }
+          if (normalizedRemote.geminiApiKey && normalizedRemote.geminiApiKey.trim().length > 0) {
+            safeLocalStorageSetItem('contrareloj_gemini_api_key', normalizedRemote.geminiApiKey.trim());
             const currAi = getAISettings();
             saveAISettings({
               ...currAi,
-              geminiApiKey: remotePodcastSettings.geminiApiKey.trim(),
+              geminiApiKey: normalizedRemote.geminiApiKey.trim(),
             });
           }
         } else {
@@ -2841,7 +2857,7 @@ export const googleDriveService = {
    * Sube inmediatamente la configuración de Podcast a Google Drive solo si hubo cambios reales.
    */
   async syncPodcastSettingsToDrive(overrideSettings?: PodcastSettings): Promise<boolean> {
-    const podcastSettings = overrideSettings || getPodcastSettings();
+    const podcastSettings = normalizePodcastSettings(overrideSettings || getPodcastSettings());
     const digest = computePodcastSettingsDigest(podcastSettings);
     if (lastSyncedPodcastDigest && digest === lastSyncedPodcastDigest) {
       return true;
