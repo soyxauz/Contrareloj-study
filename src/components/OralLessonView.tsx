@@ -22,6 +22,7 @@ import { askTheaAI, getGroqKeyPool, pickActiveGroqKey, GROQ_WHISPER_MODEL } from
 import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { FormattedText } from './FormattedText';
 import { startWhisperRecording, isWhisperMicSupported, isMeaningfulSpeech, type WhisperRecording } from '../services/whisperMic';
+import { PersistentSpeechPlayer } from '../utils/mobileAudioPlayer';
 
 interface OralLessonViewProps {
   kit: StudyKit;
@@ -191,8 +192,15 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   messagesRef.current = messages;
 
   const recognitionRef = useRef<any>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioResolveRef = useRef<(() => void) | null>(null);
+  const speechPlayerRef = useRef<PersistentSpeechPlayer | null>(null);
+  const getSpeechPlayer = (): PersistentSpeechPlayer => {
+    if (!speechPlayerRef.current) {
+      speechPlayerRef.current = new PersistentSpeechPlayer();
+    }
+    return speechPlayerRef.current;
+  };
+  const blockedSpeechRef = useRef<string>('');
+  const [hasBlockedVoice, setHasBlockedVoice] = useState(false);
   const speakToken = useRef(0);
   const handleSendRef = useRef<(display: string, prompt?: string) => Promise<void>>(async () => {});
 
@@ -228,6 +236,8 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
       stopSpeaking();
       stopBargeInListener();
       stopListening(false);
+      speechPlayerRef.current?.dispose();
+      speechPlayerRef.current = null;
       isListeningDesiredRef.current = false;
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
@@ -257,6 +267,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
         e.preventDefault();
         e.stopPropagation();
         if (e.repeat) return;
+        getSpeechPlayer().unlock();
 
         // 1. Si Thea está hablando: la tecla Espacio la pausa e inicia el micrófono de inmediato para hablar
         if (speakingRef.current) {
@@ -325,42 +336,16 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   const stopSpeaking = () => {
     speakToken.current++;
     stopBargeInListener();
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current.src = '';
-      } catch {}
-      audioRef.current = null;
-    }
-    if (audioResolveRef.current) {
-      audioResolveRef.current();
-      audioResolveRef.current = null;
-    }
+    speechPlayerRef.current?.stop();
     setSpeaking(false);
   };
 
-  const playUrl = (url: string) =>
-    new Promise<void>((resolve) => {
-      const a = new Audio(url);
-      audioRef.current = a;
-      audioResolveRef.current = resolve;
-      a.onended = () => {
-        if (audioRef.current === a) audioRef.current = null;
-        resolve();
-      };
-      a.onerror = () => {
-        if (audioRef.current === a) audioRef.current = null;
-        resolve();
-      };
-      a.play().catch(() => {
-        if (audioRef.current === a) audioRef.current = null;
-        resolve();
-      });
-    });
+  const playUrl = (url: string) => getSpeechPlayer().play(url);
 
   const speak = async (text: string): Promise<boolean> => {
     stopSpeaking();
+    blockedSpeechRef.current = '';
+    setHasBlockedVoice(false);
     const token = ++speakToken.current;
     const chunks = splitForSpeech(text).slice(0, 6);
     if (chunks.length === 0) return false;
@@ -395,12 +380,35 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
           setVoiceError('No se pudo conectar con la voz Azure Neural. Verifica tu conexión e inténtalo de nuevo.');
           return false;
         }
-        await playUrl(url);
+        const outcome = await playUrl(url);
+        if (outcome === 'stopped' || token !== speakToken.current) {
+          stopBargeInListener();
+          return false;
+        }
+        if (outcome === 'blocked') {
+          blockedSpeechRef.current = chunks.slice(i).join(' ');
+          setHasBlockedVoice(true);
+          setVoiceError('Toca "Escuchar respuesta" para continuar la narración en este navegador.');
+          return false;
+        }
       }
       return token === speakToken.current;
     } finally {
       stopBargeInListener();
       if (token === speakToken.current) setSpeaking(false);
+    }
+  };
+
+  const replayBlockedSpeech = async () => {
+    getSpeechPlayer().unlock();
+    const pending = blockedSpeechRef.current || lastTheaStatementRef.current;
+    if (!pending || !voiceOnRef.current) return;
+    blockedSpeechRef.current = '';
+    setHasBlockedVoice(false);
+    setVoiceError('');
+    const finished = await speak(pending);
+    if (finished && handsFreeRef.current && (SR || useWhisperRef.current)) {
+      startListening();
     }
   };
 
@@ -693,6 +701,7 @@ export const OralLessonView: React.FC<OralLessonViewProps> = ({
   startListeningRef.current = startListening;
 
   const toggleMic = () => {
+    getSpeechPlayer().unlock();
     if (listening) {
       stopListening(true);
     } else {
@@ -878,7 +887,10 @@ Reglas obligatorias estrictas:
   const isInitialState = messages.length <= 1;
 
   return (
-    <div className="relative max-w-4xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 h-full flex flex-col justify-between min-h-0 overflow-hidden select-none">
+    <div
+      onPointerDownCapture={() => getSpeechPlayer().unlock()}
+      className="relative max-w-4xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 h-full flex flex-col justify-between min-h-0 overflow-hidden select-none"
+    >
       {/* Fondo ambiental dinámico con aura pulsante en el centro */}
       <div
         className={`absolute inset-0 -z-10 blur-3xl transition-all duration-1000 pointer-events-none ${
@@ -1231,6 +1243,22 @@ Reglas obligatorias estrictas:
                 </span>
               )}
             </p>
+          )}
+
+          {/* Botón de desbloqueo/reproducción manual si el navegador bloqueó el audio automático */}
+          {hasBlockedVoice && (
+            <button
+              type="button"
+              onClick={replayBlockedSpeech}
+              className={`mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-xs font-semibold transition-[transform,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer active:scale-[0.97] ${
+                theme === 'dark'
+                  ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/50 text-amber-200'
+                  : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-950'
+              }`}
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Escuchar respuesta</span>
+            </button>
           )}
 
           {/* Aviso normal de voz si existiera */}
