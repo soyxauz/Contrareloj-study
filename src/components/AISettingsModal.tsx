@@ -29,7 +29,6 @@ import {
   Cpu,
   ExternalLink,
   Settings,
-  Mic,
 } from 'lucide-react';
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
@@ -503,18 +502,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   {rotationSummary.hasDistinctPair ? 'Rotación 2 claves activa' : 'Configura 2 claves distintas'}
                 </span>
               </div>
-            </div>
-
-            <div className={`text-[11px] leading-relaxed space-y-1 ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>
-              <p>
-                <strong className={strongText}>Toda la IA:</strong> usa <strong className={strongText}>Qwen</strong> en API 1 → API 2 y al agotarse salta automáticamente a <strong className={strongText}>GPT-OSS 120B</strong> en API 1 → API 2.
-              </p>
-              <p className="flex items-start gap-1.5">
-                <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                <span className="min-w-0">
-                  <strong className={strongText}>Lección Oral (Voz):</strong> prioriza siempre <strong className={strongText}>Whisper</strong> desde la <strong className={strongText}>API 2</strong> (usando API 1 únicamente si API 2 falta o agota su cuota).
-                </span>
-              </p>
             </div>
 
             {rotationSummary.generalCascade.length > 0 && (
