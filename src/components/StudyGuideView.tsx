@@ -81,7 +81,6 @@ import { StudyGuideScanner } from './StudyGuideScanner';
 import { useTheme } from '../services/themeService';
 import { ConceptPopover } from './ConceptPopover';
 import { extractGlossaryConcepts, type GlossaryConcept } from '../utils/glossaryExtractor';
-import { HierarchicalLinkPill } from './HierarchicalLinkPill';
 import { syncBrowserHierarchicalUrl } from '../utils/hierarchicalLink';
 
 interface StudyGuideViewProps {
@@ -507,12 +506,6 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Rehacer con diferente extensión</span>
               </button>
-
-              {/* Píldora de Enlace Jerárquico Thea (⑂ thea.study/study/:kitId) */}
-              <HierarchicalLinkPill
-                mode="study"
-                kitId={kit.id}
-              />
 
               {/* Smart Edit */}
               <button

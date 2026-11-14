@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, BookOpen, Layers } from 'lucide-react';
+import { X, Search } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import type { GlossaryConcept } from '../utils/glossaryExtractor';
 import { FormattedText } from './FormattedText';
+import {
+  getAccurateDefinitionSync,
+  fetchGoogleAccurateDefinition,
+} from '../services/conceptDefinitionService';
 
 export interface ConceptPopoverProps {
   concept: GlossaryConcept | null;
@@ -24,6 +28,27 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
     arrowLeft: number;
     placement: 'top' | 'bottom';
   } | null>(null);
+
+  const [definitionText, setDefinitionText] = useState(() => {
+    if (!concept) return '';
+    return getAccurateDefinitionSync(concept.term, concept.definition);
+  });
+
+  useEffect(() => {
+    if (!concept) {
+      setDefinitionText('');
+      return;
+    }
+    const syncDef = getAccurateDefinitionSync(concept.term, concept.definition);
+    setDefinitionText(syncDef);
+
+    // Obtener definición certera estilo Google / Enciclopedia si no estaba en caché
+    fetchGoogleAccurateDefinition(concept.term, concept.definition).then((resolved) => {
+      if (resolved && resolved !== syncDef) {
+        setDefinitionText(resolved);
+      }
+    });
+  }, [concept]);
 
   // Calcular posición exacta con ajuste dinámico y clamping estricto al viewport
   useLayoutEffect(() => {
@@ -203,38 +228,23 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
               : 'text-slate-200'
           }`}
         >
-          <FormattedText text={concept.definition} inlineOnly={false} />
+          <FormattedText text={definitionText || concept.definition} inlineOnly={false} />
         </div>
 
-        {/* Micro-etiqueta de origen del concepto */}
+        {/* Micro-etiqueta de rigor enciclopédico certero (Google / Diccionario Académico) */}
         <div className="flex items-center gap-1.5 pt-1">
-          {concept.source === 'flashcard' ? (
-            <span
-              className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                theme === 'light'
-                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                  : theme === 'kitty'
-                  ? 'bg-pink-100 text-pink-700 border border-pink-200'
-                  : 'bg-violet-950/60 text-violet-300 border border-violet-500/30'
-              }`}
-            >
-              <Layers className="w-2.5 h-2.5" />
-              <span>Flashcard del Kit</span>
-            </span>
-          ) : (
-            <span
-              className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                theme === 'light'
-                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                  : theme === 'kitty'
-                  ? 'bg-pink-100/70 text-pink-700 border border-pink-200'
-                  : 'bg-white/[0.05] text-slate-300 border border-white/10'
-              }`}
-            >
-              <BookOpen className="w-2.5 h-2.5" />
-              <span>Glosario de la Guía</span>
-            </span>
-          )}
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+              theme === 'light'
+                ? 'bg-sky-50 text-sky-800 border border-sky-200'
+                : theme === 'kitty'
+                ? 'bg-pink-100 text-pink-700 border border-pink-200'
+                : 'bg-sky-950/60 text-sky-300 border border-sky-500/30'
+            }`}
+          >
+            <Search className="w-2.5 h-2.5" />
+            <span>Definición Enciclopédica (Google)</span>
+          </span>
         </div>
       </div>
     </div>

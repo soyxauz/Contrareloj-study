@@ -1,4 +1,5 @@
 import type { StudyKit } from '../types';
+import { getAccurateDefinitionSync } from '../services/conceptDefinitionService';
 
 export interface GlossaryConcept {
   term: string;
@@ -160,9 +161,10 @@ export function extractGlossaryConcepts(kit: StudyKit, markdownText?: string): G
 
       const lower = cleanTerm.toLowerCase();
       if (!map.has(lower)) {
+        const accurateDef = getAccurateDefinitionSync(cleanTerm, cleanDefinitionSentence(rawDef));
         map.set(lower, {
           term: cleanTerm,
-          definition: cleanDefinitionSentence(rawDef),
+          definition: accurateDef,
           source: 'flashcard',
         });
       }
@@ -186,9 +188,10 @@ export function extractGlossaryConcepts(kit: StudyKit, markdownText?: string): G
       if (isValidConceptTerm(cleanTerm) && rawDef.length >= 15) {
         const lower = cleanTerm.toLowerCase();
         if (!map.has(lower)) {
+          const accurateDef = getAccurateDefinitionSync(cleanTerm, cleanDefinitionSentence(rawDef));
           map.set(lower, {
             term: cleanTerm,
-            definition: cleanDefinitionSentence(rawDef),
+            definition: accurateDef,
             source: 'guide',
           });
         }
@@ -204,9 +207,10 @@ export function extractGlossaryConcepts(kit: StudyKit, markdownText?: string): G
       if (isValidConceptTerm(cleanTerm) && rawDef.length >= 15) {
         const lower = cleanTerm.toLowerCase();
         if (!map.has(lower)) {
+          const accurateDef = getAccurateDefinitionSync(cleanTerm, cleanDefinitionSentence(rawDef));
           map.set(lower, {
             term: cleanTerm,
-            definition: cleanDefinitionSentence(rawDef),
+            definition: accurateDef,
             source: 'guide',
           });
         }
