@@ -26,7 +26,208 @@ const STOP_WORDS = new Set([
   'y', 'e', 'o', 'u', 'que', 'se', 'su', 'sus', 'es', 'son', 'fue', 'eran',
 ]);
 
+// Diccionario de alta confusión médica y biológica (antónimos, dianas funcionales, direcciones e iones)
+const CONFUSION_PAIRS: Record<string, string[]> = {
+  // Canales, Receptores, Transportadores y Estructuras
+  canales: ['receptores', 'transportadores', 'bombas', 'poros', 'complejos'],
+  canal: ['receptor', 'transportador', 'poro', 'complejo'],
+  receptores: ['canales', 'transportadores', 'ligandos', 'moduladores'],
+  receptor: ['canal', 'transportador', 'ligando', 'modulador'],
+  transportadores: ['canales', 'receptores', 'bombas', 'transportadores'],
+  transportador: ['canal', 'receptor', 'poro', 'portador'],
+  bombas: ['canales', 'transportadores', 'receptores'],
+  bomba: ['canal', 'transportador', 'receptor'],
+  subunidades: ['cadenas', 'dominios', 'porciones', 'complejos'],
+  subunidad: ['cadena', 'dominio', 'porción'],
+  enzima: ['hormona', 'proteína', 'coenzima', 'sustrato'],
+  enzimas: ['hormonas', 'proteínas', 'coenzimas', 'sustratos'],
+  hormona: ['enzima', 'neurotransmisor', 'péptido', 'proteína'],
+  hormonas: ['enzimas', 'neurotransmisores', 'péptidos', 'proteínas'],
+
+  // Acciones y Verbos en 3ra persona singular (-e / -a)
+  cierra: ['abre', 'bloquea', 'inactiva', 'estimula', 'activa'],
+  abre: ['cierra', 'bloquea', 'activa', 'despolariza'],
+  inhibe: ['estimula', 'activa', 'promueve', 'induce', 'aumenta'],
+  estimula: ['inhibe', 'bloquea', 'suprime', 'reduce', 'detiene'],
+  activa: ['inactiva', 'bloquea', 'inhibe', 'degrada', 'fosforila'],
+  inactiva: ['activa', 'fosforila', 'estimula', 'induce'],
+  bloquea: ['activa', 'estimula', 'abre', 'facilita', 'promueve'],
+  aumenta: ['disminuye', 'reduce', 'mantiene', 'neutraliza'],
+  disminuye: ['aumenta', 'incrementa', 'potencia', 'eleva'],
+  reduce: ['aumenta', 'incrementa', 'potencia', 'mantiene'],
+  incrementa: ['reduce', 'disminuye', 'inhibe'],
+  secreta: ['absorbe', 'almacena', 'capta', 'degrada', 'sintetiza'],
+  libera: ['retiene', 'almacena', 'capta', 'fija'],
+  degrada: ['sintetiza', 'produce', 'fosforila', 'almacena'],
+  sintetiza: ['degrada', 'hidroliza', 'metaboliza', 'libera'],
+  promueve: ['inhibe', 'limita', 'bloquea', 'dificulta'],
+  induce: ['previene', 'bloquea', 'suprime', 'reprime'],
+  previene: ['induce', 'facilita', 'promueve'],
+  fosforila: ['desfosforila', 'inactiva', 'degrada', 'metaboliza'],
+  transloca: ['degrada', 'internaliza', 'recicla', 'fija'],
+  une: ['separa', 'disocia', 'libera', 'degrada'],
+  unión: ['disociación', 'separación', 'liberación', 'escisión'],
+
+  // Localizaciones y Direcciones Biológicas
+  intracelular: ['extracelular', 'mitocondrial', 'citosólico', 'nuclear', 'plasmático'],
+  extracelular: ['intracelular', 'intersticial', 'citosólico', 'plasmático'],
+  intracelulares: ['extracelulares', 'mitocondriales', 'citosólicos'],
+  extracelulares: ['intracelulares', 'intersticiales', 'citosólicos'],
+  citosólico: ['mitocondrial', 'nuclear', 'membranal', 'extracelular'],
+  citosólica: ['mitocondrial', 'nuclear', 'membranal', 'extracelular'],
+  mitocondrial: ['citosólico', 'nuclear', 'lisosomal', 'intracelular'],
+  mitocondriales: ['citosólicos', 'nucleares', 'lisosomales'],
+  hepática: ['muscular', 'renal', 'pancreática', 'adiposa'],
+  hepático: ['muscular', 'renal', 'pancreático', 'adiposo'],
+  hepáticas: ['musculares', 'renales', 'pancreáticas', 'adiposas'],
+  muscular: ['hepática', 'adiposa', 'renal', 'pancreática'],
+  musculares: ['hepáticas', 'adiposas', 'renales'],
+  adiposa: ['hepática', 'muscular', 'endotelial'],
+  adiposo: ['hepático', 'muscular', 'endotelial'],
+  renal: ['hepática', 'pancreática', 'gástrica'],
+  renales: ['hepáticas', 'pancreáticas', 'gástricas'],
+  proximal: ['distal', 'medial', 'intermedio'],
+  distal: ['proximal', 'medial', 'apical'],
+  apical: ['basolateral', 'basal', 'luminal'],
+  basolateral: ['apical', 'luminal', 'basal'],
+
+  // Modificadores y Propiedades Farmacológicas
+  dependiente: ['independiente', 'mediado', 'asociado', 'regulado'],
+  independiente: ['dependiente', 'mediado', 'regulado'],
+  dependientes: ['independientes', 'mediados', 'regulados'],
+  independientes: ['dependientes', 'mediados', 'regulados'],
+  sensibles: ['resistentes', 'insensibles', 'específicos'],
+  sensible: ['resistente', 'insensible', 'específico'],
+  resistentes: ['sensibles', 'susceptibles', 'específicos'],
+  resistente: ['sensible', 'susceptible', 'específico'],
+  agonista: ['antagonista', 'inhibidor', 'modulador', 'bloqueador'],
+  antagonista: ['agonista', 'modulador', 'activador'],
+  agonistas: ['antagonistas', 'inhibidores', 'bloqueadores'],
+  antagonistas: ['agonistas', 'moduladores', 'activadores'],
+  rápida: ['lenta', 'prolongada', 'intermedia', 'ultrarrápida'],
+  rápido: ['lento', 'prolongado', 'intermedio', 'ultrarrápido'],
+  ultrarrápida: ['intermedia', 'prolongada', 'lenta'],
+  ultrarrápido: ['intermedio', 'prolongado', 'lento'],
+  prolongada: ['rápida', 'intermedia', 'corta', 'ultrarrápida'],
+  prolongado: ['rápido', 'intermedio', 'corto', 'ultrarrápido'],
+  intermedia: ['rápida', 'prolongada', 'ultrarrápida'],
+  lenta: ['rápida', 'inmediata', 'precoz'],
+  primera: ['segunda', 'tercera', 'última'],
+  segunda: ['primera', 'tercera'],
+
+  // Sustancias e Iones Clave
+  potasio: ['sodio', 'calcio', 'cloro', 'magnesio'],
+  sodio: ['potasio', 'calcio', 'cloro'],
+  calcio: ['potasio', 'sodio', 'magnesio'],
+  glucosa: ['glucógeno', 'insulina', 'lactato', 'fructosa'],
+  insulina: ['glucagón', 'somatostatina', 'amilina', 'cortisol'],
+  glucagón: ['insulina', 'adrenalina', 'somatostatina'],
+  glucogénesis: ['gluconeogénesis', 'glucogenólisis', 'glucólisis'],
+  gluconeogénesis: ['glucogenólisis', 'glucogénesis', 'glucólisis'],
+  glucogenólisis: ['gluconeogénesis', 'glucogénesis', 'glucólisis'],
+  glucólisis: ['gluconeogénesis', 'glucogénesis', 'lipólisis'],
+
+  // Sustantivos médicos terminados en -ción / -miento
+  secreción: ['captación', 'producción', 'absorción', 'degradación', 'liberación'],
+  captación: ['secreción', 'producción', 'excreción', 'liberación'],
+  producción: ['degradación', 'captación', 'secreción', 'síntesis'],
+  degradación: ['síntesis', 'producción', 'captación', 'activación'],
+  absorción: ['secreción', 'excreción', 'eliminación'],
+  translocación: ['fosforilación', 'activación', 'degradación', 'migración'],
+  fosforilación: ['desfosforilación', 'translocación', 'metilación', 'activación'],
+  proliferación: ['apoptosis', 'diferenciación', 'migración'],
+  apoptosis: ['necrosis', 'proliferación', 'supervivencia'],
+  almacenamiento: ['liberación', 'consumo', 'utilización'],
+};
+
 const cleanWord = (w: string) => w.replace(/[.,;:()¿?¡!]/g, '').trim();
+
+// Puntuación de idoneidad para convertir una palabra en hueco clave y confuso
+const scoreCandidateWord = (word: string): number => {
+  const cw = cleanWord(word).toLowerCase();
+  if (STOP_WORDS.has(cw) || cw.length < 4 || /^\d+$/.test(cw)) return -1;
+
+  let score = 1;
+  // Palabras con pares de confusión médicos definidos (máxima prioridad)
+  if (CONFUSION_PAIRS[cw]) score += 14;
+  for (const list of Object.values(CONFUSION_PAIRS)) {
+    if (list.includes(cw)) {
+      score += 10;
+      break;
+    }
+  }
+
+  // Verbos de acción o sufijos biológicos determinantes
+  if (/(?:e|a|ar|ir|er|ando|endo)$/.test(cw) && cw.length >= 5) score += 3;
+  if (/(?:ción|sión|miento|idad|ismo)$/.test(cw)) score += 4;
+  if (/(?:ales|ores|antes|entes|icos|icas)$/.test(cw)) score += 5;
+
+  return score;
+};
+
+// Generación de distractores que comparten categoría gramatical y crean duda genuina
+const getSmartDistractors = (
+  rawWord: string,
+  kitVocabulary: string[],
+  alreadyUsed: Set<string>
+): string[] => {
+  const cleanTarget = cleanWord(rawWord);
+  const lowerTarget = cleanTarget.toLowerCase();
+  const distractors: string[] = [];
+
+  const addCandidate = (cand: string) => {
+    const cleanCand = cleanWord(cand);
+    const lowerCand = cleanCand.toLowerCase();
+    if (!lowerCand || lowerCand === lowerTarget || alreadyUsed.has(lowerCand)) return;
+
+    // Respetar mayúscula inicial si la palabra original estaba al inicio de frase
+    const formatted = cleanTarget[0] === cleanTarget[0].toUpperCase() && cleanTarget.length > 1
+      ? cleanCand.charAt(0).toUpperCase() + cleanCand.slice(1).toLowerCase()
+      : cleanCand.toLowerCase();
+
+    distractors.push(formatted);
+    alreadyUsed.add(lowerCand);
+  };
+
+  // 1. Coincidencia directa en CONFUSION_PAIRS
+  if (CONFUSION_PAIRS[lowerTarget]) {
+    const candidates = [...CONFUSION_PAIRS[lowerTarget]].sort(() => Math.random() - 0.5);
+    candidates.forEach(addCandidate);
+  }
+
+  // 2. Búsqueda inversa en los valores de CONFUSION_PAIRS
+  if (distractors.length < 3) {
+    for (const [key, values] of Object.entries(CONFUSION_PAIRS)) {
+      if (values.includes(lowerTarget)) {
+        addCandidate(key);
+        [...values].sort(() => Math.random() - 0.5).forEach(addCandidate);
+      }
+    }
+  }
+
+  // 3. Concordancia morfológica / gramatical estricta con el vocabulario del kit
+  if (distractors.length < 3) {
+    const isPlural = lowerTarget.endsWith('s') || lowerTarget.endsWith('es');
+    const endsWithCion = lowerTarget.endsWith('ción') || lowerTarget.endsWith('cion');
+    const endsWithIca = lowerTarget.endsWith('ica') || lowerTarget.endsWith('ico');
+    const endsWithTe = lowerTarget.endsWith('te') || lowerTarget.endsWith('tes');
+
+    const grammaticalMatches = kitVocabulary.filter(w => {
+      const lw = cleanWord(w).toLowerCase();
+      if (lw.length < 4 || lw === lowerTarget || STOP_WORDS.has(lw) || /^\d+$/.test(lw)) return false;
+      if (isPlural && !(lw.endsWith('s') || lw.endsWith('es'))) return false;
+      if (!isPlural && (lw.endsWith('s') || lw.endsWith('es'))) return false;
+      if (endsWithCion && !lw.endsWith('ción') && !lw.endsWith('cion')) return false;
+      if (endsWithIca && !lw.endsWith('ica') && !lw.endsWith('ico')) return false;
+      if (endsWithTe && !lw.endsWith('te') && !lw.endsWith('tes')) return false;
+      return true;
+    }).sort(() => Math.random() - 0.5);
+
+    grammaticalMatches.forEach(addCandidate);
+  }
+
+  return distractors.slice(0, 3);
+};
 
 const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
 const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
@@ -85,49 +286,41 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
       targetBlankCount = 1;
     }
 
-    // Identify candidate positions to convert to blanks (exclude stop words, pure numbers, and very short words)
-    const eligibleIndices: number[] = [];
-    rawWords.forEach((w, idx) => {
-      const cw = cleanWord(w).toLowerCase();
-      if (cw.length >= 4 && !STOP_WORDS.has(cw) && !/^\d+$/.test(cw)) {
-        eligibleIndices.push(idx);
-      }
-    });
+    // Kit vocabulary for contextual distractor matching
+    const kitVocabulary = validCards
+      .flatMap(c => getCardDef(c).split(/\s+/))
+      .map(cleanWord)
+      .filter(w => w.length >= 4 && !STOP_WORDS.has(w.toLowerCase()) && !/^\d+$/.test(w));
 
-    if (eligibleIndices.length === 0) {
-      rawWords.forEach((w, idx) => {
-        if (cleanWord(w).length >= 4 && !/^\d+$/.test(cleanWord(w))) {
-          eligibleIndices.push(idx);
-        }
-      });
-    }
+    // Score and rank all candidate words by clinical/conceptual relevance and confusion potential
+    const scoredCandidates = rawWords
+      .map((w, idx) => ({ idx, word: w, score: scoreCandidateWord(w) }))
+      .filter(c => c.score > 0);
 
-    // Pick blanks ensuring:
-    // 1. Strictly NO consecutive blanks (every blank must have surrounding visible words)
-    // 2. The first word is kept visible in short sentences (< 10 words) as an anchor
-    const shuffledEligible = [...eligibleIndices].sort(() => Math.random() - 0.5);
+    // Sort descending by score, adding small random factor to vary between rounds of the same card
+    scoredCandidates.sort((a, b) => (b.score + Math.random() * 2) - (a.score + Math.random() * 2));
+
     const chosenBlankIndices = new Set<number>();
-
-    for (const idx of shuffledEligible) {
+    for (const cand of scoredCandidates) {
       if (chosenBlankIndices.size >= targetBlankCount) break;
 
-      // Rule: strictly no consecutive blanks
-      if (chosenBlankIndices.has(idx - 1) || chosenBlankIndices.has(idx + 1)) {
+      // Rule 1: strictly NO consecutive blanks
+      if (chosenBlankIndices.has(cand.idx - 1) || chosenBlankIndices.has(cand.idx + 1)) {
         continue;
       }
 
-      // Keep first word as anchor in shorter sentences
-      if (idx === 0 && totalWords < 10 && chosenBlankIndices.size === 0 && eligibleIndices.some(c => c > 0)) {
+      // Rule 2: keep first word as visible anchor in short sentences (< 10 words) if alternatives exist
+      if (cand.idx === 0 && totalWords < 10 && chosenBlankIndices.size === 0 && scoredCandidates.some(c => c.idx > 0)) {
         continue;
       }
 
-      chosenBlankIndices.add(idx);
+      chosenBlankIndices.add(cand.idx);
     }
 
-    // Fallback: if none chosen, pick one non-first candidate or middle
-    if (chosenBlankIndices.size === 0 && eligibleIndices.length > 0) {
-      const nonFirst = eligibleIndices.find(idx => idx > 0);
-      chosenBlankIndices.add(nonFirst !== undefined ? nonFirst : eligibleIndices[0]);
+    // Fallback if none qualified
+    if (chosenBlankIndices.size === 0 && rawWords.length > 0) {
+      const mid = Math.floor(rawWords.length / 2);
+      chosenBlankIndices.add(mid);
     }
 
     const parsedTokens: BlankToken[] = rawWords.map((rawWord, idx) => {
@@ -148,22 +341,32 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
       }
     });
 
-    // Gather 4-6 balanced distractor words from other flashcard definitions
-    const otherDefs = validCards
-      .filter(c => c.id !== target.id)
-      .map(c => getCardDef(c))
-      .join(' ')
-      .split(/\s+/)
-      .map(cleanWord)
-      .filter(w => w.length >= 4 && !STOP_WORDS.has(w.toLowerCase()) && !/^\d+$/.test(w));
+    // Generate high-confusion, grammatically matched distractors tailored for EACH blank
+    const alreadyUsed = new Set<string>(correctWords.map(w => w.toLowerCase()));
+    const smartDistractors: string[] = [];
 
-    const uniqueDistractors = Array.from(new Set(otherDefs))
-      .filter(w => !correctWords.some(cw => cw.toLowerCase() === w.toLowerCase()))
-      .sort(() => Math.random() - 0.5)
-      .slice(0, Math.min(6, Math.max(4, 7 - correctWords.length)));
+    correctWords.forEach(correctW => {
+      const tailored = getSmartDistractors(correctW, kitVocabulary, alreadyUsed);
+      // Seleccionar 2 competidores directos de alta confusión por cada hueco
+      tailored.slice(0, 2).forEach(d => smartDistractors.push(d));
+    });
 
-    // Combined word bank of 6 to 8 chips (clean, focused, not overwhelming)
-    const bankItems = [...correctWords, ...uniqueDistractors]
+    // Asegurar un total equilibrado de 3 a 6 distractores (banco total de 6 a 9 chips)
+    const targetDistractorCount = Math.max(3, Math.min(6, correctWords.length * 2));
+    if (smartDistractors.length < targetDistractorCount) {
+      const fallbackCandidates = kitVocabulary
+        .filter(w => !alreadyUsed.has(w.toLowerCase()))
+        .sort(() => Math.random() - 0.5);
+
+      for (const cand of fallbackCandidates) {
+        if (smartDistractors.length >= targetDistractorCount) break;
+        smartDistractors.push(cand.toLowerCase());
+        alreadyUsed.add(cand.toLowerCase());
+      }
+    }
+
+    // Combined word bank of 5 to 7 chips (focused, challenging, highly plausible)
+    const bankItems = [...correctWords, ...smartDistractors]
       .sort(() => Math.random() - 0.5)
       .map((w, idx) => ({
         id: `chip-${idx}-${w}`,
