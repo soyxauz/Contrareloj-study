@@ -57,6 +57,8 @@ import {
   createInitialSocraticProfile,
   updateSocraticProfileOnAnswer,
   resolveNextSocraticTarget,
+  isTopicInRecent,
+  normalizeTopicKey,
   type SocraticSessionProfile
 } from '../engine/socraticEngine';
 import { FormattedText } from './FormattedText';
@@ -611,6 +613,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // Referencia para barajado inteligente de categorías (evita rachas monótonas consecutivas)
   const recentCategoriesRef = useRef<(keyof SmartStudyTypeFilters)[]>([]);
+
+  // Referencia para rotación activa de temas (evita preguntas repetidas del mismo tema en ráfagas - A2)
+  const recentTopicsRef = useRef<string[]>([]);
+  // Referencia para amortiguador entre intervenciones socráticas (mínimo 3 preguntas normales entre intervenciones - A3)
+  const lastSocraticTriggerIndexRef = useRef<number>(-999);
 
   // ── Respuestas Abiertas Cortas (Short Answer) ──────────────────────────
   const [shortAnswerInput, setShortAnswerInput] = useState<string>(wasPreviouslyAnswered ? '' : (savedSession?.shortAnswerInput || ''));
@@ -1248,15 +1255,35 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       return queue[0];
     }
 
-    // Comprobar si hay una intervención socrática lista que no sea la actual ni haya sido ya completada
-    const socraticTarget = resolveNextSocraticTarget(socraticProfile, targetIndex);
+    // Helper interno para sellar y registrar el tema de la pregunta elegida (A2: memoria de rotación de temas)
+    const finalizeQuestionSelection = (q: Question): Question => {
+      const sanitized = sanitizeQuestionStructure(q, kit.questions);
+      if (sanitized.topic) {
+        recentTopicsRef.current = [...recentTopicsRef.current.slice(-2), normalizeTopicKey(sanitized.topic)];
+      }
+      return sanitized;
+    };
+
+    // A3: Comprobar si hay una intervención socrática lista, respetando:
+    // 1. Amortiguador mínimo de 3 preguntas normales entre intervenciones consecutivas
+    // 2. Que el tema de la intervención no sea idéntico al tema de la pregunta recién respondida
+    const canTriggerSocratic = (targetIndex - lastSocraticTriggerIndexRef.current) >= 3;
+    const lastAnsweredTopic = recentTopicsRef.current.length > 0
+      ? recentTopicsRef.current[recentTopicsRef.current.length - 1]
+      : undefined;
+
+    const socraticTarget = canTriggerSocratic
+      ? resolveNextSocraticTarget(socraticProfile, targetIndex, lastAnsweredTopic)
+      : null;
+
     if (
       socraticTarget &&
       socraticTarget.reformulatedQuestion &&
       socraticTarget.reformulatedQuestion.id !== excludeQuestionId &&
       !completedSocraticIdsRef.current.has(socraticTarget.reformulatedQuestion.id)
     ) {
-      return socraticTarget.reformulatedQuestion;
+      lastSocraticTriggerIndexRef.current = targetIndex;
+      return finalizeQuestionSelection(socraticTarget.reformulatedQuestion);
     }
 
     // Distribución aleatoria inteligente (shuffle no repetitivo) entre los formatos activos (tuerca)
@@ -1288,6 +1315,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Shuffle de índices para exploración aleatoria impredecible del banco disponible
     const shuffledIndices = Array.from({ length: pool.length }, (_, i) => i).sort(() => Math.random() - 0.5);
 
+    // A2: Rotación activa de 3 temas (Anti-Monotonía)
+    // Reordenar los índices barajados para que las preguntas cuyos temas NO pertenezcan a los últimos 3 temas vistos
+    // se evalúen con máxima prioridad, evitando que el alumno vea preguntas repetidas del mismo tema en seguidilla.
+    const activeRecentTopics = recentTopicsRef.current;
+    if (activeRecentTopics.length > 0) {
+      shuffledIndices.sort((a, b) => {
+        const aRecent = isTopicInRecent(pool[a]?.topic, activeRecentTopics) ? 1 : 0;
+        const bRecent = isTopicInRecent(pool[b]?.topic, activeRecentTopics) ? 1 : 0;
+        return aRecent - bRecent;
+      });
+    }
+
     if (shouldPreferFalseConcept) {
       for (const i of shuffledIndices) {
         const candidate = pool[i];
@@ -1297,7 +1336,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           getCategoryForQuestion(candidate) === targetCat &&
           isFalseConceptQuestion(candidate)
         ) {
-          return sanitizeQuestionStructure(candidate, kit.questions);
+          return finalizeQuestionSelection(candidate);
         }
       }
     }
@@ -1312,7 +1351,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         getCategoryForQuestion(candidate) === targetCat &&
         (!shouldPreferFalseConcept ? !isFalseConceptQuestion(candidate) : true)
       ) {
-        return sanitizeQuestionStructure(candidate, kit.questions);
+        return finalizeQuestionSelection(candidate);
       }
     }
 
@@ -1324,7 +1363,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         !isQuestionAnswered(candidate.id) &&
         getCategoryForQuestion(candidate) === targetCat
       ) {
-        return sanitizeQuestionStructure(candidate, kit.questions);
+        return finalizeQuestionSelection(candidate);
       }
     }
 
@@ -1342,7 +1381,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         !isQuestionAnswered(candidate.id) &&
         safeActiveCategories.includes(getCategoryForQuestion(candidate))
       ) {
-        return sanitizeQuestionStructure(candidate, kit.questions);
+        return finalizeQuestionSelection(candidate);
       }
     }
 
@@ -1350,7 +1389,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (candidate.id !== excludeQuestionId && !isQuestionAnswered(candidate.id)) {
-        return sanitizeQuestionStructure(candidate, kit.questions);
+        return finalizeQuestionSelection(candidate);
       }
     }
 
@@ -1358,20 +1397,20 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     checkAndPrefetchQuestions(targetLevel, targetIndex);
     const unansInKit = kit.questions.find(q => q.id !== excludeQuestionId && !isQuestionAnswered(q.id));
     if (unansInKit) {
-      return sanitizeQuestionStructure(unansInKit, kit.questions);
+      return finalizeQuestionSelection(unansInKit);
     }
 
     // Prioridad 4: Si absolutamente todas las preguntas del kit han sido respondidas, elegir la del pool distinta a la excluida
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (candidate.id !== excludeQuestionId) {
-        return sanitizeQuestionStructure(candidate, kit.questions);
+        return finalizeQuestionSelection(candidate);
       }
     }
 
     // Prioridad 5: En kit general
     const randomKitQ = kit.questions.find(q => q.id !== excludeQuestionId) || kit.questions[0];
-    return sanitizeQuestionStructure(randomKitQ, kit.questions);
+    return finalizeQuestionSelection(randomKitQ);
   }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory, isFalseConceptQuestion, checkAndPrefetchQuestions]);
 
   // Pregunta activa fijada en estado: NUNCA cambia por efectos secundarios en segundo plano
@@ -2350,7 +2389,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       currentQ,
       correct,
       userAnswerText,
-      currentIndex
+      currentIndex,
+      kit.questions.length
     );
     setSocraticProfile(updatedProfile);
 
