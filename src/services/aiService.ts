@@ -4464,13 +4464,14 @@ export function normalizeStudyGuideBullets(text: string): string {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const trimmed = line.trim();
     const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
 
-    // Detectar viñeta de primer nivel que actúa como título/categoría (termina en ':' o va seguida de sub-viñetas con sangría)
-    const topLevelHeaderBullet = line.match(/^[-*+]\s+(\*{0,2}[A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][^\n:]+\*{0,2}:?\s*)$/);
-    const hasIndentedNextBullet = /^(\s{2,}|\t)[-*+]\s+/.test(nextLine);
+    // 1. Detectar viñeta de primer nivel que actúa como título/categoría (termina en ':' o va seguida de sub-viñetas con sangría)
+    const topLevelHeaderBullet = line.match(/^[-*+•]\s+(\*{0,2}[A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][^\n:]+\*{0,2}:?\s*)$/);
+    const hasIndentedNextBullet = /^(\s{2,}|\t)[-*+•]\s+/.test(nextLine);
 
-    if (topLevelHeaderBullet && (line.trim().endsWith(':') || hasIndentedNextBullet)) {
+    if (topLevelHeaderBullet && (trimmed.endsWith(':') || hasIndentedNextBullet)) {
       const title = topLevelHeaderBullet[1].replace(/[:*]/g, '').trim();
       result.push('');
       result.push(`### ${title}`);
@@ -4478,12 +4479,29 @@ export function normalizeStudyGuideBullets(text: string): string {
       continue;
     }
 
-    // Detectar sub-viñetas con sangría que definen propiedades clave (ej. '  * Mecanismo: ...' o '  * Efectos Adversos: ...')
-    const indentedProperty = line.match(/^(\s{2,}|\t)[-*+]\s+(\*{0,2}[A-Za-zÁÉÍÓÚáéíóúñÑ\s/]{3,35}:?\*{0,2}:?\s*)(.*)$/);
+    // 2. Detectar sub-viñetas con sangría que definen propiedades clave (ej. '  * Mecanismo: ...' o '  * **Efectos:** ...')
+    const indentedProperty = line.match(/^(\s{2,}|\t)[-*+•]\s+\*{0,2}([^*:\n]{2,50}?)\*{0,2}(?::\*\*|\*\*:\s*|\*\*\s*:|:\s*|\s*:)\s*(.+)$/);
     if (indentedProperty) {
       const propName = indentedProperty[2].replace(/[:*]/g, '').trim();
       const propVal = indentedProperty[3].trim();
-      result.push(`**${propName}:** ${propVal}`);
+      result.push(`* **${propName}:** ${propVal}`);
+      continue;
+    }
+
+    // 3. Aplanar cualquier otra sub-viñeta anidada a viñeta limpia de primer nivel
+    const indentedGeneric = line.match(/^(\s{2,}|\t)[-*+•]\s+(.+)$/);
+    if (indentedGeneric) {
+      result.push(`* ${indentedGeneric[2].trim()}`);
+      continue;
+    }
+
+    // 4. Si encontramos líneas de propiedades en negrita al inicio de línea sin viñeta, agregarles viñeta
+    // (ej: '**Mecanismo de acción:** Activa...' o '**Contraindicaciones**: TFG...')
+    const plainProperty = trimmed.match(/^\*\*([^*:\n]{2,50}?)(?::\*\*|\*\*:\s*|\*\*\s*:)\s*(.+)$/);
+    if (plainProperty && !line.startsWith('>') && !line.startsWith('#') && !line.startsWith('|')) {
+      const propName = plainProperty[1].replace(/[:*]/g, '').trim();
+      const propVal = plainProperty[2].trim();
+      result.push(`* **${propName}:** ${propVal}`);
       continue;
     }
 
@@ -4524,10 +4542,12 @@ export function stripExecutiveSummaryPreamble(markdownText: string): string {
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
 
-const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO OBLIGATORIO (Markdown + KaTeX) — CERO VIÑETAS EXCESIVAS:
-- REDACCIÓN EN PROSA ACADÉMICA Y SUBTÍTULOS: Desarrolla cada concepto, clase, fármaco, artículo o mecanismo en párrafos continuos, fluidos y explicativos (de 2 a 5 líneas) bajo subtítulos temáticos estructurados (ej. '### Metformina (Biguanidas)').
-- PROHIBIDO EL ABUSO DE VIÑETAS Y LISTAS ANIDADAS: Queda terminantemente PROHIBIDO estructurar el texto como una sucesión interminable de viñetas (* o -) o crear árboles de viñetas anidadas (* Concepto: / * Mecanismo: / * Efectos:).
-- USO ESTRICTAMENTE RESTRINGIDO DE VIÑETAS: Las viñetas (* o -) están permitidas ÚNICAMENTE para enumeraciones breves e indispensables (máximo 3 a 4 ítems homogéneos, por ejemplo: criterios diagnósticos específicos, contraindicaciones absolutas puntuales o tríadas sintomáticas). Todo lo demás debe redactarse en párrafos explicativos o tablas.
+const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO Y EQUILIBRADO (Markdown + KaTeX):
+- EQUILIBRIO ENTRE PROSA Y VIÑETAS (MÁXIMA CLARIDAD): Evita tanto los bloques densos de texto corrido que cansan la vista como las cascadas infinitas de viñetas anidadas.
+  * Encabezados claros: Estructura cada tema con subtítulos '### [Nombre del Concepto/Tema]'.
+  * Introducción concisa: Escribe 1 o 2 oraciones introductorias en prosa fluida que enmarquen el concepto.
+  * Viñetas didácticas de primer nivel: Desglosa mecanismos, propiedades, criterios, contraindicaciones, efectos adversos o pasos usando viñetas simples y legibles con prefijo en negrita (ej. '* **Mecanismo:** ...', '* **Efectos:** ...', '* **Criterio clínico:** ...').
+  * Cero anidamiento profundo: Mantén las viñetas en un único nivel limpio sin crear árboles de sangrías multinivel.
 - TABLAS COMPARATIVAS MARKDOWN OBLIGATORIAS: Cuando compares entidades, clasificaciones, mecanismos, vías de acción o efectos adversos, utiliza SIEMPRE tablas comparativas completas en Markdown con formato estricto:
   | Columna 1 | Columna 2 | Columna 3 |
   | :--- | :--- | :--- |
@@ -4703,7 +4723,7 @@ ESTRUCTURA DE LA FASE 1:
 (Principios basales, taxonomía, definiciones formales, fórmulas/cadenas causales y cuadro resumen inicial en Markdown)
 
 ## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección / Diapositiva por Diapositiva)
-(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original estructurado mediante subtítulos '### [Nombre del Tema]', párrafos continuos de prosa explicativa en español y tablas comparativas. PROHIBIDO estructurar el contenido como listas anidadas de viñetas; usa prosa fluida, conceptos en negrita y bloques \`> **Perla Clave:**\`)`;
+(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original estructurado mediante subtítulos '### [Nombre del Tema]', una breve contextualización en prosa y viñetas didácticas limpias de primer nivel '* **Propiedad/Mecanismo:** Detalle' para que el texto sea ágil de leer sin ser un bloque denso ni una cascada de listas anidadas, además de tablas comparativas y bloques \`> **Perla Clave:**\`)`;
 
     const phase1User = `DOCUMENTO ORIGINAL ("${title}" - ${category}):
 ${effectiveStudyInput}
@@ -4803,11 +4823,11 @@ ${STUDY_GUIDE_RICH_FORMAT_RULES}
 
 ESTRUCTURA DEL MÓDULO 2:
 ## 3. Desarrollo Sistemático Minucioso (Diapositiva por Diapositiva / Sección por Sección)
-(Desarrolla cada sección o subtema con subtítulo '### [Nombre del Tema]', redactando en párrafos continuos de prosa académica explicativa, tablas comparativas y fórmulas KaTeX. CERO listas anidadas de viñetas:
-- Explica el mecanismo detallado, fisiología o derivación en párrafos redactados fluidos.
-- Desarrolla implicaciones prácticas y clínicas con rigor explicativo.
+(Desarrolla cada sección o subtema con subtítulo '### [Nombre del Tema]', combinando párrafos breves de contextualización, viñetas didácticas limpias de primer nivel '* **Aspecto Clave:** explicación' para propiedades/mecanismos/efectos/criterios, tablas comparativas y fórmulas KaTeX. Evita bloques densos de puro texto y evita listas anidadas con sangrías profundas:
+- Explica el mecanismo detallado, fisiología o derivación con viñetas claras o tablas.
+- Desarrolla implicaciones prácticas y clínicas con rigor explicativo y lectura ágil.
 - Emplea tablas Markdown para contrastar fármacos, entidades o clasificaciones.
-- Reserva viñetas simples solo para listas breves de 3-4 criterios o contraindicaciones puntuales).`;
+- Utiliza viñetas directas de primer nivel con prefijo en negrita para desglosar características y criterios).`;
 
   const p2User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
 ${effectiveStudyInput}
