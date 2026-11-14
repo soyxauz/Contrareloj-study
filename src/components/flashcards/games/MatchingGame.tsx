@@ -216,8 +216,12 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
           const isEvaluating = evaluatingPair?.id1 === item.id || evaluatingPair?.id2 === item.id;
           const isCorrectPair = isEvaluating && evaluatingPair?.isCorrect;
           const isWrongPair = isEvaluating && !evaluatingPair?.isCorrect;
+          const isTerm = item.type === 'term';
 
-          let cardStyle = 'bg-[#181033]/90 hover:bg-[#23174a] border-white/[0.09] text-slate-100 hover:border-purple-400/50';
+          // Estilo base diferenciado: los conceptos en ROJO VINO prominente, las definiciones en azul oscuro/noche
+          let cardStyle = isTerm
+            ? 'bg-[#220715]/95 hover:bg-[#320a1f] border-[#9f1239]/50 hover:border-[#f43f5e]/80 text-[#ffe4e6] shadow-[0_8px_24px_-4px_rgba(159,18,57,0.3),inset_0_1px_0_rgba(255,180,200,0.18)]'
+            : 'bg-[#130d26]/95 hover:bg-[#1c1438] border-white/[0.1] hover:border-purple-400/50 text-slate-200 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.08)]';
 
           if (item.isMatched) {
             cardStyle = 'opacity-0 scale-95 pointer-events-none';
@@ -226,7 +230,9 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
           } else if (isWrongPair) {
             cardStyle = 'bg-rose-600/40 border-rose-400 text-rose-100 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-shake';
           } else if (isSelected) {
-            cardStyle = 'bg-[#29174d] border-purple-400 text-white ring-2 ring-purple-400/50 scale-[1.02] shadow-lg';
+            cardStyle = isTerm
+              ? 'bg-[#3d0b23] border-[#f43f5e] text-white ring-2 ring-[#f43f5e]/70 shadow-[0_0_25px_rgba(244,63,94,0.45)] scale-[1.02]'
+              : 'bg-[#271545] border-purple-400 text-white ring-2 ring-purple-400/60 shadow-[0_0_25px_rgba(168,85,247,0.4)] scale-[1.02]';
           }
 
           return (
@@ -235,11 +241,11 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
               type="button"
               disabled={item.isMatched || evaluatingPair !== null}
               onClick={() => handleItemClick(item)}
-              className={`p-3.5 sm:p-5 rounded-2xl border min-h-[135px] sm:min-h-[145px] flex items-center justify-center text-center transition-all duration-200 cursor-pointer shadow-md ${cardStyle}`}
+              className={`p-3.5 sm:p-5 rounded-2xl border min-h-[135px] sm:min-h-[145px] flex items-center justify-center text-center transition-[transform,background-color,border-color,box-shadow,opacity] duration-200 active:scale-[0.98] cursor-pointer shadow-md ${cardStyle}`}
             >
               <div className={`font-semibold leading-relaxed w-full flex items-center justify-center ${
-                item.type === 'term'
-                  ? 'text-sm sm:text-base text-purple-200 font-bold'
+                isTerm
+                  ? 'text-sm sm:text-base text-[#fecdd3] font-extrabold tracking-tight drop-shadow-sm'
                   : (item.text.length > 90
                       ? 'text-xs text-slate-200 font-normal leading-snug'
                       : 'text-xs sm:text-sm text-slate-200 font-normal leading-normal')

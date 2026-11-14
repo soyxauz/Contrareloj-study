@@ -391,12 +391,14 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
                 <div
                   key={card.id}
                   onClick={() => handleSelectCard(card)}
-                  className={`p-4 sm:p-5 rounded-2xl border min-h-[110px] flex flex-col justify-between relative transition-all duration-150 cursor-pointer shadow-md ${
+                  className={`p-4 sm:p-5 rounded-2xl border min-h-[110px] flex flex-col justify-between relative transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 active:scale-[0.985] cursor-pointer shadow-md ${
                     isEliminated
                       ? 'bg-[#120c24]/50 border-white/[0.04] opacity-35 text-slate-500 line-through'
                       : isSelectingAnswer
-                      ? 'bg-[#221644] border-purple-400 hover:scale-[1.02] text-white shadow-purple-500/20 ring-1 ring-purple-400'
-                      : 'bg-[#181033]/90 hover:bg-[#23174a] border-white/[0.09] text-slate-100 hover:border-purple-400/50'
+                      ? 'bg-[#3b0b21] border-rose-400 hover:scale-[1.02] text-white shadow-rose-500/20 ring-1 ring-rose-400'
+                      : showDefinitions
+                      ? 'bg-[#181033]/90 hover:bg-[#23174a] border-white/[0.09] text-slate-100 hover:border-purple-400/50'
+                      : 'bg-[#200714]/90 hover:bg-[#2e091d] border-[#9f1239]/50 hover:border-[#f43f5e]/70 text-[#fecdd3]'
                   }`}
                 >
                   {/* Eye Toggle Elimination Button in Top Right */}
@@ -411,7 +413,7 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
 
                   {/* Card Content: Term or Definition */}
                   <div className="pr-6 mt-1 flex items-center justify-center flex-1 text-center w-full">
-                    <div className={`font-semibold leading-snug w-full ${showDefinitions ? 'text-xs text-slate-200 font-normal max-h-[140px] overflow-y-auto custom-scrollbar' : 'text-sm sm:text-base text-slate-100'}`}>
+                    <div className={`font-semibold leading-snug w-full ${showDefinitions ? 'text-xs text-slate-200 font-normal max-h-[140px] overflow-y-auto custom-scrollbar' : 'text-sm sm:text-base text-[#fecdd3] font-bold'}`}>
                       <FormattedText text={showDefinitions ? maskTermInDefinition(cardTerm, cardDef) : cardTerm} inlineOnly />
                     </div>
                   </div>

@@ -354,9 +354,9 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
           </div>
         </div>
 
-        {/* Target Term in centered bold purple/lavender matching Screenshot 6 */}
+        {/* Target Term in centered bold Rojo Vino */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-[#c084fc] tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-[#fecdd3] tracking-tight drop-shadow-sm">
             {currentCard ? <FormattedText text={getCardTerm(currentCard)} inlineOnly /> : 'Cargando...'}
           </h2>
         </div>

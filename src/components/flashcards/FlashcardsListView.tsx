@@ -241,7 +241,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
               <div className="flex-1 text-sm sm:text-base leading-relaxed">
                 {displayMode === 'all' && (
                   <div>
-                    <strong className="text-white font-bold"><FormattedText text={term} inlineOnly /></strong>
+                    <strong className="text-[#fecdd3] font-bold"><FormattedText text={term} inlineOnly /></strong>
                     <span className="text-slate-400 mx-2 font-normal">|</span>
                     <span className="text-slate-300 font-normal"><FormattedText text={def} inlineOnly /></span>
                   </div>
@@ -249,7 +249,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
 
                 {displayMode === 'hide-defs' && (
                   <div>
-                    <strong className="text-white font-bold"><FormattedText text={term} inlineOnly /></strong>
+                    <strong className="text-[#fecdd3] font-bold"><FormattedText text={term} inlineOnly /></strong>
                   </div>
                 )}
 
