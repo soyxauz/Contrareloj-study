@@ -153,27 +153,27 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-3 sm:py-6 animate-fadeIn text-slate-100">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn text-slate-100">
       {/* Top Header Bar matching Screenshot 2 & Thea */}
-      <div className="flex items-center justify-between mb-8 pb-3">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 pb-2">
         <button
           type="button"
           onClick={() => {
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
         >
           <ArrowLeft className="w-4 h-4 text-slate-300" />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-white">
+        <div className="flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-white">
           <Copy className="w-5 h-5 text-indigo-400" />
           <span>Coincidencias</span>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-semibold tabular-nums">
+        <div className="flex items-center gap-2.5 sm:gap-3 text-xs font-semibold tabular-nums">
           <span className="px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.1] text-slate-300">
             Fallos: <strong className="text-rose-400 ml-1">{mistakes}</strong>
           </span>
@@ -184,7 +184,7 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
       </div>
 
       {/* Grid of Matching Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3 max-w-4xl lg:max-w-5xl mx-auto w-full">
         {items.map(item => {
           const isSelected = selectedId === item.id;
           const isEvaluating = evaluatingPair?.id1 === item.id || evaluatingPair?.id2 === item.id;
@@ -215,14 +215,14 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
               type="button"
               disabled={item.isMatched || evaluatingPair !== null}
               onClick={() => handleItemClick(item)}
-              className={`p-3.5 sm:p-5 rounded-2xl border min-h-[135px] sm:min-h-[145px] flex items-center justify-center text-center transition-[transform,background-color,border-color,box-shadow,opacity] duration-200 active:scale-[0.98] cursor-pointer shadow-md ${cardStyle}`}
+              className={`p-2.5 sm:p-3.5 rounded-2xl border min-h-[96px] sm:min-h-[108px] lg:min-h-[114px] flex items-center justify-center text-center transition-[transform,background-color,border-color,box-shadow,opacity] duration-200 active:scale-[0.98] cursor-pointer shadow-md ${cardStyle}`}
             >
-              <div className={`font-semibold leading-relaxed w-full flex items-center justify-center ${
+              <div className={`font-semibold leading-snug w-full flex items-center justify-center ${
                 isTerm
-                  ? 'text-sm sm:text-base text-[#fecdd3] font-extrabold tracking-tight drop-shadow-sm'
+                  ? 'text-sm sm:text-[15px] text-[#fecdd3] font-black tracking-tight drop-shadow-sm'
                   : (item.text.length > 90
-                      ? 'text-xs text-slate-200 font-normal leading-snug'
-                      : 'text-xs sm:text-sm text-slate-200 font-normal leading-normal')
+                      ? 'text-[11.5px] sm:text-xs text-slate-200 font-medium leading-tight'
+                      : 'text-xs sm:text-[13px] text-slate-200 font-medium leading-snug')
               }`}>
                 <FormattedText text={item.text} inlineOnly />
               </div>

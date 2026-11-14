@@ -242,39 +242,39 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-3 sm:py-6 animate-fadeIn text-slate-100">
+    <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn text-slate-100">
       {/* Top Header Bar matching Screenshot 4 */}
-      <div className="flex items-center justify-between mb-6 pb-2">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 pb-2">
         <button
           type="button"
           onClick={() => {
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
         >
           <ArrowLeft className="w-4 h-4 text-slate-300" />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-white">
+        <div className="flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-white">
           <MessageSquare className="w-5 h-5 text-indigo-400" />
           <span>Adivina el Término</span>
         </div>
 
-        <div className="w-24" /> {/* Spacer */}
+        <div className="w-20" /> {/* Spacer */}
       </div>
 
       {/* Main Grid: Left Chat Panel (4 cols) | Right Candidates Board (8 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* Left Column: AI Chat & Action Buttons */}
-        <div className="lg:col-span-4 flex flex-col gap-4">
-          <p className="text-sm text-slate-300 font-medium leading-relaxed">
+        <div className="lg:col-span-4 flex flex-col gap-3">
+          <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
             Haz preguntas de sí o no en el chat para deducir el término secreto.
           </p>
 
           {/* Chat Box Container */}
-          <div className="rounded-3xl bg-[#140e2b]/95 border border-white/[0.12] p-4 flex flex-col h-[380px] shadow-2xl relative">
+          <div className="rounded-2xl bg-[#140e2b]/95 border border-white/[0.12] p-3 sm:p-4 flex flex-col h-[330px] sm:h-[350px] shadow-2xl relative">
             {/* Scrollable messages history */}
             <div ref={chatScrollRef} className="flex-1 overflow-y-auto space-y-3 pr-1.5 custom-scrollbar">
               {chatMessages.map(msg => (
@@ -381,7 +381,7 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
           </div>
 
           {/* 3-column scrollable grid of Candidate Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 max-h-[560px] overflow-y-auto pr-1.5 custom-scrollbar">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[430px] sm:max-h-[460px] overflow-y-auto pr-1.5 custom-scrollbar">
             {candidateCards.map(card => {
               const isEliminated = eliminatedIds.has(card.id);
               const cardTerm = getCardTerm(card);

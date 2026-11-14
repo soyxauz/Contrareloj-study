@@ -108,9 +108,9 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
   const masteredCount = deck.filter(c => c.mastery === 'mastered').length;
 
   return (
-    <div className="w-full max-w-4xl mx-auto py-2 px-2 sm:px-4 pb-16 sm:pb-12 animate-fadeIn text-slate-100 flex flex-col items-center">
+    <div className="w-full max-w-3xl mx-auto py-1 sm:py-2 px-2 sm:px-4 flex-1 flex flex-col items-center justify-center animate-fadeIn text-slate-100">
       {/* Top Stats & Progress Bar */}
-      <div className="w-full max-w-2xl flex items-center justify-between mb-3 text-xs font-semibold tabular-nums text-slate-400">
+      <div className="w-full max-w-2xl flex items-center justify-between mb-2 text-xs font-semibold tabular-nums text-slate-400">
         <div>
           Tarjeta <strong className="text-white text-sm">{currentIdx + 1}</strong> de {deck.length}
         </div>
@@ -132,7 +132,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
       </div>
 
       {/* Progress Line */}
-      <div className="w-full max-w-2xl h-1.5 bg-white/[0.08] rounded-full overflow-hidden mb-5">
+      <div className="w-full max-w-2xl h-1.5 bg-white/[0.08] rounded-full overflow-hidden mb-3.5">
         <div
           className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-200"
           style={{ width: `${((currentIdx + 1) / deck.length) * 100}%` }}
@@ -140,14 +140,14 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
       </div>
 
       {/* ── AUTÉNTICA PERSPECTIVA 3D QUE VOLTEA LA TARJETA SUAVEMENTE ── */}
-      <div className="perspective-card w-full max-w-2xl h-[280px] sm:h-[320px] md:h-[350px] max-h-[50vh]">
+      <div className="perspective-card w-full max-w-2xl h-[250px] sm:h-[280px] md:h-[300px] max-h-[46vh]">
         <div
           onClick={handleFlip}
           className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group h-full rounded-3xl relative`}
         >
           {/* CARA FRONTAL (TÉRMINO O CONCEPTO - EN ROJO VINO) */}
           <div
-            className="card-face rounded-3xl bg-[#200714]/95 hover:bg-[#2e091d] border border-[#9f1239]/50 hover:border-[#f43f5e]/70 p-6 sm:p-10 shadow-2xl flex flex-col justify-between select-none"
+            className="card-face rounded-3xl bg-[#200714]/95 hover:bg-[#2e091d] border border-[#9f1239]/50 hover:border-[#f43f5e]/70 p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none"
             style={{
               boxShadow: '0 12px 40px rgba(159, 18, 57, 0.25), inset 0 1px 0 rgba(255, 180, 200, 0.18)',
             }}
@@ -161,7 +161,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             </div>
 
             {/* Card Main Term */}
-            <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
+            <div className="my-auto text-center py-3 overflow-y-auto max-h-[28vh]">
               <div className="text-xl sm:text-2xl md:text-3xl text-[#ffe4e6] font-black tracking-tight leading-relaxed drop-shadow-sm">
                 <FormattedText text={currentCard ? getCardTerm(currentCard) : ''} inlineOnly />
               </div>
@@ -187,7 +187,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
 
           {/* CARA TRASERA (DEFINICIÓN - SOLO EL CONCEPTO PURO SIN VIÑETAS) */}
           <div
-            className="card-face card-back rounded-3xl bg-[#16102c]/95 hover:bg-[#1b1338] border border-white/[0.12] hover:border-purple-400/40 p-6 sm:p-10 shadow-2xl flex flex-col justify-between select-none"
+            className="card-face card-back rounded-3xl bg-[#16102c]/95 hover:bg-[#1b1338] border border-white/[0.12] hover:border-purple-400/40 p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none"
             style={{
               boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
             }}
@@ -228,7 +228,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
       </div>
 
       {/* Navigation & Mastery Controls */}
-      <div className="w-full max-w-2xl mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+      <div className="w-full max-w-2xl mt-3 sm:mt-4 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3">
         {/* Prev Card */}
         <button
           type="button"

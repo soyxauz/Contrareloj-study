@@ -316,33 +316,33 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-4 sm:py-6 animate-fadeIn text-slate-100">
+    <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn text-slate-100">
       {/* Top Header Bar matching Screenshot 6 */}
-      <div className="flex items-center justify-between mb-8 pb-3">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 pb-2">
         <button
           type="button"
           onClick={() => {
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
         >
           <ArrowLeft className="w-4 h-4 text-slate-300" />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-white">
+        <div className="flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-white">
           <CheckSquare className="w-5 h-5 text-indigo-400" />
           <span>Constructor de Definiciones</span>
         </div>
 
-        <div className="w-24" /> {/* Spacer to center title */}
+        <div className="w-20" /> {/* Spacer to center title */}
       </div>
 
       {/* Main Card Frame */}
-      <div className="rounded-3xl bg-[#140e2b]/95 border border-white/[0.12] p-6 sm:p-10 shadow-2xl relative">
+      <div className="rounded-2xl bg-[#140e2b]/95 border border-white/[0.12] p-4 sm:p-6 shadow-2xl relative">
         {/* Top bar inside container: Puntuación & Round Indicator */}
-        <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/[0.08] tabular-nums">
+        <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-white/[0.08] tabular-nums">
           <div className="flex items-center gap-2 font-extrabold text-base sm:text-lg text-emerald-400">
             <span>Puntuación:</span>
             <span>{score}</span>
@@ -355,14 +355,14 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
         </div>
 
         {/* Target Term in centered bold Rojo Vino */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-[#fecdd3] tracking-tight drop-shadow-sm">
+        <div className="text-center mb-4 sm:mb-5">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-[#fecdd3] tracking-tight drop-shadow-sm">
             {currentCard ? <FormattedText text={getCardTerm(currentCard)} inlineOnly /> : 'Cargando...'}
           </h2>
         </div>
 
         {/* Definition Sentence with Blanks */}
-        <div className={`p-6 sm:p-8 rounded-2xl bg-[#0e0920]/90 border transition-all duration-200 shadow-inner mb-10 leading-loose text-base sm:text-lg flex flex-wrap items-center gap-x-2 gap-y-3.5 ${
+        <div className={`p-4 sm:p-6 rounded-2xl bg-[#0e0920]/90 border transition-all duration-200 shadow-inner mb-5 sm:mb-6 leading-relaxed text-sm sm:text-base flex flex-wrap items-center gap-x-2 gap-y-2.5 ${
           feedback === 'correct'
             ? 'border-emerald-500/50 shadow-emerald-500/10'
             : feedback === 'wrong'

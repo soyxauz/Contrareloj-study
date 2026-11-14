@@ -54,9 +54,9 @@ export const FlashcardsGamesHub: React.FC<FlashcardsGamesHubProps> = ({
   cardCount: _cardCount,
 }) => {
   return (
-    <div className="w-full max-w-6xl mx-auto py-4 px-2 sm:px-4 animate-fadeIn">
+    <div className="w-full max-w-5xl mx-auto py-2 sm:py-3 px-2 sm:px-4 flex-1 flex flex-col justify-center animate-fadeIn">
       {/* 5-Game Grid matching Screenshot 2 (No RPG) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-4 max-w-4xl lg:max-w-5xl mx-auto w-full">
         {GAMES.map(game => {
           const Icon = game.icon;
 
@@ -68,7 +68,7 @@ export const FlashcardsGamesHub: React.FC<FlashcardsGamesHubProps> = ({
                 gameAudio.playTap();
                 onSelectGame(game.id);
               }}
-              className="p-8 sm:p-10 rounded-3xl bg-[#140e2b]/90 hover:bg-[#1f1542] border border-white/[0.12] hover:border-purple-400/50 shadow-xl flex flex-col items-center justify-center text-center transition-transform active:scale-[0.97] duration-150 cursor-pointer group min-h-[260px] relative overflow-hidden"
+              className="p-5 sm:p-6 rounded-2xl bg-[#140e2b]/90 hover:bg-[#1f1542] border border-white/[0.12] hover:border-purple-400/50 shadow-xl flex flex-col items-center justify-center text-center transition-transform active:scale-[0.97] duration-150 cursor-pointer group min-h-[175px] sm:min-h-[190px] relative overflow-hidden"
               style={{
                 boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
               }}
@@ -77,17 +77,17 @@ export const FlashcardsGamesHub: React.FC<FlashcardsGamesHubProps> = ({
               <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
               {/* Game Icon */}
-              <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-6 text-white group-hover:text-purple-300 group-hover:scale-110 transition-all duration-200">
-                <Icon className="w-9 h-9" />
+              <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-3 text-white group-hover:text-purple-300 group-hover:scale-110 transition-all duration-200">
+                <Icon className="w-6 h-6" />
               </div>
 
               {/* Title */}
-              <h3 className="text-xl sm:text-2xl font-bold text-white mb-2.5 tracking-tight group-hover:text-purple-200 transition-colors">
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-1.5 tracking-tight group-hover:text-purple-200 transition-colors">
                 {game.title}
               </h3>
 
               {/* Description */}
-              <p className="text-xs sm:text-sm text-slate-300/80 leading-relaxed max-w-xs font-normal">
+              <p className="text-xs sm:text-[13px] text-slate-300/80 leading-relaxed max-w-xs font-normal">
                 {game.description}
               </p>
             </button>

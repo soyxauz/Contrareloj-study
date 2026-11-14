@@ -223,22 +223,22 @@ export const StackerGame: React.FC<StackerGameProps> = ({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-3 sm:py-6 animate-fadeIn text-slate-100">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn text-slate-100">
       {/* Top Header Bar matching Screenshot 3 */}
-      <div className="flex items-center justify-between mb-8 pb-3">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 pb-2">
         <button
           type="button"
           onClick={() => {
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
         >
           <ArrowLeft className="w-4 h-4 text-slate-300" />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-white">
+        <div className="flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-white">
           <Layers className="w-5 h-5 text-indigo-400" />
           <span>Apilador</span>
         </div>
@@ -254,9 +254,9 @@ export const StackerGame: React.FC<StackerGameProps> = ({
       </div>
 
       {/* Main Game Arena */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-center">
         {/* Left Column: Tower Visualizer (5 cols) */}
-        <div className="lg:col-span-5 h-[420px] rounded-3xl bg-[#0d091e]/85 border border-white/[0.08] p-6 relative flex flex-col justify-end overflow-hidden shadow-2xl backdrop-blur-sm">
+        <div className="lg:col-span-5 h-[370px] rounded-2xl bg-[#0d091e]/85 border border-white/[0.08] p-5 relative flex flex-col justify-end overflow-hidden shadow-2xl backdrop-blur-sm">
           {/* Background horizontal guideline marks */}
           <div className="absolute inset-0 flex flex-col justify-between py-8 px-6 pointer-events-none opacity-25">
             {Array.from({ length: TOTAL_LEVELS }).map((_, i) => (
