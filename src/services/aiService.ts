@@ -4453,55 +4453,159 @@ export function stripStudyGuideEmojis(markdownText: string): string {
 }
 
 /**
+ * Convierte secuencias repetitivas de entidades con propiedades farmacocinéticas/clínicas paralelas en una tabla Markdown limpia.
+ */
+export function convertRepeatedEntityBulletsToTable(text: string): string {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    const isEntityCandidate = /^[-*+•]\s+\*{0,2}(?:Insulinas?|F[aá]rmacos?|Antibi[oó]ticos?|Antihipertensivos?|Clase|Tipo|Categor[ií]a|Estadio|Grado|Grupo)\b[^\n:]*:\s*(.+)$/i.test(trimmed);
+
+    if (isEntityCandidate) {
+      const entities: Array<{ name: string; desc: string; attrs: Record<string, string> }> = [];
+      let cur = i;
+
+      while (cur < lines.length) {
+        const curTrim = lines[cur].trim();
+        const entMatch = curTrim.match(/^[-*+•]\s+\*{0,2}([^\n:]{3,50}?)\*{0,2}:\s*(.*)$/);
+        if (!entMatch) break;
+
+        const entName = entMatch[1].replace(/[*]/g, '').trim();
+        const entDesc = entMatch[2].trim();
+
+        const attrs: Record<string, string> = {};
+        let attrIdx = cur + 1;
+        while (attrIdx < lines.length) {
+          const attrTrim = lines[attrIdx].trim();
+          const attrMatch = attrTrim.match(/^[-*+•]\s+\*{0,2}([A-Za-zÁÉÍÓÚáéíóúñÑ\s/]{3,30}?)\*{0,2}:\s*(.+)$/);
+          if (attrMatch) {
+            const rawKey = attrMatch[1].replace(/[*]/g, '').trim();
+            const attrVal = attrMatch[2].trim();
+            if (/^(?:inicio(?:\s+de\s+(?:acci[oó]n|action))?|pico(?:\s+de\s+(?:acci[oó]n|action))?|duraci[oó]n|uso(?:\s+cl[ií]nico)?|dosis|biodisponibilidad|v[ií]a|mecanismo|eliminaci[oó]n)$/i.test(rawKey)) {
+              let canonicalKey = rawKey;
+              if (/^inicio/i.test(rawKey)) canonicalKey = 'Inicio de acción';
+              else if (/^pico/i.test(rawKey)) canonicalKey = 'Pico de acción';
+              else if (/^duraci/i.test(rawKey)) canonicalKey = 'Duración';
+              else if (/^uso/i.test(rawKey)) canonicalKey = 'Uso clínico';
+              attrs[canonicalKey] = attrVal;
+              attrIdx++;
+              continue;
+            }
+          }
+          break;
+        }
+
+        if (Object.keys(attrs).length >= 2) {
+          entities.push({ name: entName, desc: entDesc, attrs });
+          cur = attrIdx;
+        } else {
+          break;
+        }
+      }
+
+      if (entities.length >= 2) {
+        const colSet = new Set<string>();
+        entities.forEach(e => Object.keys(e.attrs).forEach(k => colSet.add(k)));
+        const attrCols = Array.from(colSet);
+
+        const headers = ['Tipo / Entidad', 'Descripción / Análogos', ...attrCols];
+        result.push('');
+        result.push(`| ${headers.join(' | ')} |`);
+        result.push(`| ${headers.map(() => ':---').join(' | ')} |`);
+
+        entities.forEach(e => {
+          const rowVals = [
+            `**${e.name}**`,
+            e.desc || '—',
+            ...attrCols.map(col => e.attrs[col] || '—')
+          ];
+          result.push(`| ${rowVals.join(' | ')} |`);
+        });
+        result.push('');
+
+        i = cur;
+        continue;
+      }
+    }
+
+    result.push(line);
+    i++;
+  }
+
+  return result.join('\n');
+}
+
+/**
  * Normaliza guías de estudio para evitar listas jerárquicas o cascadas excesivas de viñetas.
- * Convierte viñetas principales que actúan como títulos de sección o fármacos en encabezados '###'
+ * Convierte viñetas principales que actúan como títulos de sección o fármacos en encabezados '###' o '####',
+ * transforma entidades paralelas con atributos repetitivos en tablas Markdown,
  * y aplana sub-viñetas anidadas en propiedades en negrita o párrafos legibles.
  */
 export function normalizeStudyGuideBullets(text: string): string {
   if (!text) return '';
-  const lines = text.split('\n');
+
+  const processed = convertRepeatedEntityBulletsToTable(text);
+  const lines = processed.split('\n');
   const result: string[] = [];
+
+  const CATEGORY_NAMES = /^(?:mecanismo(?:\s+de\s+acci[oó]n)?|farmacocin[eé]tica|farmacodin[aá]mica|efectos\s+(?:adversos|secundarios)|contraindicaciones|indicaciones(?:\s+terap[eé]uticas)?|clasificaci[oó]n(?:\s+por\s+[^\n:]+)?|diagn[oó]stico|criterios(?:\s+diagn[oó]sticos)?|fisiopatolog[ií]a|manifestaciones(?:\s+cl[ií]nicas)?|tratamiento|prevenci[oó]n|posolog[ií]a|cuadro\s+cl[ií]nico)$/i;
+  const ATTRIBUTE_KEYS = /^(?:inicio|pico|duraci[oó]n|uso|dosis|absorci[oó]n|eliminaci[oó]n|metabolismo|biodisponibilidad|v[ií]a|hep[aá]tico|perif[eé]rico|intestinal|gastrointestinales|deficiencia|acidosis)\b/i;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
-    const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
 
-    // 1. Detectar viñeta de primer nivel que actúa como título/categoría (termina en ':' o va seguida de sub-viñetas con sangría)
-    const topLevelHeaderBullet = line.match(/^[-*+•]\s+(\*{0,2}[A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][^\n:]+\*{0,2}:?\s*)$/);
-    const hasIndentedNextBullet = /^(\s{2,}|\t)[-*+•]\s+/.test(nextLine);
-
-    if (topLevelHeaderBullet && (trimmed.endsWith(':') || hasIndentedNextBullet)) {
-      const title = topLevelHeaderBullet[1].replace(/[:*]/g, '').trim();
-      result.push('');
-      result.push(`### ${title}`);
-      result.push('');
+    if (trimmed.startsWith('|') || trimmed.startsWith('#') || trimmed.startsWith('>') || trimmed.startsWith('```')) {
+      result.push(line);
       continue;
     }
 
-    // 2. Detectar sub-viñetas con sangría que definen propiedades clave (ej. '  * Mecanismo: ...' o '  * **Efectos:** ...')
-    const indentedProperty = line.match(/^(\s{2,}|\t)[-*+•]\s+\*{0,2}([^*:\n]{2,50}?)\*{0,2}(?::\*\*|\*\*:\s*|\*\*\s*:|:\s*|\s*:)\s*(.+)$/);
-    if (indentedProperty) {
-      const propName = indentedProperty[2].replace(/[:*]/g, '').trim();
-      const propVal = indentedProperty[3].trim();
-      result.push(`* **${propName}:** ${propVal}`);
+    // 1. Detectar categorías que actúan como encabezado de sección terminando en ':' sin contenido posterior
+    const emptyColonCategory = trimmed.match(/^(?:[-*+•]\s+)?\*{0,2}([A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][A-Za-z0-9ÁÉÍÓÚáéíóúñÑ\s/()-]{2,45}?)\*{0,2}:\s*$/);
+    if (emptyColonCategory) {
+      const catName = emptyColonCategory[1].replace(/[:*]/g, '').trim();
+      if (!ATTRIBUTE_KEYS.test(catName) || CATEGORY_NAMES.test(catName)) {
+        result.push('');
+        result.push(`#### ${catName}`);
+        result.push('');
+        continue;
+      }
+    }
+
+    // 2. Detectar viñeta o propiedad en negrita con ':' y explicación
+    const bulletWithDesc = trimmed.match(/^(?:[-*+•]\s+)?\*{0,2}([A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][A-Za-z0-9ÁÉÍÓÚáéíóúñÑ\s/()-]{2,45}?)\*{0,2}(?::\*\*|\*\*:\s*|\*\*\s*:|:\s*|\s*:)\s*(.+)$/);
+    if (bulletWithDesc && !line.startsWith('>') && !line.startsWith('#') && !line.startsWith('|')) {
+      const title = bulletWithDesc[1].replace(/[:*]/g, '').trim();
+      const desc = bulletWithDesc[2].trim();
+
+      if (CATEGORY_NAMES.test(title)) {
+        result.push('');
+        result.push(`#### ${title}`);
+        if (desc) result.push(desc);
+        result.push('');
+        continue;
+      }
+
+      result.push(`* **${title}:** ${desc}`);
       continue;
     }
 
     // 3. Aplanar cualquier otra sub-viñeta anidada a viñeta limpia de primer nivel
-    const indentedGeneric = line.match(/^(\s{2,}|\t)[-*+•]\s+(.+)$/);
-    if (indentedGeneric) {
-      result.push(`* ${indentedGeneric[2].trim()}`);
-      continue;
-    }
-
-    // 4. Si encontramos líneas de propiedades en negrita al inicio de línea sin viñeta, agregarles viñeta
-    // (ej: '**Mecanismo de acción:** Activa...' o '**Contraindicaciones**: TFG...')
-    const plainProperty = trimmed.match(/^\*\*([^*:\n]{2,50}?)(?::\*\*|\*\*:\s*|\*\*\s*:)\s*(.+)$/);
-    if (plainProperty && !line.startsWith('>') && !line.startsWith('#') && !line.startsWith('|')) {
-      const propName = plainProperty[1].replace(/[:*]/g, '').trim();
-      const propVal = plainProperty[2].trim();
-      result.push(`* **${propName}:** ${propVal}`);
+    const indentedBullet = line.match(/^(\s{2,}|\t)[-*+•]\s+(.+)$/);
+    if (indentedBullet) {
+      const content = indentedBullet[2].trim();
+      const propMatch = content.match(/^\*{0,2}([^*:\n]{2,45}?)\*{0,2}(?::\*\*|\*\*:\s*|\*\*\s*:|:\s*|\s*:)\s*(.+)$/);
+      if (propMatch) {
+        result.push(`* **${propMatch[1].trim()}:** ${propMatch[2].trim()}`);
+      } else {
+        result.push(`* ${content}`);
+      }
       continue;
     }
 
@@ -4542,16 +4646,16 @@ export function stripExecutiveSummaryPreamble(markdownText: string): string {
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
 
-const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO Y EQUILIBRADO (Markdown + KaTeX):
-- EQUILIBRIO ENTRE PROSA Y VIÑETAS (MÁXIMA CLARIDAD): Evita tanto los bloques densos de texto corrido que cansan la vista como las cascadas infinitas de viñetas anidadas.
-  * Encabezados claros: Estructura cada tema con subtítulos '### [Nombre del Concepto/Tema]'.
-  * Introducción concisa: Escribe 1 o 2 oraciones introductorias en prosa fluida que enmarquen el concepto.
-  * Viñetas didácticas de primer nivel: Desglosa mecanismos, propiedades, criterios, contraindicaciones, efectos adversos o pasos usando viñetas simples y legibles con prefijo en negrita (ej. '* **Mecanismo:** ...', '* **Efectos:** ...', '* **Criterio clínico:** ...').
-  * Cero anidamiento profundo: Mantén las viñetas en un único nivel limpio sin crear árboles de sangrías multinivel.
-- TABLAS COMPARATIVAS MARKDOWN OBLIGATORIAS: Cuando compares entidades, clasificaciones, mecanismos, vías de acción o efectos adversos, utiliza SIEMPRE tablas comparativas completas en Markdown con formato estricto:
-  | Columna 1 | Columna 2 | Columna 3 |
-  | :--- | :--- | :--- |
-  | Dato A | Dato B | Dato C |
+const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO, JERÁRQUICO Y EQUILIBRADO (Markdown + KaTeX):
+- PROHIBIDO CONVERTIR TODO EN VIÑETAS: NUNCA generes listas continuas de más de 4 viñetas seguidas. Estructura siempre el contenido con jerarquía visual:
+  * Encabezados de sección ('### [Tema General]') y subtemas ('#### [Categoría/Aspecto]').
+  * Categorías como 'Mecanismo de Acción', 'Farmacocinética', 'Efectos Adversos', 'Contraindicaciones', 'Criterios Diagnósticos' e 'Indicaciones Clínicas' DEBEN SER SIEMPRE SUBTÍTULOS ('#### Mecanismo de Acción', '#### Farmacocinética'), NUNCA viñetas ('* Mecanismo de Acción:').
+  * Breve contextualización en prosa fluida (1-2 oraciones) bajo cada subtítulo.
+  * Máximo 3 a 4 viñetas puntuales ('* **Aspecto:** Detalle') por cada subtítulo para desglosar propiedades específicas.
+- TABLAS COMPARATIVAS MARKDOWN OBLIGATORIAS: Cuando clasifiques o compares tipos de fármacos (ej. insulinas ultrarrápidas vs rápidas vs intermedias vs lentas), familias farmacológicas, estadios clínicos o entidades con parámetros repetitivos (ej. inicio de acción, pico, duración, uso clínico, dosis, vía), QUEDA PROHIBIDO redactarlo como viñetas repetitivas. DEBES UTILIZAR SIEMPRE UNA TABLA COMPARATIVA MARKDOWN:
+  | Tipo / Fármaco | Descripción / Análogos | Inicio de acción | Pico de acción | Duración | Uso Clínico Principal |
+  | :--- | :--- | :--- | :--- | :--- | :--- |
+  | Dato A | Dato B | Dato C | Dato D | Dato E | Dato F |
   Sin líneas en blanco entre filas y SIN encerrar tablas en bloques \`\`\`.
 - INCLUYE bloques de perla/alerta usando citas: \`> **Perla Clave:** ...\` o \`> **Error Frecuente:** ...\`.
 - USA KaTeX en fórmulas, parámetros numéricos o flechas causales (ej. \`$\\text{Estímulo} \\rightarrow \\text{Mecanismo} \\rightarrow \\text{Efecto}$\`).
