@@ -4713,7 +4713,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   value={targetTopic}
                   onChange={e => setTargetTopic(e.target.value)}
                   placeholder="Ej: Mecanismo de acción, Diagnóstico diferencial, Artículos..."
-                  className="w-full px-4 py-3 rounded-2xl bg-thea-surfaceLight border border-thea-border text-sm text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500/80 transition-colors"
+                  className="w-full px-4 py-3 rounded-2xl bg-thea-surfaceLight border border-thea-border text-base md:text-sm text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500/80 transition-colors"
                 />
               </div>
               <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">

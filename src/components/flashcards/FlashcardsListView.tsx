@@ -275,7 +275,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
       {/* Modal: Agregar Tarjeta */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl">
+          <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl">
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/[0.08]">
               <h3 className="text-xl font-bold text-white tracking-tight">Agregar Tarjeta de Memoria</h3>
               <button
@@ -298,7 +298,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   value={formTerm}
                   onChange={e => setFormTerm(e.target.value)}
                   placeholder="Ej. Anticuerpo anticardiolipina (aCL)"
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors"
+                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white placeholder-slate-500 outline-none transition-colors"
                 />
               </div>
 
@@ -312,7 +312,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   value={formDef}
                   onChange={e => setFormDef(e.target.value)}
                   placeholder="Ej. Tipo de anticuerpo antifosfolípido dirigido contra la cardiolipina..."
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors resize-none"
+                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white placeholder-slate-500 outline-none transition-colors resize-none"
                 />
               </div>
 
@@ -339,7 +339,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
       {/* Modal: Editar Tarjeta */}
       {editingCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl">
+          <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl">
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/[0.08]">
               <h3 className="text-xl font-bold text-white tracking-tight">Editar Tarjeta de Memoria</h3>
               <button
@@ -361,7 +361,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   required
                   value={formTerm}
                   onChange={e => setFormTerm(e.target.value)}
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-colors"
+                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white outline-none transition-colors"
                 />
               </div>
 
@@ -374,7 +374,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   required
                   value={formDef}
                   onChange={e => setFormDef(e.target.value)}
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-colors resize-none"
+                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white outline-none transition-colors resize-none"
                 />
               </div>
 

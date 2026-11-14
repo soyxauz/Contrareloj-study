@@ -1021,8 +1021,8 @@ Reglas obligatorias estrictas:
         </div>
       )}
 
-      {/* ── CUERPO PRINCIPAL: INTERFAZ CENTRADA Y MINIMALISTA SIN OVERFLOW ── */}
-      <main className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-3 sm:px-4 relative py-1 overflow-hidden">
+      {/* ── CUERPO PRINCIPAL: INTERFAZ CENTRADA Y MINIMALISTA CON SCROLL ADAPTATIVO ── */}
+      <main className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-3 sm:px-4 relative py-1 overflow-y-auto">
         {/* Subtítulo dinámico / Pregunta actual de Thea */}
         <div className="w-full max-w-xl mx-auto mb-2 sm:mb-3 transition-all duration-300 shrink-0">
           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-bold uppercase tracking-widest mb-1.5 ${
@@ -1350,7 +1350,7 @@ Reglas obligatorias estrictas:
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Escribe tu respuesta aquí si prefieres no usar el micrófono..."
-            className="flex-1 bg-thea-bg/90 border border-thea-border rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="flex-1 bg-thea-bg/90 border border-thea-border rounded-xl px-3.5 py-2 text-base md:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
           <button
             type="submit"

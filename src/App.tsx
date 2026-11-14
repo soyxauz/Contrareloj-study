@@ -1068,14 +1068,14 @@ export const App: React.FC = () => {
   // Whether to show the full navbar with mode tabs (hide on home & create, or when no kit exists)
   const showModeTabs = currentMode !== 'home' && currentMode !== 'create' && currentKit !== null;
 
-  // Study modes designed to fit 100% within the viewport height without outer page scroll
-  const isScreenFittingMode = currentMode === 'podcast' || currentMode === 'ask-thea' || currentMode === 'oral-lesson' || currentMode === 'flashcards';
+  // Study modes designed to fit within the desktop viewport but allow internal fluid scrolling on mobile, tablets, and smaller screens
+  const isScreenFittingMode = currentMode === 'podcast' || currentMode === 'ask-thea' || currentMode === 'oral-lesson';
 
   return (
-    <div className={`min-h-screen bg-thea-bg flex flex-col selection:bg-violet-600 selection:text-white ${
+    <div className={`min-h-screen min-h-[100dvh] bg-thea-bg flex flex-col selection:bg-violet-600 selection:text-white ${
       theme === 'dark' ? 'text-slate-100' : 'text-zinc-950'
     } ${
-      isScreenFittingMode ? 'h-screen max-h-screen overflow-hidden' : ''
+      isScreenFittingMode ? 'md:h-screen md:max-h-screen md:overflow-hidden' : ''
     }`}>
       {/* Navigation */}
       <Navbar
@@ -1111,8 +1111,8 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main Mode View */}
-      <main className={`flex-1 ${isScreenFittingMode ? 'min-h-0 overflow-hidden flex flex-col p-0' : 'pb-24 md:pb-8'}`}>
+      {/* Main Mode View - always scrollable whenever content exceeds screen height */}
+      <main className={`flex-1 min-h-0 flex flex-col ${isScreenFittingMode ? 'overflow-y-auto p-0 pb-24 md:pb-4' : 'overflow-y-auto pb-28 md:pb-12'}`}>
         <ViewErrorBoundary onReset={() => setCurrentMode('home')}>
         {currentMode === 'home' && (
           <HomeView

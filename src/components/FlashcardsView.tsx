@@ -321,7 +321,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-4 sm:py-6 animate-fadeIn">
+    <div className="w-full max-w-6xl mx-auto px-4 py-4 sm:py-6 pb-28 md:pb-16 animate-fadeIn">
       {/* Top Navigation Tabs Header matching Screenshot 1 */}
       <div className="flex items-center justify-between mb-8 pb-3 border-b border-white/[0.08]">
         {/* Pills Toggle: Lista | Mazo | Juegos */}

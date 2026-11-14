@@ -106,9 +106,9 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
   const masteredCount = deck.filter(c => c.mastery === 'mastered').length;
 
   return (
-    <div className="w-full max-w-4xl mx-auto py-2 px-2 sm:px-4 animate-fadeIn text-slate-100 flex flex-col items-center">
+    <div className="w-full max-w-4xl mx-auto py-2 px-2 sm:px-4 pb-16 sm:pb-12 animate-fadeIn text-slate-100 flex flex-col items-center">
       {/* Top Stats & Progress Bar */}
-      <div className="w-full max-w-2xl flex items-center justify-between mb-4 text-xs font-semibold tabular-nums text-slate-400">
+      <div className="w-full max-w-2xl flex items-center justify-between mb-3 text-xs font-semibold tabular-nums text-slate-400">
         <div>
           Tarjeta <strong className="text-white text-sm">{currentIdx + 1}</strong> de {deck.length}
         </div>
@@ -122,7 +122,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             type="button"
             onClick={handleShuffle}
             title="Rebarajar tarjetas"
-            className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white transition-colors cursor-pointer active:scale-95"
           >
             <Shuffle className="w-4 h-4" />
           </button>
@@ -130,17 +130,17 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
       </div>
 
       {/* Progress Line */}
-      <div className="w-full max-w-2xl h-1.5 bg-white/[0.08] rounded-full overflow-hidden mb-6">
+      <div className="w-full max-w-2xl h-1.5 bg-white/[0.08] rounded-full overflow-hidden mb-5">
         <div
           className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-200"
           style={{ width: `${((currentIdx + 1) / deck.length) * 100}%` }}
         />
       </div>
 
-      {/* 3D Flip Card Container */}
+      {/* 3D Flip Card Container with Responsive Adaptive Height */}
       <div
         onClick={handleFlip}
-        className="w-full max-w-2xl min-h-[340px] sm:min-h-[380px] rounded-3xl bg-[#140e2b]/95 hover:bg-[#191136] border border-white/[0.12] hover:border-purple-400/40 p-8 sm:p-12 shadow-2xl flex flex-col justify-between cursor-pointer transition-transform duration-200 select-none relative group"
+        className="w-full max-w-2xl min-h-[250px] sm:min-h-[300px] md:min-h-[340px] max-h-[52vh] rounded-3xl bg-[#140e2b]/95 hover:bg-[#191136] border border-white/[0.12] hover:border-purple-400/40 p-6 sm:p-10 shadow-2xl flex flex-col justify-between cursor-pointer transition-transform duration-200 select-none relative group active:scale-[0.99]"
         style={{
           boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         }}
@@ -154,11 +154,11 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
         </div>
 
         {/* Card Main Content */}
-        <div className="my-auto text-center py-6">
+        <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
           <p className={`leading-relaxed transition-all duration-200 ${
             isFlipped
-              ? 'text-base sm:text-xl text-slate-200 font-normal'
-              : 'text-2xl sm:text-3xl text-white font-extrabold tracking-tight'
+              ? 'text-sm sm:text-lg md:text-xl text-slate-200 font-normal'
+              : 'text-xl sm:text-2xl md:text-3xl text-white font-extrabold tracking-tight'
           }`}>
             {currentCard ? (isFlipped ? getCardDef(currentCard) : getCardTerm(currentCard)) : ''}
           </p>
@@ -183,13 +183,13 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
       </div>
 
       {/* Navigation & Mastery Controls */}
-      <div className="w-full max-w-2xl mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="w-full max-w-2xl mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
         {/* Prev Card */}
         <button
           type="button"
           onClick={handlePrev}
           disabled={currentIdx === 0}
-          className="p-3 rounded-2xl bg-[#1b1338] hover:bg-[#261b4f] disabled:opacity-30 border border-white/[0.1] text-slate-200 hover:text-white transition-all cursor-pointer disabled:cursor-not-allowed shadow-md"
+          className="p-3 rounded-2xl bg-[#1b1338] hover:bg-[#261b4f] disabled:opacity-30 border border-white/[0.1] text-slate-200 hover:text-white transition-all cursor-pointer disabled:cursor-not-allowed shadow-md active:scale-95"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -199,7 +199,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           <button
             type="button"
             onClick={() => handleSetMastery('to-learn')}
-            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-all active-press cursor-pointer shadow-sm ${
+            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-transform duration-150 active:scale-[0.97] cursor-pointer shadow-sm ${
               currentCard?.mastery === 'to-learn'
                 ? 'bg-slate-700/60 border-slate-500 text-white'
                 : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.08] text-slate-300'
@@ -211,7 +211,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           <button
             type="button"
             onClick={() => handleSetMastery('known')}
-            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-all active-press cursor-pointer shadow-sm ${
+            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-transform duration-150 active:scale-[0.97] cursor-pointer shadow-sm ${
               currentCard?.mastery === 'known'
                 ? 'bg-amber-600/30 border-amber-400 text-amber-200'
                 : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.08] text-slate-300'
@@ -223,7 +223,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           <button
             type="button"
             onClick={() => handleSetMastery('mastered')}
-            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-all active-press cursor-pointer shadow-sm ${
+            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-transform duration-150 active:scale-[0.97] cursor-pointer shadow-sm ${
               currentCard?.mastery === 'mastered'
                 ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200'
                 : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.08] text-slate-300'
@@ -238,7 +238,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           type="button"
           onClick={handleNext}
           disabled={currentIdx === deck.length - 1}
-          className="p-3 rounded-2xl bg-[#1b1338] hover:bg-[#261b4f] disabled:opacity-30 border border-white/[0.1] text-slate-200 hover:text-white transition-all cursor-pointer disabled:cursor-not-allowed shadow-md"
+          className="p-3 rounded-2xl bg-[#1b1338] hover:bg-[#261b4f] disabled:opacity-30 border border-white/[0.1] text-slate-200 hover:text-white transition-all cursor-pointer disabled:cursor-not-allowed shadow-md active:scale-95"
         >
           <ChevronRight className="w-5 h-5" />
         </button>

@@ -303,7 +303,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Escribe tu consulta o pide una explicación detallada sobre el material..."
-            className={`flex-1 rounded-2xl px-4 py-2 text-xs sm:text-sm transition-colors border focus:outline-none ${
+            className={`flex-1 rounded-2xl px-4 py-2 text-base md:text-sm transition-colors border focus:outline-none ${
               theme === 'dark'
                 ? 'bg-[#090314]/90 border-white/[0.08] text-white placeholder-zinc-500 focus:border-white/30'
                 : theme === 'kitty'

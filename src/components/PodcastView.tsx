@@ -1558,7 +1558,7 @@ export const PodcastView: React.FC<PodcastViewProps> = ({ kit, onUpdateKit }) =>
   return (
     <div
       key={podcast.id || podcast.title}
-      className="max-w-5xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 h-full flex flex-col min-h-0 overflow-hidden animate-podcast-panel-enter"
+      className="max-w-5xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 h-full flex flex-col min-h-0 overflow-y-auto md:overflow-hidden animate-podcast-panel-enter"
     >
       {/* Top Controls Bar (Limpio y Espacioso) */}
       <div className="mb-2 sm:mb-3 pb-2 border-b border-thea-border shrink-0 flex items-center justify-between gap-3">

@@ -642,7 +642,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                 value={topicQuery}
                 onChange={(e) => setTopicQuery(e.target.value)}
                 placeholder="Escribe el tema a investigar (ej. Resistencia bacteriana a antibióticos, Contratos civiles...)"
-                className="w-full bg-thea-bg border border-thea-border rounded-xl py-3.5 pl-12 pr-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full bg-thea-bg border border-thea-border rounded-xl py-3.5 pl-12 pr-4 text-base md:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               {topicQuery && (
                 <button
@@ -724,7 +724,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             placeholder="Pega aquí tus apuntes, notas de clase, texto del libro, resumen, o cualquier contenido de estudio...&#10;&#10;Tip: Cuanto más contenido proporciones, más preguntas y flashcards se generarán. Mínimo recomendado: 200 caracteres."
-            className="w-full h-64 bg-thea-bg border border-thea-border rounded-xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y font-mono"
+            className="w-full h-64 bg-thea-bg border border-thea-border rounded-xl p-4 text-base md:text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y font-mono"
           />
         )}
 
@@ -738,7 +738,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                 value={youtubeURL}
                 onChange={(e) => setYoutubeURL(e.target.value)}
                 placeholder="https://www.youtube.com/watch?v=..."
-                className="w-full bg-thea-bg border border-thea-border rounded-xl py-3.5 pl-12 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="w-full bg-thea-bg border border-thea-border rounded-xl py-3.5 pl-12 pr-4 text-base md:text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>
             <div className="bg-thea-bg/50 rounded-xl p-4 border border-thea-border/50 flex items-start gap-2.5">
@@ -908,7 +908,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
                 value={linkURL}
                 onChange={(e) => setLinkURL(e.target.value)}
                 placeholder="https://ejemplo.com/articulo-de-estudio o https://es.wikipedia.org/wiki/..."
-                className="w-full bg-thea-bg border border-thea-border rounded-xl py-3.5 pl-12 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="w-full bg-thea-bg border border-thea-border rounded-xl py-3.5 pl-12 pr-4 text-base md:text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>
             <div className="bg-thea-bg/50 rounded-xl p-4 border border-thea-border/50 flex items-start gap-2.5">
@@ -1012,14 +1012,14 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
             setIsTitleManuallyEdited(true);
           }}
           placeholder="Título del Study Kit (la IA decidirá el tema automáticamente si se deja vacío)"
-          className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
+          className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-base md:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
         />
         <input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Descripción breve (ej: Capítulo 5 del libro de Biología)"
-          className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
+          className="w-full bg-[#090314]/90 border border-white/[0.08] rounded-xl py-3 px-4 text-base md:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
         />
       </div>
 

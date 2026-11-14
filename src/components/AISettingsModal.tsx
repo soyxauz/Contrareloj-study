@@ -582,7 +582,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   setApiKey1(e.target.value);
                 }}
                 placeholder="gsk_... (vacía por defecto)"
-                className={`w-full px-3 py-2.5 pr-10 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(key1Validation.isValid)}`}
+                className={`w-full px-3 py-2.5 pr-10 rounded-xl border text-base md:text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(key1Validation.isValid)}`}
               />
               <button
                 type="button"
@@ -664,7 +664,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   setApiKey2(e.target.value);
                 }}
                 placeholder="gsk_... (vacía por defecto · voz Whisper + respaldo)"
-                className={`w-full px-3 py-2.5 pr-10 rounded-xl border text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(key2Validation.isValid)}`}
+                className={`w-full px-3 py-2.5 pr-10 rounded-xl border text-base md:text-xs font-mono focus:outline-none transition-colors ${inputSurface} ${inputBorder(key2Validation.isValid)}`}
               />
               <button
                 type="button"

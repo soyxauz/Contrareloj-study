@@ -313,7 +313,7 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
                 onChange={e => setInputQuestion(e.target.value)}
                 placeholder="¿Está relacionado con...?"
                 disabled={isAiThinking || questionsUsed >= MAX_QUESTIONS || gameOver}
-                className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-indigo-400 rounded-2xl pl-3.5 pr-11 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors"
+                className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-indigo-400 rounded-2xl pl-3.5 pr-11 py-2.5 text-base md:text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors"
               />
               <button
                 type="submit"

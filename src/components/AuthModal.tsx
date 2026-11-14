@@ -279,7 +279,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Ej: Sofía Martínez"
-                  className={`w-full border rounded-xl py-2.5 pl-10 pr-4 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all ${
+                  className={`w-full border rounded-xl py-2.5 pl-10 pr-4 text-base md:text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all ${
                     theme === 'dark'
                       ? 'bg-thea-bg border-thea-border text-white'
                       : theme === 'kitty'
@@ -303,7 +303,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="usuario_estudio"
-                className={`w-full border rounded-xl py-2.5 pl-10 pr-4 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all lowercase ${
+                className={`w-full border rounded-xl py-2.5 pl-10 pr-4 text-base md:text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all lowercase ${
                   theme === 'dark'
                     ? 'bg-thea-bg border-thea-border text-white'
                     : theme === 'kitty'
@@ -326,7 +326,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className={`w-full border rounded-xl py-2.5 pl-10 pr-10 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all ${
+                className={`w-full border rounded-xl py-2.5 pl-10 pr-10 text-base md:text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all ${
                   theme === 'dark'
                     ? 'bg-thea-bg border-thea-border text-white'
                     : theme === 'kitty'
