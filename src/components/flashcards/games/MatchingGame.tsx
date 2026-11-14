@@ -4,6 +4,7 @@ import { ArrowLeft, Copy, RotateCcw, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { FormattedText } from '../../FormattedText';
 
 interface MatchingGameProps {
   flashcards: Flashcard[];
@@ -233,15 +234,17 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
               type="button"
               disabled={item.isMatched || evaluatingPair !== null}
               onClick={() => handleItemClick(item)}
-              className={`p-4 sm:p-5 rounded-2xl border min-h-[120px] flex items-center justify-center text-center transition-all duration-200 cursor-pointer shadow-md ${cardStyle}`}
+              className={`p-3.5 sm:p-5 rounded-2xl border min-h-[135px] sm:min-h-[145px] flex items-center justify-center text-center transition-all duration-200 cursor-pointer shadow-md ${cardStyle}`}
             >
-              <p className={`font-semibold leading-relaxed ${
+              <div className={`font-semibold leading-relaxed w-full flex items-center justify-center ${
                 item.type === 'term'
                   ? 'text-sm sm:text-base text-purple-200 font-bold'
-                  : 'text-xs sm:text-sm text-slate-200 font-normal line-clamp-4'
+                  : (item.text.length > 90
+                      ? 'text-xs text-slate-200 font-normal leading-snug'
+                      : 'text-xs sm:text-sm text-slate-200 font-normal leading-normal')
               }`}>
-                {item.text}
-              </p>
+                <FormattedText text={item.text} inlineOnly />
+              </div>
             </button>
           );
         })}

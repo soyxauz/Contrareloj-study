@@ -4,6 +4,7 @@ import { Layers, ArrowLeft, RotateCcw, Trophy, AlertCircle } from 'lucide-react'
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { FormattedText } from '../../FormattedText';
 
 interface StackerGameProps {
   flashcards: Flashcard[];
@@ -300,9 +301,9 @@ export const StackerGame: React.FC<StackerGameProps> = ({
         <div className="lg:col-span-7 flex flex-col gap-5">
           {/* Definition Prompt Box matching Screenshot 3 */}
           <div className="p-6 rounded-2xl bg-[#140e2b]/90 border border-white/[0.12] backdrop-blur-md shadow-xl min-h-[120px] flex items-center">
-            <p className="text-base sm:text-lg text-slate-100 leading-relaxed font-normal">
-              {currentCard ? getCardDef(currentCard) : 'Cargando definición de la tarjeta...'}
-            </p>
+            <div className="text-base sm:text-lg text-slate-100 leading-relaxed font-normal">
+              <FormattedText text={currentCard ? getCardDef(currentCard) : 'Cargando definición de la tarjeta...'} inlineOnly />
+            </div>
           </div>
 
           {/* 2x2 Grid of Term Options matching Screenshot 3 */}
@@ -325,7 +326,9 @@ export const StackerGame: React.FC<StackerGameProps> = ({
                   disabled={feedbackStatus !== null || gameOver || gameWon}
                   className={`p-5 rounded-2xl border text-left font-semibold text-sm sm:text-base min-h-[85px] flex items-center justify-start transition-transform active:scale-[0.985] duration-150 cursor-pointer shadow-md ${btnClass}`}
                 >
-                  <span className="line-clamp-3 leading-snug">{opt}</span>
+                  <span className="leading-snug break-words">
+                    <FormattedText text={opt} inlineOnly />
+                  </span>
                 </button>
               );
             })}

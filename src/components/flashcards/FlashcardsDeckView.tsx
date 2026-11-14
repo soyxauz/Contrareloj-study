@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { gameAudio } from './games/gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from './flashcardSanitizer';
+import { FormattedText } from '../FormattedText';
 
 interface FlashcardsDeckViewProps {
   cards: Flashcard[];
@@ -161,9 +162,9 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
 
             {/* Card Main Term */}
             <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
-              <p className="text-xl sm:text-2xl md:text-3xl text-white font-extrabold tracking-tight leading-relaxed">
-                {currentCard ? getCardTerm(currentCard) : ''}
-              </p>
+              <div className="text-xl sm:text-2xl md:text-3xl text-white font-extrabold tracking-tight leading-relaxed">
+                <FormattedText text={currentCard ? getCardTerm(currentCard) : ''} inlineOnly />
+              </div>
             </div>
 
             {/* Current mastery status badge */}
@@ -201,9 +202,9 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
 
             {/* Card Main Definition (SOLO EL CONCEPTO, CERO VIÑETAS) */}
             <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
-              <p className="text-sm sm:text-base md:text-lg text-slate-200 font-normal leading-relaxed">
-                {currentCard ? getCardDef(currentCard) : ''}
-              </p>
+              <div className="text-sm sm:text-base md:text-lg text-slate-200 font-normal leading-relaxed">
+                <FormattedText text={currentCard ? getCardDef(currentCard) : ''} inlineOnly />
+              </div>
             </div>
 
             {/* Current mastery status badge */}

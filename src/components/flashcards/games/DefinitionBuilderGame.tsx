@@ -4,6 +4,7 @@ import { ArrowLeft, CheckSquare, RotateCcw, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { FormattedText } from '../../FormattedText';
 
 interface DefinitionBuilderGameProps {
   flashcards: Flashcard[];
@@ -306,7 +307,7 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
         {/* Target Term in centered bold purple/lavender matching Screenshot 6 */}
         <div className="text-center mb-8">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-[#c084fc] tracking-tight">
-            {currentCard ? getCardTerm(currentCard) : 'Cargando...'}
+            {currentCard ? <FormattedText text={getCardTerm(currentCard)} inlineOnly /> : 'Cargando...'}
           </h2>
         </div>
 

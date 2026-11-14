@@ -3,6 +3,7 @@ import type { Flashcard } from '../../types';
 import { Plus, Pencil, Trash2, X, ChevronDown, Check, ArrowUpDown, BookOpen } from 'lucide-react';
 import { gameAudio } from './games/gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from './flashcardSanitizer';
+import { FormattedText } from '../FormattedText';
 
 interface FlashcardsListViewProps {
   cards: Flashcard[];
@@ -239,23 +240,23 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
               {/* Content left */}
               <div className="flex-1 text-sm sm:text-base leading-relaxed">
                 {displayMode === 'all' && (
-                  <p>
-                    <strong className="text-white font-bold">{term}</strong>
+                  <div>
+                    <strong className="text-white font-bold"><FormattedText text={term} inlineOnly /></strong>
                     <span className="text-slate-400 mx-2 font-normal">|</span>
-                    <span className="text-slate-300 font-normal">{def}</span>
-                  </p>
+                    <span className="text-slate-300 font-normal"><FormattedText text={def} inlineOnly /></span>
+                  </div>
                 )}
 
                 {displayMode === 'hide-defs' && (
-                  <p>
-                    <strong className="text-white font-bold">{term}</strong>
-                  </p>
+                  <div>
+                    <strong className="text-white font-bold"><FormattedText text={term} inlineOnly /></strong>
+                  </div>
                 )}
 
                 {displayMode === 'hide-terms' && (
-                  <p>
-                    <span className="text-slate-300 font-normal">{def}</span>
-                  </p>
+                  <div>
+                    <span className="text-slate-300 font-normal"><FormattedText text={def} inlineOnly /></span>
+                  </div>
                 )}
               </div>
 

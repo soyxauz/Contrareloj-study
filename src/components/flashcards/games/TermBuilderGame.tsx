@@ -4,6 +4,7 @@ import { ArrowLeft, Grid, RotateCcw, Trophy, Delete } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { FormattedText } from '../../FormattedText';
 
 interface TermBuilderGameProps {
   flashcards: Flashcard[];
@@ -320,9 +321,9 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
 
       {/* Target Definition Prompt */}
       <div className="text-center mb-5 max-w-2xl mx-auto">
-        <p className="text-base sm:text-lg text-slate-100 font-normal leading-relaxed">
-          {currentCard ? getCardDef(currentCard) : 'Cargando definición...'}
-        </p>
+        <div className="text-base sm:text-lg text-slate-100 font-normal leading-relaxed">
+          <FormattedText text={currentCard ? getCardDef(currentCard) : 'Cargando definición...'} inlineOnly />
+        </div>
         <p className="text-xs sm:text-sm text-slate-400 italic mt-2.5">
           Haz clic en las sílabas para escribir el término correspondiente
         </p>
