@@ -24,23 +24,23 @@ export const ShortAnswerRenderer: React.FC<ShortAnswerRendererProps> = ({
   const wordCount = shortAnswerInput.trim().split(/\s+/).filter(Boolean).length;
 
   return (
-    <div className="space-y-4 mb-6 sm:mb-8">
-      <div className="p-5 rounded-3xl bg-[#1e0711]/75 border border-[#881337]/40 space-y-3.5 shadow-xl shadow-[#28030d]/30 glass-specular">
+    <div className="space-y-2.5 mb-3 sm:mb-4">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-[#1e0711]/75 border border-[#881337]/40 space-y-2.5 shadow-lg shadow-[#28030d]/30 glass-specular">
         <div className="flex items-center justify-between">
           <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
             Escribe tu respuesta analítica / técnica:
           </label>
-          <span className="text-[11px] font-semibold text-rose-300 bg-[#881337]/30 px-2.5 py-0.5 rounded-full border border-[#9f1239]/40">
+          <span className="text-[10px] font-semibold text-rose-300 bg-[#881337]/30 px-2 py-0.5 rounded-full border border-[#9f1239]/40">
             Respuesta Abierta Corta
           </span>
         </div>
         <textarea
-          rows={3}
+          rows={2}
           disabled={isAnswered || isEvaluatingShortAnswer}
           value={shortAnswerInput}
           onChange={e => onInputChange(e.target.value)}
           placeholder="Escribe una respuesta fundamentada de 1 a 4 líneas. La IA evaluará la similitud conceptual y los puntos clave con la respuesta modelo..."
-          className="w-full bg-[#12030a]/60 border border-[#881337]/35 focus:border-[#be123c]/60 rounded-2xl p-4 text-[15px] sm:text-base text-white placeholder-slate-500 focus:outline-none transition-colors resize-y disabled:opacity-60"
+          className="w-full bg-[#12030a]/60 border border-[#881337]/35 focus:border-[#be123c]/60 rounded-xl p-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none transition-colors resize-y disabled:opacity-60"
         />
         <div className="flex items-center justify-between text-xs text-slate-400 tabular-nums">
           <span>{wordCount} palabras</span>

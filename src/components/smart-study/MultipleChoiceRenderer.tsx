@@ -21,7 +21,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 mb-6 sm:mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
       {safeOptions.map((option, idx) => {
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
@@ -80,18 +80,18 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`animate-stagger-item active-press w-full text-left p-4 sm:p-5 rounded-2xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center gap-3.5 sm:gap-4 group cursor-pointer ${cardClasses}`}
+            className={`animate-stagger-item active-press w-full text-left p-3 sm:p-3.5 rounded-xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center gap-3 group cursor-pointer ${cardClasses}`}
           >
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-[13px] sm:text-sm shrink-0 tabular-nums transition-[transform,background-color,border-color] duration-150 shadow-sm ${badgeClasses}`}>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 tabular-nums transition-[transform,background-color,border-color] duration-150 shadow-sm ${badgeClasses}`}>
               {isAnswered && isCorrect ? (
-                <Check className="w-4 h-4 stroke-[3]" />
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
               ) : isAnswered && isSelected ? (
-                <X className="w-4 h-4 stroke-[3]" />
+                <X className="w-3.5 h-3.5 stroke-[3]" />
               ) : (
                 <span>{idx + 1}</span>
               )}
             </div>
-            <span className={`font-medium text-[15px] sm:text-base leading-snug flex-1 transition-colors ${textClasses}`}>
+            <span className={`font-medium text-[13px] sm:text-sm leading-snug flex-1 transition-colors ${textClasses}`}>
               <FormattedText text={option} inlineOnly={true} />
             </span>
           </button>

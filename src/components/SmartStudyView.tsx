@@ -3756,7 +3756,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-2 sm:py-3.5">
       {activeTab === 'history' ? (
         <div className="space-y-6 animate-fadeIn">
           {/* Header de Historial con botón de retorno a la práctica */}
@@ -4101,7 +4101,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
 
           {/* Divider Line */}
-          <div className="w-full h-px bg-white/[0.06] my-6 sm:my-8" />
+          <div className="w-full h-px bg-white/[0.06] my-2.5 sm:my-3.5" />
 
           {/* Notificación de Nivel Completado / Subida de Nivel */}
           {levelUpBanner && (
@@ -4224,7 +4224,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           {/* Píldora de Subtema Granular (Diseño Apple / Emil Kowalski / Linear) */}
           {currentSubtopic && (
             <div
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide bg-white/[0.04] border border-white/[0.08] text-rose-300 backdrop-blur-md shadow-sm mb-4 select-none animate-fadeIn"
+              className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-semibold tracking-wide bg-white/[0.04] border border-white/[0.08] text-rose-300 backdrop-blur-md shadow-sm mb-2 sm:mb-2.5 select-none animate-fadeIn"
               style={{
                 boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
               }}
@@ -4247,7 +4247,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 : (currentQ.question || '')
             }
             topic={currentQ.topic}
-            className="text-lg sm:text-[21px] tracking-tight mb-6 sm:mb-8 leading-snug"
+            className="text-base sm:text-lg font-bold tracking-tight mb-3 sm:mb-4 leading-snug"
           />
 
           {/* ── QUESTION TYPE RENDERERS ────────────────────────────────────── */}
@@ -4422,71 +4422,87 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           );
         })()}
 
-        {/* ── ACTION ROW: HISTORIAL DE PREGUNTAS + THUMBS UP / DOWN (ESTILO LINEAR / RAYCAST) ────── */}
-        <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
+        {/* ── ACTION ROW: HISTORIAL + SALTAR PREGUNTA + FEEDBACK ────── */}
+        <div className="flex items-center justify-between gap-2.5 pt-1 mb-3 sm:mb-4">
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className="active-press px-4 sm:px-5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 text-slate-300 hover:text-white font-medium text-xs sm:text-sm transition-colors shadow-sm flex items-center gap-2 min-h-[40px] cursor-pointer"
+            className="active-press px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 text-slate-300 hover:text-white font-medium text-xs transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
           >
-            <History className="w-4 h-4 text-slate-400" />
-            <span>Historial de preguntas</span>
+            <History className="w-3.5 h-3.5 text-slate-400" />
+            <span>Historial</span>
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setFeedbackGiven(feedbackGiven === 'up' ? null : 'up')}
-              title="Pregunta clara y de alta calidad"
-              className={`active-press w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
-                feedbackGiven === 'up'
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <ThumbsUp className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setFeedbackGiven(feedbackGiven === 'down' ? null : 'down')}
-              title="Reportar pregunta o redacción confusa"
-              className={`active-press w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
-                feedbackGiven === 'down'
-                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
-                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <ThumbsDown className="w-4 h-4" />
-            </button>
+            {!isAnswered && (
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={isAdvancing}
+                className="active-press px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Saltar pregunta</span>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+            )}
+
+            <div className="flex items-center gap-1 border-l border-white/[0.08] pl-2">
+              <button
+                type="button"
+                onClick={() => setFeedbackGiven(feedbackGiven === 'up' ? null : 'up')}
+                title="Pregunta clara y de alta calidad"
+                className={`active-press w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
+                  feedbackGiven === 'up'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ThumbsUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedbackGiven(feedbackGiven === 'down' ? null : 'down')}
+                title="Reportar pregunta o redacción confusa"
+                className={`active-press w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
+                  feedbackGiven === 'down'
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ThumbsDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* ── CENTERED "SIGUIENTE PREGUNTA" / "SALTAR PREGUNTA" BUTTON (ESTILO LINEAR STUDIO) ── */}
-        <div className="flex justify-center mb-6 sm:mb-8">
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={isAdvancing}
-            className={`active-press w-full sm:w-auto justify-center px-8 py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-colors duration-150 flex items-center gap-2.5 cursor-pointer min-h-[46px] ${
-              isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
-            } ${
-              currentLevelCorrect >= levelTarget
-                ? 'bg-gradient-to-r from-amber-400 to-amber-300 text-zinc-950 shadow-amber-500/20 font-extrabold hover:from-amber-300 hover:to-amber-200'
-                : theme === 'dark'
-                ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-black/40'
-                : theme === 'kitty'
-                ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
-                : 'thea-glass-card thea-glass-pill-hover border text-zinc-950'
-            }`}
-          >
-            <span>
-              {currentLevelCorrect >= levelTarget
-                ? (level < 3 ? `Avanzar al Nivel ${level + 1}` : 'Finalizar Kit (Dominio Total)')
-                : (isAnswered ? 'Siguiente pregunta' : 'Saltar pregunta')}
-            </span>
-            <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-          </button>
-        </div>
+        {/* ── CUANDO ESTÁ RESPONDIDO: BOTÓN DESTACADO "SIGUIENTE PREGUNTA" ── */}
+        {isAnswered && (
+          <div className="flex justify-center mb-4 sm:mb-5">
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={isAdvancing}
+              className={`active-press w-full sm:w-auto justify-center px-8 py-2.5 sm:py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-colors duration-150 flex items-center gap-2.5 cursor-pointer ${
+                isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
+              } ${
+                currentLevelCorrect >= levelTarget
+                  ? 'bg-gradient-to-r from-amber-400 to-amber-300 text-zinc-950 shadow-amber-500/20 font-extrabold hover:from-amber-300 hover:to-amber-200'
+                  : theme === 'dark'
+                  ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-black/40'
+                  : theme === 'kitty'
+                  ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
+                  : 'thea-glass-card thea-glass-pill-hover border text-zinc-950'
+              }`}
+            >
+              <span>
+                {currentLevelCorrect >= levelTarget
+                  ? (level < 3 ? `Avanzar al Nivel ${level + 1}` : 'Finalizar Kit (Dominio Total)')
+                  : 'Siguiente pregunta'}
+              </span>
+              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+            </button>
+          </div>
+        )}
 
         {/* ── JUSTIFICACIÓN EXACTA DE THEA (VISIBLE AUTOMÁTICAMENTE AL RESPONDER) ─ */}
         {isAnswered && (

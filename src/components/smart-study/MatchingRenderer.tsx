@@ -34,7 +34,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
   onCheckMatching,
 }) => {
   return (
-    <div className="space-y-6 mb-8">
+    <div className="space-y-3 mb-3 sm:mb-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-xs text-slate-300 font-medium">
           Haz clic en un concepto numerado de la izquierda y luego en su definición correspondiente a la derecha:
@@ -46,9 +46,9 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Left Column: Terms */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-violet-300 uppercase tracking-wider block">
               Conceptos ({matchingPairs.length})
@@ -200,7 +200,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
           type="button"
           disabled={Object.keys(matchingPairsMap).length < (matchingPairs.length || 4)}
           onClick={onCheckMatching}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-sm shadow-lg shadow-violet-900/30 transition-transform duration-160 ease-out active:scale-[0.985] cursor-pointer"
+          className="w-full py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-violet-900/30 transition-transform duration-160 ease-out active:scale-[0.985] cursor-pointer"
         >
           Comprobar Emparejamientos ({Object.keys(matchingPairsMap).length}/{matchingPairs.length || 4})
         </button>

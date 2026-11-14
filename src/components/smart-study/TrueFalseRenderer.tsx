@@ -18,7 +18,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 sm:mb-5">
       {['Verdadero', 'Falso'].map((label, idx) => {
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
@@ -73,16 +73,16 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`animate-stagger-item active-press w-full py-8 sm:py-10 px-6 rounded-3xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex flex-col items-center justify-center gap-3 cursor-pointer ${cardClasses}`}
+            className={`animate-stagger-item active-press w-full py-4 sm:py-5 px-4 rounded-2xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex flex-col items-center justify-center gap-2 cursor-pointer ${cardClasses}`}
           >
-            <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all shadow-sm ${iconBgClasses}`}>
+            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all shadow-sm ${iconBgClasses}`}>
               {isVerdadero ? (
-                <Check className={`w-7 h-7 stroke-[2.5] ${iconClasses}`} />
+                <Check className={`w-5 h-5 stroke-[2.5] ${iconClasses}`} />
               ) : (
-                <X className={`w-7 h-7 stroke-[2.5] ${iconClasses}`} />
+                <X className={`w-5 h-5 stroke-[2.5] ${iconClasses}`} />
               )}
             </div>
-            <span className={`font-bold text-[19px] sm:text-[22px] tracking-tight ${
+            <span className={`font-bold text-base sm:text-lg tracking-tight ${
               theme === 'dark' ? 'text-white' : 'text-zinc-950'
             }`}>
               {label}

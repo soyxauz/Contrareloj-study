@@ -23,11 +23,11 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="space-y-4 mb-8">
-      <p className={`text-[13px] font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+    <div className="space-y-2.5 mb-3 sm:mb-4">
+      <p className={`text-xs sm:text-[13px] font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
         Selecciona una o más respuestas válidas y presiona &quot;Comprobar Selección&quot;:
       </p>
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-2.5">
         {safeOptions.map((option, idx) => {
           const isSelected = selectedMultiIndices.includes(idx);
           const isCorrect = safeCorrectIndices.includes(idx);
@@ -74,26 +74,26 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
               disabled={isAnswered}
               style={{ animationDelay: `${idx * 30}ms` }}
               onClick={() => onToggleIndex(idx)}
-              className={`animate-stagger-item active-press w-full text-left p-4 rounded-2xl border transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center justify-between cursor-pointer ${optionStyles}`}
+              className={`animate-stagger-item active-press w-full text-left p-2.5 sm:p-3 rounded-xl border transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center justify-between cursor-pointer ${optionStyles}`}
             >
-              <div className="flex items-center gap-3">
-                <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+              <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
+                <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
                   isSelected
                     ? (theme === 'dark' ? 'bg-white border-white text-zinc-950 font-bold shadow-sm' : theme === 'kitty' ? 'bg-pink-500 border-pink-500 text-white font-bold' : 'bg-zinc-900 border-zinc-900 text-white font-bold')
                     : (theme === 'dark' ? 'border-white/20 bg-white/[0.04]' : theme === 'kitty' ? 'border-pink-300 bg-pink-50/50' : 'border-slate-300 bg-slate-100')
                 }`}>
                   {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
-                <span className="text-[15px] sm:text-base font-medium leading-snug">
+                <span className="text-[13px] sm:text-sm font-medium leading-snug flex-1">
                   <FormattedText text={option} inlineOnly={true} />
                 </span>
               </div>
 
               {isAnswered && isCorrect && isSelected && (
-                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
               )}
               {isAnswered && !isCorrect && isSelected && (
-                <XCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
               )}
             </button>
           );
@@ -105,7 +105,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
           type="button"
           disabled={selectedMultiIndices.length === 0}
           onClick={onCheckSelection}
-          className={`active-press w-full py-3 rounded-xl font-bold text-sm sm:text-[15px] shadow-md transition-[transform,background-color] duration-150 cursor-pointer tabular-nums disabled:opacity-40 ${
+          className={`active-press w-full py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-[transform,background-color] duration-150 cursor-pointer tabular-nums disabled:opacity-40 ${
             theme === 'dark'
               ? 'bg-white hover:bg-zinc-200 text-zinc-950 glass-specular'
               : theme === 'kitty'
