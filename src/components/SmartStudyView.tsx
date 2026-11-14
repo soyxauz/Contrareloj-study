@@ -634,11 +634,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   // Ventana deslizante de firmas conceptuales (subtema + tokens nucleares) para intercalado de alta fidelidad
   const recentSignaturesRef = useRef<QuestionSignature[]>([]);
   // Cola de reintroducción espaciada de preguntas falladas (Curva Ebbinghaus / Thea original: 4-5 de separación)
-  const scheduledErrorReviewsRef = useRef<Array<{ question: Question; targetIndex: number }>>([]);
+  const scheduledErrorReviewsRef = useRef<Array<{ question: Question; targetIndex: number }>>(
+    Array.isArray(savedSession?.scheduledErrorReviews) ? savedSession.scheduledErrorReviews : []
+  );
   // Referencia para amortiguador entre intervenciones socráticas (mínimo 3 preguntas normales entre intervenciones - A3)
   const lastSocraticTriggerIndexRef = useRef<number>(-999);
   // Referencia para amortiguador entre reapariciones de preguntas erróneas (mínimo 2-3 preguntas normales entre cada error que reaparece)
-  const lastErrorReviewTriggerIndexRef = useRef<number>(-999);
+  const lastErrorReviewTriggerIndexRef = useRef<number>(
+    typeof savedSession?.lastErrorReviewTriggerIndex === 'number' ? savedSession.lastErrorReviewTriggerIndex : -999
+  );
 
   // ── Respuestas Abiertas Cortas (Short Answer) ──────────────────────────
   const [shortAnswerInput, setShortAnswerInput] = useState<string>(wasPreviouslyAnswered ? '' : (savedSession?.shortAnswerInput || ''));
@@ -2156,6 +2160,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     levelCorrectCount: currentLevelCorrect,
     levelCorrectCounts,
     errorQueue,
+    scheduledErrorReviews: scheduledErrorReviewsRef.current,
+    lastErrorReviewTriggerIndex: lastErrorReviewTriggerIndexRef.current,
     isReinforcementMode,
     selectedOption,
     selectedMultiIndices,
@@ -2259,6 +2265,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         setActivePracticeLevel(rActiveLevel);
         setTargetLevel(rActiveLevel);
         setErrorQueue(rErrorQ);
+        if (Array.isArray(idbSession.scheduledErrorReviews) && scheduledErrorReviewsRef.current.length === 0) {
+          scheduledErrorReviewsRef.current = idbSession.scheduledErrorReviews;
+        }
+        if (typeof idbSession.lastErrorReviewTriggerIndex === 'number' && lastErrorReviewTriggerIndexRef.current === -999) {
+          lastErrorReviewTriggerIndexRef.current = idbSession.lastErrorReviewTriggerIndex;
+        }
         setIsReinforcementMode(rReinforce);
         setQuestionsAnsweredTotal(idbSession.questionsAnsweredTotal || 0);
         setTotalErrorsReinforced(idbSession.totalErrorsReinforced || 0);
@@ -2397,6 +2409,47 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       isCancelled = true;
     };
   }, [userId, kit.id]);
+
+  // Sincronización reactiva en tiempo real ante eventos remotos de Google Drive
+  useEffect(() => {
+    const handleProgressSynced = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail && detail.kitId && detail.kitId !== kit.id) return;
+      if (detail?.source === 'local' || detail?.source === 'initial_pin') return;
+      if (hasUserInteractedRef.current || isAnswered) return;
+
+      const remoteSession = authService.getSmartStudySession(userId || null, kit.id);
+      if (!remoteSession || (remoteSession.lastUpdated || 0) <= (sessionTimestampRef.current || 0)) return;
+
+      if (Array.isArray(remoteSession.scheduledErrorReviews)) {
+        scheduledErrorReviewsRef.current = remoteSession.scheduledErrorReviews;
+      }
+      if (typeof remoteSession.lastErrorReviewTriggerIndex === 'number') {
+        lastErrorReviewTriggerIndexRef.current = remoteSession.lastErrorReviewTriggerIndex;
+      }
+      if (Array.isArray(remoteSession.history)) {
+        setHistory(remoteSession.history.slice(0, 50));
+      }
+      if (typeof remoteSession.questionsAnsweredTotal === 'number') {
+        setQuestionsAnsweredTotal(remoteSession.questionsAnsweredTotal);
+      }
+      if (typeof remoteSession.level === 'number') {
+        setLevel(remoteSession.level as 1 | 2 | 3);
+      }
+      if (typeof remoteSession.levelCorrectCount === 'number') {
+        setLevelCorrectCount(remoteSession.levelCorrectCount);
+      }
+      if (remoteSession.levelCorrectCounts) {
+        setLevelCorrectCounts(remoteSession.levelCorrectCounts);
+      }
+      sessionTimestampRef.current = remoteSession.lastUpdated;
+    };
+
+    window.addEventListener('thea_progress_synced', handleProgressSynced);
+    return () => {
+      window.removeEventListener('thea_progress_synced', handleProgressSynced);
+    };
+  }, [kit.id, userId, isAnswered]);
 
   // Guardado garantizado al salir, ocultar pestaña o cerrar el navegador/página
   useEffect(() => {

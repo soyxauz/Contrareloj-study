@@ -238,6 +238,8 @@ export interface SmartStudySessionState {
   level: 1 | 2 | 3;
   levelCorrectCount: number;
   errorQueue: Question[];
+  scheduledErrorReviews?: Array<{ question: Question; targetIndex: number }>;
+  lastErrorReviewTriggerIndex?: number;
   isReinforcementMode: boolean;
   selectedOption: number | null;
   selectedMultiIndices: number[];

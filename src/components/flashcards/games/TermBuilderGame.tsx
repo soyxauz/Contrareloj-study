@@ -55,6 +55,14 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
   const [gameOver, setGameOver] = useState(false);
   const [termsCompleted, setTermsCompleted] = useState<string[]>([]);
 
+  // Referencias para evitar cierres obsoletos (stale closures) en el temporizador
+  const scoreRef = useRef(0);
+  scoreRef.current = score;
+  const termsCompletedRef = useRef<string[]>([]);
+  termsCompletedRef.current = termsCompleted;
+  const onGameCompleteRef = useRef(onGameComplete);
+  onGameCompleteRef.current = onGameComplete;
+
   // Current term state
   const [currentCard, setCurrentCard] = useState<Flashcard | null>(null);
   const [tiles, setTiles] = useState<SyllableTile[]>([]);
@@ -155,15 +163,15 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
         if (prev <= 1) {
           clearInterval(timerIntervalRef.current);
           setGameOver(true);
-          if (score > 100) {
+          if (scoreRef.current > 100) {
             confetti({
               particleCount: 100,
               spread: 70,
               origin: { y: 0.6 },
             });
           }
-          if (onGameComplete) {
-            onGameComplete(score, termsCompleted);
+          if (onGameCompleteRef.current) {
+            onGameCompleteRef.current(scoreRef.current, termsCompletedRef.current);
           }
           return 0;
         }

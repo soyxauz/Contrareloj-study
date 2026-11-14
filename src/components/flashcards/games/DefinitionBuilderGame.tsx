@@ -478,8 +478,10 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
       setScore(newScore);
       setMultiplier(nextMultiplier);
 
-      if (currentCard) {
-        setMasteredTerms(prev => [...prev, getCardTerm(currentCard)]);
+      const currentTerm = currentCard ? getCardTerm(currentCard) : '';
+      const updatedMastered = currentTerm ? [...masteredTerms, currentTerm] : masteredTerms;
+      if (currentTerm) {
+        setMasteredTerms(updatedMastered);
       }
 
       // Progress to next round after delay
@@ -492,12 +494,12 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
             origin: { y: 0.6 },
           });
           if (onGameComplete) {
-            onGameComplete(newScore + 300, masteredTerms);
+            onGameComplete(newScore + 300, updatedMastered);
           }
         } else {
           const nextR = currentRound + 1;
           setCurrentRound(nextR);
-          setupRound(nextR, new Set(masteredTerms));
+          setupRound(nextR, new Set(updatedMastered));
         }
       }, 900);
     } else {

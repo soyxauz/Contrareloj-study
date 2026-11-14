@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { StudyKit, Flashcard } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
@@ -175,6 +175,56 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     googleDriveService.flushAllPendingSyncs(userId || undefined);
   }, [archivedCards, kit.id, userId]);
 
+  // 1. Auto-persistencia en primer montaje si el kit no tenía flashcards y fueron auto-extraídas
+  useEffect(() => {
+    if ((!kit.flashcards || kit.flashcards.length === 0) && cards.length > 0) {
+      persistChanges(cards);
+    }
+  }, []);
+
+  // 2. Hidratación asíncrona desde IndexedDB si LocalStorage aún no la tenía
+  useEffect(() => {
+    let cancelled = false;
+    authService.restoreFlashcardProgressAsync(userId || null, kit.id).then(idbProgress => {
+      if (cancelled || !idbProgress?.masteryMap) return;
+      masteryMapRef.current = { ...masteryMapRef.current, ...idbProgress.masteryMap };
+      setCards(prevCards =>
+        prevCards.map(c => ({
+          ...c,
+          mastery: getCardMastery(c, masteryMapRef.current),
+        }))
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [kit.id, userId]);
+
+  // 3. Sincronización en tiempo real ante eventos remotos de Google Drive o guardado de sesión
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail && detail.kitId && detail.kitId !== kit.id) return;
+      const progress = authService.getFlashcardProgress(userId || null, kit.id);
+      if (progress?.masteryMap) {
+        masteryMapRef.current = { ...masteryMapRef.current, ...progress.masteryMap };
+        setCards(prevCards =>
+          prevCards.map(c => ({
+            ...c,
+            mastery: getCardMastery(c, masteryMapRef.current),
+          }))
+        );
+      }
+    };
+
+    window.addEventListener('thea_progress_synced', handleSync);
+    window.addEventListener('thea_flashcard_saved', handleSync);
+    return () => {
+      window.removeEventListener('thea_progress_synced', handleSync);
+      window.removeEventListener('thea_flashcard_saved', handleSync);
+    };
+  }, [kit.id, userId]);
+
   // Handle Add Card from List View
   const handleAddCard = (term: string, definition: string) => {
     const newCard: Flashcard = {
@@ -234,12 +284,19 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   const handleGameVictory = (score: number, termsMastered: string[]) => {
     if (termsMastered.length === 0) return;
 
-    const termSet = new Set(termsMastered.map(t => t.toLowerCase().trim()));
-    const nextCards = cards.map(c => {
-      const t = getCardTerm(c).toLowerCase().trim();
-      if (termSet.has(t)) {
+    const normalizeTerm = (str: string) =>
+      str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+    const termSet = new Set(termsMastered.map(normalizeTerm));
+
+    const nextCards = cardsRef.current.map(c => {
+      const termNorm = normalizeTerm(getCardTerm(c));
+      const rawTermNorm = normalizeTerm(c.term || '');
+      const idNorm = normalizeTerm(c.id || '');
+      if (termSet.has(termNorm) || termSet.has(rawTermNorm) || termSet.has(idNorm)) {
         masteryMapRef.current[c.id] = 'mastered';
         masteryMapRef.current[c.term] = 'mastered';
+        if (c.term) masteryMapRef.current[c.term.toLowerCase().trim()] = 'mastered';
         return { ...c, mastery: 'mastered' as const };
       }
       return c;
