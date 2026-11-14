@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Search } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import type { GlossaryConcept } from '../utils/glossaryExtractor';
 import { FormattedText } from './FormattedText';
@@ -218,34 +218,16 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
       />
 
       {/* Cuerpo de la Definición con soporte enriquecido para KaTeX y Markdown */}
-      <div className="space-y-2.5">
-        <div
-          className={`text-xs sm:text-[13px] leading-relaxed font-normal ${
-            theme === 'light'
-              ? 'text-slate-700'
-              : theme === 'kitty'
-              ? 'text-pink-900/90'
-              : 'text-slate-200'
-          }`}
-        >
-          <FormattedText text={definitionText || concept.definition} inlineOnly={false} />
-        </div>
-
-        {/* Micro-etiqueta de rigor enciclopédico certero (Google / Diccionario Académico) */}
-        <div className="flex items-center gap-1.5 pt-1">
-          <span
-            className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-              theme === 'light'
-                ? 'bg-sky-50 text-sky-800 border border-sky-200'
-                : theme === 'kitty'
-                ? 'bg-pink-100 text-pink-700 border border-pink-200'
-                : 'bg-sky-950/60 text-sky-300 border border-sky-500/30'
-            }`}
-          >
-            <Search className="w-2.5 h-2.5" />
-            <span>Definición Enciclopédica (Google)</span>
-          </span>
-        </div>
+      <div
+        className={`text-xs sm:text-[13px] leading-relaxed font-normal ${
+          theme === 'light'
+            ? 'text-slate-700'
+            : theme === 'kitty'
+            ? 'text-pink-900/90'
+            : 'text-slate-200'
+        }`}
+      >
+        <FormattedText text={definitionText || concept.definition} inlineOnly={false} />
       </div>
     </div>
   );
