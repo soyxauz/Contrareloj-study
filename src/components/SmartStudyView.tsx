@@ -4207,32 +4207,96 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
           {/* Badge de advertencia si la pregunta fue revelada previamente en el Banco de Preguntas */}
           {isCurrentQRevealed && (
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold mb-4 animate-fadeIn">
-              <EyeOff className="w-4 h-4 text-amber-400 shrink-0" />
+            <div
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold mb-4 animate-fadeIn ${
+                theme === 'light'
+                  ? 'bg-amber-50/95 border border-amber-300/90 text-amber-900 shadow-xs'
+                  : theme === 'kitty'
+                  ? 'bg-amber-100/90 border border-amber-300/90 text-amber-950 shadow-xs'
+                  : 'bg-amber-500/15 border border-amber-500/40 text-amber-300'
+              }`}
+            >
+              <EyeOff
+                className={`w-4 h-4 shrink-0 ${
+                  theme === 'dark' ? 'text-amber-400' : 'text-amber-700'
+                }`}
+              />
               <span>Pregunta revelada previamente (no suma avance al progreso)</span>
             </div>
           )}
 
           {/* Badge de advertencia para preguntas de detección de concepto falso / impostor */}
           {(qType === 'multiple-choice' || qType === 'multi-select') && isFalseConceptQuestion(currentQ) && (
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-bold mb-4 animate-fadeIn">
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <div
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold mb-4 animate-fadeIn ${
+                theme === 'light'
+                  ? 'bg-rose-50/95 border border-rose-300/90 text-rose-950 shadow-xs'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100/90 border border-pink-300 text-pink-950 shadow-xs'
+                  : 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
+              }`}
+            >
+              <AlertTriangle
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  theme === 'dark' ? 'text-rose-400' : theme === 'kitty' ? 'text-pink-700' : 'text-rose-700'
+                }`}
+              />
               <span>Atención: Selecciona el concepto EQUIVOCADO o la afirmación FALSA</span>
             </div>
           )}
 
-          {/* Píldora de Subtema Granular (Diseño Apple / Emil Kowalski / Linear) */}
+          {/* Píldora de Subtema Granular (Diseño Apple / Emil Kowalski / Linear con soporte multitema y sin punto parpadeante) */}
           {currentSubtopic && (
             <div
-              className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-semibold tracking-wide bg-white/[0.04] border border-white/[0.08] text-rose-300 backdrop-blur-md shadow-sm mb-2 sm:mb-2.5 select-none animate-fadeIn"
+              className={`inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md mb-2 sm:mb-2.5 select-none animate-fadeIn ${
+                theme === 'light'
+                  ? 'bg-rose-50/90 border border-rose-200/90 text-rose-950 shadow-xs'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100/90 border border-pink-300/80 text-pink-950 shadow-xs'
+                  : 'bg-white/[0.04] border border-white/[0.08] text-rose-200 shadow-sm'
+              }`}
               style={{
-                boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
+                boxShadow:
+                  theme === 'light'
+                    ? '0 1px 2px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                    : theme === 'kitty'
+                    ? '0 1px 2px rgba(219, 39, 119, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                    : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
-              <span className="uppercase tracking-wider text-[10px] text-slate-400 font-bold">Subtema</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-rose-200 font-medium">{currentSubtopic}</span>
+              <span
+                className={`uppercase tracking-wider text-[10px] font-bold ${
+                  theme === 'light'
+                    ? 'text-rose-700'
+                    : theme === 'kitty'
+                    ? 'text-pink-700'
+                    : 'text-slate-400'
+                }`}
+              >
+                Subtema
+              </span>
+              <span
+                className={
+                  theme === 'light'
+                    ? 'text-rose-300'
+                    : theme === 'kitty'
+                    ? 'text-pink-300'
+                    : 'text-slate-600'
+                }
+              >
+                •
+              </span>
+              <span
+                className={`font-medium ${
+                  theme === 'light'
+                    ? 'text-rose-950 font-semibold'
+                    : theme === 'kitty'
+                    ? 'text-pink-950 font-semibold'
+                    : 'text-rose-200'
+                }`}
+              >
+                {currentSubtopic}
+              </span>
             </div>
           )}
 
