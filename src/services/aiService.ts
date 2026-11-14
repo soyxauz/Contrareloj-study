@@ -3135,70 +3135,37 @@ export function shuffleOptionsWithEqualProbability(
   return { options: shuffled, correctIndex: targetSlot };
 }
 
-/** Normaliza contexto y pregunta evitando duplicar dos preguntas seguidas cuando el contexto ya incluye interrogación */
-function combineCaseContextAndQuestion(contexto: string, pregunta: string, isCase: boolean): string {
+/** Normaliza contexto y pregunta preservando íntegramente cualquier caso clínico o supuesto fáctico */
+function combineCaseContextAndQuestion(contexto: string, pregunta: string, _isCase?: boolean): string {
   const cleanQ = (pregunta || '').trim();
   const cleanCtx = (contexto || '').trim();
-  if (!cleanCtx || !isCase || cleanQ.includes(cleanCtx.slice(0, 20))) {
+  if (!cleanCtx) return cleanQ;
+  if (!cleanQ) return cleanCtx;
+  if (cleanQ.toLowerCase().includes(cleanCtx.toLowerCase().slice(0, 25))) {
     return cleanQ;
   }
   const ctxWithoutTrailingQ = cleanCtx.replace(/\s*¿[^¿?]{8,}\?\s*$/g, '').trim();
-  if (!ctxWithoutTrailingQ || cleanQ.includes(ctxWithoutTrailingQ.slice(0, 20))) {
+  if (!ctxWithoutTrailingQ || cleanQ.toLowerCase().includes(ctxWithoutTrailingQ.toLowerCase().slice(0, 25))) {
     return cleanQ;
   }
   return `${ctxWithoutTrailingQ}\n\n${cleanQ}`;
 }
 
 /**
- * Limita la extensión de un enunciado respetando la regla pedagógica de concisión:
- * - Predominio general (~75%-80%): Preguntas cortas y directas de máximo 28 palabras (1-2 líneas).
- * - Excepción para casos prácticos (~20%-25%): Viñetas clínicas o supuestos analíticos de hasta 55 palabras máximo.
+ * Normaliza y preserva el enunciado completo de la pregunta pedagógica.
+ * Mantiene intacto cualquier caso clínico, supuesto de hecho o contexto descriptivo preliminar
+ * junto con la pregunta interrogativa, sin recortes arbitrarios ni truncamiento de palabras.
  */
-export function enforceQuestionLengthLimit(questionText: string, isCaseExplicit?: boolean): string {
+export function enforceQuestionLengthLimit(questionText: string, _isCaseExplicit?: boolean): string {
   if (!questionText) return '';
   const clean = questionText.trim();
-  const words = clean.split(/\s+/).filter(Boolean);
+  if (!clean) return '';
 
-  const isCase = isCaseExplicit ?? (
-    /\b(caso\s+(clínico|práctico|jurídico|de estudio|real)|supuesto\s+de\s+hecho|paciente\s+de|en\s+el\s+siguiente\s+caso|viñeta\s+clínica|escenario\s+práctico)\b/i.test(clean) ||
-    /^(en\s+un\s+caso|supongamos\s+que|un\s+paciente|una\s+paciente|una\s+persona|un\s+tribunal|en\s+un\s+juicio)/i.test(clean)
-  );
-
-  const maxWords = isCase ? 55 : 28;
-
-  // Si no es caso y tiene preámbulo largo, extraer la pregunta interrogativa directa nuclear si existe
-  if (!isCase && words.length > 28) {
-    const qIndex = clean.lastIndexOf('¿');
-    if (qIndex > 0) {
-      const directQ = clean.slice(qIndex).trim();
-      const directWords = directQ.split(/\s+/).filter(Boolean);
-      if (directWords.length >= 4 && directWords.length <= 28) {
-        return directQ;
-      }
-    }
+  // Asegurar que si la pregunta contiene un enunciado interrogativo final, cierre adecuadamente
+  if (clean.includes('¿') && !clean.endsWith('?') && !clean.endsWith('.')) {
+    return `${clean}?`;
   }
-
-  if (words.length <= maxWords) {
-    return clean;
-  }
-
-  // Recorte natural respetando límite de palabras
-  const truncatedWords = words.slice(0, maxWords);
-  const truncatedText = truncatedWords.join(' ');
-
-  // Si hay punto o cierre de interrogación en el último tramo del texto recortado, cortar limpiamente
-  const lastPeriod = truncatedText.lastIndexOf('.');
-  const lastQuestion = truncatedText.lastIndexOf('?');
-  const cutPoint = Math.max(lastPeriod, lastQuestion);
-
-  if (cutPoint > truncatedText.length * 0.7) {
-    return truncatedText.slice(0, cutPoint + 1).trim();
-  }
-
-  if (clean.includes('?') && !truncatedText.endsWith('?')) {
-    return `${truncatedText}...?`;
-  }
-  return `${truncatedText}...`;
+  return clean;
 }
 
 /**
@@ -3247,10 +3214,10 @@ Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosam
    - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas (tanto para marcar afirmaciones verdaderas como ocasionalmente para identificar errores).
    - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
 
-FASE 3: DISTRIBUCIÓN DE EXTENSIÓN DEL ENUNCIADO (PREDOMINIO DE PREGUNTAS CORTAS Y DIRECTAS)
-- REGLA CLAVE DE EXTENSIÓN: La mayor parte de las preguntas (~75% a 80%) DEBEN SER CORTAS, DIRECTAS Y CONCISAS (entre 8 y 22 palabras, 1 o 2 líneas sin rodeos ni preámbulos). Preguntan directamente por definiciones, causas, efectos, funciones o diferencias conceptuales precisas (ej. '¿Cuál es la función principal del ribosoma?', '¿Qué arteria irriga el nódulo sinusal?', '¿En qué plazo prescribe la acción penal?').
-- EXCEPCIÓN MODERADA (CASOS PRÁCTICOS): Únicamente una minoría (~20% a 25%) deben ser MÁS EXTENSAS (entre 35 y 55 palabras máximo) cuando se requiera describir un caso clínico, supuesto de hecho jurídico o escenario de aplicación práctica.
-- LÍMITES ESTRICTOS DE PALABRAS: Máximo 28 palabras para preguntas directas; máximo 55 palabras para casos prácticos. Queda TERMINANTEMENTE PROHIBIDO redactar párrafos introductorios inflados o innecesarios en preguntas conceptuales.
+FASE 3: INTEGRIDAD Y AUTOSUFICIENCIA DE ENUNCIADOS (CASOS CLÍNICOS Y SUPUESTOS DE HECHO)
+- AUTOSUFICIENCIA ABSOLUTA DEL CONTEXTO: Si formulas una pregunta que hace referencia a un paciente, caso clínico, supuesto de hecho jurídico o escenario específico (ej. '¿Cuál es el diagnóstico de este paciente?', '¿Qué indemnización corresponde a dicho trabajador?'), ES TERMINANTEMENTE OBLIGATORIO que el campo "pregunta" contenga el caso completo y autosuficiente (edad, antecedentes, síntomas clave, analítica de laboratorio o hechos fácticos) ANTES del signo de interrogación. Queda TERMINANTEMENTE PROHIBIDO formular preguntas referidas a "este paciente" o "el caso descrito" sin haber expuesto previamente todos sus datos y síntomas en ese mismo enunciado.
+- CONSERVACIÓN ÍNTEGRA: No amputes ni resumas datos clínicos o fácticos cruciales; el estudiante debe contar con toda la información necesaria para responder con rigor.
+- PREGUNTAS CONCEPTUALES DIRECTAS: Para preguntas de conceptos puros, definiciones o mecanismos generales, formula el enunciado de manera directa y concisa sin preámbulos inflados.
 
 FORMATO DE SALIDA (JSON ESTRICTO):
 Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
@@ -3268,7 +3235,7 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       "tipo": "multiple-choice | matching | drag-drop | multi-select | true-false",
       "longitud_enunciado": "corto (75% del lote) | extenso_caso (25% del lote)",
       "concepto_evaluado": "Concepto o tema evaluado",
-      "pregunta": "Enunciado de la pregunta (resalta con **...** la parte nuclear o clave de la pregunta, dejando el contexto preliminar sin formato)",
+      "pregunta": "Enunciado completo de la pregunta. Si es un caso clínico o supuesto práctico, incluye primero el caso con todos sus datos y síntomas antes del signo de interrogación final (resalta con **...** la parte nuclear de la pregunta)",
       "opciones": { "A": "Opción A", "B": "Opción B", "C": "Opción C", "D": "Opción D" },
       "respuesta_correcta": "A",
       "opciones_multiples": ["Opción 1", "Opción 2", "Opción 3", "Opción 4"],
@@ -3334,7 +3301,7 @@ ${sourceRepresentation}
 - PROPORCIÓN Y VARIEDAD BALANCEADA:
   * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D), priorizando preguntas afirmativas de comprensión directa y deducción, con presencia moderada (~15%-20%) de preguntas de afirmación falsa o concepto equivocado.
   * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop").
-- DISTRIBUCIÓN DE EXTENSIÓN (PREDOMINIO DE PREGUNTAS CORTAS): La mayor parte (~75%-80%) de las preguntas DEBEN ser CORTAS y directas (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Solo una minoría (~20%-25%) deben ser más extensas (entre 35 y 55 palabras) cuando se trate de casos prácticos o viñetas clínicas aplicadas. Límite máximo: 28 palabras para preguntas directas y 55 palabras para casos.
+- AUTOSUFICIENCIA Y CONTEXTO COMPLETO: Todo caso clínico, supuesto de hecho o viñeta analítica DEBE incluir la descripción completa y autosuficiente con todos sus datos y síntomas en el campo "pregunta" ANTES del signo de interrogación. Queda TERMINANTEMENTE PROHIBIDO formular preguntas sobre "este paciente", "dicha paciente" o "el caso anterior" sin haber descrito al paciente o los hechos completos en el propio enunciado.
 - REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
 - TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
 
@@ -3379,16 +3346,15 @@ Genera el JSON completo respetando la estructura exigida:`;
 
       let qType: Question['type'] = 'multiple-choice';
 
-      if (detectedType.includes('matching') || (Array.isArray(p.pares_emparejamiento) && p.pares_emparejamiento.length >= 2)) {
+      const hasValidMatching = Array.isArray(p.pares_emparejamiento) && p.pares_emparejamiento.length >= 2;
+      const hasValidDragDrop = Boolean(
+        (templateSentence && blanksCorrect && blanksCorrect.length > 0 && /\{\d+\}/.test(templateSentence)) ||
+        (hasPlaceholders && blanksCorrect && blanksCorrect.length > 0)
+      );
+
+      if (hasValidMatching) {
         qType = 'matching';
-      } else if (
-        detectedType.includes('drag') ||
-        detectedType.includes('blanks') ||
-        detectedType.includes('huecos') ||
-        detectedType.includes('completar') ||
-        (templateSentence && blanksCorrect && blanksCorrect.length > 0) ||
-        (hasPlaceholders && (blanksCorrect || wordBank || detectedType.includes('drag')))
-      ) {
+      } else if (hasValidDragDrop) {
         qType = 'drag-drop';
       } else if (detectedType.includes('multi-select') || (Array.isArray(p.indices_correctos) && p.indices_correctos.length > 1)) {
         qType = 'multi-select';
@@ -3403,19 +3369,42 @@ Genera el JSON completo respetando la estructura exigida:`;
           qType = 'multiple-choice';
         }
       } else {
+        // Si no cumple matching ni drag-drop válidos, forzar degradación segura a multiple-choice
         qType = 'multiple-choice';
       }
 
-      // Preparación de opciones estándar
+      // Preparación de opciones estándar seguras (garantizar 4 literales completos siempre)
       const optsObj = p.opciones || {};
-      const optionsArray: string[] = Array.isArray(p.opciones_multiples) && p.opciones_multiples.length > 0
-        ? p.opciones_multiples.map((o: any) => String(o).trim())
-        : [
-            String(optsObj.A || optsObj['a'] || 'Opción A').trim(),
-            String(optsObj.B || optsObj['b'] || 'Opción B').trim(),
-            String(optsObj.C || optsObj['c'] || 'Opción C').trim(),
-            String(optsObj.D || optsObj['d'] || 'Opción D').trim(),
-          ];
+      let optionsArray: string[] = [];
+      if (Array.isArray(p.opciones) && p.opciones.length >= 2) {
+        optionsArray = p.opciones.map((o: any) => String(o).trim()).filter(Boolean);
+      } else if (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 2) {
+        optionsArray = p.opciones_multiples.map((o: any) => String(o).trim()).filter(Boolean);
+      } else if (optsObj && typeof optsObj === 'object') {
+        const candidateOpts = [
+          String(optsObj.A || optsObj['a'] || '').trim(),
+          String(optsObj.B || optsObj['b'] || '').trim(),
+          String(optsObj.C || optsObj['c'] || '').trim(),
+          String(optsObj.D || optsObj['d'] || '').trim(),
+        ].filter(Boolean);
+        if (candidateOpts.length >= 2) {
+          optionsArray = candidateOpts;
+        }
+      }
+
+      if (optionsArray.length < 2) {
+        const defAnswer = String(p.respuesta_correcta || p.idealAnswer || '').trim();
+        optionsArray = [
+          defAnswer || 'Afirmación correcta demostrada en el texto',
+          'Interpretación contraria a los principios expuestos',
+          'Postulado plausible pero no verificado en el material',
+          'Concepto ajeno al tema analizado',
+        ];
+      }
+
+      while (optionsArray.length < 4) {
+        optionsArray.push(`Alternativa adicional ${optionsArray.length + 1}`);
+      }
 
       const hasMultipleOptions = (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 3) ||
         Boolean(optsObj.C || optsObj['c'] || optsObj.D || optsObj['d']);
@@ -4190,6 +4179,47 @@ export function stripStudyGuideEmojis(markdownText: string): string {
 }
 
 /**
+ * Normaliza guías de estudio para evitar listas jerárquicas o cascadas excesivas de viñetas.
+ * Convierte viñetas principales que actúan como títulos de sección o fármacos en encabezados '###'
+ * y aplana sub-viñetas anidadas en propiedades en negrita o párrafos legibles.
+ */
+export function normalizeStudyGuideBullets(text: string): string {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const result: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+
+    // Detectar viñeta de primer nivel que actúa como título/categoría (termina en ':' o va seguida de sub-viñetas con sangría)
+    const topLevelHeaderBullet = line.match(/^[-*+]\s+(\*{0,2}[A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][^\n:]+\*{0,2}:?\s*)$/);
+    const hasIndentedNextBullet = /^(\s{2,}|\t)[-*+]\s+/.test(nextLine);
+
+    if (topLevelHeaderBullet && (line.trim().endsWith(':') || hasIndentedNextBullet)) {
+      const title = topLevelHeaderBullet[1].replace(/[:*]/g, '').trim();
+      result.push('');
+      result.push(`### ${title}`);
+      result.push('');
+      continue;
+    }
+
+    // Detectar sub-viñetas con sangría que definen propiedades clave (ej. '  * Mecanismo: ...' o '  * Efectos Adversos: ...')
+    const indentedProperty = line.match(/^(\s{2,}|\t)[-*+]\s+(\*{0,2}[A-Za-zÁÉÍÓÚáéíóúñÑ\s/]{3,35}:?\*{0,2}:?\s*)(.*)$/);
+    if (indentedProperty) {
+      const propName = indentedProperty[2].replace(/[:*]/g, '').trim();
+      const propVal = indentedProperty[3].trim();
+      result.push(`**${propName}:** ${propVal}`);
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
  * Remueve resúmenes ejecutivos, visiones epistémicas, preámbulos meta-analíticos y emojis
  * de las guías de estudio para entrar directamente en la materia.
  */
@@ -4213,21 +4243,24 @@ export function stripExecutiveSummaryPreamble(markdownText: string): string {
   // 3. Quitar introducciones meta-analíticas redundantes iniciales antes del primer ##
   cleaned = cleaned.replace(/^(#\s+[^\n]+\n+)(?:(?:El presente tratado|Este documento analiza|En esta gu[íi]a de estudio)[^\n]+\n+)+/gi, '$1\n');
 
+  cleaned = normalizeStudyGuideBullets(cleaned);
   cleaned = sanitizeRepetitionLoops(cleaned);
   cleaned = stripStudyGuideEmojis(cleaned);
 
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
 
-const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO OBLIGATORIO (Markdown + KaTeX):
-- INCLUYE TABLAS MARKDOWN REALES con el formato estricto:
+const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO OBLIGATORIO (Markdown + KaTeX) — CERO VIÑETAS EXCESIVAS:
+- REDACCIÓN EN PROSA ACADÉMICA Y SUBTÍTULOS: Desarrolla cada concepto, clase, fármaco, artículo o mecanismo en párrafos continuos, fluidos y explicativos (de 2 a 5 líneas) bajo subtítulos temáticos estructurados (ej. '### Metformina (Biguanidas)').
+- PROHIBIDO EL ABUSO DE VIÑETAS Y LISTAS ANIDADAS: Queda terminantemente PROHIBIDO estructurar el texto como una sucesión interminable de viñetas (* o -) o crear árboles de viñetas anidadas (* Concepto: / * Mecanismo: / * Efectos:).
+- USO ESTRICTAMENTE RESTRINGIDO DE VIÑETAS: Las viñetas (* o -) están permitidas ÚNICAMENTE para enumeraciones breves e indispensables (máximo 3 a 4 ítems homogéneos, por ejemplo: criterios diagnósticos específicos, contraindicaciones absolutas puntuales o tríadas sintomáticas). Todo lo demás debe redactarse en párrafos explicativos o tablas.
+- TABLAS COMPARATIVAS MARKDOWN OBLIGATORIAS: Cuando compares entidades, clasificaciones, mecanismos, vías de acción o efectos adversos, utiliza SIEMPRE tablas comparativas completas en Markdown con formato estricto:
   | Columna 1 | Columna 2 | Columna 3 |
   | :--- | :--- | :--- |
   | Dato A | Dato B | Dato C |
   Sin líneas en blanco entre filas y SIN encerrar tablas en bloques \`\`\`.
 - INCLUYE bloques de perla/alerta usando citas: \`> **Perla Clave:** ...\` o \`> **Error Frecuente:** ...\`.
 - USA KaTeX en fórmulas, parámetros numéricos o flechas causales (ej. \`$\\text{Estímulo} \\rightarrow \\text{Mecanismo} \\rightarrow \\text{Efecto}$\`).
-- Combina negritas (**término**), listas jerárquicas y diferenciaciones claras.
 - PROHIBIDO usar emojis, pictogramas ni íconos Unicode (ej. 🟢, 📘, 🔴, 🟡, 💡, 📌, ⚠️, ✅, ❌, 🎯, 🚀) en títulos, listas, tablas o párrafos; utiliza únicamente texto académico formal en español.`;
 
 function buildBalancedStudyExcerpt(text: string, maxChars: number): string {
@@ -4396,7 +4429,7 @@ ESTRUCTURA DE LA FASE 1:
 (Principios basales, taxonomía, definiciones formales, fórmulas/cadenas causales y cuadro resumen inicial en Markdown)
 
 ## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección / Diapositiva por Diapositiva)
-(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original, desglosando cada fármaco, mecanismo o concepto individualmente con rigor causal y bloques \`> **Perla Clave:**\`)`;
+(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original estructurado mediante subtítulos '### [Nombre del Tema]', párrafos continuos de prosa explicativa en español y tablas comparativas. PROHIBIDO estructurar el contenido como listas anidadas de viñetas; usa prosa fluida, conceptos en negrita y bloques \`> **Perla Clave:**\`)`;
 
     const phase1User = `DOCUMENTO ORIGINAL ("${title}" - ${category}):
 ${effectiveStudyInput}
@@ -4496,11 +4529,11 @@ ${STUDY_GUIDE_RICH_FORMAT_RULES}
 
 ESTRUCTURA DEL MÓDULO 2:
 ## 3. Desarrollo Sistemático Minucioso (Diapositiva por Diapositiva / Sección por Sección)
-(Análisis exhaustivo punto por punto con cuadro síntesis intermedio en Markdown y fórmulas KaTeX:
-- Diapositiva / Sección: Título y objetivo
-- Mecanismo detallado / Fisiología / Derivación matemática
-- Implicaciones prácticas / Clínicas / Aplicaciones reales
-- Interacciones, casos límite y excepciones)`;
+(Desarrolla cada sección o subtema con subtítulo '### [Nombre del Tema]', redactando en párrafos continuos de prosa académica explicativa, tablas comparativas y fórmulas KaTeX. CERO listas anidadas de viñetas:
+- Explica el mecanismo detallado, fisiología o derivación en párrafos redactados fluidos.
+- Desarrolla implicaciones prácticas y clínicas con rigor explicativo.
+- Emplea tablas Markdown para contrastar fármacos, entidades o clasificaciones.
+- Reserva viñetas simples solo para listas breves de 3-4 criterios o contraindicaciones puntuales).`;
 
   const p2User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
 ${effectiveStudyInput}
@@ -6325,7 +6358,8 @@ DIRECTRICES DE EXCELENCIA ACADÉMICA:
    - "rubric": Criterio breve de evaluación pedagógica.
    - "acceptableAnswers": 2 a 3 variantes sinónimas o redacciones alternativas igualmente válidas.
 5. TODA PREGUNTA debe incluir una explicación exhaustiva fundamentada en la información del documento.
-6. TODO EL CONTENIDO DEBE ESTAR 100% EN ESPAÑOL ACADÉMICO.
+6. INTEGRIDAD Y AUTOSUFICIENCIA DEL ENUNCIADO: Si la pregunta describe un caso clínico, paciente, litigio o escenario fáctico concreto, ES OBLIGATORIO redactar la descripción completa de los hechos y síntomas en el campo "pregunta" antes de la interrogación. Queda terminantemente prohibido preguntar por "este paciente" o "el caso citado" sin haber expuesto los antecedentes completos en ese mismo enunciado.
+7. TODO EL CONTENIDO DEBE ESTAR 100% EN ESPAÑOL ACADÉMICO.
 
 FORMATO DE SALIDA (ESTRICTAMENTE JSON VÁLIDO):
 {
@@ -6375,9 +6409,13 @@ Redacta las ${count} preguntas en formato JSON estricto:`;
           const isShort = rawType.includes('short') || rawType.includes('abierta') || formatPreference === 'short-answer';
           const type: Question['type'] = isShort ? 'short-answer' : 'multiple-choice';
 
-          const opts = Array.isArray(p.opciones) && p.opciones.length >= 2
-            ? p.opciones.map(String)
+          let opts = Array.isArray(p.opciones) && p.opciones.length >= 2
+            ? p.opciones.map(String).filter(Boolean)
             : ['Opción A fundamentada', 'Opción B plausible', 'Opción C alternativa', 'Opción D alternativa'];
+
+          while (opts.length < 4) {
+            opts.push(`Alternativa adicional ${opts.length + 1}`);
+          }
 
           const correctIdx = typeof p.indice_correcto === 'number'
             ? Math.max(0, Math.min(opts.length - 1, p.indice_correcto))

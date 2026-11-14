@@ -16,7 +16,7 @@ import {
   Loader2,
   CheckCheck,
 } from 'lucide-react';
-import { generateSpecializedExamQuestions, evaluateShortAnswer, enforceQuestionLengthLimit } from '../services/aiService';
+import { generateSpecializedExamQuestions, evaluateShortAnswer } from '../services/aiService';
 import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
 import { useTheme } from '../services/themeService';
 
@@ -389,7 +389,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
 
             <QuestionPrompt
               as="h3"
-              text={enforceQuestionLengthLimit(currentQ.question || '')}
+              text={currentQ.question || ''}
               topic={currentQ.topic}
               className="text-lg sm:text-xl mb-6 leading-relaxed font-medium"
             />
@@ -416,7 +416,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               </div>
             ) : (
               <div className="space-y-3 mb-8">
-                {(currentQ.options || []).map((option, optIdx) => {
+                {((currentQ.options && currentQ.options.length > 0) ? currentQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D']).map((option, optIdx) => {
                   const isSelected = userAnswers[currentIdx] === optIdx;
 
                   let btnClasses = theme === 'dark'
@@ -603,7 +603,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
                     </span>
                   </div>
 
-                  <QuestionPrompt as="h4" text={enforceQuestionLengthLimit(q.question || '')} topic={q.topic} className="text-sm sm:text-base mb-3" />
+                  <QuestionPrompt as="h4" text={q.question || ''} topic={q.topic} className="text-sm sm:text-base mb-3" />
 
                   {/* Detalle para Preguntas Abiertas Cortas */}
                   {q.type === 'short-answer' ? (

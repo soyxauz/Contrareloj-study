@@ -52,7 +52,6 @@ import {
   evaluateShortAnswer,
   parseCorrectIndex,
   parseCorrectIndices,
-  enforceQuestionLengthLimit,
 } from '../services/aiService';
 import {
   createInitialSocraticProfile,
@@ -165,7 +164,7 @@ const parseExplanationDetails = (rawText: string) => {
  *    - Si solo tiene ['Verdadero', 'Falso'], reestructura el enunciado a una afirmación conceptual declarativa
  *      para que la evaluación de Verdadero/Falso tenga coherencia gramatical y didáctica.
  */
-function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Question {
+export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Question {
   if (!q) return q;
 
   // 1. Recuperar del kit original si tenía un id mutado artificialmente (ej. tf-*, mc-*, sa-*)
@@ -286,6 +285,74 @@ function sanitizeQuestionStructure(q: Question, allKitQuestions?: Question[]): Q
         sourceAsset: undefined,
       };
     }
+  }
+
+  // 6. Si es 'matching' pero NO tiene pares válidos suficientes (mínimo 2), degradar a multiple-choice
+  if (q.type === 'matching' && (!Array.isArray(q.matchingPairs) || q.matchingPairs.length < 2)) {
+    let opts = Array.isArray(q.options) && q.options.length >= 2 ? [...q.options] : [];
+    if (opts.length < 2) {
+      opts = [
+        q.idealAnswer || 'Alternativa correcta fundamentada en el texto',
+        'Postulado inconsistente con el material analizado',
+        'Principio secundario no aplicable al supuesto evaluado',
+        'Concepto contrapuesto a la evidencia presentada',
+      ];
+    }
+    while (opts.length < 4) {
+      opts.push(`Alternativa complementaria ${opts.length + 1}`);
+    }
+    return {
+      ...q,
+      type: 'multiple-choice',
+      options: opts,
+      correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0,
+    };
+  }
+
+  // 7. Si es 'drag-drop' pero NO tiene la plantilla con {0} o los huecos válidos, degradar a multiple-choice
+  if (q.type === 'drag-drop' && (!q.templateSentence || !/\{\d+\}/.test(q.templateSentence) || !Array.isArray(q.blanksCorrect) || q.blanksCorrect.length === 0)) {
+    let opts = Array.isArray(q.options) && q.options.length >= 2 ? [...q.options] : [];
+    if (opts.length < 2 && Array.isArray(q.blanksCorrect) && q.blanksCorrect.length >= 2) {
+      opts = [...q.blanksCorrect];
+    }
+    if (opts.length < 2) {
+      opts = [
+        q.idealAnswer || 'Opción correcta fundamentada',
+        'Alternativa plausible no confirmada por el texto',
+        'Distractor conceptual divergente',
+        'Interpretación contraria a los postulados académicos',
+      ];
+    }
+    while (opts.length < 4) {
+      opts.push(`Alternativa complementaria ${opts.length + 1}`);
+    }
+    return {
+      ...q,
+      type: 'multiple-choice',
+      options: opts,
+      correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0,
+    };
+  }
+
+  // 8. Para multiple-choice y multi-select, asegurar que options siempre tenga al menos 4 literales
+  if (q.type === 'multiple-choice' || q.type === 'multi-select') {
+    let opts = Array.isArray(q.options) ? q.options.filter(Boolean) : [];
+    if (opts.length < 2) {
+      opts = [
+        q.idealAnswer || 'Opción correcta fundamentada',
+        'Alternativa plausible no confirmada por el texto',
+        'Distractor conceptual divergente',
+        'Interpretación contraria a los postulados académicos',
+      ];
+    }
+    while (opts.length < 4) {
+      opts.push(`Alternativa complementaria ${opts.length + 1}`);
+    }
+    return {
+      ...q,
+      options: opts,
+      correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0,
+    };
   }
 
   return q;
@@ -1552,15 +1619,23 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   const qType = useMemo(() => {
     const baseType = currentQ?.type || 'multiple-choice';
-    if (baseType === 'drag-drop') return 'drag-drop';
-    if (effectiveTemplateSentence && /\{\d+\}/.test(effectiveTemplateSentence) && effectiveBlanksCorrect.length > 0) {
-      return 'drag-drop';
+    if (baseType === 'drag-drop') {
+      if (effectiveTemplateSentence && /\{\d+\}/.test(effectiveTemplateSentence) && effectiveBlanksCorrect.length > 0) {
+        return 'drag-drop';
+      }
+      return 'multiple-choice';
+    }
+    if (baseType === 'matching') {
+      if (Array.isArray(currentQ?.matchingPairs) && currentQ.matchingPairs.length >= 2) {
+        return 'matching';
+      }
+      return 'multiple-choice';
     }
     if (baseType === 'true-false' && Array.isArray(currentQ?.options) && currentQ.options.length >= 3) {
       return 'multiple-choice';
     }
     return baseType;
-  }, [currentQ?.type, currentQ?.options, effectiveTemplateSentence, effectiveBlanksCorrect]);
+  }, [currentQ?.type, currentQ?.options, currentQ?.matchingPairs, effectiveTemplateSentence, effectiveBlanksCorrect]);
 
   // ── Distribución Equitativa y Aleatoria de Opciones (Misma probabilidad del 25% para cada opción) ──
   const { safeOptions, safeCorrectIndex, safeCorrectIndices } = useMemo(() => {
@@ -3753,7 +3828,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 ? (currentQ.topic
                     ? `Completa los espacios en blanco sobre **${currentQ.topic}**:`
                     : 'Completa los espacios en blanco del siguiente enunciado:')
-                : enforceQuestionLengthLimit(currentQ.question)
+                : (currentQ.question || '')
             }
             topic={currentQ.topic}
             className="text-lg sm:text-[21px] tracking-tight mb-6 sm:mb-8 leading-snug"
