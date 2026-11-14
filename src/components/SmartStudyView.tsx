@@ -41,6 +41,7 @@ import {
   ZoomIn,
   CheckCheck,
   Brain,
+  SkipForward,
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
@@ -4590,87 +4591,136 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           );
         })()}
 
-        {/* ── ACTION ROW: HISTORIAL + SALTAR PREGUNTA + FEEDBACK ────── */}
-        <div className="flex items-center justify-between gap-2.5 pt-1 mb-3 sm:mb-4">
+        {/* ── BOTÓN PRINCIPAL DE AVANCE / SALTAR PREGUNTA (ESTILO APPLE / LINEAR STUDIO) ── */}
+        <div className="flex justify-center mb-3 sm:mb-4">
           <button
             type="button"
-            onClick={() => setActiveTab('history')}
-            className="active-press px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 text-slate-300 hover:text-white font-medium text-xs transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
-          >
-            <History className="w-3.5 h-3.5 text-slate-400" />
-            <span>Historial</span>
-          </button>
-
-          <div className="flex items-center gap-2">
-            {!isAnswered && (
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={isAdvancing}
-                className="active-press px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>Saltar pregunta</span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            )}
-
-            <div className="flex items-center gap-1 border-l border-white/[0.08] pl-2">
-              <button
-                type="button"
-                onClick={() => setFeedbackGiven(feedbackGiven === 'up' ? null : 'up')}
-                title="Pregunta clara y de alta calidad"
-                className={`active-press w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
-                  feedbackGiven === 'up'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                    : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <ThumbsUp className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setFeedbackGiven(feedbackGiven === 'down' ? null : 'down')}
-                title="Reportar pregunta o redacción confusa"
-                className={`active-press w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
-                  feedbackGiven === 'down'
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
-                    : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <ThumbsDown className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── CUANDO ESTÁ RESPONDIDO: BOTÓN DESTACADO "SIGUIENTE PREGUNTA" ── */}
-        {isAnswered && (
-          <div className="flex justify-center mb-4 sm:mb-5">
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={isAdvancing}
-              className={`active-press w-full sm:w-auto justify-center px-8 py-2.5 sm:py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-colors duration-150 flex items-center gap-2.5 cursor-pointer ${
-                isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
-              } ${
-                currentLevelCorrect >= levelTarget
+            onClick={handleNext}
+            disabled={isAdvancing}
+            title={
+              isAnswered
+                ? 'Avanzar a la siguiente pregunta'
+                : 'Saltar esta pregunta y ver la justificación sin penalizar tu progreso'
+            }
+            className={`active-press w-full sm:w-auto justify-center px-8 sm:px-10 py-2.5 sm:py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
+              isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
+            } ${
+              isAnswered
+                ? currentLevelCorrect >= levelTarget
                   ? 'bg-gradient-to-r from-amber-400 to-amber-300 text-zinc-950 shadow-amber-500/20 font-extrabold hover:from-amber-300 hover:to-amber-200'
                   : theme === 'dark'
                   ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-black/40'
                   : theme === 'kitty'
                   ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/25'
                   : 'thea-glass-card thea-glass-pill-hover border text-zinc-950'
+                : theme === 'dark'
+                ? 'bg-slate-800/90 hover:bg-slate-700/90 border border-slate-600/80 hover:border-slate-500 text-white shadow-black/40'
+                : theme === 'kitty'
+                ? 'bg-pink-100 hover:bg-pink-200 border-2 border-pink-300 text-pink-950 shadow-xs'
+                : 'bg-white hover:bg-rose-50/80 border-2 border-rose-200 hover:border-rose-300 text-rose-950 shadow-xs'
+            }`}
+            style={{
+              boxShadow:
+                !isAnswered
+                  ? theme === 'light'
+                    ? '0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)'
+                    : theme === 'kitty'
+                    ? '0 1px 3px rgba(236,72,153,0.15), inset 0 1px 0 rgba(255,255,255,0.9)'
+                    : '0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1)'
+                  : undefined,
+            }}
+          >
+            <span>
+              {isAnswered
+                ? currentLevelCorrect >= levelTarget
+                  ? (level < 3 ? `Avanzar al Nivel ${level + 1}` : 'Finalizar Kit (Dominio Total)')
+                  : 'Siguiente pregunta'
+                : 'Saltar pregunta'}
+            </span>
+            {isAnswered ? (
+              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+            ) : (
+              <SkipForward
+                className={`w-4 h-4 stroke-[2.5] ${
+                  theme === 'light'
+                    ? 'text-rose-700'
+                    : theme === 'kitty'
+                    ? 'text-pink-600'
+                    : 'text-amber-400'
+                }`}
+              />
+            )}
+          </button>
+        </div>
+
+        {/* ── ACTION ROW: HISTORIAL + FEEDBACK ────── */}
+        <div className="flex items-center justify-between gap-2.5 pt-1 mb-3 sm:mb-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`active-press px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl border text-xs font-semibold transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer ${
+              theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:text-slate-900 shadow-xs'
+                : theme === 'kitty'
+                ? 'bg-pink-100/80 hover:bg-pink-200/80 border-pink-200 text-pink-900 shadow-xs'
+                : 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/15 text-slate-300 hover:text-white'
+            }`}
+          >
+            <History
+              className={`w-3.5 h-3.5 ${
+                theme === 'light'
+                  ? 'text-slate-500'
+                  : theme === 'kitty'
+                  ? 'text-pink-600'
+                  : 'text-slate-400'
+              }`}
+            />
+            <span>Historial</span>
+          </button>
+
+          <div
+            className={`flex items-center gap-1 border-l pl-2 ${
+              theme === 'light'
+                ? 'border-slate-200'
+                : theme === 'kitty'
+                ? 'border-pink-200'
+                : 'border-white/[0.08]'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setFeedbackGiven(feedbackGiven === 'up' ? null : 'up')}
+              title="Pregunta clara y de alta calidad"
+              className={`active-press w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
+                feedbackGiven === 'up'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-800'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 hover:bg-pink-100 border-pink-200 text-pink-600 hover:text-pink-900'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span>
-                {currentLevelCorrect >= levelTarget
-                  ? (level < 3 ? `Avanzar al Nivel ${level + 1}` : 'Finalizar Kit (Dominio Total)')
-                  : 'Siguiente pregunta'}
-              </span>
-              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+              <ThumbsUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setFeedbackGiven(feedbackGiven === 'down' ? null : 'down')}
+              title="Reportar pregunta o redacción confusa"
+              className={`active-press w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
+                feedbackGiven === 'down'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-800'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50 hover:bg-pink-100 border-pink-200 text-pink-600 hover:text-pink-900'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ThumbsDown className="w-3.5 h-3.5" />
             </button>
           </div>
-        )}
+        </div>
 
         {/* ── JUSTIFICACIÓN EXACTA DE THEA (VISIBLE AUTOMÁTICAMENTE AL RESPONDER) ─ */}
         {isAnswered && (
