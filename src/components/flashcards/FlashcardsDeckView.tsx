@@ -145,24 +145,24 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           onClick={handleFlip}
           className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group h-full rounded-3xl relative`}
         >
-          {/* CARA FRONTAL (TÉRMINO O CONCEPTO - EN ROJO VINO) */}
+          {/* CARA FRONTAL (TÉRMINO O CONCEPTO - ESTILO ORIGINAL LIMPIO SIN ILUMINACIÓN ROJA) */}
           <div
-            className="card-face rounded-3xl bg-[#200714]/95 hover:bg-[#2e091d] border border-[#9f1239]/50 hover:border-[#f43f5e]/70 p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none"
+            className="card-face rounded-3xl bg-[#140e2b]/95 hover:bg-[#191136] border border-white/[0.12] hover:border-purple-400/40 p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none"
             style={{
-              boxShadow: '0 12px 40px rgba(159, 18, 57, 0.25), inset 0 1px 0 rgba(255, 180, 200, 0.18)',
+              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
             }}
           >
             {/* Top hint tag */}
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-rose-300">
+            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300/80">
               <span>Concepto</span>
-              <span className="text-rose-200/50 font-normal lowercase text-[11px] group-hover:text-rose-200/80 transition-colors">
+              <span className="text-slate-500 font-normal lowercase text-[11px] group-hover:text-slate-400 transition-colors">
                 clic o espacio para voltear
               </span>
             </div>
 
             {/* Card Main Term */}
             <div className="my-auto text-center py-3 overflow-y-auto max-h-[28vh]">
-              <div className="text-xl sm:text-2xl md:text-3xl text-[#ffe4e6] font-black tracking-tight leading-relaxed drop-shadow-sm">
+              <div className="text-xl sm:text-2xl md:text-3xl text-white font-extrabold tracking-tight leading-relaxed">
                 <FormattedText text={currentCard ? getCardTerm(currentCard) : ''} inlineOnly />
               </div>
             </div>
