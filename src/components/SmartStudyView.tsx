@@ -637,6 +637,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const scheduledErrorReviewsRef = useRef<Array<{ question: Question; targetIndex: number }>>([]);
   // Referencia para amortiguador entre intervenciones socráticas (mínimo 3 preguntas normales entre intervenciones - A3)
   const lastSocraticTriggerIndexRef = useRef<number>(-999);
+  // Referencia para amortiguador entre reapariciones de preguntas erróneas (mínimo 2-3 preguntas normales entre cada error que reaparece)
+  const lastErrorReviewTriggerIndexRef = useRef<number>(-999);
 
   // ── Respuestas Abiertas Cortas (Short Answer) ──────────────────────────
   const [shortAnswerInput, setShortAnswerInput] = useState<string>(wasPreviouslyAnswered ? '' : (savedSession?.shortAnswerInput || ''));
@@ -1366,8 +1368,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     };
 
     // A0: Reintroducción espaciada de preguntas falladas (Curva Ebbinghaus / Thea original: 4 a 5 preguntas de separación)
-    // Se activa únicamente cuando targetIndex ha alcanzado o superado el turno programado
-    const readyReviewIndex = scheduledErrorReviewsRef.current.findIndex(r => r.targetIndex <= targetIndex);
+    // REGLA PEDAGÓGICA (Espaciado Obligatorio de Preguntas Erróneas):
+    // Si hay muchas preguntas erróneas, NUNCA deben aparecer secuencialmente.
+    // Debe respetarse un amortiguador de al menos 2 a 3 preguntas normales desde la última vez que reapareció una pregunta errónea.
+    const canTriggerErrorReview = (targetIndex - lastErrorReviewTriggerIndexRef.current) >= 3;
+
+    const readyReviewIndex = canTriggerErrorReview
+      ? scheduledErrorReviewsRef.current.findIndex(r => r.targetIndex <= targetIndex)
+      : -1;
+
     if (readyReviewIndex !== -1) {
       const reviewItem = scheduledErrorReviewsRef.current[readyReviewIndex];
       const rCandidate = reviewItem.question;
@@ -1386,10 +1395,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       );
       if (!isTooRecent && rCandidate.id !== excludeQuestionId) {
         scheduledErrorReviewsRef.current.splice(readyReviewIndex, 1);
+        lastErrorReviewTriggerIndexRef.current = targetIndex;
+
+        // Reescalonar todas las demás preguntas erróneas pendientes en la cola
+        // para garantizar que la siguiente no aparezca antes de 2 a 3 preguntas adicionales (offset de al menos +3)
+        scheduledErrorReviewsRef.current.forEach((item, idx) => {
+          item.targetIndex = Math.max(item.targetIndex, targetIndex + 3 + idx * 3);
+        });
+
         return finalizeQuestionSelection(rCandidate);
       } else {
-        // Postergar 1 turno para permitir que otro tema intervenga
-        reviewItem.targetIndex = targetIndex + 1;
+        // Postergar 2 turnos para permitir que otro tema intervenga
+        reviewItem.targetIndex = targetIndex + 2;
       }
     }
 
@@ -1599,8 +1616,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // REGLA DEL USUARIO: Cero repetición de conceptos dominados.
     // Únicamente se permite repetición a través del Método Socrático:
     // 4.1. Repaso espaciado de preguntas que fueron falladas y aún requieren refuerzo
-    if (scheduledErrorReviewsRef.current.length > 0) {
+    if (scheduledErrorReviewsRef.current.length > 0 && canTriggerErrorReview) {
       const pendingReview = scheduledErrorReviewsRef.current.shift()!;
+      lastErrorReviewTriggerIndexRef.current = targetIndex;
+      scheduledErrorReviewsRef.current.forEach((item, idx) => {
+        item.targetIndex = Math.max(item.targetIndex, targetIndex + 3 + idx * 3);
+      });
       return finalizeQuestionSelection(pendingReview.question);
     }
 
@@ -2715,8 +2736,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         // Si la respondió correctamente, eliminarla de revisiones programadas
         scheduledErrorReviewsRef.current = scheduledErrorReviewsRef.current.filter(r => r.question.id !== currentQ.id);
       } else {
-        // Programar reaparición tras 4 a 5 preguntas intermedias de otros temas (Curva Ebbinghaus / Thea original)
-        const reviewTargetIndex = currentIndex + 5;
+        // Programar reaparición tras 4 a 5 preguntas intermedias de otros temas (Curva Ebbinghaus / Thea original).
+        // REGLA PEDAGÓGICA (Espaciado de Errores):
+        // Si hay muchas preguntas erróneas acumuladas, NUNCA deben reaparecer de forma consecutiva.
+        // Se escalonan garantizando al menos 2 a 3 preguntas normales de separación entre cada una.
+        const hasExisting = scheduledErrorReviewsRef.current.length > 0;
+        const highestScheduledTarget = hasExisting
+          ? scheduledErrorReviewsRef.current.reduce((max, r) => Math.max(max, r.targetIndex), 0)
+          : 0;
+        const reviewTargetIndex = hasExisting
+          ? Math.max(currentIndex + 4, highestScheduledTarget + 3)
+          : Math.max(currentIndex + 4, lastErrorReviewTriggerIndexRef.current + 3);
+
         if (!scheduledErrorReviewsRef.current.some(r => r.question.id === currentQ.id)) {
           scheduledErrorReviewsRef.current.push({
             question: currentQ,
