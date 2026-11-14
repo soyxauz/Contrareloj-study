@@ -1221,12 +1221,6 @@ export const App: React.FC = () => {
                 >
                   Volver al Inicio
                 </button>
-                <button
-                  onClick={() => setCurrentMode('home')}
-                  className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-300 hover:text-white text-sm font-semibold transition-all cursor-pointer"
-                >
-                  Ir al Inicio
-                </button>
               </div>
             </div>
           )

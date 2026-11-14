@@ -72,6 +72,7 @@ import {
   ShortAnswerRenderer,
 } from './smart-study';
 import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
+import { filterCompliantQuestions } from '../utils/questionValidator';
 
 // ── Indicador Minimalista de Nivel de Dominio (Apple / Linear Studio) ──
 const LevelIndicator: React.FC<{ currentLevel: number; onResetClick?: () => void }> = ({
@@ -259,7 +260,7 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
       ...restQ,
       type: 'multiple-choice',
       question: cleanQuestionText || restQ.question || 'Selecciona la opción correcta:',
-      options: Array.isArray(restQ.options) && restQ.options.length >= 2 ? restQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+      options: Array.isArray(restQ.options) ? restQ.options : [],
       correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
       sourceAsset: undefined,
     };
@@ -452,6 +453,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   });
   const [historyFilter, setHistoryFilter] = useState<'all' | 'correct' | 'incorrect'>(savedSession?.historyFilter || 'all');
   const [historyLevelFilter, setHistoryLevelFilter] = useState<number | 'all'>(savedSession?.historyLevelFilter || 'all');
+  const historyRef = useRef<StudyHistoryItem[]>(history);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
   const [shuffleSeed, setShuffleSeed] = useState<number>(savedSession?.lastUpdated ? (savedSession as any).shuffleSeed || 1 : 1);
 
   // ── Progression State ────────────────────────────────────────────────────
@@ -690,6 +695,38 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (!qId) return;
     answeredQuestionIdsRef.current.add(qId);
     answeredQuestionIdsRef.current.add(normalizeQId(qId));
+  }, []);
+
+  // Memoria de preguntas dominadas/acertadas: una pregunta respondida correctamente no debe repetirse en este nivel
+  const correctlyAnsweredIdsRef = useRef<Set<string>>((() => {
+    const ids = new Set<string>();
+    if (savedSession?.history && Array.isArray(savedSession.history)) {
+      for (const h of savedSession.history) {
+        if (h && (h.isCorrect || h.correct) && h.questionId) {
+          ids.add(h.questionId);
+          ids.add(normalizeQId(h.questionId));
+        }
+      }
+    }
+    if (savedSession?.isAnswered && (savedSession as any)?.isCurrentCorrect) {
+      const lastId = savedSession.currentQuestion?.id || savedSession.currentQuestionId;
+      if (lastId) {
+        ids.add(lastId);
+        ids.add(normalizeQId(lastId));
+      }
+    }
+    return ids;
+  })());
+
+  const markQuestionAsCorrect = useCallback((qId: string) => {
+    if (!qId) return;
+    correctlyAnsweredIdsRef.current.add(qId);
+    correctlyAnsweredIdsRef.current.add(normalizeQId(qId));
+  }, []);
+
+  const isQuestionCorrectlyAnswered = useCallback((qId: string): boolean => {
+    if (!qId) return false;
+    return correctlyAnsweredIdsRef.current.has(qId) || correctlyAnsweredIdsRef.current.has(normalizeQId(qId));
   }, []);
 
   const completedSocraticIdsRef = useRef<Set<string>>(new Set());
@@ -1305,9 +1342,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
     recentCategoriesRef.current = [...recentCategoriesRef.current.slice(-5), targetCat];
 
+    const compliantKit = filterCompliantQuestions(kit.questions);
     const targetDiff = targetLevel === 1 ? 'easy' : targetLevel === 2 ? 'medium' : 'hard';
-    const levelQuestions = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
-    const pool = levelQuestions.length > 0 ? levelQuestions : kit.questions;
+    const levelQuestions = compliantKit.filter(q => (q.difficulty || 'easy') === targetDiff);
+    const pool = levelQuestions.length > 0 ? levelQuestions : (compliantKit.length > 0 ? compliantKit : kit.questions);
 
     // Frecuencia moderada y aleatoria de afirmaciones falsas (~15% - 20%): solo ocasionalmente y de forma impredecible
     const shouldPreferFalseConcept = (targetCat === 'multipleChoice') && (Math.random() < 0.18);
@@ -1395,23 +1433,44 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     // Prioridad 3: Si ya se respondieron todas las del nivel, activar prefetch IA y buscar en otros niveles preguntas no respondidas
     checkAndPrefetchQuestions(targetLevel, targetIndex);
-    const unansInKit = kit.questions.find(q => q.id !== excludeQuestionId && !isQuestionAnswered(q.id));
+    const unansInKit = compliantKit.find(q => q.id !== excludeQuestionId && !isQuestionAnswered(q.id));
     if (unansInKit) {
       return finalizeQuestionSelection(unansInKit);
     }
 
-    // Prioridad 4: Si absolutamente todas las preguntas del kit han sido respondidas, elegir la del pool distinta a la excluida
-    for (const i of shuffledIndices) {
-      const candidate = pool[i];
-      if (candidate.id !== excludeQuestionId) {
-        return finalizeQuestionSelection(candidate);
+    // Prioridad 4: Todas las preguntas del nivel/kit han sido respondidas al menos una vez.
+    // REGLA DEL USUARIO: Cero repetición de preguntas acertadas en el nivel.
+    // 4.1. Priorizar preguntas que fueron falladas y aún no han sido dominadas:
+    const failedUnmastered = pool.filter(q => q.id !== excludeQuestionId && !isQuestionCorrectlyAnswered(q.id));
+    if (failedUnmastered.length > 0) {
+      return finalizeQuestionSelection(failedUnmastered[Math.floor(Math.random() * failedUnmastered.length)]);
+    }
+
+    // 4.2. Si absolutamente todas las preguntas del pool fueron respondidas correctamente:
+    // El estudiante ya dominó todo el material disponible en este nivel.
+    // Disparar inmediatamente generación de nuevas preguntas para expandir el banco:
+    checkAndPrefetchQuestions(targetLevel, targetIndex);
+
+    // Para evitar preguntas repetidas 4 veces intercaladas, seleccionar la pregunta
+    // que tenga la mayor separación temporal en el historial:
+    const recentHistoryQIds = (historyRef.current || [])
+      .map((h: any) => h?.questionId)
+      .filter(Boolean);
+
+    let bestCandidate = pool[0];
+    let maxDistance = -1;
+    for (const candidate of pool) {
+      if (candidate.id === excludeQuestionId) continue;
+      const lastIndexInHistory = recentHistoryQIds.lastIndexOf(candidate.id);
+      const distance = lastIndexInHistory === -1 ? 9999 : (recentHistoryQIds.length - 1 - lastIndexInHistory);
+      if (distance > maxDistance) {
+        maxDistance = distance;
+        bestCandidate = candidate;
       }
     }
 
-    // Prioridad 5: En kit general
-    const randomKitQ = kit.questions.find(q => q.id !== excludeQuestionId) || kit.questions[0];
-    return finalizeQuestionSelection(randomKitQ);
-  }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory, isFalseConceptQuestion, checkAndPrefetchQuestions]);
+    return finalizeQuestionSelection(bestCandidate);
+  }, [kit.questions, socraticProfile, typeFilters, getCategoryForQuestion, adaptQuestionToCategory, isFalseConceptQuestion, checkAndPrefetchQuestions, isQuestionCorrectlyAnswered]);
 
   // Pregunta activa fijada en estado: NUNCA cambia por efectos secundarios en segundo plano
   const [currentQuestion, setCurrentQuestion] = useState<Question>(() => {
@@ -1444,8 +1503,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (!kit.questions || kit.questions.length === 0) {
       return {
         id: 'thea-placeholder-loading',
-        question: 'Cargando preguntas del kit...',
-        options: ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+        question: 'Cargando preguntas de estudio...',
+        options: ['Cargando material...', 'Sintetizando conceptos...', 'Generando alternativas...', 'Preparando opciones...'],
         correctIndex: 0,
         explanation: 'Preparando el kit de estudio.',
         difficulty: 'easy',
@@ -1680,7 +1739,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const { safeOptions, safeCorrectIndex, safeCorrectIndices } = useMemo(() => {
     if (!currentQ) {
       return {
-        safeOptions: ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
+        safeOptions: [],
         safeCorrectIndex: 0,
         safeCorrectIndices: [0],
       };
@@ -1707,10 +1766,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         'Principio secundario aplicable solo en supuestos atípicos',
         'Concepto no contemplado en el material de estudio'
       ];
-    }
-
-    while (baseOptions.length < 4) {
-      baseOptions.push(`Alternativa adicional ${baseOptions.length + 1}`);
     }
 
     // 2. Determinar índice original de respuesta correcta
@@ -2465,6 +2520,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Registrar permanentemente la pregunta respondida para evitar repeticiones futuras
     if (currentQ?.id) {
       markQuestionAsAnswered(currentQ.id);
+      if (correct) {
+        markQuestionAsCorrect(currentQ.id);
+      }
     }
 
     hasUserInteractedRef.current = true;
@@ -2946,6 +3004,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
           answeredQuestionIdsRef.current.clear();
           completedSocraticIdsRef.current.clear();
+          correctlyAnsweredIdsRef.current.clear();
 
           confetti({
             particleCount: 120,

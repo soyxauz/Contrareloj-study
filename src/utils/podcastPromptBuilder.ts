@@ -159,7 +159,7 @@ export function computePodcastLengthPlan(
     const maxMins = Math.min(43, explicitMinutes + 3);
     const targetWords = Math.round(explicitMinutes * 142);
     const minWords = Math.round(minMins * 135);
-    const actsCount = Math.max(2, Math.min(5, Math.ceil(targetWords / 680)));
+    const actsCount = Math.max(2, Math.min(4, Math.ceil(targetWords / 900)));
     return {
       durationMode: 'long',
       minMinutes: minMins,
@@ -169,8 +169,8 @@ export function computePodcastLengthPlan(
       targetWords,
       actsCount,
       turnsPerActRange: [10, 14],
-      wordsPerTurnRange: [65, 110],
-      maxTokensPerAct: 5500,
+      wordsPerTurnRange: [65, 100],
+      maxTokensPerAct: 3800,
       defaultDurationLabel: `${explicitMinutes}:00 min`,
       explicitMinutesRequested: explicitMinutes,
     };
@@ -212,19 +212,19 @@ export function computePodcastLengthPlan(
 
   if (selectedDuration === 'long') {
     let minMinutes = 11;
-    let targetMinutes = 15;
-    let maxMinutes = 22;
+    let targetMinutes = 16;
+    let maxMinutes = 24;
     let actsCount = 3;
 
     if (materialLength > 36000) {
       minMinutes = 16;
       targetMinutes = 22;
-      maxMinutes = 32;
-      actsCount = 4;
+      maxMinutes = 30;
+      actsCount = 3;
     } else if (materialLength > 18000 || asksExhaustive) {
       minMinutes = 13;
       targetMinutes = 18;
-      maxMinutes = 26;
+      maxMinutes = 25;
       actsCount = 3;
     }
 
@@ -240,8 +240,8 @@ export function computePodcastLengthPlan(
       targetWords,
       actsCount,
       turnsPerActRange: [11, 15],
-      wordsPerTurnRange: [65, 110],
-      maxTokensPerAct: 5500,
+      wordsPerTurnRange: [65, 100],
+      maxTokensPerAct: 3800,
       defaultDurationLabel: `${targetMinutes}:00 min`,
       explicitMinutesRequested: null,
     };

@@ -84,6 +84,8 @@ let inMemoryRefreshToken: string | null = null;
 
 let proactiveRefreshTimer: any = null;
 let cachedServerlessStatus: { available: boolean; hasClientId: boolean; hasClientSecret: boolean } | null = null;
+let lastOAuthAttemptTime = 0;
+let pendingOAuthPromise: Promise<string> | null = null;
 
 // Initialize cached state from storage
 try {
@@ -1445,117 +1447,140 @@ export const googleDriveService = {
    * Si el backend o el client_secret no están disponibles, realiza fallback transparente al flujo implícito.
    */
   async requestGoogleAccess(): Promise<string> {
-    const clientId = this.getClientId();
-    if (!clientId) {
-      updateState({ status: 'needs_client_id', errorMessage: 'Configura tu Google Client ID para continuar.' });
-      throw new Error('CLIENT_ID_MISSING');
+    if (pendingOAuthPromise) {
+      return pendingOAuthPromise;
     }
 
-    if (!(window as any).google?.accounts?.oauth2) {
-      await ensureGsiLoaded();
+    const now = Date.now();
+    if (now - lastOAuthAttemptTime < 2500) {
+      throw new Error('Petición de conexión con Google muy reciente. Espera unos segundos.');
     }
+    lastOAuthAttemptTime = now;
 
-    const serverlessStatus = cachedServerlessStatus || {
-      available: Boolean(this.getClientSecret()),
-      hasClientId: Boolean(clientId),
-      hasClientSecret: Boolean(this.getClientSecret())
-    };
-    const canUseServerless = serverlessStatus.available && (serverlessStatus.hasClientSecret || Boolean(this.getClientSecret()));
+    const executeAuth = async (): Promise<string> => {
+      const clientId = this.getClientId();
+      if (!clientId) {
+        updateState({ status: 'needs_client_id', errorMessage: 'Configura tu Google Client ID para continuar.' });
+        throw new Error('CLIENT_ID_MISSING');
+      }
 
-    if (canUseServerless && (window as any).google?.accounts?.oauth2?.initCodeClient) {
-      try {
-        return await new Promise<string>((resolve, reject) => {
-          let isResolved = false;
-          try {
-            const codeClient = (window as any).google.accounts.oauth2.initCodeClient({
-              client_id: clientId,
-              scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-              ux_mode: 'popup',
-              callback: async (response: any) => {
-                if (isResolved) return;
-                if (response.error) {
-                  console.error('[GoogleDriveService] Error en code popup:', response);
-                  if (response.error === 'popup_closed_by_user') {
+      if (!(window as any).google?.accounts?.oauth2) {
+        await ensureGsiLoaded();
+      }
+
+      const serverlessStatus = cachedServerlessStatus || {
+        available: Boolean(this.getClientSecret()),
+        hasClientId: Boolean(clientId),
+        hasClientSecret: Boolean(this.getClientSecret())
+      };
+      const canUseServerless = serverlessStatus.available && (serverlessStatus.hasClientSecret || Boolean(this.getClientSecret()));
+
+      if (canUseServerless && (window as any).google?.accounts?.oauth2?.initCodeClient) {
+        try {
+          return await new Promise<string>((resolve, reject) => {
+            let isResolved = false;
+            try {
+              const codeClient = (window as any).google.accounts.oauth2.initCodeClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+                ux_mode: 'popup',
+                callback: async (response: any) => {
+                  if (isResolved) return;
+                  if (response.error) {
+                    console.error('[GoogleDriveService] Error en code popup:', response);
+                    if (response.error === 'popup_closed_by_user') {
+                      isResolved = true;
+                      reject(new Error('Ventana de inicio de sesión cerrada por el usuario.'));
+                      return;
+                    }
                     isResolved = true;
-                    reject(new Error('Ventana de inicio de sesión cerrada por el usuario.'));
+                    reject(new Error(response.error));
                     return;
                   }
-                  isResolved = true;
-                  reject(new Error(response.error));
-                  return;
-                }
 
-                if (response.code) {
-                  try {
-                    const exchangeRes = await fetch('/api/auth/google/token', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        code: response.code,
-                        redirect_uri: 'postmessage',
-                        clientId,
-                        clientSecret: this.getClientSecret() || undefined,
-                      }),
-                    });
+                  if (response.code) {
+                    try {
+                      const exchangeRes = await fetch('/api/auth/google/token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          code: response.code,
+                          redirect_uri: 'postmessage',
+                          clientId,
+                          clientSecret: this.getClientSecret() || undefined,
+                        }),
+                      });
 
-                    const data = await exchangeRes.json();
-                    if (!exchangeRes.ok || !data.success || !data.access_token) {
-                      throw new Error(data.error || 'No se pudo canjear el código de autorización.');
+                      const data = await exchangeRes.json();
+                      if (!exchangeRes.ok || !data.success || !data.access_token) {
+                        throw new Error(data.error || 'No se pudo canjear el código de autorización.');
+                      }
+
+                      const expiresIn = data.expires_in ? parseInt(data.expires_in, 10) : 3600;
+                      this.setAccessToken(data.access_token, expiresIn);
+                      if (data.refresh_token) {
+                        this.setRefreshToken(data.refresh_token);
+                      }
+                      this.setAuthType('serverless_refresh');
+                      isResolved = true;
+                      resolve(data.access_token);
+                    } catch (exchangeErr: any) {
+                      console.warn('[GoogleDriveService] Error en canje serverless:', exchangeErr);
+                      isResolved = true;
+                      reject(exchangeErr);
                     }
-
-                    const expiresIn = data.expires_in ? parseInt(data.expires_in, 10) : 3600;
-                    this.setAccessToken(data.access_token, expiresIn);
-                    if (data.refresh_token) {
-                      this.setRefreshToken(data.refresh_token);
-                    }
-                    this.setAuthType('serverless_refresh');
+                  } else {
                     isResolved = true;
-                    resolve(data.access_token);
-                  } catch (exchangeErr: any) {
-                    console.warn('[GoogleDriveService] Error en canje serverless:', exchangeErr);
-                    isResolved = true;
-                    reject(exchangeErr);
+                    reject(new Error('No se recibió código de autorización.'));
                   }
-                } else {
+                },
+                error_callback: (err: any) => {
+                  if (isResolved) return;
                   isResolved = true;
-                  reject(new Error('No se recibió código de autorización.'));
-                }
-              },
-              error_callback: (err: any) => {
-                if (isResolved) return;
-                isResolved = true;
-                console.warn('[GoogleDriveService] Error callback initCodeClient:', err);
-                const isPopupBlocked = err?.type === 'popup_failed_to_open' ||
-                  err?.type === 'popup_closed_by_user' ||
-                  err?.message?.includes('popup');
-                if (isPopupBlocked) {
+                  console.warn('[GoogleDriveService] Error callback initCodeClient:', err);
+                  const isPopupBlocked = err?.type === 'popup_failed_to_open' ||
+                    err?.type === 'popup_closed_by_user' ||
+                    err?.error === 'popup_closed_by_user' ||
+                    err?.message?.includes('popup');
+                  if (isPopupBlocked) {
+                    updateState({
+                      status: 'error',
+                      errorMessage: 'Ventana de inicio de sesión de Google cerrada o bloqueada por el navegador.'
+                    });
+                    reject(new Error('POPUP_BLOCKED'));
+                    return;
+                  }
                   updateState({
                     status: 'error',
-                    errorMessage: 'El navegador bloqueó la ventana emergente de Google. Haz clic en el icono de ventana bloqueada en la barra de direcciones de tu navegador y permite las ventanas emergentes.'
+                    errorMessage: err?.message || 'Error de autenticación con Google.'
                   });
-                  reject(new Error('POPUP_BLOCKED'));
-                  return;
-                }
+                  reject(err);
+                },
+              });
+
+              codeClient.requestCode();
+            } catch (initErr) {
+              console.warn('[GoogleDriveService] Error al instanciar initCodeClient, fallback a implícito:', initErr);
+              if (!isResolved) {
+                isResolved = true;
                 this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
-              },
-            });
-
-            codeClient.requestCode();
-          } catch (initErr) {
-            console.warn('[GoogleDriveService] Error al instanciar initCodeClient:', initErr);
-            if (!isResolved) {
-              isResolved = true;
-              this.requestGoogleAccessImplicit(clientId).then(resolve).catch(reject);
+              }
             }
-          }
-        });
-      } catch (codeErr) {
-        console.warn('[GoogleDriveService] Error en flujo code:', codeErr);
-        throw codeErr;
+          });
+        } catch (codeErr) {
+          console.warn('[GoogleDriveService] Error en flujo code:', codeErr);
+          throw codeErr;
+        }
       }
-    }
 
-    return this.requestGoogleAccessImplicit(clientId);
+      return this.requestGoogleAccessImplicit(clientId);
+    };
+
+    pendingOAuthPromise = executeAuth().finally(() => {
+      pendingOAuthPromise = null;
+    });
+
+    return pendingOAuthPromise;
   },
 
   /**

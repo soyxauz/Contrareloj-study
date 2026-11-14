@@ -2,6 +2,7 @@ import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, Shor
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 import { safeLocalStorageSetItem } from './storageService';
 import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
+import { filterCompliantQuestions, isQuestionCompliantWithStandard } from '../utils/questionValidator';
 import {
   computePodcastLengthPlan,
   buildPodcastActPrompts,
@@ -3236,9 +3237,19 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       "longitud_enunciado": "corto (75% del lote) | extenso_caso (25% del lote)",
       "concepto_evaluado": "Concepto o tema evaluado",
       "pregunta": "Enunciado completo de la pregunta. Si es un caso clínico o supuesto práctico, incluye primero el caso con todos sus datos y síntomas antes del signo de interrogación final (resalta con **...** la parte nuclear de la pregunta)",
-      "opciones": { "A": "Opción A", "B": "Opción B", "C": "Opción C", "D": "Opción D" },
+      "opciones": {
+        "A": "Texto completo y explicativo de la alternativa A",
+        "B": "Texto completo y explicativo de la alternativa B",
+        "C": "Texto completo y explicativo de la alternativa C",
+        "D": "Texto completo y explicativo de la alternativa D"
+      },
       "respuesta_correcta": "A",
-      "opciones_multiples": ["Opción 1", "Opción 2", "Opción 3", "Opción 4"],
+      "opciones_multiples": [
+        "Texto sustantivo de la primera opción",
+        "Texto sustantivo de la segunda opción",
+        "Texto sustantivo de la tercera opción",
+        "Texto sustantivo de la cuarta opción"
+      ],
       "indices_correctos": [0, 2],
       "pares_emparejamiento": [
         { "termino": "Concepto 1", "definicion": "Definición exacta 1" },
@@ -3262,6 +3273,11 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
     }
   ]
 }
+
+REGLA ESTRICTA DE CALIDAD DE OPCIONES (PROHIBIDO PLACEHOLDERS):
+- Queda TERMINANTEMENTE PROHIBIDO generar opciones como 'Opción A', 'Opción B', 'Opción C', 'Opción D', 'Opción 1', 'Literal A', 'Alternativa 1' o una sola letra.
+- Cada opción DEBE contener el texto explicativo completo, sustantivo y técnicamente riguroso de la alternativa.
+- Si formulas una pregunta tipo 'multi-select', el arreglo 'opciones_multiples' DEBE contener afirmaciones completas y detalladas, NUNCA marcadores de posición.
 
 REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
 - NO cites fragmentos, diapositivas, títulos de páginas ni uses la frase 'Referencia en el texto'.
@@ -3392,19 +3408,7 @@ Genera el JSON completo respetando la estructura exigida:`;
         }
       }
 
-      if (optionsArray.length < 2) {
-        const defAnswer = String(p.respuesta_correcta || p.idealAnswer || '').trim();
-        optionsArray = [
-          defAnswer || 'Afirmación correcta demostrada en el texto',
-          'Interpretación contraria a los principios expuestos',
-          'Postulado plausible pero no verificado en el material',
-          'Concepto ajeno al tema analizado',
-        ];
-      }
-
-      while (optionsArray.length < 4) {
-        optionsArray.push(`Alternativa adicional ${optionsArray.length + 1}`);
-      }
+      // Si no hay opciones válidas estructuradas, la pregunta será filtrada por filterCompliantQuestions
 
       const hasMultipleOptions = (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 3) ||
         Boolean(optsObj.C || optsObj['c'] || optsObj.D || optsObj['d']);
@@ -3536,7 +3540,7 @@ Genera el JSON completo respetando la estructura exigida:`;
       [mappedQuestions[i], mappedQuestions[j]] = [mappedQuestions[j], mappedQuestions[i]];
     }
 
-    return mappedQuestions;
+    return filterCompliantQuestions(mappedQuestions);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Contrareloj Study AI Engine] Error generando preguntas (${difficulty}):`, msg);
@@ -4715,8 +4719,8 @@ export async function generateAIPodcast(
           ],
           plan.maxTokensPerAct,
           stageLabel,
-          actIdx === 0 ? 18000 : 10000,
-          actIdx === 0 ? 65000 : 48000
+          actIdx === 0 ? 20000 : 15000,
+          75000
         );
         const extracted = extractTurns(res);
         if (actIdx === 0 && extracted.titleCandidate) {
@@ -4729,10 +4733,16 @@ export async function generateAIPodcast(
         }
       } catch (actErr) {
         // Si falló el primer acto o aún no hay suficiente guion base, propagar error
-        if (actIdx === 0 || accumulatedTurns.length < 10) {
+        if (actIdx === 0 || accumulatedTurns.length < 8) {
           throw actErr;
         }
-        console.warn(`[Podcast AI] Acto ${actIdx + 1} omitido tras límite transitorio:`, actErr);
+        console.warn(`[Podcast AI] Acto ${actIdx + 1} finalizado anticipadamente tras límite transitorio:`, actErr);
+        const lastSpeaker = accumulatedTurns[accumulatedTurns.length - 1]?.speaker || 'Alex';
+        const closingSpeaker = lastSpeaker === 'Sofia' ? 'Alex' : 'Sofia';
+        accumulatedTurns.push({
+          speaker: closingSpeaker,
+          text: `Y con estos núcleos conceptuales esenciales cerramos nuestra sesión de repaso sobre ${title}. ¡Mucho éxito en tu estudio y a seguir afianzando el conocimiento!`,
+        });
         break;
       }
     }
@@ -5155,10 +5165,10 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
   "contexto_o_enunciado": "Planteamiento del escenario o premisa lógica.",
   "pregunta": "¿Pregunta clara, directa y reformulada?",
   "opciones": {
-    "A": "Opción A",
-    "B": "Opción B",
-    "C": "Opción C",
-    "D": "Opción D"
+    "A": "Texto completo y sustantivo de la alternativa A",
+    "B": "Texto completo y sustantivo de la alternativa B",
+    "C": "Texto completo y sustantivo de la alternativa C",
+    "D": "Texto completo y sustantivo de la alternativa D"
   },
   "respuesta_correcta": "Letra (A, B, C o D)",
   "retroalimentacion": {
@@ -5172,7 +5182,11 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
       "termino_imagen": "Palabras clave concisas para buscar diagrama explicativo en la web"
     }
   }
-}`;
+}
+
+REGLA ESTRICTA DE OPCIONES:
+- Queda TERMINANTEMENTE PROHIBIDO generar opciones como 'Opción A', 'Opción B', 'Opción C', 'Opción D' o marcadores sin contenido.
+- Cada una de las 4 opciones debe contener la explicación o respuesta técnica completa.`;
 
   const referenceText = contextChunkText || originalQuestion.sourceChunkText || originalQuestion.explanation;
   const userPrompt = `Material de estudio de referencia sobre el concepto "${concept}":
@@ -5195,11 +5209,15 @@ Genera la pregunta socrática reformulada en formato JSON:`;
 
   const optsObj = parsed.opciones || {};
   const optionsArray: string[] = [
-    String(optsObj.A || optsObj['a'] || 'Opción A').trim(),
-    String(optsObj.B || optsObj['b'] || 'Opción B').trim(),
-    String(optsObj.C || optsObj['c'] || 'Opción C').trim(),
-    String(optsObj.D || optsObj['d'] || 'Opción D').trim(),
-  ];
+    String(optsObj.A || optsObj['a'] || '').trim(),
+    String(optsObj.B || optsObj['b'] || '').trim(),
+    String(optsObj.C || optsObj['c'] || '').trim(),
+    String(optsObj.D || optsObj['d'] || '').trim(),
+  ].filter(Boolean);
+
+  if (optionsArray.length < 2) {
+    throw new Error('La reformulación socrática no devolvió opciones suficientes.');
+  }
 
   const rawCorrectIndex = parseCorrectIndex(parsed.respuesta_correcta, optionsArray, 'multiple-choice');
   const balanced = shuffleOptionsWithEqualProbability(optionsArray, rawCorrectIndex);
@@ -5219,7 +5237,7 @@ Genera la pregunta socrática reformulada en formato JSON:`;
 
   const { explanation, googleOverview } = formatTheaSearchOverview(parsed.retroalimentacion, query);
 
-  return {
+  const candidateQuestion: Question = {
     id: `q-socratic-recall-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     type: 'multiple-choice',
     difficulty: originalQuestion.difficulty || 'medium',
@@ -5237,6 +5255,12 @@ Genera la pregunta socrática reformulada en formato JSON:`;
     originalFailedQuestionId: originalQuestion.id,
     socraticAngle: parsed.angulo_socratico || 'Reformulación cognitiva de Active Recall',
   };
+
+  if (!isQuestionCompliantWithStandard(candidateQuestion)) {
+    throw new Error('La pregunta socrática generada no cumple con el estándar pedagógico de calidad.');
+  }
+
+  return candidateQuestion;
 }
 
 /**
@@ -5366,9 +5390,19 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
       "concepto_evaluado": "Subconcepto específico evaluado",
       "contexto_o_enunciado": "Planteamiento del escenario o premisa.",
       "pregunta": "¿Pregunta analítica o concepto específico?",
-      "opciones": { "A": "Opción A", "B": "Opción B", "C": "Opción C", "D": "Opción D" },
+      "opciones": {
+        "A": "Texto completo y sustantivo de la opción A",
+        "B": "Texto completo y sustantivo de la opción B",
+        "C": "Texto completo y sustantivo de la opción C",
+        "D": "Texto completo y sustantivo de la opción D"
+      },
       "respuesta_correcta": "A",
-      "opciones_multiples": ["Opción 1", "Opción 2", "Opción 3", "Opción 4"],
+      "opciones_multiples": [
+        "Texto detallado de la primera alternativa",
+        "Texto detallado de la segunda alternativa",
+        "Texto detallado de la tercera alternativa",
+        "Texto detallado de la cuarta alternativa"
+      ],
       "indices_correctos": [0, 2],
       "pares_emparejamiento": [
         { "termino": "Concepto 1", "definicion": "Definición 1" },
@@ -5470,13 +5504,13 @@ Genera las ${count} preguntas en formato JSON estricto:`;
 
     const optsObj = p.opciones || {};
     const optionsArray: string[] = Array.isArray(p.opciones_multiples) && p.opciones_multiples.length > 0
-      ? p.opciones_multiples.map((o: any) => String(o).trim())
+      ? p.opciones_multiples.map((o: any) => String(o).trim()).filter(Boolean)
       : [
-          String(optsObj.A || optsObj['a'] || 'Opción A').trim(),
-          String(optsObj.B || optsObj['b'] || 'Opción B').trim(),
-          String(optsObj.C || optsObj['c'] || 'Opción C').trim(),
-          String(optsObj.D || optsObj['d'] || 'Opción D').trim(),
-        ];
+          String(optsObj.A || optsObj['a'] || '').trim(),
+          String(optsObj.B || optsObj['b'] || '').trim(),
+          String(optsObj.C || optsObj['c'] || '').trim(),
+          String(optsObj.D || optsObj['d'] || '').trim(),
+        ].filter(Boolean);
 
     const hasMultipleOptions = (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 3) ||
       Boolean(optsObj.C || optsObj['c'] || optsObj.D || optsObj['d']);
@@ -5595,7 +5629,7 @@ Genera las ${count} preguntas en formato JSON estricto:`;
     };
   });
 
-  return mapped;
+  return filterCompliantQuestions(mapped);
 }
 
 export interface DocumentClassification {
@@ -6404,21 +6438,17 @@ Redacta las ${count} preguntas en formato JSON estricto:`;
 
     const parsed = safeParseAIJSON<any>(rawResponse);
     if (parsed && Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
-        return parsed.preguntas.map((p: any, idx: number): Question => {
+      const mappedQuestions = parsed.preguntas.map((p: any, idx: number): Question => {
           const rawType = String(p.tipo || '').toLowerCase();
           const isShort = rawType.includes('short') || rawType.includes('abierta') || formatPreference === 'short-answer';
           const type: Question['type'] = isShort ? 'short-answer' : 'multiple-choice';
 
           let opts = Array.isArray(p.opciones) && p.opciones.length >= 2
             ? p.opciones.map(String).filter(Boolean)
-            : ['Opción A fundamentada', 'Opción B plausible', 'Opción C alternativa', 'Opción D alternativa'];
-
-          while (opts.length < 4) {
-            opts.push(`Alternativa adicional ${opts.length + 1}`);
-          }
+            : [];
 
           const correctIdx = typeof p.indice_correcto === 'number'
-            ? Math.max(0, Math.min(opts.length - 1, p.indice_correcto))
+            ? Math.max(0, Math.min(Math.max(0, opts.length - 1), p.indice_correcto))
             : 0;
 
           const idealAnswer = String(p.respuesta_ideal || p.idealAnswer || opts[correctIdx] || '').trim();
@@ -6438,6 +6468,7 @@ Redacta las ${count} preguntas en formato JSON estricto:`;
             acceptableAnswers: Array.isArray(p.respuestas_aceptables) ? p.respuestas_aceptables.map(String) : undefined,
           };
         });
+        return filterCompliantQuestions(mappedQuestions);
       }
   } catch (err) {
     console.warn('[generateSpecializedExamQuestions] Fallback a preguntas adaptadas del material:', err);
@@ -6486,7 +6517,7 @@ Redacta las ${count} preguntas en formato JSON estricto:`;
     }
   }
 
-  return fallbackList;
+  return filterCompliantQuestions(fallbackList);
 }
 
 

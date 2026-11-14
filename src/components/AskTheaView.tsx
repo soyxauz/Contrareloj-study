@@ -79,7 +79,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
 
     let replyText: string;
     try {
-      replyText = await askTheaAI(trimmed, kit, previousHistory, 'ollama');
+      replyText = await askTheaAI(trimmed, kit, previousHistory, 'auto');
     } catch {
       replyText = `He analizado tu material de estudio sobre "${kit.title}". ¿Podrías reformular tu consulta o indicar qué concepto específico deseas revisar?`;
     }
@@ -142,7 +142,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
                   Consultas Escritas
                 </span>
                 <span className="text-[10px] text-zinc-400">
-                  Ollama Local / IA
+                  Groq Cloud · IA Engine
                 </span>
               </div>
               <p className={`text-[11px] truncate max-w-[240px] sm:max-w-md ${

@@ -19,6 +19,7 @@ import {
 import { generateSpecializedExamQuestions, evaluateShortAnswer } from '../services/aiService';
 import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
 import { useTheme } from '../services/themeService';
+import { filterCompliantQuestions } from '../utils/questionValidator';
 
 interface PracticeTestViewProps {
   kit: StudyKit;
@@ -91,24 +92,25 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
       setTestState('taking');
     } catch (err) {
       console.warn('[PracticeTestView] Error al generar examen especializado:', err);
-      // Fallback con las preguntas existentes del kit
-      const pool = kit.questions.filter(q => q.options && q.options.length > 0);
-      const effectivePool = pool.length > 0 ? pool : kit.questions;
+      // Fallback con las preguntas existentes del kit que cumplan el estándar
+      const pool = filterCompliantQuestions(kit.questions);
       const fallbackList: Question[] = [];
-      for (let i = 0; i < questionCount; i++) {
-        const base = effectivePool[i % effectivePool.length];
-        const isShort = formatPreference === 'short-answer' || (formatPreference === 'all' && i % 2 === 1);
-        fallbackList.push({
-          ...base,
-          id: `test-q-${i + 1}`,
-          type: isShort ? 'short-answer' : 'multiple-choice',
-          question: i >= effectivePool.length ? `[Variación ${i + 1}] ${base.question}` : base.question,
-          options: isShort ? undefined : base.options || ['Opción A', 'Opción B', 'Opción C', 'Opción D'],
-          correctIndex: isShort ? undefined : base.correctIndex ?? 0,
-          idealAnswer: isShort ? (base.options ? base.options[base.correctIndex ?? 0] : base.explanation) : undefined,
-          rubric: isShort ? 'Evaluar precisión del concepto nuclear.' : undefined,
-          acceptableAnswers: isShort && base.options ? [base.options[base.correctIndex ?? 0]] : undefined,
-        });
+      if (pool.length > 0) {
+        for (let i = 0; i < questionCount; i++) {
+          const base = pool[i % pool.length];
+          const isShort = formatPreference === 'short-answer' || (formatPreference === 'all' && i % 2 === 1);
+          fallbackList.push({
+            ...base,
+            id: `test-q-${i + 1}`,
+            type: isShort ? 'short-answer' : 'multiple-choice',
+            question: i >= pool.length ? `[Variación ${i + 1}] ${base.question}` : base.question,
+            options: isShort ? undefined : base.options || [],
+            correctIndex: isShort ? undefined : base.correctIndex ?? 0,
+            idealAnswer: isShort ? (base.options ? base.options[base.correctIndex ?? 0] : base.explanation) : undefined,
+            rubric: isShort ? 'Evaluar precisión del concepto nuclear.' : undefined,
+            acceptableAnswers: isShort && base.options ? [base.options[base.correctIndex ?? 0]] : undefined,
+          });
+        }
       }
       setActiveTestQuestions(fallbackList);
       setUserAnswers({});
@@ -416,7 +418,7 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
               </div>
             ) : (
               <div className="space-y-3 mb-8">
-                {((currentQ.options && currentQ.options.length > 0) ? currentQ.options : ['Opción A', 'Opción B', 'Opción C', 'Opción D']).map((option, optIdx) => {
+                {(currentQ.options || []).map((option, optIdx) => {
                   const isSelected = userAnswers[currentIdx] === optIdx;
 
                   let btnClasses = theme === 'dark'

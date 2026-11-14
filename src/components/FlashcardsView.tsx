@@ -1,6 +1,7 @@
 import { googleDriveService } from '../services/googleDriveService';
 import { authService } from '../services/authService';
 import { useTheme } from '../services/themeService';
+import { filterCompliantQuestions, isPlaceholderOption } from '../utils/questionValidator';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit, Flashcard, GuessWhoCase, GuessWhoClue } from '../types';
@@ -124,11 +125,8 @@ const cleanToShortConcept = (rawText: string): string => {
 
 const isGarbageOrPlaceholderOption = (text: string): boolean => {
   if (!text) return true;
+  if (isPlaceholderOption(text)) return true;
   const t = text.trim().toLowerCase();
-  // Placeholders directos tipo Opción A, B, C, D o Choice
-  if (/^(opci[oó]n|alternativa|respuesta|inciso|item|choice)\b/i.test(t)) return true;
-  if (/^(opci[oó]n|alternativa|respuesta)\s+[a-d0-9]/i.test(t)) return true;
-  if (/^(verdadero|falso|true|false|todas las anteriores|ninguna de las anteriores|ambas|n\/a)$/i.test(t)) return true;
   // Frases o comodines artificiales vacíos
   if (/^(principio de|mecanismo principal|factor estructural|criterio diagn[oó]stico|patr[oó]n funcional|elemento central|concepto clave|entidad clave)/i.test(t)) return true;
   if (/^(pregunta \d+|caso \d+|ejemplo \d+|tema \d+|definici[oó]n \d+)/i.test(t)) return true;
@@ -178,7 +176,7 @@ const buildGuessWhoCases = (
 
   // 2. Recolectar de los temas (topics), parejas de match y opciones válidas de las preguntas
   if (kit.questions && Array.isArray(kit.questions)) {
-    kit.questions.forEach(q => {
+    filterCompliantQuestions(kit.questions).forEach(q => {
       if (q.topic) registerConcept(q.topic);
       if (q.matchingPairs) {
         q.matchingPairs.forEach(p => registerConcept(p.term));
