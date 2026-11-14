@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, BookOpen, Layers } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import type { GlossaryConcept } from '../utils/glossaryExtractor';
+import { FormattedText } from './FormattedText';
 
 export interface ConceptPopoverProps {
   concept: GlossaryConcept | null;
@@ -24,7 +25,7 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
     placement: 'top' | 'bottom';
   } | null>(null);
 
-  // Calcular posición exacta con ajuste dinámico a la pantalla
+  // Calcular posición exacta con ajuste dinámico y clamping estricto al viewport
   useLayoutEffect(() => {
     if (!targetRect || !concept) {
       setCoords(null);
@@ -32,17 +33,20 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
     }
 
     const popoverEl = popoverRef.current;
-    const popoverWidth = popoverEl ? popoverEl.offsetWidth : 320;
-    const popoverHeight = popoverEl ? popoverEl.offsetHeight : 160;
+    const popoverWidth = popoverEl ? popoverEl.offsetWidth : 350;
+    const popoverHeight = popoverEl ? popoverEl.offsetHeight : 180;
 
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
 
-    // Decidir si va arriba o abajo del término
+    // Espacios disponibles arriba y abajo del elemento subrayado
     const spaceBelow = viewportHeight - targetRect.bottom;
-    const placeBelow = spaceBelow >= popoverHeight + 16 || targetRect.top < popoverHeight + 16;
+    const spaceAbove = targetRect.top;
+
+    // Colocar abajo si hay suficiente espacio o si abajo hay más espacio que arriba
+    const placeBelow = spaceBelow >= popoverHeight + 16 || spaceBelow >= spaceAbove;
     const placement = placeBelow ? 'bottom' : 'top';
 
     // Coordenada vertical
@@ -53,13 +57,18 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
       top = targetRect.top + scrollY - popoverHeight - 10;
     }
 
-    // Coordenada horizontal (centrado sobre la palabra, con márgenes de 14px en los bordes)
+    // Clamping vertical estricto para que la cabecera, título y botón de cierre nunca queden fuera de la pantalla
+    const minTop = scrollY + 14;
+    const maxTop = Math.max(minTop, scrollY + viewportHeight - popoverHeight - 14);
+    top = Math.max(minTop, Math.min(maxTop, top));
+
+    // Coordenada horizontal (centrado sobre la palabra con márgenes de seguridad de 14px)
     const targetCenterX = targetRect.left + scrollX + targetRect.width / 2;
     const rawLeft = targetCenterX - popoverWidth / 2;
     const left = Math.max(14 + scrollX, Math.min(scrollX + viewportWidth - popoverWidth - 14, rawLeft));
 
     // Posición de la flecha con respecto a la caja del popover
-    const arrowLeft = Math.max(16, Math.min(popoverWidth - 16, targetCenterX - left));
+    const arrowLeft = Math.max(18, Math.min(popoverWidth - 18, targetCenterX - left));
 
     setCoords({
       top,
@@ -108,7 +117,7 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label={`Definición de ${concept.term}`}
-      className={`absolute z-[99999] w-[310px] sm:w-[360px] rounded-2xl p-4 sm:p-4.5 backdrop-blur-xl animate-fadeIn select-text ${
+      className={`absolute z-[99999] w-[320px] sm:w-[380px] max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-5 backdrop-blur-xl animate-fadeIn select-text ${
         coords ? 'opacity-100' : 'opacity-0 pointer-events-none'
       } ${
         theme === 'light'
@@ -122,19 +131,19 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
         left: coords ? `${coords.left}px` : '-9999px',
         boxShadow:
           theme === 'light'
-            ? '0 16px 36px -6px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.95)'
+            ? '0 20px 48px -10px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.95)'
             : theme === 'kitty'
-            ? '0 16px 36px -6px rgba(236,72,153,0.18), 0 2px 8px rgba(236,72,153,0.1), inset 0 1px 0 rgba(255,255,255,0.95)'
-            : '0 18px 44px -8px rgba(0,0,0,0.7), 0 2px 10px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12)',
+            ? '0 20px 48px -10px rgba(236,72,153,0.22), 0 2px 8px rgba(236,72,153,0.12), inset 0 1px 0 rgba(255,255,255,0.95)'
+            : '0 22px 50px -10px rgba(0,0,0,0.75), 0 2px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)',
       }}
     >
       {/* Flecha conectora / Pointer hacia la palabra subrayada */}
       {coords && (
         <div
-          className={`absolute w-3 h-3 rotate-45 pointer-events-none ${
+          className={`absolute w-3.5 h-3.5 rotate-45 pointer-events-none ${
             coords.placement === 'bottom'
-              ? '-top-1.5 border-t border-l'
-              : '-bottom-1.5 border-b border-r'
+              ? '-top-2 border-t border-l'
+              : '-bottom-2 border-b border-r'
           } ${
             theme === 'light'
               ? 'bg-white border-slate-200/90'
@@ -160,7 +169,7 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
           type="button"
           onClick={onClose}
           aria-label="Cerrar definición"
-          className={`p-1 rounded-lg transition-colors cursor-pointer shrink-0 -mr-1 -mt-1 active-press ${
+          className={`p-1 rounded-lg transition-transform duration-150 cursor-pointer shrink-0 -mr-1 -mt-1 active:scale-95 ${
             theme === 'light'
               ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
               : theme === 'kitty'
@@ -183,9 +192,9 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
         }`}
       />
 
-      {/* Cuerpo de la Definición */}
-      <div className="space-y-2">
-        <p
+      {/* Cuerpo de la Definición con soporte enriquecido para KaTeX y Markdown */}
+      <div className="space-y-2.5">
+        <div
           className={`text-xs sm:text-[13px] leading-relaxed font-normal ${
             theme === 'light'
               ? 'text-slate-700'
@@ -194,11 +203,11 @@ export const ConceptPopover: React.FC<ConceptPopoverProps> = ({
               : 'text-slate-200'
           }`}
         >
-          {concept.definition}
-        </p>
+          <FormattedText text={concept.definition} inlineOnly={false} />
+        </div>
 
         {/* Micro-etiqueta de origen del concepto */}
-        <div className="flex items-center gap-1.5 pt-0.5">
+        <div className="flex items-center gap-1.5 pt-1">
           {concept.source === 'flashcard' ? (
             <span
               className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${

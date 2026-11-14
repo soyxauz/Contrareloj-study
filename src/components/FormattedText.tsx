@@ -171,7 +171,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
               onConceptClick(concept, e.currentTarget.getBoundingClientRect());
             }
           }}
-          className={`border-b-2 border-dotted cursor-pointer select-text transition-all duration-150 inline font-inherit ${
+          className={`border-b-2 border-dotted cursor-pointer select-text transition-[border-color,color] duration-150 inline font-inherit ${
             theme === 'dark'
               ? 'border-violet-300/80 hover:border-violet-200 text-inherit hover:text-white'
               : theme === 'kitty'
@@ -195,7 +195,11 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
   };
 
   // Renderizado inline de matemáticas, negrita, cursiva, código y enlaces
-  const renderInline = (str: string, keyPrefix: string = 'inline'): React.ReactNode[] => {
+  const renderInline = (
+    str: string,
+    keyPrefix: string = 'inline',
+    allowGlossary: boolean = true
+  ): React.ReactNode[] => {
     // Regex tokens: $$block$$, \\[block\\], $inline$, \\(inline\\), **negrita**, __negrita__, `código`, *cursiva*, _cursiva_, [link](url)
     const tokenRegex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\*\*[\s\S]+?\*\*|__[\s\S]+?__|`[^`]+`|\*[^*]+?\*|_([^_]+)_|\[([^\]]+)\]\(([^)]+)\))/g;
     const parts: React.ReactNode[] = [];
@@ -205,7 +209,11 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
     const pushPlain = (rawText: string, idxKey: string | number) => {
       const cleaned = cleanPlainGapText(rawText);
       if (!cleaned) return;
-      parts.push(...renderPlainGlossaryNodes(cleaned, `${keyPrefix}-${idxKey}`));
+      if (allowGlossary && glossaryRegex && glossaryMap && onConceptClick) {
+        parts.push(...renderPlainGlossaryNodes(cleaned, `${keyPrefix}-${idxKey}`));
+      } else {
+        parts.push(cleaned);
+      }
     };
 
     while ((match = tokenRegex.exec(str)) !== null) {
@@ -262,7 +270,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
             theme === 'kitty' ? 'text-[#be185d]' : theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
           }`}>
-            {renderInline(content, `b-${match.index}`)}
+            {renderInline(content, `b-${match.index}`, allowGlossary)}
           </strong>
         );
       } else if (token.startsWith('__') && token.endsWith('__')) {
@@ -271,7 +279,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
             theme === 'kitty' ? 'text-[#be185d]' : theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
           }`}>
-            {renderInline(content, `b-${match.index}`)}
+            {renderInline(content, `b-${match.index}`, allowGlossary)}
           </strong>
         );
       } else if (token.startsWith('`') && token.endsWith('`')) {
@@ -296,7 +304,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <em key={`i-${match.index}`} className={`italic ${
             theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
           }`}>
-            {renderInline(content, `i-${match.index}`)}
+            {renderInline(content, `i-${match.index}`, allowGlossary)}
           </em>
         );
       } else if (token.startsWith('_') && token.endsWith('_')) {
@@ -305,7 +313,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <em key={`i-${match.index}`} className={`italic ${
             theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
           }`}>
-            {renderInline(content, `i-${match.index}`)}
+            {renderInline(content, `i-${match.index}`, allowGlossary)}
           </em>
         );
       } else if (token.startsWith('[') && token.includes('](')) {
@@ -572,7 +580,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
                               : 'border-thea-border/30 text-violet-300 font-bold'
                           } ${alignments[colIdx] || 'text-left'}`}
                         >
-                          {renderInline(h)}
+                          {renderInline(h, `th-${i}-${colIdx}`, false)}
                         </th>
                       ))}
                     </tr>
@@ -701,17 +709,17 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       continue;
     }
 
-    // Encabezados H1 a H4 sin sintaxis #
+    // Encabezados H1 a H4 sin sintaxis # (desactivando glosario para mantener títulos limpios e intactos)
     if (trimmed.startsWith('# ')) {
       if (currentList) flushList(`list-${i}`);
       blocks.push(
         <h1
           key={`h1-${i}`}
-          className={`text-xl sm:text-2xl font-black mt-5 mb-2.5 tracking-tight flex items-center gap-2 ${
+          className={`block text-xl sm:text-2xl font-black mt-5 mb-2.5 tracking-tight ${
             theme === 'light' ? 'text-zinc-950' : theme === 'kitty' ? 'text-pink-600' : 'text-amber-300'
           }`}
         >
-          {renderInline(trimmed.replace(/^#\s+/, ''))}
+          {renderInline(trimmed.replace(/^#\s+/, ''), `h1-${i}`, false)}
         </h1>
       );
       continue;
@@ -722,7 +730,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <h2
           key={`h2-${i}`}
-          className={`text-lg sm:text-xl font-extrabold mt-4 mb-2 tracking-tight border-b pb-1 ${
+          className={`block text-lg sm:text-xl font-extrabold mt-4 mb-2 tracking-tight border-b pb-1 ${
             theme === 'light'
               ? 'text-zinc-950 border-slate-200'
               : theme === 'kitty'
@@ -730,7 +738,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
               : 'text-violet-300 border-thea-border/40'
           }`}
         >
-          {renderInline(trimmed.replace(/^##\s+/, ''))}
+          {renderInline(trimmed.replace(/^##\s+/, ''), `h2-${i}`, false)}
         </h2>
       );
       continue;
@@ -741,11 +749,11 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <h3
           key={`h3-${i}`}
-          className={`text-base sm:text-lg font-bold mt-3.5 mb-1.5 ${
+          className={`block text-base sm:text-lg font-bold mt-3.5 mb-1.5 ${
             theme === 'dark' ? 'text-white' : 'text-zinc-900 font-extrabold'
           }`}
         >
-          {renderInline(trimmed.replace(/^###\s+/, ''))}
+          {renderInline(trimmed.replace(/^###\s+/, ''), `h3-${i}`, false)}
         </h3>
       );
       continue;
@@ -756,11 +764,11 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       blocks.push(
         <h4
           key={`h4-${i}`}
-          className={`text-sm sm:text-base font-semibold mt-3 mb-1 ${
+          className={`block text-sm sm:text-base font-semibold mt-3 mb-1 ${
             theme === 'dark' ? 'text-slate-200' : 'text-zinc-800 font-bold'
           }`}
         >
-          {renderInline(trimmed.replace(/^####\s+/, ''))}
+          {renderInline(trimmed.replace(/^####\s+/, ''), `h4-${i}`, false)}
         </h4>
       );
       continue;
