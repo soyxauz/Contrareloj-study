@@ -40,6 +40,7 @@ import {
   ChevronDown,
   ZoomIn,
   CheckCheck,
+  Brain,
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
@@ -87,30 +88,49 @@ import { filterCompliantQuestions } from '../utils/questionValidator';
 const LevelIndicator: React.FC<{ currentLevel: number; onResetClick?: () => void }> = ({
   currentLevel,
   onResetClick,
-}) => (
-  <button
-    type="button"
-    onClick={onResetClick}
-    title={`Nivel ${currentLevel}: ${currentLevel === 1 ? 'Fundamentos' : currentLevel === 2 ? 'Aplicación' : 'Dominio'} (clic para reiniciar progreso)`}
-    className="active-press flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/20 hover:bg-white/[0.06] transition-colors cursor-pointer select-none text-xs tabular-nums"
-  >
-    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-      Nivel {currentLevel}
-    </span>
-    <div className="flex items-center gap-1">
-      {[1, 2, 3].map(lvl => (
-        <span
-          key={lvl}
-          className={`w-3.5 h-1.5 rounded-full transition-colors ${
-            currentLevel >= lvl
-              ? 'bg-rose-500 shadow-sm shadow-rose-950/40'
-              : 'bg-white/[0.12]'
-          }`}
-        />
-      ))}
-    </div>
-  </button>
-);
+}) => {
+  const { theme } = useTheme();
+  return (
+    <button
+      type="button"
+      onClick={onResetClick}
+      title={`Nivel ${currentLevel}: ${currentLevel === 1 ? 'Fundamentos' : currentLevel === 2 ? 'Aplicación' : 'Dominio'} (clic para reiniciar progreso)`}
+      className={`active-press flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors cursor-pointer select-none text-xs tabular-nums ${
+        theme === 'light'
+          ? 'bg-rose-50/90 border border-rose-200/90 hover:bg-rose-100/90 text-rose-950 shadow-xs'
+          : theme === 'kitty'
+          ? 'bg-pink-100/90 border border-pink-300/80 hover:bg-pink-200/90 text-pink-950 shadow-xs'
+          : 'bg-white/[0.03] border border-white/[0.08] hover:border-white/20 hover:bg-white/[0.06] text-white shadow-sm'
+      }`}
+    >
+      <span
+        className={`text-[11px] font-semibold uppercase tracking-wider ${
+          theme === 'light' ? 'text-rose-700' : theme === 'kitty' ? 'text-pink-700' : 'text-slate-400'
+        }`}
+      >
+        Nivel {currentLevel}
+      </span>
+      <div className="flex items-center gap-1">
+        {[1, 2, 3].map(lvl => (
+          <span
+            key={lvl}
+            className={`w-3.5 h-1.5 rounded-full transition-colors ${
+              currentLevel >= lvl
+                ? theme === 'kitty'
+                  ? 'bg-pink-500 shadow-sm shadow-pink-500/40'
+                  : 'bg-rose-500 shadow-sm shadow-rose-950/40'
+                : theme === 'light'
+                ? 'bg-rose-200'
+                : theme === 'kitty'
+                ? 'bg-pink-200'
+                : 'bg-white/[0.12]'
+            }`}
+          />
+        ))}
+      </div>
+    </button>
+  );
+};
 
 export interface StudyHistoryItem {
   id: string;
@@ -483,8 +503,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     };
   });
   const [levelCorrectCount, setLevelCorrectCount] = useState(savedSession?.levelCorrectCount || 0);
-  const currentLevelQuestionsCount = (kit.questions || []).filter(q => (q.difficulty || 'easy') === (level === 1 ? 'easy' : level === 2 ? 'medium' : 'hard')).length;
-  const levelTarget = Math.max(1, Math.min(25, currentLevelQuestionsCount > 0 ? currentLevelQuestionsCount : 7));
+  // Meta pedagógica unificada de 25 aciertos (100%) por nivel, sincronizada exactamente con statsService y HomeView
+  const levelTarget = 25;
   const currentLevelCorrect = levelCorrectCounts[level] ?? levelCorrectCount ?? 0;
   const [levelUpBanner, setLevelUpBanner] = useState<string>('');
 
@@ -4072,36 +4092,120 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       ) : (
         /* ── MODO PRÁCTICA ACTIVA (DISTRIBUCIÓN PREMIUM SEGÚN CAPTURA) ───────── */
         <div className="animate-fadeIn">
-          {/* ── TOP BAR: PROGRESS PILL + 3 SPARKLE STARS + SETTINGS ─── */}
-          <div className="flex items-center justify-between gap-3 sm:gap-6">
-            {/* Pill Progress Bar: Nivel {level}: {pct}% */}
-            <div className="flex-1 max-w-xl h-7 sm:h-8 rounded-full bg-white/[0.04] border border-white/[0.08] p-1 flex items-center relative overflow-hidden shadow-inner">
+          {/* ── TOP BAR: PROGRESS PILL + LEVEL INDICATOR + SETTINGS (APPLE / LINEAR STUDIO) ─── */}
+          <div className="flex items-center justify-between gap-2.5 sm:gap-4 flex-wrap sm:flex-nowrap">
+            {/* Left: Progress Badge + Sleek Bar */}
+            <div className="flex-1 min-w-[200px] flex items-center gap-2.5 sm:gap-3">
+              {/* Pill sincronizada con HomeView: Nivel X: N/25 (Y%) */}
               <div
-                className="h-full rounded-full bg-gradient-to-r from-rose-700 via-rose-600 to-rose-500 transition-[width] duration-300 ease-out shadow-sm"
-                style={{ width: `${Math.max(6, Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100)))}%` }}
-              />
-              <span className="absolute left-4 text-xs font-semibold text-white tracking-wide select-none drop-shadow-sm tabular-nums">
-                Nivel {level}: {Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100))}%
-              </span>
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shrink-0 tabular-nums select-none ${
+                  theme === 'light'
+                    ? 'bg-rose-50/95 border border-rose-200/90 text-rose-950 shadow-xs'
+                    : theme === 'kitty'
+                    ? 'bg-pink-100/90 border border-pink-300/80 text-pink-950 shadow-xs'
+                    : 'bg-white/[0.04] border border-white/[0.08] text-white shadow-sm'
+                }`}
+                style={{
+                  boxShadow:
+                    theme === 'light'
+                      ? '0 1px 2px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                      : theme === 'kitty'
+                      ? '0 1px 2px rgba(236, 72, 153, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                      : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
+                }}
+              >
+                <Brain
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    theme === 'light'
+                      ? 'text-rose-600'
+                      : theme === 'kitty'
+                      ? 'text-pink-600'
+                      : 'text-rose-400'
+                  }`}
+                />
+                <span className="font-bold">Nivel {level}:</span>
+                <span
+                  className={`font-bold ${
+                    theme === 'light'
+                      ? 'text-rose-700'
+                      : theme === 'kitty'
+                      ? 'text-pink-700'
+                      : 'text-rose-300'
+                  }`}
+                >
+                  {currentLevelCorrect}/{levelTarget}
+                </span>
+                <span
+                  className={`text-[11px] ${
+                    theme === 'light'
+                      ? 'text-slate-500'
+                      : theme === 'kitty'
+                      ? 'text-pink-600/80'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  ({Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100))}%)
+                </span>
+              </div>
+
+              {/* Pista de Barra de Progreso Elegante y Fluida (Sin colisión ni texto cortado) */}
+              <div
+                className={`flex-1 h-2 sm:h-2.5 rounded-full relative overflow-hidden ${
+                  theme === 'light'
+                    ? 'bg-slate-200/80 border border-slate-300/50 shadow-inner'
+                    : theme === 'kitty'
+                    ? 'bg-pink-200/60 border border-pink-300/60 shadow-inner'
+                    : 'bg-white/[0.06] border border-white/[0.08] shadow-inner'
+                }`}
+              >
+                <div
+                  className={`h-full rounded-full transition-[width] duration-300 ease-out ${
+                    theme === 'kitty'
+                      ? 'bg-gradient-to-r from-pink-500 via-rose-400 to-pink-400 shadow-[0_0_8px_rgba(236,72,153,0.35)]'
+                      : 'bg-gradient-to-r from-rose-700 via-rose-600 to-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.35)]'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100))}%`
+                  }}
+                />
+              </div>
             </div>
 
-            {/* Right: 3 Sparkle Stars + Settings Gear */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Right: LevelIndicator + Settings Gear */}
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
               <LevelIndicator currentLevel={level} onResetClick={() => setShowResetConfirmModal(true)} />
 
               <button
                 type="button"
                 onClick={() => setShowConfigDrawer(true)}
                 title="Calibrar Dificultad y Enfoque Temático"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer ml-1 active-press"
+                className={`p-1.5 rounded-xl transition-colors cursor-pointer active-press ${
+                  theme === 'light'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    : theme === 'kitty'
+                    ? 'text-pink-600 hover:text-pink-900 hover:bg-pink-200/60'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
               >
-                <Settings className="w-5 h-5 text-slate-300" />
+                <Settings
+                  className={`w-5 h-5 ${
+                    theme === 'light'
+                      ? 'text-slate-700'
+                      : theme === 'kitty'
+                      ? 'text-pink-700'
+                      : 'text-slate-300'
+                  }`}
+                />
               </button>
             </div>
           </div>
 
           {/* Divider Line */}
-          <div className="w-full h-px bg-white/[0.06] my-2.5 sm:my-3.5" />
+          <div
+            className={`w-full h-px my-2.5 sm:my-3.5 ${
+              theme === 'light' ? 'bg-slate-200' : theme === 'kitty' ? 'bg-pink-200' : 'bg-white/[0.06]'
+            }`}
+          />
 
           {/* Notificación de Nivel Completado / Subida de Nivel */}
           {levelUpBanner && (
