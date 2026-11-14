@@ -1,11 +1,17 @@
-import React from 'react';
+import React, { useMemo, useRef } from 'react';
 import katex from 'katex';
 import { useTheme } from '../services/themeService';
+import type { GlossaryConcept } from '../utils/glossaryExtractor';
+import { buildGlossaryMatcherRegex } from '../utils/glossaryExtractor';
 
-interface FormattedTextProps {
+export type { GlossaryConcept };
+
+export interface FormattedTextProps {
   text: string;
   className?: string;
   inlineOnly?: boolean;
+  glossary?: GlossaryConcept[];
+  onConceptClick?: (concept: GlossaryConcept, rect: DOMRect) => void;
 }
 
 /**
@@ -93,22 +99,119 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
   text,
   className = '',
   inlineOnly = false,
+  glossary,
+  onConceptClick,
 }) => {
   const { theme } = useTheme();
   if (!text) return null;
 
+  // Mapa de conceptos en minúsculas para resolución O(1)
+  const glossaryMap = useMemo(() => {
+    if (!glossary || glossary.length === 0) return null;
+    const map = new Map<string, GlossaryConcept>();
+    for (const g of glossary) {
+      map.set(g.term.toLowerCase(), g);
+    }
+    return map;
+  }, [glossary]);
+
+  // Expresión regular precompilada con fronteras Unicode para términos exactos
+  const glossaryRegex = useMemo(() => {
+    if (!glossary || glossary.length === 0) return null;
+    return buildGlossaryMatcherRegex(glossary);
+  }, [glossary]);
+
+  // Contador de subrayados por término para balance estético (máximo 2 por concepto en el documento)
+  const occurrenceCountMap = useRef<Map<string, number>>(new Map());
+  occurrenceCountMap.current = new Map();
+
+  // Helper para dividir un fragmento de texto plano e inyectar el subrayado punteado interactivo
+  const renderPlainGlossaryNodes = (plainStr: string, keyPrefix: string): React.ReactNode[] => {
+    if (!glossaryRegex || !glossaryMap || !onConceptClick || plainStr.length < 3) {
+      return [plainStr];
+    }
+
+    glossaryRegex.lastIndex = 0;
+    const nodes: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = glossaryRegex.exec(plainStr)) !== null) {
+      const matchIndex = match.index;
+      const matchText = match[0];
+      const lower = matchText.toLowerCase();
+      const concept = glossaryMap.get(lower);
+
+      if (!concept) continue;
+
+      const currentCount = occurrenceCountMap.current.get(lower) || 0;
+      // Permitir hasta 2 subrayados interactivos por término en el documento
+      if (currentCount >= 2) {
+        continue;
+      }
+
+      if (matchIndex > lastIdx) {
+        nodes.push(plainStr.substring(lastIdx, matchIndex));
+      }
+
+      occurrenceCountMap.current.set(lower, currentCount + 1);
+
+      nodes.push(
+        <span
+          key={`concept-${keyPrefix}-${matchIndex}`}
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            onConceptClick(concept, e.currentTarget.getBoundingClientRect());
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onConceptClick(concept, e.currentTarget.getBoundingClientRect());
+            }
+          }}
+          className={`border-b-2 border-dotted cursor-pointer select-text transition-all duration-150 inline font-inherit ${
+            theme === 'dark'
+              ? 'border-violet-300/80 hover:border-violet-200 text-inherit hover:text-white'
+              : theme === 'kitty'
+              ? 'border-pink-500/80 hover:border-pink-600 text-inherit hover:text-pink-950'
+              : 'border-indigo-600/80 hover:border-indigo-700 text-inherit hover:text-slate-950'
+          }`}
+          title={`Definición de "${concept.term}" (clic para ver)`}
+        >
+          {matchText}
+        </span>
+      );
+
+      lastIdx = glossaryRegex.lastIndex;
+    }
+
+    if (lastIdx < plainStr.length) {
+      nodes.push(plainStr.substring(lastIdx));
+    }
+
+    return nodes.length > 0 ? nodes : [plainStr];
+  };
+
   // Renderizado inline de matemáticas, negrita, cursiva, código y enlaces
-  const renderInline = (str: string): React.ReactNode[] => {
+  const renderInline = (str: string, keyPrefix: string = 'inline'): React.ReactNode[] => {
     // Regex tokens: $$block$$, \\[block\\], $inline$, \\(inline\\), **negrita**, __negrita__, `código`, *cursiva*, _cursiva_, [link](url)
     const tokenRegex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\*\*[\s\S]+?\*\*|__[\s\S]+?__|`[^`]+`|\*[^*]+?\*|_([^_]+)_|\[([^\]]+)\]\(([^)]+)\))/g;
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
+    const pushPlain = (rawText: string, idxKey: string | number) => {
+      const cleaned = cleanPlainGapText(rawText);
+      if (!cleaned) return;
+      parts.push(...renderPlainGlossaryNodes(cleaned, `${keyPrefix}-${idxKey}`));
+    };
+
     while ((match = tokenRegex.exec(str)) !== null) {
       // Texto previo sin formato (reemplazando símbolos matemáticos sueltos y limpiando ** huérfanos)
       if (match.index > lastIndex) {
-        parts.push(cleanPlainGapText(str.substring(lastIndex, match.index)));
+        pushPlain(str.substring(lastIndex, match.index), `pre-${match.index}`);
       }
 
       const token = match[0];
@@ -159,7 +262,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
             theme === 'kitty' ? 'text-[#be185d]' : theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
           }`}>
-            {renderInline(content)}
+            {renderInline(content, `b-${match.index}`)}
           </strong>
         );
       } else if (token.startsWith('__') && token.endsWith('__')) {
@@ -168,7 +271,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <strong key={`b-${match.index}`} className={`font-bold tracking-normal ${
             theme === 'kitty' ? 'text-[#be185d]' : theme === 'dark' ? 'text-white' : 'text-zinc-950 font-black'
           }`}>
-            {renderInline(content)}
+            {renderInline(content, `b-${match.index}`)}
           </strong>
         );
       } else if (token.startsWith('`') && token.endsWith('`')) {
@@ -193,7 +296,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <em key={`i-${match.index}`} className={`italic ${
             theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
           }`}>
-            {renderInline(content)}
+            {renderInline(content, `i-${match.index}`)}
           </em>
         );
       } else if (token.startsWith('_') && token.endsWith('_')) {
@@ -202,7 +305,7 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
           <em key={`i-${match.index}`} className={`italic ${
             theme === 'dark' ? 'text-slate-200' : 'text-zinc-800'
           }`}>
-            {renderInline(content)}
+            {renderInline(content, `i-${match.index}`)}
           </em>
         );
       } else if (token.startsWith('[') && token.includes('](')) {
@@ -230,10 +333,14 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
     }
 
     if (lastIndex < str.length) {
-      parts.push(cleanPlainGapText(str.substring(lastIndex)));
+      pushPlain(str.substring(lastIndex), `tail-${lastIndex}`);
     }
 
-    return parts.length > 0 ? parts : [cleanPlainGapText(str)];
+    if (parts.length === 0) {
+      pushPlain(str, 'empty');
+    }
+
+    return parts;
   };
 
   if (inlineOnly) {

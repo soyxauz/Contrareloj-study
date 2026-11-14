@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { StudyKit, DocumentAsset, StudyGuideDepth } from '../types';
 import {
@@ -79,6 +79,8 @@ import { synthesizeAzureEdgeSpeech, prefetchAzureEdgeSpeech } from '../services/
 import { getAssetById } from '../services/storageService';
 import { StudyGuideScanner } from './StudyGuideScanner';
 import { useTheme } from '../services/themeService';
+import { ConceptPopover } from './ConceptPopover';
+import { extractGlossaryConcepts, type GlossaryConcept } from '../utils/glossaryExtractor';
 
 interface StudyGuideViewProps {
   kit: StudyKit;
@@ -109,6 +111,25 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
     message: '',
     percent: 0,
   });
+
+  // Conceptos glosario interactivo para subrayado punteado y popover de definición
+  const glossaryConcepts = useMemo(() => {
+    return extractGlossaryConcepts(currentKitState, markdown);
+  }, [currentKitState, markdown]);
+
+  const [activeConceptData, setActiveConceptData] = useState<{
+    concept: GlossaryConcept;
+    rect: DOMRect;
+  } | null>(null);
+
+  const handleConceptClick = useCallback((concept: GlossaryConcept, rect: DOMRect) => {
+    setActiveConceptData(prev => {
+      if (prev && prev.concept.term.toLowerCase() === concept.term.toLowerCase()) {
+        return null;
+      }
+      return { concept, rect };
+    });
+  }, []);
 
   useEffect(() => {
     setCurrentKitState(kit);
@@ -774,8 +795,21 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                   ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
                   : 'thea-glass-card text-zinc-950'
               }`}>
-                <FormattedText text={stripExecutiveSummaryPreamble(markdown)} />
+                <FormattedText
+                  text={stripExecutiveSummaryPreamble(markdown)}
+                  glossary={glossaryConcepts}
+                  onConceptClick={handleConceptClick}
+                />
               </div>
+
+              {/* Globo emergente / Popover interactivo con la definición del concepto */}
+              {activeConceptData && (
+                <ConceptPopover
+                  concept={activeConceptData.concept}
+                  targetRect={activeConceptData.rect}
+                  onClose={() => setActiveConceptData(null)}
+                />
+              )}
 
               {/* Banner inferior para Rehacer con diferente extensión */}
               <div className={`p-6 sm:p-8 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-5 ${
