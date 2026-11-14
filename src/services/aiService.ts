@@ -3,6 +3,7 @@ import { detectDocumentLanguage, getSpanishTranslationDirective } from './langua
 import { safeLocalStorageSetItem } from './storageService';
 import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
 import { filterCompliantQuestions, isQuestionCompliantWithStandard } from '../utils/questionValidator';
+import { extractCleanTokens } from '../engine/topicInterleaving';
 import {
   computePodcastLengthPlan,
   buildPodcastActPrompts,
@@ -3175,8 +3176,34 @@ export interface DocumentSection {
   title: string;
   chunks: DocumentChunk[];
   text: string;
+  keywords: string[];
   startPage?: number;
   endPage?: number;
+}
+
+/**
+ * Extrae los términos conceptuales más frecuentes y sustantivos de una sección de texto,
+ * descartando stopwords y palabras genéricas, para usarlos como anclas temáticas.
+ */
+export function extractSectionKeywords(text: string, count: number = 6): string[] {
+  const tokenSet = extractCleanTokens(text);
+  const words = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 4 && tokenSet.has(w));
+
+  const freq: Record<string, number> = {};
+  for (const w of words) {
+    freq[w] = (freq[w] || 0) + 1;
+  }
+
+  return Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, count)
+    .map(([w]) => w);
 }
 
 /**
@@ -3202,22 +3229,34 @@ export function partitionDocumentIntoSections(
       const secChunks = chunks.slice(startIdx, endIdx);
       if (secChunks.length === 0) continue;
 
+      const secFullText = secChunks.map(c => c.text).join(' ');
+      const secKeywords = extractSectionKeywords(secFullText, 6);
+
       const headings = secChunks.map(c => c.heading).filter(Boolean);
       const uniqueHeadings = Array.from(new Set(headings));
       let title = uniqueHeadings.slice(0, 2).join(' / ');
       if (!title) {
-        if (i === 0) title = 'Fundamentos, Definiciones e Introducción';
-        else if (i === sectionCount - 1) title = 'Complicaciones, Aplicaciones Prácticas y Cierre';
-        else if (i === 1) title = 'Fisiopatología, Vías y Mecanismos de Acción';
-        else if (i === 2) title = 'Criterios Diagnósticos, Signos y Laboratorio';
-        else title = `Parte ${i + 1}: Manejo Terapéutico y Farmacología`;
+        if (secKeywords.length > 0) {
+          title = `Parte ${i + 1}: ${secKeywords.slice(0, 3).map(k => k.charAt(0).toUpperCase() + k.slice(1)).join(', ')}`;
+        } else if (i === 0) {
+          title = 'Fundamentos, Definiciones e Introducción';
+        } else if (i === sectionCount - 1) {
+          title = 'Complicaciones, Aplicaciones Prácticas y Cierre';
+        } else if (i === 1) {
+          title = 'Fisiopatología, Vías y Mecanismos de Acción';
+        } else if (i === 2) {
+          title = 'Criterios Diagnósticos, Signos y Laboratorio';
+        } else {
+          title = `Parte ${i + 1}: Manejo Terapéutico y Farmacología`;
+        }
       }
 
       const startPage = secChunks[0]?.pageOrSlide;
       const endPage = secChunks[secChunks.length - 1]?.pageOrSlide;
       const text = secChunks
         .map(c => `[FRAGMENTO ID: ${c.id} | ${c.heading || 'Sección'} | Pág/Diapositiva: ${c.pageOrSlide || 1}]\n${c.text}`)
-        .join('\n\n---\n\n');
+        .join('\n\n---\n\n')
+        .slice(0, 16000);
 
       sections.push({
         index: i + 1,
@@ -3225,6 +3264,7 @@ export function partitionDocumentIntoSections(
         title,
         chunks: secChunks,
         text,
+        keywords: secKeywords,
         startPage,
         endPage,
       });
@@ -3245,12 +3285,21 @@ export function partitionDocumentIntoSections(
     const secParas = paragraphs.slice(startIdx, endIdx);
     if (secParas.length === 0) continue;
 
+    const secFullText = secParas.join(' ');
+    const secKeywords = extractSectionKeywords(secFullText, 6);
+
     const firstLine = secParas[0].split('\n')[0].replace(/^#+\s*/, '').trim();
     let title = firstLine.slice(0, 60);
     if (!title || title.length < 5) {
-      if (i === 0) title = 'Fundamentos y Conceptos Iniciales';
-      else if (i === sectionCount - 1) title = 'Casos Clínicos y Recomendaciones Finales';
-      else title = `Parte ${i + 1}: Desarrollo Temático y Mecanismos`;
+      if (secKeywords.length > 0) {
+        title = `Parte ${i + 1}: ${secKeywords.slice(0, 3).map(k => k.charAt(0).toUpperCase() + k.slice(1)).join(', ')}`;
+      } else if (i === 0) {
+        title = 'Fundamentos y Conceptos Iniciales';
+      } else if (i === sectionCount - 1) {
+        title = 'Casos Clínicos y Recomendaciones Finales';
+      } else {
+        title = `Parte ${i + 1}: Desarrollo Temático y Mecanismos`;
+      }
     }
 
     sections.push({
@@ -3258,7 +3307,8 @@ export function partitionDocumentIntoSections(
       total: sectionCount,
       title,
       chunks: [],
-      text: secParas.join('\n\n'),
+      text: secParas.join('\n\n').slice(0, 16000),
+      keywords: secKeywords,
     });
   }
 
@@ -3267,7 +3317,8 @@ export function partitionDocumentIntoSections(
     total: 1,
     title: 'Contenido General del Documento',
     chunks: [],
-    text: clean.slice(0, 35000),
+    text: clean.slice(0, 20000),
+    keywords: extractSectionKeywords(clean, 6),
   }];
 }
 
@@ -3285,6 +3336,7 @@ export async function generateAIPedagogicalQuestions(
     sectionIndex: number;
     totalSections: number;
     sectionTitle?: string;
+    keyConcepts?: string[];
     pageRange?: string;
   },
   excludedTopics?: string[]
@@ -3396,7 +3448,11 @@ REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
 - La justificación DEBE formularse como una búsqueda enciclopédica externa en Google/Wikipedia con exactamente 3 viñetas completas, gramaticalmente perfectas y con rigor científico universal.`;
 
   let sourceRepresentation = '';
-  if (chunks && chunks.length > 0) {
+  if (sectionMeta && rawText) {
+    // Cuando se analiza una sección temática específica del documento,
+    // usamos directamente el texto representativo de dicha sección (hasta 16000 caracteres)
+    sourceRepresentation = rawText.slice(0, 16000);
+  } else if (chunks && chunks.length > 0) {
     let selectedChunks = chunks;
     if (chunks.length > 36) {
       // Muestreo uniforme estratificado para cubrir desde la diapositiva/página 1 hasta la última sin omisiones
@@ -3421,14 +3477,14 @@ REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
 
   const sectionDirective = sectionMeta
     ? `\n- SECCIÓN TEMÁTICA ASIGNADA:
-  * Estás analizando específicamente la Parte ${sectionMeta.sectionIndex} de ${sectionMeta.totalSections}: "${sectionMeta.sectionTitle || 'Sección Temática'}"${sectionMeta.pageRange ? ` (Páginas/Diapositivas: ${sectionMeta.pageRange})` : ''}.
+  * Estás analizando específicamente la Parte ${sectionMeta.sectionIndex} de ${sectionMeta.totalSections}: "${sectionMeta.sectionTitle || 'Sección Temática'}"${sectionMeta.pageRange ? ` (Páginas/Diapositivas: ${sectionMeta.pageRange})` : ''}.${sectionMeta.keyConcepts && sectionMeta.keyConcepts.length > 0 ? `\n  * Ejes conceptuales clave de esta sección: ${sectionMeta.keyConcepts.join(', ')}` : ''}
   * OBLIGATORIO: Formula TODAS las preguntas de este lote basándote EXCLUSIVAMENTE en los datos, conceptos, mecanismos y elementos explicados en ESTA sección del documento.
   * PROHIBICIÓN: Queda TERMINANTEMENTE PROHIBIDO tomar conceptos de otras partes o formular preguntas sobre temas genéricos ya vistos.`
     : '';
 
   const exclusionDirective = excludedTopics && excludedTopics.length > 0
     ? `\n- CONCEPTOS Y TEMAS YA EVALUADOS (PROHIBIDO REPETIR):
-  * ${excludedTopics.slice(0, 20).join(', ')}
+  * ${excludedTopics.slice(-25).join(', ')}
   * NO formules ninguna pregunta sobre estos conceptos ya cubiertos. Escoge subtemas diferentes y variados.`
     : '';
 
@@ -3438,6 +3494,7 @@ ${sourceRepresentation}
 
 - Cantidad exacta de preguntas a generar: ${count}
 - Nivel de exigencia: ${difficulty.toUpperCase()}${sectionDirective}${exclusionDirective}
+- DIVERSIDAD CONCEPTUAL INTERNA ESTRICTA: Cada pregunta del lote DEBE evaluar un concepto o mecanismo DIFERENTE. Está PROHIBIDO repetir el mismo concepto en dos preguntas dentro del mismo lote.
 - COBERTURA COMPLETA OBLIGATORIA: Distribuye las preguntas de manera equilibrada a lo largo de TODAS las diapositivas/páginas presentadas (desde el inicio, pasando por el desarrollo intermedio, hasta la última diapositiva). ESTÁ PROHIBIDO concentrar las preguntas solo en las primeras 4 o 5 diapositivas.
 - PROPORCIÓN Y VARIEDAD BALANCEADA:
   * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D), priorizando preguntas afirmativas de comprensión directa y deducción, con presencia moderada (~15%-20%) de preguntas de afirmación falsa o concepto equivocado.
@@ -3699,61 +3756,70 @@ export async function generateCompleteAIPedagogicalBatch(
 
   onProgress?.(`Analizando ${totalSections} secciones del documento (inicio, desarrollo, farmacología/diagnóstico y cierre)...`);
 
-  // 2. Definir la matriz de generación por sección:
-  // Para cada sección, generamos de 4 a 5 preguntas con dificultades alternadas
-  // Asegurando que Fácil, Medio y Difícil estén presentes a lo largo de TODO el documento
-  const sectionPlans = sections.map((sec, sIdx) => {
-    const qCount = totalSections <= 3 ? 6 : totalSections === 4 ? 5 : 4;
-    const primaryDiff: 'easy' | 'medium' | 'hard' = sIdx % 3 === 0 ? 'easy' : sIdx % 3 === 1 ? 'medium' : 'hard';
-    return {
-      section: sec,
-      count: qCount,
-      primaryDiff,
-    };
-  });
-
   onProgress?.(`Generando catálogo variado de preguntas sobre las ${totalSections} partes del documento...`);
 
-  // 3. Ejecutar las llamadas de generación por sección de manera concurrente controlada
-  // Pasando la sección específica, su rango de páginas/diapositivas y los chunks correspondientes
-  const sectionPromises = sectionPlans.map(async (plan) => {
+  // 3. Ejecutar las llamadas de generación de manera SECUENCIAL (anti-saturación de GPU/Ollama/API)
+  // con acumulación continua de temas excluidos para impedir la duplicación conceptual entre secciones
+  const collectedQuestions: Question[] = [];
+  const accumulatedTopics: string[] = [];
+
+  for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+    const sec = sections[sIdx];
+    const qCount = totalSections <= 3 ? 5 : totalSections === 4 ? 4 : 4;
+    const primaryDiff: 'easy' | 'medium' | 'hard' = sIdx % 3 === 0 ? 'easy' : sIdx % 3 === 1 ? 'medium' : 'hard';
+
+    onProgress?.(`Analizando sección ${sIdx + 1}/${totalSections} (${Math.round(((sIdx + 1) / totalSections) * 100)}%): "${sec.title.slice(0, 40)}"...`);
+
     try {
       const sectionMeta = {
-        sectionIndex: plan.section.index,
-        totalSections: plan.section.total,
-        sectionTitle: plan.section.title,
-        pageRange: plan.section.startPage && plan.section.endPage
-          ? `${plan.section.startPage} - ${plan.section.endPage}`
+        sectionIndex: sec.index,
+        totalSections: sec.total,
+        sectionTitle: sec.title,
+        keyConcepts: sec.keywords,
+        pageRange: sec.startPage && sec.endPage
+          ? `${sec.startPage} - ${sec.endPage}`
           : undefined,
       };
 
-      return await generateAIPedagogicalQuestions(
-        plan.section.text,
-        plan.count,
-        plan.primaryDiff,
-        plan.section.chunks.length > 0 ? plan.section.chunks : chunks,
-        sectionMeta
+      const sectionQuestions = await generateAIPedagogicalQuestions(
+        sec.text,
+        qCount,
+        primaryDiff,
+        sec.chunks.length > 0 ? sec.chunks : undefined,
+        sectionMeta,
+        [...accumulatedTopics]
       );
+
+      for (const q of sectionQuestions) {
+        // Registrar conceptos cubiertos para alimentar la lista negra de las siguientes secciones
+        const t = q.topic || (q as any).subtema || (q as any).concepto_evaluado;
+        if (t && typeof t === 'string' && t.trim().length > 0) {
+          accumulatedTopics.push(t.trim());
+        }
+        if (q.matchingPairs && Array.isArray(q.matchingPairs)) {
+          for (const p of q.matchingPairs) {
+            if (p.term) accumulatedTopics.push(p.term.trim());
+          }
+        }
+        collectedQuestions.push(q);
+      }
     } catch (err) {
-      console.warn(`[Batch Section ${plan.section.index}] Falló generación de sección:`, err);
-      return [];
-    }
-  });
-
-  const results = await Promise.allSettled(sectionPromises);
-  const collectedQuestions: Question[] = [];
-
-  for (const res of results) {
-    if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-      collectedQuestions.push(...res.value);
+      console.warn(`[Batch Section ${sec.index}] Falló generación de sección:`, err);
     }
   }
 
-  // Si fallaron o se obtuvieron muy pocas (< 8), recurrir a un lote de respaldo de amplio espectro
+  // Si fallaron varias secciones y se obtuvieron muy pocas (< 8), recurrir a un lote de respaldo de amplio espectro
   if (collectedQuestions.length < 8) {
     onProgress?.('Reforzando catálogo con escaneo integral de respaldo...');
     try {
-      const fallback = await generateAIPedagogicalQuestions(rawText, 12, 'medium', chunks);
+      const fallback = await generateAIPedagogicalQuestions(
+        rawText,
+        12,
+        'medium',
+        chunks,
+        undefined,
+        accumulatedTopics
+      );
       collectedQuestions.push(...fallback);
     } catch (fallbackErr) {
       console.warn('[Batch Fallback Error]', fallbackErr);
@@ -3789,6 +3855,33 @@ export async function generateCompleteAIPedagogicalBatch(
   return shuffledQuestions;
 }
 
+/**
+ * Muestrea de forma equilibrada a lo largo de todo el documento (inicio, desarrollo y cierre)
+ * para evitar que las flashcards se extraigan únicamente de las primeras páginas.
+ */
+export function sampleDocumentBalanced(rawText: string, maxChars: number = 10000, offsetPercent: number = 0): string {
+  if (rawText.length <= maxChars) return rawText;
+
+  const totalLen = rawText.length;
+  const sliceSize = Math.floor(maxChars / 4);
+  const p1 = Math.floor((offsetPercent % 1) * (totalLen * 0.2));
+  const p2 = Math.floor(totalLen * 0.33);
+  const p3 = Math.floor(totalLen * 0.66);
+  const p4 = Math.max(0, totalLen - sliceSize);
+
+  const part1 = rawText.slice(p1, p1 + sliceSize);
+  const part2 = rawText.slice(p2, p2 + sliceSize);
+  const part3 = rawText.slice(p3, p3 + sliceSize);
+  const part4 = rawText.slice(p4, p4 + sliceSize);
+
+  return [
+    `[PARTE INICIAL (FUNDAMENTOS)]:\n${part1}`,
+    `[PARTE INTERMEDIA 1 (MECANISMOS Y DESARROLLO)]:\n${part2}`,
+    `[PARTE INTERMEDIA 2 (DIAGNÓSTICO Y TRATAMIENTO)]:\n${part3}`,
+    `[PARTE FINAL (COMPLICACIONES Y CONCLUSIONES)]:\n${part4}`,
+  ].join('\n\n---\n\n');
+}
+
 /** Generación de Flashcards bajo demanda con proporción 70% conceptos / 30% preguntas cortas */
 export async function generateAIFlashcards(
   rawText: string,
@@ -3803,6 +3896,9 @@ export async function generateAIFlashcards(
 A partir del texto del estudiante, extrae conceptos clave esenciales y genera exactamente entre 8 y 12 flashcards rigurosas en español.
 
 ${translationDirective}
+
+COBERTURA EQUILIBRADA DE TODO EL DOCUMENTO:
+- OBLIGATORIO: Extrae términos y conceptos de TODAS las partes proporcionadas (inicio, intermedias y final), no te limites a la primera parte. Asegúrate de incluir conceptos avanzados o finales.
 
 DISTRIBUCIÓN OBLIGATORIA (70% CONCEPTOS / 30% PREGUNTAS SUMAMENTE CORTAS Y CONCRETAS):
 1. APROXIMADAMENTE EL 70% DE LAS FICHAS en formato de TÉRMINOS CLAVE ("type": "concept"):
@@ -3820,7 +3916,8 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   ]
 }`;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 7000)}\n\nGenera las flashcards (70% palabras clave / 30% preguntas sumamente cortas, 100% en español):`;
+  const sampledSource = sampleDocumentBalanced(rawText, 10000, 0);
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${sampledSource}\n\nGenera las flashcards (70% palabras clave / 30% preguntas sumamente cortas, 100% en español):`;
 
   if (settings.enabled) {
     try {
@@ -3870,6 +3967,9 @@ A partir del texto del estudiante, extrae conceptos o términos clave esenciales
 
 ${translationDirective}
 
+COBERTURA DE PARTES NUEVAS:
+- Extrae conceptos preferentemente de las partes intermedias y finales del documento que no hayan sido cubiertos aún.
+
 DISTRIBUCIÓN OBLIGATORIA (70% CONCEPTOS / 30% PREGUNTAS SUMAMENTE CORTAS Y CONCRETAS):
 1. APROXIMADAMENTE EL 70% DE LAS FICHAS ("type": "concept"): Término clave en "term", definición concisa en "definition".
 2. APROXIMADAMENTE EL 30% DE LAS FICHAS ("type": "question"): Pregunta sumamente corta y concreta en "term" (ej: "¿Qué enzima inicia...?"), respuesta directa en "definition".
@@ -3883,7 +3983,9 @@ Responde ÚNICAMENTE con un JSON con la estructura:
   ]
 }`;
 
-  const userPrompt = `Material ("${title}" - ${category}):\n\n${rawText.slice(0, 8000)}\n\nGenera las ${count} flashcards adicionales (70% conceptos / 30% preguntas cortas, 100% en español):`;
+  const offset = (existingTerms.length * 0.17) % 1;
+  const sampledSource = sampleDocumentBalanced(rawText, 10000, offset);
+  const userPrompt = `Material ("${title}" - ${category}):\n\n${sampledSource}\n\nGenera las ${count} flashcards adicionales (70% conceptos / 30% preguntas cortas, 100% en español):`;
 
   if (settings.enabled) {
     try {
