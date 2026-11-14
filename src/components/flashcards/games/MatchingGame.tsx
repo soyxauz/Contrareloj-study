@@ -3,6 +3,7 @@ import type { Flashcard } from '../../../types';
 import { ArrowLeft, Copy, RotateCcw, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
+import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
 
 interface MatchingGameProps {
   flashcards: Flashcard[];
@@ -18,8 +19,8 @@ interface MatchCardItem {
   isMatched: boolean;
 }
 
-const getCardTerm = (c: Flashcard): string => c.term || (c as any).frontText || '';
-const getCardDef = (c: Flashcard): string => c.definition || (c as any).backText || '';
+const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
+const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
 
 export const MatchingGame: React.FC<MatchingGameProps> = ({
   flashcards,

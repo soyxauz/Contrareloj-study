@@ -3,6 +3,7 @@ import type { Flashcard } from '../../../types';
 import { ArrowLeft, Grid, RotateCcw, Trophy, Delete } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
+import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
 
 interface TermBuilderGameProps {
   flashcards: Flashcard[];
@@ -18,8 +19,8 @@ interface SyllableTile {
   orderIndex: number; // Order in the target word if part of it, -1 otherwise
 }
 
-const getCardTerm = (c: Flashcard): string => c.term || (c as any).frontText || '';
-const getCardDef = (c: Flashcard): string => c.definition || (c as any).backText || '';
+const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
+const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
 
 // Splits a term into 2-3 char syllable-like chunks
 const splitIntoSyllables = (term: string): string[] => {

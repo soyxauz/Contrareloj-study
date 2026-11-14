@@ -15,6 +15,7 @@ import { DefinitionBuilderGame } from './flashcards/games/DefinitionBuilderGame'
 import { TermBuilderGame } from './flashcards/games/TermBuilderGame';
 import { GuessTheTermGame } from './flashcards/games/GuessTheTermGame';
 import { gameAudio } from './flashcards/games/gameAudio';
+import { cleanConceptDefinition, cleanConceptTerm } from './flashcards/flashcardSanitizer';
 
 interface FlashcardsViewProps {
   kit: StudyKit;
@@ -24,7 +25,8 @@ interface FlashcardsViewProps {
 
 type MainTab = 'lista' | 'mazo' | 'juegos';
 
-const getCardTerm = (c: Flashcard): string => c.term || (c as any).frontText || '';
+const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
+const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
 
 export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   kit,
@@ -61,8 +63,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
       kit.questions.forEach(q => {
         if (q.matchingPairs && Array.isArray(q.matchingPairs)) {
           q.matchingPairs.forEach(p => {
-            const t = p.term?.trim();
-            const d = p.definition?.trim();
+            const t = cleanConceptTerm(p.term || '');
+            const d = cleanConceptDefinition(p.definition || '');
             if (t && d && t.length >= 3 && d.length >= 5 && !seen.has(t.toLowerCase())) {
               seen.add(t.toLowerCase());
               extracted.push({
@@ -76,13 +78,14 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           });
         }
         if (q.topic && q.explanation && !seen.has(q.topic.toLowerCase()) && q.topic.length >= 3 && q.topic.length <= 45) {
-          const cleanExpl = q.explanation.replace(/^[•\s*-]+/, '').trim();
-          if (cleanExpl.length >= 15) {
-            seen.add(q.topic.toLowerCase());
+          const t = cleanConceptTerm(q.topic);
+          const d = cleanConceptDefinition(q.explanation);
+          if (t && d && d.length >= 15) {
+            seen.add(t.toLowerCase());
             extracted.push({
               id: `card-auto-${extracted.length}-${Math.random().toString(36).substring(2, 6)}`,
-              term: q.topic.trim(),
-              definition: cleanExpl.length > 160 ? cleanExpl.slice(0, 160) + '...' : cleanExpl,
+              term: t,
+              definition: d,
               mastery: 'to-learn',
               type: 'concept',
             });
@@ -98,6 +101,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     const map = savedProgress?.masteryMap;
     return rawCards.map(c => ({
       ...c,
+      term: cleanConceptTerm(getCardTerm(c)),
+      definition: cleanConceptDefinition(getCardDef(c)),
       mastery: getCardMastery(c, map),
     }));
   });
@@ -174,8 +179,8 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   const handleAddCard = (term: string, definition: string) => {
     const newCard: Flashcard = {
       id: `card-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      term,
-      definition,
+      term: cleanConceptTerm(term),
+      definition: cleanConceptDefinition(definition),
       mastery: 'to-learn',
       type: 'concept',
     };
@@ -183,14 +188,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     const nextCards = [newCard, ...cards];
     setCards(nextCards);
     persistChanges(nextCards);
-    showNotification(`Se agregó "${term}" al mazo.`);
+    showNotification(`Se agregó "${newCard.term}" al mazo.`);
   };
 
   // Handle Edit Card from List View
   const handleEditCard = (cardId: string, term: string, definition: string) => {
+    const cleanT = cleanConceptTerm(term);
+    const cleanD = cleanConceptDefinition(definition);
     const nextCards = cards.map(c => {
       if (c.id === cardId) {
-        return { ...c, term, definition };
+        return { ...c, term: cleanT, definition: cleanD };
       }
       return c;
     });
@@ -258,10 +265,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
       );
 
       if (additional.length > 0) {
-        const nextCards = [...cards, ...additional];
+        const cleaned = additional.map(c => ({
+          ...c,
+          term: cleanConceptTerm(getCardTerm(c)),
+          definition: cleanConceptDefinition(getCardDef(c)),
+        }));
+        const nextCards = [...cards, ...cleaned];
         setCards(nextCards);
         persistChanges(nextCards);
-        showNotification(`¡Éxito! Se añadieron ${additional.length} flashcards generadas con IA.`);
+        showNotification(`¡Éxito! Se añadieron ${cleaned.length} flashcards generadas con IA.`);
       }
     } catch (e) {
       console.error(e);

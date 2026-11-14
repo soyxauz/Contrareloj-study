@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import type { Flashcard } from '../../types';
 import { Plus, Pencil, Trash2, X, ChevronDown, Check, ArrowUpDown, BookOpen } from 'lucide-react';
 import { gameAudio } from './games/gameAudio';
+import { cleanConceptDefinition, cleanConceptTerm } from './flashcardSanitizer';
 
 interface FlashcardsListViewProps {
   cards: Flashcard[];
@@ -13,8 +14,8 @@ interface FlashcardsListViewProps {
 type SortOrder = 'alpha-asc' | 'alpha-desc' | 'original';
 type DisplayMode = 'all' | 'hide-defs' | 'hide-terms';
 
-const getCardTerm = (c: Flashcard): string => c.term || (c as any).frontText || '';
-const getCardDef = (c: Flashcard): string => c.definition || (c as any).backText || '';
+const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
+const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
 
 export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
   cards,

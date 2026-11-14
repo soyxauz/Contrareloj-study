@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
+import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
 
 interface GuessTheTermGameProps {
   flashcards: Flashcard[];
@@ -28,8 +29,8 @@ interface ChatMessage {
 
 const MAX_QUESTIONS = 8;
 
-const getCardTerm = (c: Flashcard): string => c.term || (c as any).frontText || '';
-const getCardDef = (c: Flashcard): string => c.definition || (c as any).backText || '';
+const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
+const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
 
 export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
   flashcards,

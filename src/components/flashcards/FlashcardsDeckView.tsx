@@ -7,14 +7,15 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { gameAudio } from './games/gameAudio';
+import { cleanConceptDefinition, cleanConceptTerm } from './flashcardSanitizer';
 
 interface FlashcardsDeckViewProps {
   cards: Flashcard[];
   onUpdateMastery: (cardId: string, mastery: 'to-learn' | 'known' | 'mastered') => void;
 }
 
-const getCardTerm = (c: Flashcard): string => c.term || (c as any).frontText || '';
-const getCardDef = (c: Flashcard): string => c.definition || (c as any).backText || '';
+const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
+const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
 
 export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
   cards,
@@ -137,48 +138,91 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
         />
       </div>
 
-      {/* 3D Flip Card Container with Responsive Adaptive Height */}
-      <div
-        onClick={handleFlip}
-        className="w-full max-w-2xl min-h-[250px] sm:min-h-[300px] md:min-h-[340px] max-h-[52vh] rounded-3xl bg-[#140e2b]/95 hover:bg-[#191136] border border-white/[0.12] hover:border-purple-400/40 p-6 sm:p-10 shadow-2xl flex flex-col justify-between cursor-pointer transition-transform duration-200 select-none relative group active:scale-[0.99]"
-        style={{
-          boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-        }}
-      >
-        {/* Top hint tag */}
-        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300/80">
-          <span>{isFlipped ? 'Definición' : 'Término'}</span>
-          <span className="text-slate-500 font-normal lowercase text-[11px] group-hover:text-slate-400 transition-colors">
-            clic o espacio para voltear
-          </span>
-        </div>
+      {/* ── AUTÉNTICA PERSPECTIVA 3D QUE VOLTEA LA TARJETA SUAVEMENTE ── */}
+      <div className="perspective-card w-full max-w-2xl h-[280px] sm:h-[320px] md:h-[350px] max-h-[50vh]">
+        <div
+          onClick={handleFlip}
+          className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group h-full rounded-3xl relative`}
+        >
+          {/* CARA FRONTAL (TÉRMINO O CONCEPTO) */}
+          <div
+            className="card-face rounded-3xl bg-[#140e2b]/95 hover:bg-[#191136] border border-white/[0.12] hover:border-purple-400/40 p-6 sm:p-10 shadow-2xl flex flex-col justify-between select-none"
+            style={{
+              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            {/* Top hint tag */}
+            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300/80">
+              <span>Término</span>
+              <span className="text-slate-500 font-normal lowercase text-[11px] group-hover:text-slate-400 transition-colors">
+                clic o espacio para voltear
+              </span>
+            </div>
 
-        {/* Card Main Content */}
-        <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
-          <p className={`leading-relaxed transition-all duration-200 ${
-            isFlipped
-              ? 'text-sm sm:text-lg md:text-xl text-slate-200 font-normal'
-              : 'text-xl sm:text-2xl md:text-3xl text-white font-extrabold tracking-tight'
-          }`}>
-            {currentCard ? (isFlipped ? getCardDef(currentCard) : getCardTerm(currentCard)) : ''}
-          </p>
-        </div>
+            {/* Card Main Term */}
+            <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
+              <p className="text-xl sm:text-2xl md:text-3xl text-white font-extrabold tracking-tight leading-relaxed">
+                {currentCard ? getCardTerm(currentCard) : ''}
+              </p>
+            </div>
 
-        {/* Current mastery status badge */}
-        <div className="flex items-center justify-center">
-          <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
-            currentCard?.mastery === 'mastered'
-              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-              : currentCard?.mastery === 'known'
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : 'bg-slate-700/40 text-slate-400 border border-white/[0.08]'
-          }`}>
-            {currentCard?.mastery === 'mastered'
-              ? 'Dominada'
-              : currentCard?.mastery === 'known'
-              ? 'En Repaso'
-              : 'Por Aprender'}
-          </span>
+            {/* Current mastery status badge */}
+            <div className="flex items-center justify-center">
+              <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                currentCard?.mastery === 'mastered'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : currentCard?.mastery === 'known'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-slate-700/40 text-slate-400 border border-white/[0.08]'
+              }`}>
+                {currentCard?.mastery === 'mastered'
+                  ? 'Dominada'
+                  : currentCard?.mastery === 'known'
+                  ? 'En Repaso'
+                  : 'Por Aprender'}
+              </span>
+            </div>
+          </div>
+
+          {/* CARA TRASERA (DEFINICIÓN - SOLO EL CONCEPTO PURO SIN VIÑETAS) */}
+          <div
+            className="card-face card-back rounded-3xl bg-[#16102c]/95 hover:bg-[#1b1338] border border-white/[0.12] hover:border-purple-400/40 p-6 sm:p-10 shadow-2xl flex flex-col justify-between select-none"
+            style={{
+              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            {/* Top hint tag */}
+            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300/80">
+              <span>Definición</span>
+              <span className="text-slate-500 font-normal lowercase text-[11px] group-hover:text-slate-400 transition-colors">
+                clic o espacio para voltear
+              </span>
+            </div>
+
+            {/* Card Main Definition (SOLO EL CONCEPTO, CERO VIÑETAS) */}
+            <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
+              <p className="text-sm sm:text-base md:text-lg text-slate-200 font-normal leading-relaxed">
+                {currentCard ? getCardDef(currentCard) : ''}
+              </p>
+            </div>
+
+            {/* Current mastery status badge */}
+            <div className="flex items-center justify-center">
+              <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                currentCard?.mastery === 'mastered'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : currentCard?.mastery === 'known'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-slate-700/40 text-slate-400 border border-white/[0.08]'
+              }`}>
+                {currentCard?.mastery === 'mastered'
+                  ? 'Dominada'
+                  : currentCard?.mastery === 'known'
+                  ? 'En Repaso'
+                  : 'Por Aprender'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 

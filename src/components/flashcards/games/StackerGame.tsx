@@ -3,6 +3,7 @@ import type { Flashcard } from '../../../types';
 import { Layers, ArrowLeft, RotateCcw, Trophy, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
+import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
 
 interface StackerGameProps {
   flashcards: Flashcard[];
@@ -28,8 +29,8 @@ const BLOCK_COLORS = [
   '#38bdf8', // Celeste cian
 ];
 
-const getCardTerm = (c: Flashcard): string => c.term || (c as any).frontText || '';
-const getCardDef = (c: Flashcard): string => c.definition || (c as any).backText || '';
+const getCardTerm = (c: Flashcard): string => cleanConceptTerm(c.term || (c as any).frontText || '');
+const getCardDef = (c: Flashcard): string => cleanConceptDefinition(c.definition || (c as any).backText || '');
 
 export const StackerGame: React.FC<StackerGameProps> = ({
   flashcards,
