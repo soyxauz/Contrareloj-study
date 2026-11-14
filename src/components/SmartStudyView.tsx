@@ -4616,8 +4616,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 : theme === 'dark'
                 ? 'bg-slate-800/90 hover:bg-slate-700/90 border border-slate-600/80 hover:border-slate-500 text-white shadow-black/40'
                 : theme === 'kitty'
-                ? 'bg-pink-100 hover:bg-pink-200 border-2 border-pink-300 text-pink-950 shadow-xs'
-                : 'bg-white hover:bg-rose-50/80 border-2 border-rose-200 hover:border-rose-300 text-rose-950 shadow-xs'
+                ? 'bg-pink-100 hover:bg-pink-200 border-2 border-pink-300 hover:border-pink-400 text-black shadow-xs'
+                : 'bg-white hover:bg-slate-100 border-2 border-slate-300 hover:border-slate-400 text-black shadow-xs'
             }`}
             style={{
               boxShadow:
@@ -4642,11 +4642,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             ) : (
               <SkipForward
                 className={`w-4 h-4 stroke-[2.5] ${
-                  theme === 'light'
-                    ? 'text-rose-700'
-                    : theme === 'kitty'
-                    ? 'text-pink-600'
-                    : 'text-amber-400'
+                  theme === 'dark' ? 'text-white' : 'text-black'
                 }`}
               />
             )}
