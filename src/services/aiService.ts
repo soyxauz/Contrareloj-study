@@ -3235,7 +3235,7 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       "chunk_id_origen": "ID del fragmento origen (ej: chk-0-abc)",
       "tipo": "multiple-choice | matching | drag-drop | multi-select | true-false",
       "longitud_enunciado": "corto (75% del lote) | extenso_caso (25% del lote)",
-      "concepto_evaluado": "Concepto o tema evaluado",
+      "concepto_evaluado": "Subtema granular específico y distintivo (ej: Fisiopatología Celular, Criterios Diagnósticos, Mecanismo de Biguanidas, Secretagogos, Factores de Riesgo). NUNCA repitas el mismo concepto para todas las preguntas ni uses el título general del kit.",
       "pregunta": "Enunciado completo de la pregunta. Si es un caso clínico o supuesto práctico, incluye primero el caso con todos sus datos y síntomas antes del signo de interrogación final (resalta con **...** la parte nuclear de la pregunta)",
       "opciones": {
         "A": "Texto completo y explicativo de la alternativa A",
@@ -3278,6 +3278,9 @@ REGLA ESTRICTA DE CALIDAD DE OPCIONES (PROHIBIDO PLACEHOLDERS):
 - Queda TERMINANTEMENTE PROHIBIDO generar opciones como 'Opción A', 'Opción B', 'Opción C', 'Opción D', 'Opción 1', 'Literal A', 'Alternativa 1' o una sola letra.
 - Cada opción DEBE contener el texto explicativo completo, sustantivo y técnicamente riguroso de la alternativa.
 - Si formulas una pregunta tipo 'multi-select', el arreglo 'opciones_multiples' DEBE contener afirmaciones completas y detalladas, NUNCA marcadores de posición.
+
+REGLA ESTRICTA DE DIVERSIDAD DE SUBTEMAS (INTERLEAVING TEMÁTICO):
+- Cada pregunta DEBE poseer un "concepto_evaluado" específico, granular y diferente del resto (ej. 'Mecanismo de Biguanidas', 'Fisiopatología de Resistencia a la Insulina', 'Factores de Riesgo', 'Criterios de Laboratorio HbA1c'). Queda TERMINANTEMENTE PROHIBIDO poner el mismo tema general a todas las preguntas.
 
 REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
 - NO cites fragmentos, diapositivas, títulos de páginas ni uses la frase 'Referencia en el texto'.
@@ -5387,7 +5390,7 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
       "chunk_id_origen": "ID del fragmento utilizado",
       "tipo": "multiple-choice | matching | drag-drop | multi-select | true-false",
       "longitud_enunciado": "corto | medio_largo",
-      "concepto_evaluado": "Subconcepto específico evaluado",
+      "concepto_evaluado": "Subconcepto específico y granular evaluado (no repetir el tema general)",
       "contexto_o_enunciado": "Planteamiento del escenario o premisa.",
       "pregunta": "¿Pregunta analítica o concepto específico?",
       "opciones": {

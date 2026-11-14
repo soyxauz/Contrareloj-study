@@ -57,10 +57,17 @@ import {
   createInitialSocraticProfile,
   updateSocraticProfileOnAnswer,
   resolveNextSocraticTarget,
-  isTopicInRecent,
   normalizeTopicKey,
   type SocraticSessionProfile
 } from '../engine/socraticEngine';
+import {
+  deriveGranularSubtopic,
+  extractQuestionStemTokens,
+  extractQuestionSemanticTokens,
+  calculateInterleavingPenalty,
+  isQuestionThematicallyRecent,
+  type QuestionSignature,
+} from '../engine/topicInterleaving';
 import { FormattedText } from './FormattedText';
 import { QuestionPrompt } from './QuestionPrompt';
 import {
@@ -621,6 +628,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // Referencia para rotación activa de temas (evita preguntas repetidas del mismo tema en ráfagas - A2)
   const recentTopicsRef = useRef<string[]>([]);
+  // Ventana deslizante de firmas conceptuales (subtema + tokens nucleares) para intercalado de alta fidelidad
+  const recentSignaturesRef = useRef<QuestionSignature[]>([]);
+  // Cola de reintroducción espaciada de preguntas falladas (Curva Ebbinghaus / Thea original: 4-5 de separación)
+  const scheduledErrorReviewsRef = useRef<Array<{ question: Question; targetIndex: number }>>([]);
   // Referencia para amortiguador entre intervenciones socráticas (mínimo 3 preguntas normales entre intervenciones - A3)
   const lastSocraticTriggerIndexRef = useRef<number>(-999);
 
@@ -1292,25 +1303,68 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       return queue[0];
     }
 
-    // Helper interno para sellar y registrar el tema de la pregunta elegida (A2: memoria de rotación de temas)
+    // Helper interno para sellar y registrar la firma de la pregunta elegida (Intercalado Thea Engine)
     const finalizeQuestionSelection = (q: Question): Question => {
       const sanitized = sanitizeQuestionStructure(q, kit.questions);
+      const subtopic = deriveGranularSubtopic(sanitized, kit.title);
+      const stemTokens = extractQuestionStemTokens(sanitized, kit.title);
+      const allTokens = extractQuestionSemanticTokens(sanitized, kit.title);
+
+      recentSignaturesRef.current = [
+        ...recentSignaturesRef.current.slice(-12),
+        {
+          id: sanitized.id,
+          topic: sanitized.topic || 'General',
+          subtopic,
+          stemTokens,
+          allTokens,
+        }
+      ];
+
       if (sanitized.topic) {
-        recentTopicsRef.current = [...recentTopicsRef.current.slice(-2), normalizeTopicKey(sanitized.topic)];
+        recentTopicsRef.current = [...recentTopicsRef.current.slice(-6), normalizeTopicKey(sanitized.topic)];
       }
       return sanitized;
     };
 
+    // A0: Reintroducción espaciada de preguntas falladas (Curva Ebbinghaus / Thea original: 4 a 5 preguntas de separación)
+    // Se activa únicamente cuando targetIndex ha alcanzado o superado el turno programado
+    const readyReviewIndex = scheduledErrorReviewsRef.current.findIndex(r => r.targetIndex <= targetIndex);
+    if (readyReviewIndex !== -1) {
+      const reviewItem = scheduledErrorReviewsRef.current[readyReviewIndex];
+      const rCandidate = reviewItem.question;
+      const rSubtopic = deriveGranularSubtopic(rCandidate, kit.title);
+      const rStemTokens = extractQuestionStemTokens(rCandidate, kit.title);
+      const rAllTokens = extractQuestionSemanticTokens(rCandidate, kit.title);
+
+      // Comprobar que no coincida con el tema inmediato anterior (mínimo 1-2 preguntas de amortiguación)
+      const isTooRecent = isQuestionThematicallyRecent(
+        rCandidate,
+        rStemTokens,
+        rAllTokens,
+        rSubtopic,
+        recentSignaturesRef.current,
+        2
+      );
+      if (!isTooRecent && rCandidate.id !== excludeQuestionId) {
+        scheduledErrorReviewsRef.current.splice(readyReviewIndex, 1);
+        return finalizeQuestionSelection(rCandidate);
+      } else {
+        // Postergar 1 turno para permitir que otro tema intervenga
+        reviewItem.targetIndex = targetIndex + 1;
+      }
+    }
+
     // A3: Comprobar si hay una intervención socrática lista, respetando:
     // 1. Amortiguador mínimo de 3 preguntas normales entre intervenciones consecutivas
-    // 2. Que el tema de la intervención no sea idéntico al tema de la pregunta recién respondida
+    // 2. Que el tema de la intervención no sea idéntico al subtema recién respondido
     const canTriggerSocratic = (targetIndex - lastSocraticTriggerIndexRef.current) >= 3;
-    const lastAnsweredTopic = recentTopicsRef.current.length > 0
-      ? recentTopicsRef.current[recentTopicsRef.current.length - 1]
+    const lastAnsweredSubtopic = recentSignaturesRef.current.length > 0
+      ? recentSignaturesRef.current[recentSignaturesRef.current.length - 1].subtopic
       : undefined;
 
     const socraticTarget = canTriggerSocratic
-      ? resolveNextSocraticTarget(socraticProfile, targetIndex, lastAnsweredTopic)
+      ? resolveNextSocraticTarget(socraticProfile, targetIndex, lastAnsweredSubtopic)
       : null;
 
     if (
@@ -1350,20 +1404,44 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Frecuencia moderada y aleatoria de afirmaciones falsas (~15% - 20%): solo ocasionalmente y de forma impredecible
     const shouldPreferFalseConcept = (targetCat === 'multipleChoice') && (Math.random() < 0.18);
 
-    // Shuffle de índices para exploración aleatoria impredecible del banco disponible
+    // Pre-calcular metadatos conceptuales para el pool de preguntas
+    const poolSignatures = pool.map(candidate => ({
+      candidate,
+      subtopic: deriveGranularSubtopic(candidate, kit.title),
+      stemTokens: extractQuestionStemTokens(candidate, kit.title),
+      allTokens: extractQuestionSemanticTokens(candidate, kit.title),
+    }));
+
+    // Shuffle inicial de índices para variabilidad
     const shuffledIndices = Array.from({ length: pool.length }, (_, i) => i).sort(() => Math.random() - 0.5);
 
-    // A2: Rotación activa de 3 temas (Anti-Monotonía)
-    // Reordenar los índices barajados para que las preguntas cuyos temas NO pertenezcan a los últimos 3 temas vistos
-    // se evalúen con máxima prioridad, evitando que el alumno vea preguntas repetidas del mismo tema en seguidilla.
-    const activeRecentTopics = recentTopicsRef.current;
-    if (activeRecentTopics.length > 0) {
-      shuffledIndices.sort((a, b) => {
-        const aRecent = isTopicInRecent(pool[a]?.topic, activeRecentTopics) ? 1 : 0;
-        const bRecent = isTopicInRecent(pool[b]?.topic, activeRecentTopics) ? 1 : 0;
-        return aRecent - bRecent;
-      });
-    }
+    // Intercalado estricto por huella conceptual y subtema (Anti-Monotonía Thea Engine)
+    // Aquellas preguntas cuyo subtema o tokens nucleares NO hayan aparecido en las últimas 5 preguntas
+    // recibirán penalización 0 y se evaluarán con máxima prioridad.
+    shuffledIndices.sort((a, b) => {
+      const sigA = poolSignatures[a];
+      const sigB = poolSignatures[b];
+      const penaltyA = calculateInterleavingPenalty(
+        sigA.candidate,
+        sigA.stemTokens,
+        sigA.allTokens,
+        sigA.subtopic,
+        recentSignaturesRef.current,
+        5
+      );
+      const penaltyB = calculateInterleavingPenalty(
+        sigB.candidate,
+        sigB.stemTokens,
+        sigB.allTokens,
+        sigB.subtopic,
+        recentSignaturesRef.current,
+        5
+      );
+      if (Math.abs(penaltyA - penaltyB) > 0.5) {
+        return penaltyA - penaltyB;
+      }
+      return (Math.random() - 0.5);
+    });
 
     if (shouldPreferFalseConcept) {
       for (const i of shuffledIndices) {
@@ -1440,10 +1518,29 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
     // Prioridad 4: Todas las preguntas del nivel/kit han sido respondidas al menos una vez.
     // REGLA DEL USUARIO: Cero repetición de preguntas acertadas en el nivel.
-    // 4.1. Priorizar preguntas que fueron falladas y aún no han sido dominadas:
+    // 4.1. Priorizar preguntas que fueron falladas y aún no han sido dominadas, ordenadas por variedad temática:
     const failedUnmastered = pool.filter(q => q.id !== excludeQuestionId && !isQuestionCorrectlyAnswered(q.id));
     if (failedUnmastered.length > 0) {
-      return finalizeQuestionSelection(failedUnmastered[Math.floor(Math.random() * failedUnmastered.length)]);
+      failedUnmastered.sort((a, b) => {
+        const penA = calculateInterleavingPenalty(
+          a,
+          extractQuestionStemTokens(a, kit.title),
+          extractQuestionSemanticTokens(a, kit.title),
+          deriveGranularSubtopic(a, kit.title),
+          recentSignaturesRef.current,
+          4
+        );
+        const penB = calculateInterleavingPenalty(
+          b,
+          extractQuestionStemTokens(b, kit.title),
+          extractQuestionSemanticTokens(b, kit.title),
+          deriveGranularSubtopic(b, kit.title),
+          recentSignaturesRef.current,
+          4
+        );
+        return penA - penB;
+      });
+      return finalizeQuestionSelection(failedUnmastered[0]);
     }
 
     // 4.2. Si absolutamente todas las preguntas del pool fueron respondidas correctamente:
@@ -2366,6 +2463,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }).join(', ');
   }, [currentQ?.matchingPairs, shuffledDefinitions]);
 
+  // Subtema granular representativo de la pregunta activa (deducido con Thea Topic Interleaving Engine)
+  const currentSubtopic = useMemo(() => {
+    if (!currentQ) return '';
+    return deriveGranularSubtopic(currentQ, kit?.title);
+  }, [currentQ, kit?.title]);
+
   // Historial filtrado para visualización, estrictamente ordenado de forma descendente (última pregunta respondida arriba)
   const filteredHistory = useMemo(() => {
     const getEpoch = (item: StudyHistoryItem): number => {
@@ -2522,7 +2625,33 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       markQuestionAsAnswered(currentQ.id);
       if (correct) {
         markQuestionAsCorrect(currentQ.id);
+        // Si la respondió correctamente, eliminarla de revisiones programadas
+        scheduledErrorReviewsRef.current = scheduledErrorReviewsRef.current.filter(r => r.question.id !== currentQ.id);
+      } else {
+        // Programar reaparición tras 4 a 5 preguntas intermedias de otros temas (Curva Ebbinghaus / Thea original)
+        const reviewTargetIndex = currentIndex + 5;
+        if (!scheduledErrorReviewsRef.current.some(r => r.question.id === currentQ.id)) {
+          scheduledErrorReviewsRef.current.push({
+            question: currentQ,
+            targetIndex: reviewTargetIndex,
+          });
+        }
       }
+
+      // Registrar la firma conceptual de la pregunta respondida para el cálculo de intercalado
+      const ansSubtopic = deriveGranularSubtopic(currentQ, kit.title);
+      const ansStemTokens = extractQuestionStemTokens(currentQ, kit.title);
+      const ansAllTokens = extractQuestionSemanticTokens(currentQ, kit.title);
+      recentSignaturesRef.current = [
+        ...recentSignaturesRef.current.slice(-12),
+        {
+          id: currentQ.id,
+          topic: currentQ.topic || 'General',
+          subtopic: ansSubtopic,
+          stemTokens: ansStemTokens,
+          allTokens: ansAllTokens,
+        }
+      ];
     }
 
     hasUserInteractedRef.current = true;
@@ -3916,6 +4045,21 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-bold mb-4 animate-fadeIn">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
               <span>Atención: Selecciona el concepto EQUIVOCADO o la afirmación FALSA</span>
+            </div>
+          )}
+
+          {/* Píldora de Subtema Granular (Diseño Apple / Emil Kowalski / Linear) */}
+          {currentSubtopic && (
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide bg-white/[0.04] border border-white/[0.08] text-rose-300 backdrop-blur-md shadow-sm mb-4 select-none animate-fadeIn"
+              style={{
+                boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+              <span className="uppercase tracking-wider text-[10px] text-slate-400 font-bold">Subtema</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-rose-200 font-medium">{currentSubtopic}</span>
             </div>
           )}
 
