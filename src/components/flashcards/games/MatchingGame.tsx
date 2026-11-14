@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Flashcard } from '../../../types';
 import { ArrowLeft, Copy, RotateCcw, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -32,10 +32,7 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [evaluatingPair, setEvaluatingPair] = useState<{ id1: string; id2: string; isCorrect: boolean } | null>(null);
   const [mistakes, setMistakes] = useState(0);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [gameWon, setGameWon] = useState(false);
-
-  const timerRef = useRef<any>(null);
 
   // Pool of valid flashcards (pick 6 pairs for 12 cards, optimal for focus)
   const validCards = useMemo(() => {
@@ -71,29 +68,12 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
     setSelectedId(null);
     setEvaluatingPair(null);
     setMistakes(0);
-    setElapsedSeconds(0);
     setGameWon(false);
   }, [validCards]);
 
   useEffect(() => {
     startNewGame();
   }, [startNewGame]);
-
-  // Timer loop
-  useEffect(() => {
-    if (gameWon || items.length === 0) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      setElapsedSeconds(prev => +(prev + 0.1).toFixed(1));
-    }, 100);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [gameWon, items]);
 
   // Puntuación en tiempo real: se maneja por equivocaciones, NUNCA por tiempo
   // Inicia en 1000 pts y se descuenta penalización únicamente al equivocarse
@@ -172,12 +152,6 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
     }
   };
 
-  const formatTimer = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = (seconds % 60).toFixed(1);
-    return `${mins > 0 ? `${mins}m ` : ''}${secs}s`;
-  };
-
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-3 sm:py-6 animate-fadeIn text-slate-100">
       {/* Top Header Bar matching Screenshot 2 & Thea */}
@@ -199,11 +173,11 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
           <span>Coincidencias</span>
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-semibold tabular-nums">
-          <span className="text-slate-400">
-            Tiempo: <strong className="text-white">{formatTimer(elapsedSeconds)}</strong>
+        <div className="flex items-center gap-3 text-xs font-semibold tabular-nums">
+          <span className="px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.1] text-slate-300">
+            Fallos: <strong className="text-rose-400 ml-1">{mistakes}</strong>
           </span>
-          <span className="px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.1] text-indigo-200 font-bold">
+          <span className="px-3.5 py-1.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-indigo-200 font-bold shadow-sm">
             Puntos: <strong className="text-white ml-1">{currentScore}</strong>
           </span>
         </div>
@@ -273,11 +247,6 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
               <div>
                 <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Puntuación</span>
                 <span className="text-2xl font-extrabold text-emerald-400">{currentScore}</span>
-              </div>
-              <div className="w-px bg-white/10" />
-              <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Tiempo</span>
-                <span className="text-2xl font-extrabold text-white">{formatTimer(elapsedSeconds)}</span>
               </div>
               <div className="w-px bg-white/10" />
               <div>
