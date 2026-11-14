@@ -5234,6 +5234,17 @@ export async function generateAIPodcast(
   }
 }
 
+/**
+ * Limpia muletillas y preámbulos vacíos del tutor como "¡Excelente pregunta!", "Qué interesante punto...", etc.
+ */
+function cleanTutorFillerPreamble(reply: string): string {
+  return reply
+    .replace(/^(?:¡?(?:excelente|muy buena|gran|buena)\s+pregunta!?[^\n]*\n*)/gi, '')
+    .replace(/^(?:estás tocando uno de los puntos más críticos[^\n]*\n*)/gi, '')
+    .replace(/^(?:qué buena duda[^\n]*\n*)/gi, '')
+    .trim();
+}
+
 /** Asistente IA Contrareloj potenciado por la cascada automática Qwen (API 1 -> API 2) -> GPT-OSS 120B (API 1 -> API 2) */
 export async function askTheaAI(
   userQuery: string,
@@ -5252,19 +5263,37 @@ export async function askTheaAI(
     normalizeOpenAIBaseUrl(generalSettings.baseUrl) !== normalizeOpenAIBaseUrl(oralSettings.baseUrl);
   const fallbackSettings: AISettings | null = canUseCrossModelFallback ? oralSettings : null;
 
+  // Detección estricta de solicitud de extensión: solo extenderse si el usuario lo pide expresamente
+  const isExtensiveRequested = /(?:extens[oa]|detallad[oa]|a\s+fondo|en\s+detalle|ampliamente|desglos[ae]|exhaustiv[oa]|completa|larga|profundiza|explica\s+todo|caso\s+pr[aá]ctico|tabla\s+comparativa)/i.test(
+    userQuery
+  );
+
   if (targetSettings.enabled) {
     try {
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         {
           role: 'system',
-          content: `Eres una tutora académica inteligente, cálida y pedagógica de Contrareloj Study.
-Estás ayudando al estudiante a dominar el tema: "${kit.title}" (Categoría: ${kit.category}).
+          content: `Eres la Tutora Académica Inteligente de Contrareloj Study para el tema: "${kit.title}" (${kit.category}).
+
 Contexto del material de estudio del estudiante:
 ${kit.studyGuideMarkdown.slice(0, 5000)}
 
 ${getSpanishTranslationDirective(kit.sourceLanguage)}
 
-Responde siempre de forma clara, motivadora y estructurada en español. Si el material contiene pasajes o términos en otro idioma, tradúcelos y explícalos en español. Usa viñetas, analogías o reglas mnemotécnicas cuando sea útil para aprender mejor.`,
+DIRECTIVA FUNDAMENTAL DE PROPORCIONALIDAD Y CONCISIÓN (REGLA DE ORO):
+1. ADAPTA LA EXTENSIÓN A LA PREGUNTA:
+   ${
+     isExtensiveRequested
+       ? '- El estudiante ha solicitado explícitamente una explicación extensa/detallada. Desarrolla el tema a fondo con estructura completa, tablas comparativas y ejemplos si enriquecen la comprensión.'
+       : '- El estudiante ha hecho una pregunta puntual o directa. RESPONDE DE FORMA DIRECTA, CONCISA Y PROPORCIONAL (máximo 1 o 2 párrafos breves o 3-4 viñetas directas, entre 50 y 130 palabras). CERO TEXTOS INTERMINABLES.'
+   }
+2. CERO RELLENO NI CONDICIONAMIENTO:
+   - PROHIBIDO usar introducciones vacías o halagos ("¡Excelente pregunta!", "Estás tocando un punto clave...", "Qué buena duda..."). Ve directo a la respuesta científica y pedagógica.
+   - Si no se pidió una respuesta extensa, NO generes desgloses con 5 secciones numeradas, fórmulas artificiales ni tablas de 4 columnas.
+3. SINTAXIS KATEX Y FORMATO LIMPIO:
+   - Si incluyes fórmulas matemáticas o expresiones de intensidad (como $T = \\frac{P \\cdot r}{2h}$ o cargas como $<60\\%\\text{ 1RM}$), usa KaTeX limpio en una sola línea sin partir palabras con saltos de línea.
+4. CIERRE CONCISO:
+   - Termina con una sola sugerencia o pregunta de seguimiento de una línea.`,
         },
       ];
 
@@ -5279,28 +5308,33 @@ Responde siempre de forma clara, motivadora y estructurada en español. Si el ma
 
       messages.push({ role: 'user', content: userQuery });
 
+      const completionOptions = {
+        temperature: isExtensiveRequested ? 0.35 : 0.25,
+        max_tokens: isExtensiveRequested ? 900 : 350,
+      };
+
       let reply = '';
       try {
-        reply = await queryAICompletion(messages, false, targetSettings);
+        reply = await queryAICompletion(messages, false, targetSettings, completionOptions);
       } catch (primaryErr) {
         // Si Groq falla (HTTP 429, timeout o error) en Leccion Oral, reintentar silenciosamente con Ollama
         if (fallbackSettings) {
           console.warn('[AskThea AI] Motor Groq oral fallo, reintentando silenciosamente con Ollama para no cortar la leccion:', primaryErr);
-          reply = await queryAICompletion(messages, false, fallbackSettings);
+          reply = await queryAICompletion(messages, false, fallbackSettings, completionOptions);
         } else {
           throw primaryErr;
         }
       }
 
       if (reply && reply.trim().length > 10) {
-        return reply.trim();
+        return cleanTutorFillerPreamble(reply.trim());
       }
     } catch (err) {
       console.warn('[AskThea AI] Fallback a respuestas locales:', err);
     }
   }
 
-  // ── Fallback local inteligente basado en el texto del Study Kit ──
+  // ── Fallback local inteligente basado en el texto del Study Kit (Conciso y Directo) ──
   const lowerQuery = userQuery.toLowerCase();
 
   // Buscar coincidencia en preguntas
@@ -5308,7 +5342,7 @@ Responde siempre de forma clara, motivadora y estructurada en español. Si el ma
     q => lowerQuery.includes(q.topic.toLowerCase()) || q.question.toLowerCase().includes(lowerQuery.slice(0, 15))
   );
   if (matchingQuestion) {
-    return `Sobre tu duda en torno a **${matchingQuestion.topic}**: ${matchingQuestion.explanation}\n\n¿Quieres que profundicemos en este concepto o que te haga una pregunta de práctica?`;
+    return `Sobre **${matchingQuestion.topic}**: ${matchingQuestion.explanation}`;
   }
 
   // Buscar coincidencia en flashcards
@@ -5316,13 +5350,10 @@ Responde siempre de forma clara, motivadora y estructurada en español. Si el ma
     f => lowerQuery.includes(f.term.toLowerCase()) || f.definition.toLowerCase().includes(lowerQuery.slice(0, 15))
   );
   if (matchingCard) {
-    return `El concepto de **${matchingCard.term}** en este material se define como: ${matchingCard.definition}.\n\nEs un concepto clave para las evaluaciones de ${kit.category}.`;
+    return `**${matchingCard.term}**: ${matchingCard.definition}`;
   }
 
-  return `Excelente pregunta sobre **${kit.title}**. Analizando tus apuntes y la guía de estudio:\n\n` +
-    `• El núcleo del tema se centra en comprender las interacciones y definiciones de ${kit.questions[0]?.topic || 'los principios fundamentales'}.\n` +
-    `• Recuerda repasar las sesiones de **Smart Study** para poner a prueba tu retención activa.\n\n` +
-    `¿Deseas que te explique algún término específico o que simulemos una pregunta de examen?`;
+  return `En el tema **${kit.title}**, las cargas y conceptos se articulan en torno a ${kit.questions[0]?.topic || 'los principios fundamentales del documento'}.\n\n¿Quieres que profundicemos en algún aspecto específico?`;
 }
 
 export interface TopicResearchResult {
