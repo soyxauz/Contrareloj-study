@@ -301,6 +301,7 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
       gameAudio.playError();
       setFeedback('wrong');
       setMultiplier(1); // Reset multiplier on error
+      setScore(prev => Math.max(0, prev - 30)); // Penalización por equivocación
     }
   };
 

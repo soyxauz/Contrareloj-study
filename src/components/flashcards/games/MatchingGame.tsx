@@ -95,10 +95,11 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
     };
   }, [gameWon, items]);
 
-  // Real-time score calculation (REA Thea formula)
+  // Puntuación en tiempo real: se maneja por equivocaciones, NUNCA por tiempo
+  // Inicia en 1000 pts y se descuenta penalización únicamente al equivocarse
   const currentScore = useMemo(() => {
-    return Math.max(0, Math.round(1000 - (100 / Math.LN2) * Math.log(1 + elapsedSeconds / 10) - mistakes * 45));
-  }, [elapsedSeconds, mistakes]);
+    return Math.max(0, 1000 - mistakes * 100);
+  }, [mistakes]);
 
   // Handle card click
   const handleItemClick = (item: MatchCardItem) => {

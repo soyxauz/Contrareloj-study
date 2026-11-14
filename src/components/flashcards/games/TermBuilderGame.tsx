@@ -197,7 +197,7 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
     if (assembledStr === targetStr) {
       // Victory for this term!
       gameAudio.playSuccess();
-      const points = 100 + Math.round(timeLeft * 1.5);
+      const points = 150;
       const newScore = score + points;
       setScore(newScore);
 
@@ -209,8 +209,9 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
         loadNewTerm(new Set(newCompleted));
       }, 500);
     } else if (assembledStr.length >= targetStr.length && assembledStr !== targetStr) {
-      // Wrong term assembled
+      // Wrong term assembled: penalizar puntuación por equivocación
       gameAudio.playError();
+      setScore(prev => Math.max(0, prev - 40));
       setShakeBuilder(true);
       setTimeout(() => setShakeBuilder(false), 500);
     }
