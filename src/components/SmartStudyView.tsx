@@ -52,12 +52,14 @@ import {
   evaluateShortAnswer,
   parseCorrectIndex,
   parseCorrectIndices,
+  partitionDocumentIntoSections,
 } from '../services/aiService';
 import {
   createInitialSocraticProfile,
   updateSocraticProfileOnAnswer,
   resolveNextSocraticTarget,
   normalizeTopicKey,
+  isSameOrRelatedTopic,
   type SocraticSessionProfile
 } from '../engine/socraticEngine';
 import {
@@ -480,8 +482,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       3: currentLvl === 3 ? currentCnt : 0,
     };
   });
-  const [levelCorrectCount, setLevelCorrectCount] = useState(savedSession?.levelCorrectCount || 0); // Target: 25
-  const levelTarget = 25;
+  const [levelCorrectCount, setLevelCorrectCount] = useState(savedSession?.levelCorrectCount || 0);
+  const currentLevelQuestionsCount = (kit.questions || []).filter(q => (q.difficulty || 'easy') === (level === 1 ? 'easy' : level === 2 ? 'medium' : 'hard')).length;
+  const levelTarget = Math.max(1, Math.min(25, currentLevelQuestionsCount > 0 ? currentLevelQuestionsCount : 7));
   const currentLevelCorrect = levelCorrectCounts[level] ?? levelCorrectCount ?? 0;
   const [levelUpBanner, setLevelUpBanner] = useState<string>('');
 
@@ -1235,20 +1238,55 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     if (isAutoGeneratingRef.current) return;
 
     const targetDiff = activeLevel === 1 ? 'easy' : activeLevel === 2 ? 'medium' : 'hard';
-    const currentPool = kit.questions.filter(q => q.difficulty === targetDiff);
-    const remainingAhead = currentPool.length - (activeIndex + 1);
+    const currentPool = kit.questions.filter(q => (q.difficulty || 'easy') === targetDiff);
+    const unmasteredInPool = currentPool.filter(q => !isQuestionCorrectlyAnswered(q.id));
+    const remainingAhead = unmasteredInPool.length - (activeIndex + 1);
 
-    // Prefetch continuo equilibrado cuando quedan 3 o menos preguntas por delante en este nivel o el banco inicial tiene menos de 8
-    if (remainingAhead <= 3 || currentPool.length < 8) {
+    // Prefetch continuo equilibrado cuando quedan 3 o menos preguntas no dominadas por delante o el banco tiene pocas
+    if (remainingAhead <= 3 || unmasteredInPool.length < 6) {
       isAutoGeneratingRef.current = true;
       setIsGeneratingMore(true);
 
       try {
+        // 1. Particionar el documento en 4-6 secciones para ubicar la parte con menor cobertura
+        const sections = partitionDocumentIntoSections(kit.chunks, kit.sourceText || kit.description, 5);
+
+        // 2. Contar cobertura actual por sección
+        const countsBySec = sections.map(s => {
+          const matching = kit.questions.filter(q => {
+            if (q.sourceChunkId && s.chunks.some(c => c.id === q.sourceChunkId)) return true;
+            if (q.sourcePageOrSlide && s.startPage && s.endPage) {
+              return q.sourcePageOrSlide >= s.startPage && q.sourcePageOrSlide <= s.endPage;
+            }
+            return isSameOrRelatedTopic(q.topic, s.title);
+          });
+          return { section: s, count: matching.length };
+        });
+
+        countsBySec.sort((a, b) => a.count - b.count);
+        const targetSection = countsBySec[0]?.section || sections[0];
+
+        // 3. Prohibir explícitamente todos los subtemas ya evaluados para garantizar surtido diverso
+        const existingSubtopics = kit.questions
+          .map(q => q.topic || deriveGranularSubtopic(q, kit.title))
+          .filter(Boolean);
+
+        const sectionMeta = {
+          sectionIndex: targetSection.index,
+          totalSections: targetSection.total,
+          sectionTitle: targetSection.title,
+          pageRange: targetSection.startPage && targetSection.endPage
+            ? `${targetSection.startPage} - ${targetSection.endPage}`
+            : undefined,
+        };
+
         const generated = await generateAIPedagogicalQuestions(
-          kit.sourceText || kit.description,
+          targetSection.text,
           5,
           targetDiff,
-          kit.chunks
+          targetSection.chunks.length > 0 ? targetSection.chunks : kit.chunks,
+          sectionMeta,
+          existingSubtopics
         );
 
         if (generated.length > 0 && onUpdateKit) {
@@ -1268,7 +1306,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         setIsGeneratingMore(false);
       }
     }
-  }, [kit, onUpdateKit, isFalseConceptQuestion]);
+  }, [kit, onUpdateKit, isQuestionCorrectlyAnswered]);
 
   // Disparar verificación y generación continua al cambiar de nivel o avanzar índice
   useEffect(() => {
@@ -1443,12 +1481,28 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       return (Math.random() - 0.5);
     });
 
+    // Helper estricto de dominio pedagógico (Regla de Cero Repetición):
+    // Un concepto o pregunta ya dominada NUNCA debe reaparecer en la rotación normal de estudio.
+    const isConceptOrQuestionMastered = (candidate: Question): boolean => {
+      if (isQuestionCorrectlyAnswered(candidate.id)) return true;
+      const topic = candidate.topic || 'Conceptos Fundamentales';
+      if (socraticProfile?.conceptMastery) {
+        for (const [key, val] of Object.entries(socraticProfile.conceptMastery)) {
+          if (isSameOrRelatedTopic(key, topic) && (val.status === 'mastered' || val.mastery >= 0.75)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
     if (shouldPreferFalseConcept) {
       for (const i of shuffledIndices) {
         const candidate = pool[i];
         if (
           candidate.id !== excludeQuestionId &&
           !isQuestionAnswered(candidate.id) &&
+          !isConceptOrQuestionMastered(candidate) &&
           getCategoryForQuestion(candidate) === targetCat &&
           isFalseConceptQuestion(candidate)
         ) {
@@ -1457,13 +1511,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
     }
 
-    // Prioridad 1: Buscar una pregunta no respondida de este nivel que coincida con el tipo deseado
-    // Si NO se pidió concepto falso, priorizar una que NO sea de concepto falso para mantener variedad afirmativa
+    // Prioridad 1: Buscar una pregunta no respondida ni dominada de este nivel que coincida con el tipo deseado
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (
         candidate.id !== excludeQuestionId &&
         !isQuestionAnswered(candidate.id) &&
+        !isConceptOrQuestionMastered(candidate) &&
         getCategoryForQuestion(candidate) === targetCat &&
         (!shouldPreferFalseConcept ? !isFalseConceptQuestion(candidate) : true)
       ) {
@@ -1471,12 +1525,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
     }
 
-    // Prioridad 1b: Si no había afirmativa de ese tipo, aceptar cualquier pregunta no respondida del tipo deseado
+    // Prioridad 1b: Si no había afirmativa de ese tipo, aceptar cualquier pregunta no respondida ni dominada del tipo deseado
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (
         candidate.id !== excludeQuestionId &&
         !isQuestionAnswered(candidate.id) &&
+        !isConceptOrQuestionMastered(candidate) &&
         getCategoryForQuestion(candidate) === targetCat
       ) {
         return finalizeQuestionSelection(candidate);
@@ -1489,36 +1544,66 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       checkAndPrefetchQuestions(targetLevel, targetIndex);
     }
 
-    // Prioridad 2: Buscar cualquier no respondida del nivel que coincida con ALGUNA de las categorías activas
+    // Prioridad 2: Buscar cualquier no respondida ni dominada del nivel que coincida con ALGUNA de las categorías activas
     for (const i of shuffledIndices) {
       const candidate = pool[i];
       if (
         candidate.id !== excludeQuestionId &&
         !isQuestionAnswered(candidate.id) &&
+        !isConceptOrQuestionMastered(candidate) &&
         safeActiveCategories.includes(getCategoryForQuestion(candidate))
       ) {
         return finalizeQuestionSelection(candidate);
       }
     }
 
-    // Prioridad 2b: Buscar cualquier no respondida del nivel
+    // Prioridad 2b: Buscar cualquier no respondida ni dominada del nivel
     for (const i of shuffledIndices) {
       const candidate = pool[i];
-      if (candidate.id !== excludeQuestionId && !isQuestionAnswered(candidate.id)) {
+      if (
+        candidate.id !== excludeQuestionId &&
+        !isQuestionAnswered(candidate.id) &&
+        !isConceptOrQuestionMastered(candidate)
+      ) {
         return finalizeQuestionSelection(candidate);
       }
     }
 
-    // Prioridad 3: Si ya se respondieron todas las del nivel, activar prefetch IA y buscar en otros niveles preguntas no respondidas
+    // Prioridad 3: Si ya se respondieron/dominaron todas las de este nivel, activar prefetch IA y buscar en OTROS niveles preguntas no dominadas
     checkAndPrefetchQuestions(targetLevel, targetIndex);
-    const unansInKit = compliantKit.find(q => q.id !== excludeQuestionId && !isQuestionAnswered(q.id));
-    if (unansInKit) {
-      return finalizeQuestionSelection(unansInKit);
+    const unmasteredAnywhere = compliantKit.filter(q => q.id !== excludeQuestionId && !isConceptOrQuestionMastered(q));
+    if (unmasteredAnywhere.length > 0) {
+      unmasteredAnywhere.sort((a, b) => {
+        const penA = calculateInterleavingPenalty(
+          a,
+          extractQuestionStemTokens(a, kit.title),
+          extractQuestionSemanticTokens(a, kit.title),
+          deriveGranularSubtopic(a, kit.title),
+          recentSignaturesRef.current,
+          5
+        );
+        const penB = calculateInterleavingPenalty(
+          b,
+          extractQuestionStemTokens(b, kit.title),
+          extractQuestionSemanticTokens(b, kit.title),
+          deriveGranularSubtopic(b, kit.title),
+          recentSignaturesRef.current,
+          5
+        );
+        return penA - penB;
+      });
+      return finalizeQuestionSelection(unmasteredAnywhere[0]);
     }
 
-    // Prioridad 4: Todas las preguntas del nivel/kit han sido respondidas al menos una vez.
-    // REGLA DEL USUARIO: Cero repetición de preguntas acertadas en el nivel.
-    // 4.1. Priorizar preguntas que fueron falladas y aún no han sido dominadas, ordenadas por variedad temática:
+    // Prioridad 4: Todas las preguntas del nivel/kit han sido dominadas al menos una vez.
+    // REGLA DEL USUARIO: Cero repetición de conceptos dominados.
+    // Únicamente se permite repetición a través del Método Socrático:
+    // 4.1. Repaso espaciado de preguntas que fueron falladas y aún requieren refuerzo
+    if (scheduledErrorReviewsRef.current.length > 0) {
+      const pendingReview = scheduledErrorReviewsRef.current.shift()!;
+      return finalizeQuestionSelection(pendingReview.question);
+    }
+
     const failedUnmastered = pool.filter(q => q.id !== excludeQuestionId && !isQuestionCorrectlyAnswered(q.id));
     if (failedUnmastered.length > 0) {
       failedUnmastered.sort((a, b) => {
@@ -1543,13 +1628,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       return finalizeQuestionSelection(failedUnmastered[0]);
     }
 
-    // 4.2. Si absolutamente todas las preguntas del pool fueron respondidas correctamente:
-    // El estudiante ya dominó todo el material disponible en este nivel.
-    // Disparar inmediatamente generación de nuevas preguntas para expandir el banco:
+    // 4.2. Si absolutamente todas las preguntas del kit fueron respondidas correctamente y no hay errores pendientes:
+    // El estudiante ha dominado la totalidad del catálogo disponible.
+    // Disparar inmediatamente generación de nuevas preguntas para expandir el banco por partes del documento:
     checkAndPrefetchQuestions(targetLevel, targetIndex);
 
-    // Para evitar preguntas repetidas 4 veces intercaladas, seleccionar la pregunta
-    // que tenga la mayor separación temporal en el historial:
+    // Evitar loop infinito de repetición: mostrar hito de nivel completado o felicitación
+    setShowLevelCompleteModal(true);
+
+    // Retorno seguro con la pregunta menos reciente solo para mantener el render mientras carga el nuevo lote
     const recentHistoryQIds = (historyRef.current || [])
       .map((h: any) => h?.questionId)
       .filter(Boolean);
@@ -3133,7 +3220,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
           answeredQuestionIdsRef.current.clear();
           completedSocraticIdsRef.current.clear();
-          correctlyAnsweredIdsRef.current.clear();
+          // NOTA PEDAGÓGICA (Regla de Cero Repetición):
+          // NO borramos correctlyAnsweredIdsRef para preservar la memoria de preguntas dominadas
+          // entre niveles y evitar que los conceptos ya superados vuelvan a repetirse.
 
           confetti({
             particleCount: 120,

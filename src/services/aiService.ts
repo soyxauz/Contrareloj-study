@@ -3169,6 +3169,108 @@ export function enforceQuestionLengthLimit(questionText: string, _isCaseExplicit
   return clean;
 }
 
+export interface DocumentSection {
+  index: number;
+  total: number;
+  title: string;
+  chunks: DocumentChunk[];
+  text: string;
+  startPage?: number;
+  endPage?: number;
+}
+
+/**
+ * Particiona el documento de forma secuencial en 4-6 secciones temáticas
+ * (ej: inicio/fundamentos, desarrollo fisiopatológico, criterios diagnósticos, farmacología y complicaciones)
+ * para garantizar un análisis por partes y cobertura completa de todo el documento sin concentrarse solo en las primeras páginas.
+ */
+export function partitionDocumentIntoSections(
+  chunks?: DocumentChunk[],
+  rawText: string = '',
+  desiredSections: number = 5
+): DocumentSection[] {
+  if (chunks && chunks.length > 0) {
+    const totalChunks = chunks.length;
+    // Cantidad equilibrada de secciones: entre 3 y 6
+    const sectionCount = Math.min(6, Math.max(3, Math.min(totalChunks, desiredSections)));
+    const sections: DocumentSection[] = [];
+    const chunkSize = Math.ceil(totalChunks / sectionCount);
+
+    for (let i = 0; i < sectionCount; i++) {
+      const startIdx = i * chunkSize;
+      const endIdx = Math.min(totalChunks, (i + 1) * chunkSize);
+      const secChunks = chunks.slice(startIdx, endIdx);
+      if (secChunks.length === 0) continue;
+
+      const headings = secChunks.map(c => c.heading).filter(Boolean);
+      const uniqueHeadings = Array.from(new Set(headings));
+      let title = uniqueHeadings.slice(0, 2).join(' / ');
+      if (!title) {
+        if (i === 0) title = 'Fundamentos, Definiciones e Introducción';
+        else if (i === sectionCount - 1) title = 'Complicaciones, Aplicaciones Prácticas y Cierre';
+        else if (i === 1) title = 'Fisiopatología, Vías y Mecanismos de Acción';
+        else if (i === 2) title = 'Criterios Diagnósticos, Signos y Laboratorio';
+        else title = `Parte ${i + 1}: Manejo Terapéutico y Farmacología`;
+      }
+
+      const startPage = secChunks[0]?.pageOrSlide;
+      const endPage = secChunks[secChunks.length - 1]?.pageOrSlide;
+      const text = secChunks
+        .map(c => `[FRAGMENTO ID: ${c.id} | ${c.heading || 'Sección'} | Pág/Diapositiva: ${c.pageOrSlide || 1}]\n${c.text}`)
+        .join('\n\n---\n\n');
+
+      sections.push({
+        index: i + 1,
+        total: sectionCount,
+        title,
+        chunks: secChunks,
+        text,
+        startPage,
+        endPage,
+      });
+    }
+    return sections;
+  }
+
+  // Fallback si no hay chunks estructurados: partición proporcional del texto plano
+  const clean = rawText.trim();
+  const paragraphs = clean.split(/\n\s*\n/).filter(p => p.trim().length > 30);
+  const sectionCount = Math.min(5, Math.max(3, Math.ceil(paragraphs.length / 5)));
+  const pPerSection = Math.ceil(paragraphs.length / sectionCount);
+  const sections: DocumentSection[] = [];
+
+  for (let i = 0; i < sectionCount; i++) {
+    const startIdx = i * pPerSection;
+    const endIdx = Math.min(paragraphs.length, (i + 1) * pPerSection);
+    const secParas = paragraphs.slice(startIdx, endIdx);
+    if (secParas.length === 0) continue;
+
+    const firstLine = secParas[0].split('\n')[0].replace(/^#+\s*/, '').trim();
+    let title = firstLine.slice(0, 60);
+    if (!title || title.length < 5) {
+      if (i === 0) title = 'Fundamentos y Conceptos Iniciales';
+      else if (i === sectionCount - 1) title = 'Casos Clínicos y Recomendaciones Finales';
+      else title = `Parte ${i + 1}: Desarrollo Temático y Mecanismos`;
+    }
+
+    sections.push({
+      index: i + 1,
+      total: sectionCount,
+      title,
+      chunks: [],
+      text: secParas.join('\n\n'),
+    });
+  }
+
+  return sections.length > 0 ? sections : [{
+    index: 1,
+    total: 1,
+    title: 'Contenido General del Documento',
+    chunks: [],
+    text: clean.slice(0, 35000),
+  }];
+}
+
 /**
  * Motor de Inteligencia Pedagógica Contrareloj Study
  * FASE 1: Análisis profundo del texto (disciplina, naturaleza, anclaje y limpieza).
@@ -3178,7 +3280,14 @@ export async function generateAIPedagogicalQuestions(
   rawText: string,
   count: number = 10,
   difficulty: 'easy' | 'medium' | 'hard' = 'medium',
-  chunks?: DocumentChunk[]
+  chunks?: DocumentChunk[],
+  sectionMeta?: {
+    sectionIndex: number;
+    totalSections: number;
+    sectionTitle?: string;
+    pageRange?: string;
+  },
+  excludedTopics?: string[]
 ): Promise<Question[]> {
   const settings = getAISettings();
   if (!settings.enabled) {
@@ -3310,18 +3419,31 @@ REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
     sourceRepresentation = rawText.slice(0, 35000);
   }
 
+  const sectionDirective = sectionMeta
+    ? `\n- SECCIÓN TEMÁTICA ASIGNADA:
+  * Estás analizando específicamente la Parte ${sectionMeta.sectionIndex} de ${sectionMeta.totalSections}: "${sectionMeta.sectionTitle || 'Sección Temática'}"${sectionMeta.pageRange ? ` (Páginas/Diapositivas: ${sectionMeta.pageRange})` : ''}.
+  * OBLIGATORIO: Formula TODAS las preguntas de este lote basándote EXCLUSIVAMENTE en los datos, conceptos, mecanismos y elementos explicados en ESTA sección del documento.
+  * PROHIBICIÓN: Queda TERMINANTEMENTE PROHIBIDO tomar conceptos de otras partes o formular preguntas sobre temas genéricos ya vistos.`
+    : '';
+
+  const exclusionDirective = excludedTopics && excludedTopics.length > 0
+    ? `\n- CONCEPTOS Y TEMAS YA EVALUADOS (PROHIBIDO REPETIR):
+  * ${excludedTopics.slice(0, 20).join(', ')}
+  * NO formules ninguna pregunta sobre estos conceptos ya cubiertos. Escoge subtemas diferentes y variados.`
+    : '';
+
   const userPrompt = `PARÁMETROS DE ENTRADA:
 - Texto fuente a analizar (cobertura integral de diapositivas y páginas):
 ${sourceRepresentation}
 
 - Cantidad exacta de preguntas a generar: ${count}
-- Nivel de exigencia: ${difficulty.toUpperCase()}
+- Nivel de exigencia: ${difficulty.toUpperCase()}${sectionDirective}${exclusionDirective}
 - COBERTURA COMPLETA OBLIGATORIA: Distribuye las preguntas de manera equilibrada a lo largo de TODAS las diapositivas/páginas presentadas (desde el inicio, pasando por el desarrollo intermedio, hasta la última diapositiva). ESTÁ PROHIBIDO concentrar las preguntas solo en las primeras 4 o 5 diapositivas.
 - PROPORCIÓN Y VARIEDAD BALANCEADA:
   * Aproximadamente el 45% del lote DEBE ser "multiple-choice" con 4 opciones (A, B, C, D), priorizando preguntas afirmativas de comprensión directa y deducción, con presencia moderada (~15%-20%) de preguntas de afirmación falsa o concepto equivocado.
   * El 55% restante DEBE ser una rotación variada y balanceada de los otros formatos ("matching", "true-false", "multi-select", "drag-drop").
 - AUTOSUFICIENCIA Y CONTEXTO COMPLETO: Todo caso clínico, supuesto de hecho o viñeta analítica DEBE incluir la descripción completa y autosuficiente con todos sus datos y síntomas en el campo "pregunta" ANTES del signo de interrogación. Queda TERMINANTEMENTE PROHIBIDO formular preguntas sobre "este paciente", "dicha paciente" o "el caso anterior" sin haber descrito al paciente o los hechos completos en el propio enunciado.
-- REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras".
+- REGLA ESTRICTA PARA "drag-drop": La propiedad "pregunta" DEBE ser una instrucción ("Completa los espacios en blanco del siguiente enunciado:" o "Completa los espacios en blanco sobre **[concepto]**:"). NUNCA pongas {0} o {1} en "pregunta". La oración con los huecos {0}, {1} DEBE ir en "oracion_plantilla", las palabras correctas en orden en "huecos_correctos" y todas las palabras con 2-3 distractores en "banco_palabras". OBLIGATORIO: Cada espacio en blanco {0}, {1} DEBE estar separado por al menos 2 o 3 palabras descriptivas del texto; NUNCA coloques dos o tres espacios consecutivos ({0} {1} {2}) juntos.
 - TRADUCCIÓN OBLIGATORIA A ESPAÑOL: Si el texto fuente está en inglés u otro idioma, formula y responde TODAS las preguntas, opciones, alternativas y justificaciones 100% EN ESPAÑOL académico.
 
 Genera el JSON completo respetando la estructura exigida:`;
@@ -3552,9 +3674,12 @@ Genera el JSON completo respetando la estructura exigida:`;
 }
 
 /**
- * Genera un lote inicial ágil de 20 preguntas pedagógicas por IA de manera concurrente
- * (7 Fácil, 7 Intermedio y 6 Difícil) para máxima rapidez en la creación del Study Kit,
- * garantizando cobertura pedagógica y prefetching posterior bajo demanda.
+ * Genera un lote de preguntas pedagógicas por IA garantizando:
+ * 1. PARTICIÓN SECUENCIAL POR PARTES DEL DOCUMENTO: El documento se divide en 4-6 secciones temáticas
+ *    (inicio/fundamentos, desarrollo fisiopatológico, criterios diagnósticos, farmacología y complicaciones).
+ * 2. MÁXIMO SURTIDO Y COBERTURA TEMÁTICA: Cada sección produce preguntas exclusivas sobre sus temas.
+ * 3. DISTRIBUCIÓN EQUILIBRADA DE DIFICULTAD: Fácil, Medio y Difícil distribuidos a lo largo de todo el documento.
+ * 4. CERO DUPLICIDAD TEMÁTICA: Prohibición estricta de repetir conceptos ya evaluados.
  */
 export async function generateCompleteAIPedagogicalBatch(
   rawText: string,
@@ -3566,62 +3691,102 @@ export async function generateCompleteAIPedagogicalBatch(
     throw new Error('La integración de IA está desactivada. Actívala en el menú de Configuración de IA.');
   }
 
-  onProgress?.('Analizando disciplina, estructura y núcleos conceptuales con IA...');
+  onProgress?.('Segmentando documento por secciones temáticas para análisis integral...');
 
-  // Cobertura completa uniforme de todas las diapositivas y páginas para cada nivel pedagógico
-  // Se garantiza que ningún nivel ignore secciones intermedias o finales
-  let easyChunks = chunks;
-  let mediumChunks = chunks;
-  let hardChunks = chunks;
+  // 1. Particionar el documento en 4 a 6 secciones temáticas secuenciales
+  const sections = partitionDocumentIntoSections(chunks, rawText, 5);
+  const totalSections = sections.length;
 
-  if (chunks && chunks.length > 9) {
-    // Muestreo estratificado alternado: los tres niveles cubren desde la diapositiva 1 hasta la última
-    easyChunks = chunks.filter((_, idx) => idx % 3 === 0 || idx < 2 || idx >= chunks.length - 2);
-    mediumChunks = chunks.filter((_, idx) => idx % 3 === 1 || idx % 2 === 0);
-    hardChunks = chunks.filter((_, idx) => idx % 3 === 2 || idx % 2 === 1);
+  onProgress?.(`Analizando ${totalSections} secciones del documento (inicio, desarrollo, farmacología/diagnóstico y cierre)...`);
+
+  // 2. Definir la matriz de generación por sección:
+  // Para cada sección, generamos de 4 a 5 preguntas con dificultades alternadas
+  // Asegurando que Fácil, Medio y Difícil estén presentes a lo largo de TODO el documento
+  const sectionPlans = sections.map((sec, sIdx) => {
+    const qCount = totalSections <= 3 ? 6 : totalSections === 4 ? 5 : 4;
+    const primaryDiff: 'easy' | 'medium' | 'hard' = sIdx % 3 === 0 ? 'easy' : sIdx % 3 === 1 ? 'medium' : 'hard';
+    return {
+      section: sec,
+      count: qCount,
+      primaryDiff,
+    };
+  });
+
+  onProgress?.(`Generando catálogo variado de preguntas sobre las ${totalSections} partes del documento...`);
+
+  // 3. Ejecutar las llamadas de generación por sección de manera concurrente controlada
+  // Pasando la sección específica, su rango de páginas/diapositivas y los chunks correspondientes
+  const sectionPromises = sectionPlans.map(async (plan) => {
+    try {
+      const sectionMeta = {
+        sectionIndex: plan.section.index,
+        totalSections: plan.section.total,
+        sectionTitle: plan.section.title,
+        pageRange: plan.section.startPage && plan.section.endPage
+          ? `${plan.section.startPage} - ${plan.section.endPage}`
+          : undefined,
+      };
+
+      return await generateAIPedagogicalQuestions(
+        plan.section.text,
+        plan.count,
+        plan.primaryDiff,
+        plan.section.chunks.length > 0 ? plan.section.chunks : chunks,
+        sectionMeta
+      );
+    } catch (err) {
+      console.warn(`[Batch Section ${plan.section.index}] Falló generación de sección:`, err);
+      return [];
+    }
+  });
+
+  const results = await Promise.allSettled(sectionPromises);
+  const collectedQuestions: Question[] = [];
+
+  for (const res of results) {
+    if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+      collectedQuestions.push(...res.value);
+    }
   }
 
-  onProgress?.('Generando el lote de preguntas pedagógicas...');
-
-  // Llamadas concurrentes a los 3 niveles: 7 + 7 + 6 = 20 preguntas iniciales
-  const [resEasy, resMedium, resHard] = await Promise.allSettled([
-    generateAIPedagogicalQuestions(rawText, 7, 'easy', easyChunks),
-    generateAIPedagogicalQuestions(rawText, 7, 'medium', mediumChunks),
-    generateAIPedagogicalQuestions(rawText, 6, 'hard', hardChunks),
-  ]);
-
-  const easyQuestions = resEasy.status === 'fulfilled' ? resEasy.value : [];
-  const mediumQuestions = resMedium.status === 'fulfilled' ? resMedium.value : [];
-  const hardQuestions = resHard.status === 'fulfilled' ? resHard.value : [];
-
-  const shuffleArray = <T>(arr: T[]): T[] => {
-    const copy = [...arr];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
+  // Si fallaron o se obtuvieron muy pocas (< 8), recurrir a un lote de respaldo de amplio espectro
+  if (collectedQuestions.length < 8) {
+    onProgress?.('Reforzando catálogo con escaneo integral de respaldo...');
+    try {
+      const fallback = await generateAIPedagogicalQuestions(rawText, 12, 'medium', chunks);
+      collectedQuestions.push(...fallback);
+    } catch (fallbackErr) {
+      console.warn('[Batch Fallback Error]', fallbackErr);
     }
-    return copy;
-  };
+  }
 
-  const allQuestions = [...shuffleArray(easyQuestions), ...shuffleArray(mediumQuestions), ...shuffleArray(hardQuestions)];
-
-  // Si todas las llamadas fallaron o no se generó ninguna pregunta
-  if (allQuestions.length === 0) {
-    const errors: string[] = [];
-    if (resEasy.status === 'rejected') errors.push(`Nivel Fácil: ${resEasy.reason.message}`);
-    if (resMedium.status === 'rejected') errors.push(`Nivel Medio: ${resMedium.reason.message}`);
-    if (resHard.status === 'rejected') errors.push(`Nivel Difícil: ${resHard.reason.message}`);
-
+  if (collectedQuestions.length === 0) {
     throw new Error(
       `No fue posible generar las preguntas mediante IA.\n\n` +
-      `Detalles del error detectado:\n${errors.join('\n')}\n\n` +
       `Verifica que tu servidor local (Ollama) o endpoint API esté activo y disponible en el menú de Configuración de IA.`
     );
   }
 
-  onProgress?.('Preguntas pedagógicas generadas con éxito.');
+  // Balancear dificultades si alguna quedó con 0
+  const easyCount = collectedQuestions.filter(q => q.difficulty === 'easy').length;
+  const mediumCount = collectedQuestions.filter(q => q.difficulty === 'medium').length;
+  const hardCount = collectedQuestions.filter(q => q.difficulty === 'hard').length;
 
-  return allQuestions;
+  if (easyCount === 0 || mediumCount === 0 || hardCount === 0) {
+    collectedQuestions.forEach((q, i) => {
+      if (!q.difficulty) {
+        q.difficulty = i % 3 === 0 ? 'easy' : i % 3 === 1 ? 'medium' : 'hard';
+      }
+    });
+  }
+
+  // Intercalar preguntas de diferentes secciones para que la experiencia de estudio
+  // sea estimulante y no monocorde desde la primera pregunta
+  const shuffledQuestions = [...collectedQuestions].sort(() => Math.random() - 0.5);
+
+  onProgress?.(`Catálogo surtido generado con éxito: ${shuffledQuestions.length} preguntas de las ${totalSections} secciones del documento.`);
+
+  return shuffledQuestions;
 }
 
 /** Generación de Flashcards bajo demanda con proporción 70% conceptos / 30% preguntas cortas */
