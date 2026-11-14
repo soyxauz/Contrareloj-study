@@ -84,6 +84,8 @@ import {
 } from './smart-study';
 import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
 import { filterCompliantQuestions } from '../utils/questionValidator';
+import { HierarchicalLinkPill } from './HierarchicalLinkPill';
+import { syncBrowserHierarchicalUrl } from '../utils/hierarchicalLink';
 
 // ── Indicador Minimalista de Nivel de Dominio (Apple / Linear Studio) ──
 const LevelIndicator: React.FC<{ currentLevel: number; onResetClick?: () => void }> = ({
@@ -2651,6 +2653,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     return deriveGranularSubtopic(currentQ, kit?.title);
   }, [currentQ, kit?.title]);
 
+  // Sincronizar URL jerárquica con el navegador (/smartStudy/:kitId?st=:subtopicToken)
+  useEffect(() => {
+    if (kit?.id) {
+      syncBrowserHierarchicalUrl('smartStudy', kit.id, currentSubtopic);
+    }
+  }, [kit?.id, currentSubtopic]);
+
   // Historial filtrado para visualización, estrictamente ordenado de forma descendente (última pregunta respondida arriba)
   const filteredHistory = useMemo(() => {
     const getEpoch = (item: StudyHistoryItem): number => {
@@ -4350,58 +4359,67 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
           )}
 
-          {/* Píldora de Subtema Granular (Diseño Apple / Emil Kowalski / Linear con soporte multitema y sin punto parpadeante) */}
+          {/* Píldora de Subtema Granular + Enlace Jerárquico Thea (Diseño Apple / Emil Kowalski / Linear con soporte multitema) */}
           {currentSubtopic && (
-            <div
-              className={`inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md mb-2 sm:mb-2.5 select-none animate-fadeIn ${
-                theme === 'light'
-                  ? 'bg-rose-50/90 border border-rose-200/90 text-rose-950 shadow-xs'
-                  : theme === 'kitty'
-                  ? 'bg-pink-100/90 border border-pink-300/80 text-pink-950 shadow-xs'
-                  : 'bg-white/[0.04] border border-white/[0.08] text-rose-200 shadow-sm'
-              }`}
-              style={{
-                boxShadow:
+            <div className="flex items-center gap-2 flex-wrap mb-2 sm:mb-2.5 animate-fadeIn">
+              <div
+                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md select-none ${
                   theme === 'light'
-                    ? '0 1px 2px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                    ? 'bg-rose-50/90 border border-rose-200/90 text-rose-950 shadow-xs'
                     : theme === 'kitty'
-                    ? '0 1px 2px rgba(219, 39, 119, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                    : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
-              }}
-            >
-              <span
-                className={`uppercase tracking-wider text-[10px] font-bold ${
-                  theme === 'light'
-                    ? 'text-rose-700'
-                    : theme === 'kitty'
-                    ? 'text-pink-700'
-                    : 'text-slate-400'
+                    ? 'bg-pink-100/90 border border-pink-300/80 text-pink-950 shadow-xs'
+                    : 'bg-white/[0.04] border border-white/[0.08] text-rose-200 shadow-sm'
                 }`}
+                style={{
+                  boxShadow:
+                    theme === 'light'
+                      ? '0 1px 2px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                      : theme === 'kitty'
+                      ? '0 1px 2px rgba(219, 39, 119, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                      : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
+                }}
               >
-                Subtema
-              </span>
-              <span
-                className={
-                  theme === 'light'
-                    ? 'text-rose-300'
-                    : theme === 'kitty'
-                    ? 'text-pink-300'
-                    : 'text-slate-600'
-                }
-              >
-                •
-              </span>
-              <span
-                className={`font-medium ${
-                  theme === 'light'
-                    ? 'text-rose-950 font-semibold'
-                    : theme === 'kitty'
-                    ? 'text-pink-950 font-semibold'
-                    : 'text-rose-200'
-                }`}
-              >
-                {currentSubtopic}
-              </span>
+                <span
+                  className={`uppercase tracking-wider text-[10px] font-bold ${
+                    theme === 'light'
+                      ? 'text-rose-700'
+                      : theme === 'kitty'
+                      ? 'text-pink-700'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  Subtema
+                </span>
+                <span
+                  className={
+                    theme === 'light'
+                      ? 'text-rose-300'
+                      : theme === 'kitty'
+                      ? 'text-pink-300'
+                      : 'text-slate-600'
+                  }
+                >
+                  •
+                </span>
+                <span
+                  className={`font-medium ${
+                    theme === 'light'
+                      ? 'text-rose-950 font-semibold'
+                      : theme === 'kitty'
+                      ? 'text-pink-950 font-semibold'
+                      : 'text-rose-200'
+                  }`}
+                >
+                  {currentSubtopic}
+                </span>
+              </div>
+
+              {/* Píldora con Icono de Bifurcación (⑂ thea.study/smartStudy/:kitId?st=:token) */}
+              <HierarchicalLinkPill
+                mode="smartStudy"
+                kitId={kit.id}
+                subtopic={currentSubtopic}
+              />
             </div>
           )}
 

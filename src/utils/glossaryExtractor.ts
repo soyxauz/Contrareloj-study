@@ -3,119 +3,119 @@ import type { StudyKit } from '../types';
 export interface GlossaryConcept {
   term: string;
   definition: string;
-  source?: 'flashcard' | 'guide';
+  source: 'flashcard' | 'guide';
 }
 
-/**
- * Escapa caracteres especiales de expresiones regulares.
- */
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Palabras comunes, etiquetas estructurales o términos de secciones médicas/académicas
- * que NUNCA deben marcarse como conceptos de glosario.
+ * Metadatos, etiquetas de sección o palabras genéricas que NUNCA deben ser conceptos clave.
  */
 const EXCLUDED_TERMS = new Set([
-  // Artículos y preposiciones
+  // Artículos y conectores
   'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
   'de', 'del', 'para', 'con', 'por', 'sobre', 'entre', 'hacia', 'sin', 'tras', 'durante', 'hasta',
 
-  // Secciones y estructura de guías
+  // Etiquetas estructurales de guías Thea
+  'concepto critico', 'concepto crítico', 'perla clave', 'perlas clave',
+  'pregunta trampa', 'preguntas trampa', 'respuesta correcta', 'respuesta incorrecta',
+  'regla nemotecnica', 'regla nemotécnica', 'regla mnemotecnica', 'regla mnemotécnica',
+  'error frecuente', 'errores frecuentes', 'claves de examen', 'claves del examen',
+  'cuadro comparativo', 'tabla comparativa', 'resumen ejecutivo',
   'resumen', 'introduccion', 'introducción', 'conclusion', 'conclusión',
-  'caso clinico', 'caso clínico', 'casos clinicos', 'casos clínicos',
-  'farmacocinetica', 'farmacocinética', 'farmacodinamia',
+  'nota', 'notas', 'importante', 'atencion', 'atención', 'ejemplo', 'ejemplos', 'tabla', 'tablas',
+  'nivel 1', 'nivel 2', 'nivel 3', 'modulo', 'módulo', 'subtema', 'tema',
+
+  // Términos estructurales médicos y clínicos (que solos no son conceptos específicos)
+  'clinica', 'clínica', 'cuadro clinico', 'cuadro clínico', 'manifestaciones clinicas', 'manifestaciones clínicas',
+  'fisiopatologia', 'fisiopatología', 'etiologia', 'etiología', 'epidemiologia', 'epidemiología',
+  'diagnostico', 'diagnóstico', 'tratamiento', 'tratamientos', 'patogenia',
+  'farmacocinetica', 'farmacocinética', 'farmacodinamia', 'farmacodinamica', 'farmacodinámica',
   'mecanismo', 'mecanismos', 'mecanismo de accion', 'mecanismo de acción',
   'efectos adversos', 'efectos secundarios', 'efectos colaterales', 'reacciones adversas',
   'contraindicaciones', 'contraindicacion', 'contraindicación',
-  'tratamiento', 'tratamientos', 'diagnostico', 'diagnóstico',
   'clasificacion', 'clasificación', 'definicion', 'definición',
-  'nota', 'notas', 'importante', 'atencion', 'atención', 'ejemplo', 'ejemplos', 'tabla', 'tablas',
-  'nivel 1', 'nivel 2', 'nivel 3', 'fisiopatologia', 'fisiopatología', 'fisiopatologico', 'fisiopatológico',
-  'clinica', 'clínica', 'cuadro clinico', 'cuadro clínico', 'manifestaciones clinicas', 'manifestaciones clínicas',
-  'etiologia', 'etiología', 'epidemiologia', 'epidemiología',
-  'patogenia', 'prevencion', 'prevención', 'pronostico', 'pronóstico',
-  'generalidades', 'factores de riesgo', 'criterios',
-
-  // Propiedades / Metadatos de medicamentos o enfermedades
   'inicio', 'inicio de accion', 'inicio de acción',
-  'pico', 'pico de accion', 'pico de acción', 'pico de action',
-  'duracion', 'duración', 'vida media',
-  'uso', 'usos', 'uso clinico', 'uso clínico', 'indicacion', 'indicación', 'indicaciones',
-  'administracion', 'administración', 'via', 'vía', 'via de administracion', 'vía de administración',
-  'dosis', 'dosificacion', 'dosificación', 'posologia', 'posología',
+  'pico', 'pico de accion', 'pico de acción', 'duracion', 'duración', 'vida media',
+  'uso', 'usos', 'uso clinico', 'uso clínico', 'indicaciones', 'indicacion', 'indicación',
+  'administracion', 'administración', 'dosis', 'dosificacion', 'dosificación', 'posologia', 'posología',
   'eliminacion', 'eliminación', 'absorcion', 'absorción', 'metabolismo', 'distribucion', 'distribución',
-  'excrecion', 'excreción', 'biodisponibilidad',
-  'hepatico', 'hepático', 'renal', 'periferico', 'periférico', 'intestinal', 'gastrointestinal',
-  'gastrointestinales', 'cardiaco', 'cardíaco', 'pulmonar', 'cerebral', 'neurologico', 'neurológico',
-  'hematologico', 'hematológico',
-  'fase', 'fases', 'tipo', 'tipos', 'subtipo', 'subtipos',
-  'caracteristicas', 'características', 'propiedades', 'funcion', 'función', 'funciones',
+  'hepatico', 'hepático', 'renal', 'periferico', 'periférico', 'intestinal',
   'sintoma', 'síntoma', 'sintomas', 'síntomas', 'signo', 'signos',
   'complicaciones', 'toxicidad', 'interacciones', 'precauciones',
   'paciente', 'pacientes', 'adulto', 'adultos', 'pediatrico', 'pediátrico',
   'hombre', 'mujer', 'embarazo', 'lactancia',
   'resultado', 'resultados', 'hallazgo', 'hallazgos', 'laboratorio',
   'estudio', 'estudios', 'metodo', 'método', 'tecnica', 'técnica',
-  'objetivo', 'objetivos', 'clave', 'puntos clave', 'aspectos clave',
-  'subtema', 'tema', 'modulo', 'módulo', 'pregunta', 'preguntas', 'respuesta', 'respuestas',
+  'objetivo', 'objetivos', 'aspectos clave', 'puntos clave',
+  'pregunta', 'preguntas', 'respuesta', 'respuestas',
+  'caso', 'casos', 'caso clinico', 'caso clínico', 'casos clinicos', 'casos clínicos',
 ]);
 
 /**
- * Valida si un término es un concepto legítimo y coherente.
+ * Valida si un término califica como concepto real para resaltar en Thea.
  */
 function isValidConceptTerm(term: string): boolean {
-  const clean = term.trim();
+  const clean = term.trim().replace(/^[:\s\-\–—*•#]+|[:\s\-\–—*•#]+$/g, '');
   const lower = clean.toLowerCase();
 
-  // Longitud razonable
-  if (clean.length < 3 || clean.length > 55) return false;
-
-  // No debe estar en la lista de términos excluidos
+  if (clean.length < 3 || clean.length > 50) return false;
   if (EXCLUDED_TERMS.has(lower)) return false;
 
-  // No debe terminar en preposiciones ni signos de puntuación colgantes
+  // No debe terminar en conectores colgantes ni dos puntos
   if (/(?:\s+(?:de|del|en|y|o|con|sin|por|para|a)|[:;.,-])$/i.test(clean)) return false;
 
-  // No debe empezar con palabras de sección o viñetas
+  // No debe ser una etiqueta de paso o numeración
   if (/^(?:paso|punto|seccion|sección|capitulo|capítulo|figura|imagen)\s+/i.test(clean)) return false;
 
   // Si es una sola palabra:
   const words = clean.split(/\s+/);
   if (words.length === 1) {
-    // Si tiene menos de 4 letras y no es una sigla médica en mayúsculas (ej: NPH, IDO, HLA)
+    // Si tiene menos de 4 letras, solo permitir acrónimos en mayúsculas (ej: 1RM, NPH, IDO, HLA, ATP)
     if (clean.length < 4 && !/^[A-Z0-9-]{2,5}$/.test(clean)) {
       return false;
     }
-    // Palabras genéricas en español de una sola palabra
-    if (/^(?:caso|dosis|forma|medio|mayor|menor|total|parte|nivel|grado|grupo|clase|efecto|tiempo|salud|enfermedad|vida)$/i.test(clean)) {
+    // Palabras genéricas en español de una sola palabra que no constituyen concepto
+    if (/^(?:caso|dosis|forma|medio|mayor|menor|total|parte|nivel|grado|grupo|clase|efecto|tiempo|salud|enfermedad|vida|fuerza|resistencia|carga|flato|ruido|ruidos)$/i.test(clean)) {
       return false;
     }
   }
-
-  // Máximo 5 palabras
-  if (words.length > 5) return false;
 
   return true;
 }
 
 /**
- * Limpia y recorta una definición para que siempre termine en una oración completa con punto final,
- * evitando cortes abruptos como "lo que c...".
+ * Limpia y recorta de forma inteligente una definición a 1 o 2 oraciones completas,
+ * garantizando que NUNCA termine abruptamente en medio de una palabra o frase (ej: "...lo que c").
  */
 function cleanDefinitionSentence(rawDef: string): string {
   let def = rawDef.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  def = def.replace(/^[:\s\-\–—•]+/, '').trim();
 
-  // Si la definición empieza con guiones o dos puntos residuales
-  def = def.replace(/^[:\s\-•]+/, '').trim();
+  // 1. Si contiene fórmulas KaTeX ($...$ o $$...$$), preservar la integridad de los delimitadores
+  // Buscar cortes naturales en puntos de oración (. seguido de espacio y mayúscula o fin)
+  const sentences = def.match(/[^.!?]+[.!?]+(?:\s+|$)/g);
+  if (sentences && sentences.length > 0) {
+    let result = '';
+    for (let i = 0; i < Math.min(2, sentences.length); i++) {
+      const cand = result + sentences[i];
+      // Si la primera oración es suficientemente rica (>= 30 caracteres), con 1 o 2 oraciones es perfecto
+      if (cand.length <= 320) {
+        result = cand;
+      } else {
+        if (!result) result = sentences[0];
+        break;
+      }
+    }
+    if (result.trim()) {
+      return result.trim();
+    }
+  }
 
-  // Buscar el cierre de la primera o segunda oración completa (punto seguido de espacio o fin)
-  const sentenceMatches = def.match(/^(.+?\.)(?:\s+[A-ZÁÉÍÓÚ]|$)/);
-  if (sentenceMatches && sentenceMatches[1].length >= 30) {
-    def = sentenceMatches[1].trim();
-  } else if (def.length > 250) {
-    // Si no tiene punto antes de 250 caracteres, cortar en el último espacio antes del límite y añadir punto
+  // 2. Si no tenía puntuación estándar de cierre, buscar último espacio antes de 240 caracteres
+  if (def.length > 250) {
     const truncated = def.substring(0, 240);
     const lastSpace = truncated.lastIndexOf(' ');
     if (lastSpace > 120) {
@@ -125,7 +125,6 @@ function cleanDefinitionSentence(rawDef: string): string {
     }
   }
 
-  // Asegurar que termine en punto final si no tiene puntuación de cierre
   if (!/[.!?]$/.test(def)) {
     def += '.';
   }
@@ -134,24 +133,27 @@ function cleanDefinitionSentence(rawDef: string): string {
 }
 
 /**
- * Extrae conceptos glosario del StudyKit combinando:
- * 1. Flashcards existentes (tipo concepto, excluyendo preguntas o frases genéricas).
- * 2. Pares "Término: Definición" encontrados en la Guía de Estudio con filtros estrictos.
+ * Extrae conceptos de estudio de alta relevancia pedagógica basándose en la arquitectura de Thea (Astra AI):
+ * 1. Flashcards oficiales del kit (prioridad máxima).
+ * 2. Viñetas explícitas de definición en la guía (`* **Término:** Explicación` o `- **Término**: Explicación`).
+ * 3. Encabezados de definición (`#### Definición de [Concepto]`).
+ *
+ * Excluye estrictamente encabezados clínicos (Clínica, Tratamiento, Fisiopatología) y no rompe títulos H1-H4.
  */
 export function extractGlossaryConcepts(kit: StudyKit, markdownText?: string): GlossaryConcept[] {
   const map = new Map<string, GlossaryConcept>();
 
-  // 1. Extraer de Flashcards del Kit
+  // 1. Extraer de Flashcards del Kit (Prioridad 1 en Thea)
   if (kit.flashcards && Array.isArray(kit.flashcards)) {
     for (const card of kit.flashcards) {
       if (!card || !card.term || !card.definition) continue;
+
       const rawTerm = card.term.trim();
       const rawDef = card.definition.trim();
 
       // Descartar si es una pregunta
       if (card.type === 'question' || /^\s*[¿?]/.test(rawTerm) || /\?\s*$/.test(rawTerm)) continue;
 
-      // Limpiar marcas markdown residuales en el término
       const cleanTerm = rawTerm.replace(/^[#*_\s]+|[#*_\s:]+$/g, '').trim();
       if (!isValidConceptTerm(cleanTerm)) continue;
       if (rawDef.length < 10) continue;
@@ -167,17 +169,19 @@ export function extractGlossaryConcepts(kit: StudyKit, markdownText?: string): G
     }
   }
 
-  // 2. Extraer de la Guía de Estudio (patrones viñeta "**Término:** Definición")
+  // 2. Extraer de la Guía de Estudio en Markdown
   const text = markdownText || kit.studyGuideMarkdown || '';
   if (text) {
-    // Patrón 1: Viñetas con concepto en negrita seguido de dos puntos y descripción completa de la línea
-    // Ej: "• **Sincitiotrofoblasto:** Principal componente del trofoblasto..."
-    const bulletRegex = /(?:^|\n)\s*[-*•]\s+\*\*([A-Za-z0-9ÁÉÍÓÚáéíóúñÑüÜ\s/(),.-]{3,50})\*\*:\s+([^\n]+)/g;
+    // Patrón A: Viñetas o citas con negrita (dos puntos adentro o afuera de los asteriscos)
+    // Ejemplos Thea:
+    // "* **Zona de Fuerza:** 1 a 5 repeticiones..."
+    // "- **Tensión Mecánica**: Predomina con cargas altas..."
+    // "> **Principio de Henneman:** Las unidades motoras..."
+    const bulletOrQuoteRegex = /(?:^|\n)\s*[-*•>]+\s+\*\*([A-Za-z0-9ÁÉÍÓÚáéíóúñÑüÜ\s/(),.-]{3,45}?)(?::\*\*|\*\*[:\s—–-])\s*([^\n]+)/g;
     let match: RegExpExecArray | null;
-    while ((match = bulletRegex.exec(text)) !== null) {
-      const rawTerm = match[1].trim();
+    while ((match = bulletOrQuoteRegex.exec(text)) !== null) {
+      const cleanTerm = match[1].trim().replace(/^[:\s\-]+|[:\s\-]+$/g, '');
       const rawDef = match[2].trim();
-      const cleanTerm = rawTerm.replace(/^[#*_\s]+|[#*_\s:]+$/g, '').trim();
 
       if (isValidConceptTerm(cleanTerm) && rawDef.length >= 15) {
         const lower = cleanTerm.toLowerCase();
@@ -191,14 +195,13 @@ export function extractGlossaryConcepts(kit: StudyKit, markdownText?: string): G
       }
     }
 
-    // Patrón 2: Definiciones explícitas en párrafos (ej: "**Ley de Laplace:** La tensión en la pared...")
-    const directRegex = /(?:^|\n)\s*\*\*([A-Za-z0-9ÁÉÍÓÚáéíóúñÑüÜ\s/(),.-]{3,45}):\*\*\s+([A-ZÁÉÍÓÚ][^\n]+)/g;
-    while ((match = directRegex.exec(text)) !== null) {
-      const rawTerm = match[1].trim();
+    // Patrón B: Subtítulos de Definición ("#### Definición del Continuo de Repeticiones\nEs el modelo...")
+    const defHeaderRegex = /(?:^|\n)#{2,4}\s+Definici[oó]n\s+(?:de\s+la|del|de\s+los|de\s+las|de)\s+([A-Za-z0-9ÁÉÍÓÚáéíóúñÑüÜ\s]{3,45})\s*\n+([A-ZÁÉÍÓÚ][^\n]{15,})/gi;
+    while ((match = defHeaderRegex.exec(text)) !== null) {
+      const cleanTerm = match[1].trim().replace(/^[:\s\-]+|[:\s\-]+$/g, '');
       const rawDef = match[2].trim();
-      const cleanTerm = rawTerm.replace(/^[#*_\s]+|[#*_\s:]+$/g, '').trim();
 
-      if (isValidConceptTerm(cleanTerm) && rawDef.length >= 20) {
+      if (isValidConceptTerm(cleanTerm) && rawDef.length >= 15) {
         const lower = cleanTerm.toLowerCase();
         if (!map.has(lower)) {
           map.set(lower, {
@@ -211,24 +214,27 @@ export function extractGlossaryConcepts(kit: StudyKit, markdownText?: string): G
     }
   }
 
-  // Ordenar por longitud de término descendente para que "Sincitiotrofoblasto" se evalúe antes que "Trofoblasto"
+  // Ordenar por longitud de término descendente para que "Continuo de Repeticiones" se evalúe antes que "Repeticiones"
   return Array.from(map.values()).sort((a, b) => b.term.length - a.term.length);
 }
 
 /**
- * Crea una expresión regular segura para encontrar los conceptos en texto usando fronteras Unicode.
+ * Genera una RegExp para encontrar ocurrencias completas de los conceptos en texto plano.
+ * Usa fronteras de palabra que soportan caracteres acentuados en español.
  */
-export function buildGlossaryMatcherRegex(concepts: GlossaryConcept[]): RegExp | null {
-  if (!concepts || concepts.length === 0) return null;
+export function buildGlossaryMatcherRegex(glossary: GlossaryConcept[]): RegExp | null {
+  if (!glossary || glossary.length === 0) return null;
 
-  // Filtrar y escapar términos válidos
-  const escapedTerms = concepts
-    .map(c => escapeRegex(c.term))
-    .filter(Boolean);
+  // Filtrar y ordenar por longitud de término descendente
+  const terms = glossary
+    .map(g => g.term.trim())
+    .filter(t => t.length >= 3)
+    .sort((a, b) => b.length - a.length);
 
-  if (escapedTerms.length === 0) return null;
+  if (terms.length === 0) return null;
 
-  // Fronteras de palabra Unicode para no cortar palabras acentuadas en español (ej: "célula", "óvulo")
-  const pattern = `(?<![\\p{L}\\p{N}])(${escapedTerms.join('|')})(?![\\p{L}\\p{N}])`;
-  return new RegExp(pattern, 'giu');
+  const escaped = terms.map(escapeRegex).join('|');
+
+  // Fronteras seguras Unicode para español
+  return new RegExp(`(?<=^|[^A-Za-z0-9ÁÉÍÓÚáéíóúñÑüÜ])(${escaped})(?=$|[^A-Za-z0-9ÁÉÍÓÚáéíóúñÑüÜ])`, 'gi');
 }

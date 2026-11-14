@@ -177,14 +177,23 @@ export const App: React.FC = () => {
     return initialKits;
   });
 
-  // Selección inicial del kit activo
+  // Selección inicial del kit activo (soporta detección de ID en rutas jerárquicas /study/:id y /smartStudy/:id)
   const [currentKit, setCurrentKit] = useState<StudyKit | null>(() => {
-    const savedCurrentId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
-    if (savedCurrentId) {
-      if (['bio-respiration', 'cs-algorithms', 'cs-algo'].includes(savedCurrentId)) {
+    let targetKitId: string | null = null;
+    if (typeof window !== 'undefined') {
+      const match = window.location.pathname.match(/^\/(?:study|smartStudy)\/([^/?#]+)/i);
+      if (match && match[1]) {
+        targetKitId = decodeURIComponent(match[1]);
+      }
+    }
+    if (!targetKitId && typeof localStorage !== 'undefined') {
+      targetKitId = localStorage.getItem(STORAGE_CURRENT_KIT_KEY);
+    }
+    if (targetKitId) {
+      if (['bio-respiration', 'cs-algorithms', 'cs-algo'].includes(targetKitId)) {
         try { localStorage.removeItem(STORAGE_CURRENT_KIT_KEY); } catch {}
       } else {
-        const found = kits.find(k => k.id === savedCurrentId && !isCorruptedKit(k));
+        const found = kits.find(k => k.id === targetKitId && !isCorruptedKit(k));
         if (found) return stripAssetDataUrlsFromKit(found, true);
       }
     }
@@ -340,7 +349,17 @@ export const App: React.FC = () => {
     };
   }, [kits]);
 
-  const [currentMode, setCurrentMode] = useState<StudyMode>('home');
+  const [currentMode, setCurrentMode] = useState<StudyMode>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/smartStudy/')) return 'smart-study';
+      if (path.startsWith('/study/')) return 'study-guide';
+      if (path.startsWith('/flashcards')) return 'flashcards';
+      if (path.startsWith('/analytics')) return 'analytics';
+      if (path.startsWith('/create')) return 'create';
+    }
+    return 'home';
+  });
   const prevModeRef = useRef<StudyMode>(currentMode);
   const { theme } = useTheme();
 
@@ -442,12 +461,21 @@ export const App: React.FC = () => {
 
     setCurrentMode(mode);
     if (pushToHistory) {
+      let targetPath = '/';
+      if (mode === 'smart-study' && currentKit?.id) {
+        targetPath = `/smartStudy/${currentKit.id}`;
+      } else if (mode === 'study-guide' && currentKit?.id) {
+        targetPath = `/study/${currentKit.id}`;
+      } else if (mode !== 'home') {
+        targetPath = `/${mode}`;
+      }
+
       if (mode !== currentMode || window.history.state?.mode !== mode) {
         window.history.pushState({
           mode,
           kitId: currentKit?.id || null,
           modal: null,
-        }, '');
+        }, '', targetPath);
       }
     }
   };
@@ -480,7 +508,14 @@ export const App: React.FC = () => {
         setShowAIModal(false);
         setShowAuthModal(false);
         setShowGoogleDriveModal(false);
-        setCurrentMode('home');
+        const path = window.location.pathname;
+        if (path.startsWith('/smartStudy/')) {
+          handleSelectMode('smart-study', false);
+        } else if (path.startsWith('/study/')) {
+          handleSelectMode('study-guide', false);
+        } else {
+          setCurrentMode('home');
+        }
         return;
       }
 

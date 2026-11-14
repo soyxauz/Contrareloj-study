@@ -81,6 +81,8 @@ import { StudyGuideScanner } from './StudyGuideScanner';
 import { useTheme } from '../services/themeService';
 import { ConceptPopover } from './ConceptPopover';
 import { extractGlossaryConcepts, type GlossaryConcept } from '../utils/glossaryExtractor';
+import { HierarchicalLinkPill } from './HierarchicalLinkPill';
+import { syncBrowserHierarchicalUrl } from '../utils/hierarchicalLink';
 
 interface StudyGuideViewProps {
   kit: StudyKit;
@@ -116,6 +118,13 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   const glossaryConcepts = useMemo(() => {
     return extractGlossaryConcepts(currentKitState, markdown);
   }, [currentKitState, markdown]);
+
+  // Sincronizar URL jerárquica con el navegador (/study/:kitId)
+  useEffect(() => {
+    if (kit?.id) {
+      syncBrowserHierarchicalUrl('study', kit.id);
+    }
+  }, [kit?.id]);
 
   const [activeConceptData, setActiveConceptData] = useState<{
     concept: GlossaryConcept;
@@ -498,6 +507,12 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Rehacer con diferente extensión</span>
               </button>
+
+              {/* Píldora de Enlace Jerárquico Thea (⑂ thea.study/study/:kitId) */}
+              <HierarchicalLinkPill
+                mode="study"
+                kitId={kit.id}
+              />
 
               {/* Smart Edit */}
               <button
