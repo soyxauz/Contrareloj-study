@@ -144,3 +144,103 @@ export function cleanConceptDefinition(raw: string): string {
 
   return clean;
 }
+
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Extrae variantes morfológicas y siglas de un término para asegurar
+ * que ninguna mención directa o indirecta del concepto aparezca dentro
+ * de la definición en los juegos interactivos.
+ */
+export function extractTermVariants(term: string): string[] {
+  if (!term) return [];
+  const clean = term.trim();
+  const set = new Set<string>();
+  set.add(clean);
+
+  // 1. Extraer siglas o aclaraciones entre paréntesis: "Anticoagulante lúpico (LA)" -> "Anticoagulante lúpico", "LA"
+  const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)$/);
+  if (parenMatch) {
+    const main = parenMatch[1].trim();
+    const inside = parenMatch[2].trim();
+    if (main.length >= 3) set.add(main);
+    if (inside.length >= 2) set.add(inside);
+  }
+
+  // 2. Singular y plural en español: "Sulfonilureas" -> "Sulfonilurea"
+  const lower = clean.toLowerCase();
+  if (lower.endsWith('as')) {
+    set.add(clean.slice(0, -1));
+  } else if (lower.endsWith('es')) {
+    set.add(clean.slice(0, -2));
+  } else if (lower.endsWith('os')) {
+    set.add(clean.slice(0, -1));
+  } else if (lower.endsWith('s') && !lower.endsWith('ss')) {
+    set.add(clean.slice(0, -1));
+  }
+
+  // 3. Guiones en receptores y fármacos: "SUR-1" -> "SUR 1", "SUR1"
+  if (clean.includes('-')) {
+    set.add(clean.replace(/-/g, ' '));
+    set.add(clean.replace(/-/g, ''));
+  }
+
+  // Ordenar por longitud descendente para que las frases compuestas se reemplacen antes que subpalabras
+  return Array.from(set)
+    .filter(v => v.length >= 2)
+    .sort((a, b) => b.length - a.length);
+}
+
+/**
+ * Ocultamiento gramatical natural del término dentro de la definición
+ * para juegos interactivos (Coincidencias, Apilador, Constructor, etc.).
+ * Evita que el juego "regale" la respuesta diciendo el nombre del concepto.
+ */
+export function maskTermInDefinition(term: string, definition: string): string {
+  if (!term || !definition) return definition || '';
+  let res = definition.trim();
+  const variants = extractTermVariants(term);
+
+  for (const variant of variants) {
+    if (!variant || variant.length < 2) continue;
+    const esc = escapeRegExp(variant);
+
+    // 1. La definición empieza con "Término: " o "Término - "
+    const titleRegex = new RegExp('^(?:el|la|los|las|un|una|unos|unas)?\\s*' + esc + '\\s*[:\\-–—|]\\s*', 'i');
+    if (titleRegex.test(res)) {
+      res = res.replace(titleRegex, '');
+    }
+
+    // 2. La definición empieza con: [Artículo] [Término] [es un / son unos ...]
+    const copulaRegex = new RegExp('^(?:el|la|los|las|un|una|unos|unas|este|esta|estos|estas)?\\s*' + esc + '\\s+(?:es\\s+(?:un|una|el|la)|son\\s+(?:unos|unas|los|las|el|la))\\s+', 'i');
+    if (copulaRegex.test(res)) {
+      res = res.replace(copulaRegex, '');
+    }
+
+    // 3. La definición empieza directamente con el término y el verbo: "Las sulfonilureas se unen a..." -> "Se unen a..."
+    const startVerbRegex = new RegExp('^(?:el|la|los|las|un|una|unos|unas|este|esta|estos|estas)?\\s*' + esc + '\\s+', 'i');
+    if (startVerbRegex.test(res)) {
+      res = res.replace(startVerbRegex, '');
+    }
+
+    // 4. El término aparece en el interior o final precedido de preposición: "mediante la metformina" -> "mediante este componente"
+    const middlePrepRegex = new RegExp('\\b(?:del?|al|en|por|con|para|sobre|mediante)\\s+(?:el|la|los|las)?\\s*' + esc + '\\b', 'gi');
+    res = res.replace(middlePrepRegex, ' de este componente');
+
+    // 5. El término aparece en el interior sin preposición previa
+    const bareMiddleRegex = new RegExp('\\b(?:el|la|los|las)?\\s*' + esc + '\\b', 'gi');
+    res = res.replace(bareMiddleRegex, 'este componente');
+  }
+
+  // Limpieza inicial: quitar signos residuales si quedaron al inicio
+  res = res.replace(/^[:\-–—,;\s]+/, '').trim();
+
+  // Asegurar mayúscula inicial limpia
+  if (res.length > 0) {
+    res = res.charAt(0).toUpperCase() + res.slice(1);
+  }
+
+  return res || definition;
+}

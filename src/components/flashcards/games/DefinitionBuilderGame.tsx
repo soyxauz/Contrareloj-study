@@ -3,7 +3,7 @@ import type { Flashcard } from '../../../types';
 import { ArrowLeft, CheckSquare, RotateCcw, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
-import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
 
 interface DefinitionBuilderGameProps {
@@ -64,7 +64,8 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
     if (!target) return;
 
     setCurrentCard(target);
-    const def = getCardDef(target);
+    const rawDef = getCardDef(target);
+    const def = maskTermInDefinition(getCardTerm(target), rawDef);
     const rawWords = def.split(/\s+/).filter(Boolean);
 
     // Identify candidate positions to convert to blanks (max 5)

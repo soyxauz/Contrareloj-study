@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check, X } from 'lucide-react';
 import { FormattedText } from '../FormattedText';
+import { maskTermInDefinition } from '../flashcards/flashcardSanitizer';
 
 export interface MatchingPairItem {
   term: string;
@@ -141,6 +142,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
             const correctLeftNum = correctLeftIdx >= 0 ? correctLeftIdx + 1 : null;
 
             const isMatchCorrect = matchingChecked && pairedTerm && correctPair?.term === pairedTerm;
+            const displayDef = correctPair ? maskTermInDefinition(correctPair.term, def) : def;
 
             let borderStyles = 'border-[#881337]/40 bg-[#1e0711]/75 hover:border-[#be123c]/60 hover:bg-[#2c0b19]/90 text-slate-100';
             if (pairedTerm && !matchingChecked) borderStyles = 'border-indigo-500/60 bg-indigo-950/30';
@@ -163,7 +165,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
                     {rightNum}
                   </span>
                   <span className="text-[13px] sm:text-sm text-slate-200 leading-relaxed">
-                    <FormattedText text={def} inlineOnly={true} />
+                    <FormattedText text={displayDef} inlineOnly={true} />
                   </span>
                 </div>
 

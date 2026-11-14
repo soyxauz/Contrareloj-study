@@ -3,7 +3,7 @@ import type { Flashcard } from '../../../types';
 import { Layers, ArrowLeft, RotateCcw, Trophy, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
-import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
 
 interface StackerGameProps {
@@ -302,7 +302,7 @@ export const StackerGame: React.FC<StackerGameProps> = ({
           {/* Definition Prompt Box matching Screenshot 3 */}
           <div className="p-6 rounded-2xl bg-[#140e2b]/90 border border-white/[0.12] backdrop-blur-md shadow-xl min-h-[120px] flex items-center">
             <div className="text-base sm:text-lg text-slate-100 leading-relaxed font-normal">
-              <FormattedText text={currentCard ? getCardDef(currentCard) : 'Cargando definición de la tarjeta...'} inlineOnly />
+              <FormattedText text={currentCard ? maskTermInDefinition(getCardTerm(currentCard), getCardDef(currentCard)) : 'Cargando definición de la tarjeta...'} inlineOnly />
             </div>
           </div>
 

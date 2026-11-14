@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
-import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
 
 interface GuessTheTermGameProps {
@@ -412,7 +412,7 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
                   {/* Card Content: Term or Definition */}
                   <div className="pr-6 mt-1 flex items-center justify-center flex-1 text-center w-full">
                     <div className={`font-semibold leading-snug w-full ${showDefinitions ? 'text-xs text-slate-200 font-normal max-h-[140px] overflow-y-auto custom-scrollbar' : 'text-sm sm:text-base text-slate-100'}`}>
-                      <FormattedText text={showDefinitions ? cardDef : cardTerm} inlineOnly />
+                      <FormattedText text={showDefinitions ? maskTermInDefinition(cardTerm, cardDef) : cardTerm} inlineOnly />
                     </div>
                   </div>
                 </div>

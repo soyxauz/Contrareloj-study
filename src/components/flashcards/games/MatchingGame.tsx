@@ -3,7 +3,7 @@ import type { Flashcard } from '../../../types';
 import { ArrowLeft, Copy, RotateCcw, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
-import { cleanConceptDefinition, cleanConceptTerm } from '../flashcardSanitizer';
+import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
 
 interface MatchingGameProps {
@@ -61,7 +61,7 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
         id: `def-${c.id}`,
         cardId: c.id,
         type: 'definition',
-        text: getCardDef(c),
+        text: maskTermInDefinition(getCardTerm(c), getCardDef(c)),
         isMatched: false,
       });
     });
