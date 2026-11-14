@@ -49,15 +49,21 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
   const [activeBlankIndex, setActiveBlankIndex] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<'idle' | 'correct' | 'wrong'>('idle');
 
-  // Filter valid flashcards with meaningful definitions
+  // Filter valid flashcards prioritizing rich, contextual definitions (>= 7 words)
   const validCards = useMemo(() => {
+    const rich = flashcards.filter(f => {
+      const def = getCardDef(f);
+      return def && def.split(/\s+/).length >= 7;
+    });
+    if (rich.length >= 3) return rich;
+
     return flashcards.filter(f => {
       const def = getCardDef(f);
-      return def && def.split(/\s+/).length >= 5;
+      return def && def.split(/\s+/).length >= 4;
     });
   }, [flashcards]);
 
-  // Set up a round
+  // Set up a round with pedagogical scaffolding (never consecutive blanks, rich anchor context)
   const setupRound = useCallback((roundIdx: number, usedIds: Set<string>) => {
     const pool = validCards.filter(c => !usedIds.has(c.id));
     const target = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : validCards[roundIdx % validCards.length];
@@ -67,19 +73,62 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
     const rawDef = getCardDef(target);
     const def = maskTermInDefinition(getCardTerm(target), rawDef);
     const rawWords = def.split(/\s+/).filter(Boolean);
+    const totalWords = rawWords.length;
 
-    // Identify candidate positions to convert to blanks (max 5)
+    // Determine target blank count: maximum 20-25% of words, never leaving the sentence without context
+    let targetBlankCount = 1;
+    if (totalWords >= 14) {
+      targetBlankCount = 3;
+    } else if (totalWords >= 8) {
+      targetBlankCount = 2;
+    } else {
+      targetBlankCount = 1;
+    }
+
+    // Identify candidate positions to convert to blanks (exclude stop words, pure numbers, and very short words)
     const eligibleIndices: number[] = [];
     rawWords.forEach((w, idx) => {
       const cw = cleanWord(w).toLowerCase();
-      if (cw.length >= 4 && !STOP_WORDS.has(cw)) {
+      if (cw.length >= 4 && !STOP_WORDS.has(cw) && !/^\d+$/.test(cw)) {
         eligibleIndices.push(idx);
       }
     });
 
-    // Pick 4-5 blanks spread across the sentence
+    if (eligibleIndices.length === 0) {
+      rawWords.forEach((w, idx) => {
+        if (cleanWord(w).length >= 4 && !/^\d+$/.test(cleanWord(w))) {
+          eligibleIndices.push(idx);
+        }
+      });
+    }
+
+    // Pick blanks ensuring:
+    // 1. Strictly NO consecutive blanks (every blank must have surrounding visible words)
+    // 2. The first word is kept visible in short sentences (< 10 words) as an anchor
     const shuffledEligible = [...eligibleIndices].sort(() => Math.random() - 0.5);
-    const chosenBlankIndices = new Set(shuffledEligible.slice(0, Math.min(5, Math.max(3, eligibleIndices.length))));
+    const chosenBlankIndices = new Set<number>();
+
+    for (const idx of shuffledEligible) {
+      if (chosenBlankIndices.size >= targetBlankCount) break;
+
+      // Rule: strictly no consecutive blanks
+      if (chosenBlankIndices.has(idx - 1) || chosenBlankIndices.has(idx + 1)) {
+        continue;
+      }
+
+      // Keep first word as anchor in shorter sentences
+      if (idx === 0 && totalWords < 10 && chosenBlankIndices.size === 0 && eligibleIndices.some(c => c > 0)) {
+        continue;
+      }
+
+      chosenBlankIndices.add(idx);
+    }
+
+    // Fallback: if none chosen, pick one non-first candidate or middle
+    if (chosenBlankIndices.size === 0 && eligibleIndices.length > 0) {
+      const nonFirst = eligibleIndices.find(idx => idx > 0);
+      chosenBlankIndices.add(nonFirst !== undefined ? nonFirst : eligibleIndices[0]);
+    }
 
     const parsedTokens: BlankToken[] = rawWords.map((rawWord, idx) => {
       const isBlank = chosenBlankIndices.has(idx);
@@ -99,23 +148,22 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
       }
     });
 
-    // Gather 5 distractor words from other flashcard definitions
+    // Gather 4-6 balanced distractor words from other flashcard definitions
     const otherDefs = validCards
       .filter(c => c.id !== target.id)
       .map(c => getCardDef(c))
       .join(' ')
       .split(/\s+/)
       .map(cleanWord)
-      .filter(w => w.length >= 4 && !STOP_WORDS.has(w.toLowerCase()));
+      .filter(w => w.length >= 4 && !STOP_WORDS.has(w.toLowerCase()) && !/^\d+$/.test(w));
 
     const uniqueDistractors = Array.from(new Set(otherDefs))
       .filter(w => !correctWords.some(cw => cw.toLowerCase() === w.toLowerCase()))
       .sort(() => Math.random() - 0.5)
-      .slice(0, Math.max(5, 10 - correctWords.length));
+      .slice(0, Math.min(6, Math.max(4, 7 - correctWords.length)));
 
-    // Combined word bank of 10 chips
+    // Combined word bank of 6 to 8 chips (clean, focused, not overwhelming)
     const bankItems = [...correctWords, ...uniqueDistractors]
-      .slice(0, 10)
       .sort(() => Math.random() - 0.5)
       .map((w, idx) => ({
         id: `chip-${idx}-${w}`,
