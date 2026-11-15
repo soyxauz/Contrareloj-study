@@ -1303,13 +1303,27 @@ export const App: React.FC = () => {
         {isImportingSharedKit ? (
           <div className="max-w-md mx-auto px-6 py-28 text-center animate-fadeIn select-none">
             <div className="relative w-16 h-16 mx-auto mb-5 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-2xl bg-sky-500/20 blur-xl animate-pulse" />
-              <div className="relative w-16 h-16 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center shadow-inner">
-                <RefreshCw className="w-8 h-8 text-sky-400 animate-spin" />
+              <div className={`absolute inset-0 rounded-2xl blur-xl animate-pulse ${
+                theme === 'kitty' ? 'bg-pink-400/25' : theme === 'light' ? 'bg-sky-400/25' : 'bg-sky-500/20'
+              }`} />
+              <div className={`relative w-16 h-16 rounded-2xl border flex items-center justify-center shadow-inner ${
+                theme === 'kitty'
+                  ? 'bg-pink-100/90 border-pink-300 text-pink-600'
+                  : theme === 'light'
+                  ? 'bg-sky-100/90 border-sky-300 text-sky-700'
+                  : 'bg-white/[0.05] border-white/10 text-sky-400'
+              }`}>
+                <RefreshCw className="w-8 h-8 animate-spin" />
               </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Importando Kit Compartido...</h3>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <h3 className={`text-xl font-extrabold mb-2 tracking-tight ${
+              theme === 'kitty' ? 'text-pink-900' : theme === 'light' ? 'text-zinc-900' : 'text-white'
+            }`}>
+              Importando Kit Compartido...
+            </h3>
+            <p className={`text-xs max-w-xs mx-auto leading-relaxed ${
+              theme === 'kitty' ? 'text-pink-700/80 font-medium' : theme === 'light' ? 'text-zinc-600 font-medium' : 'text-slate-400'
+            }`}>
               Preparando el contenido base y configurando tu espacio de estudio con progreso 0% limpio.
             </p>
           </div>
@@ -1499,8 +1513,20 @@ export const App: React.FC = () => {
 
       {/* Banner de Descarga e Importación Activa de Kit Compartido */}
       {isImportingSharedKit && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-[#0e0b16]/95 border border-sky-400/40 text-sky-200 px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 backdrop-blur-xl animate-fadeIn text-xs font-semibold">
-          <div className="w-3.5 h-3.5 rounded-full border-2 border-sky-400/30 border-t-sky-400 animate-spin" />
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 backdrop-blur-xl animate-fadeIn text-xs font-bold transition-all ${
+          theme === 'kitty'
+            ? 'bg-white/95 border-2 border-pink-400 text-pink-700 shadow-[0_8px_30px_rgba(236,72,153,0.3)]'
+            : theme === 'light'
+            ? 'bg-white/95 border-2 border-sky-400 text-sky-800 shadow-[0_8px_30px_rgba(14,165,233,0.3)]'
+            : 'bg-[#0e0b16]/95 border border-sky-400/40 text-sky-200 shadow-sky-950/40'
+        }`}>
+          <div className={`w-3.5 h-3.5 rounded-full border-2 animate-spin shrink-0 ${
+            theme === 'kitty'
+              ? 'border-pink-300 border-t-pink-600'
+              : theme === 'light'
+              ? 'border-sky-300 border-t-sky-600'
+              : 'border-sky-400/30 border-t-sky-400'
+          }`} />
           <span>Descargando e importando kit de estudio desde Google Drive...</span>
         </div>
       )}

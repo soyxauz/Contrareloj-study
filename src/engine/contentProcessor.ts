@@ -2865,4 +2865,139 @@ export async function extractFromFile(file: File): Promise<{ text: string; title
   );
 }
 
+/**
+ * Genera preguntas interactivas automáticas para un kit a partir de su contenido base
+ * (fragmentos, texto fuente, materiales o flashcards), permitiendo iniciar Smart Study
+ * de forma inmediata con progreso limpio al 0% y evitando pantallas de carga infinitas.
+ */
+export function generateKitQuestions(kit: StudyKit, count: number = 20): Question[] {
+  if (!kit) return [];
+
+  // 1. Extraer todo el texto disponible del kit
+  let combinedText = '';
+  if (kit.sourceText && kit.sourceText.trim().length > 30) {
+    combinedText += kit.sourceText.trim() + '\n\n';
+  }
+  if (kit.sourceMaterials && Array.isArray(kit.sourceMaterials)) {
+    for (const mat of kit.sourceMaterials) {
+      const text = mat.rawText || (mat as any).content;
+      if (text && text.trim()) {
+        combinedText += text.trim() + '\n\n';
+      }
+    }
+  }
+  if (kit.chunks && Array.isArray(kit.chunks)) {
+    for (const ch of kit.chunks) {
+      if (ch.text && ch.text.trim()) {
+        combinedText += ch.text.trim() + '\n\n';
+      }
+    }
+  }
+
+  const cleanText = sanitizeExtractedText(combinedText);
+  let questions: Question[] = [];
+
+  // Si hay texto suficiente, utilizar el motor semántico de preguntas
+  if (cleanText.length >= 60) {
+    try {
+      const raw = generateQuestions(cleanText, count, kit.category || 'General');
+      if (raw && raw.length > 0) {
+        questions.push(...raw);
+      }
+    } catch (err) {
+      console.warn('[contentProcessor] Aviso generando preguntas desde texto:', err);
+    }
+  }
+
+  // 2. Si hay flashcards, generar preguntas derivadas de alta precisión pedagógica
+  if (kit.flashcards && Array.isArray(kit.flashcards) && kit.flashcards.length > 0) {
+    const validCards = kit.flashcards.filter(c => c && c.term && c.definition && c.term.trim().length > 1);
+    const domainFallbacks = DOMAIN_DISTRACTORS[kit.category] || DOMAIN_DISTRACTORS['General'];
+
+    for (let i = 0; i < validCards.length; i++) {
+      const card = validCards[i];
+      const otherTerms = validCards.filter((_, idx) => idx !== i).map(c => c.term);
+      const otherDefs = validCards.filter((_, idx) => idx !== i).map(c => c.definition);
+
+      // Pregunta A: Identificación de Concepto
+      const distTerms = otherTerms.sort(() => Math.random() - 0.5).slice(0, 3);
+      while (distTerms.length < 3) {
+        distTerms.push(domainFallbacks[distTerms.length % domainFallbacks.length]);
+      }
+      const optsA = [card.term, ...distTerms].sort(() => Math.random() - 0.5);
+      questions.push({
+        id: `q-fc-term-${card.id || uid()}-${i}`,
+        type: 'multiple-choice',
+        difficulty: 'easy',
+        question: `¿Qué concepto clave corresponde exactamente a la siguiente definición o rol?\n\n"${card.definition}"`,
+        options: optsA,
+        correctIndex: Math.max(0, optsA.indexOf(card.term)),
+        topic: card.term,
+        explanation: `La descripción corresponde exactamente al concepto de "${card.term}".`
+      });
+
+      // Pregunta B: Definición Directa
+      const distDefs = otherDefs.sort(() => Math.random() - 0.5).slice(0, 3);
+      while (distDefs.length < 3) {
+        distDefs.push(`Propiedad secundaria o principio complementario en ${kit.category || 'el tema'}`);
+      }
+      const optsB = [card.definition, ...distDefs].sort(() => Math.random() - 0.5);
+      questions.push({
+        id: `q-fc-def-${card.id || uid()}-${i}`,
+        type: 'multiple-choice',
+        difficulty: 'medium',
+        question: `¿Cuál de las siguientes afirmaciones describe con mayor precisión a "${card.term}"?`,
+        options: optsB,
+        correctIndex: Math.max(0, optsB.indexOf(card.definition)),
+        topic: card.term,
+        explanation: `De acuerdo con el material de estudio, "${card.term}" se define como: ${card.definition}.`
+      });
+
+      // Pregunta C: Verdadero / Falso
+      if (i < 8) {
+        questions.push({
+          id: `q-fc-tf-${card.id || uid()}-${i}`,
+          type: 'true-false',
+          difficulty: 'easy',
+          question: `Evalúa la veracidad de la siguiente afirmación:\n\n"${card.term}: ${card.definition}"`,
+          options: ['Verdadero', 'Falso'],
+          correctIndex: 0,
+          topic: card.term,
+          explanation: `Verdadero. Esta afirmación concuerda fielmente con los conceptos del kit de estudio.`
+        });
+      }
+    }
+
+    // Matching si hay al menos 4 flashcards
+    if (validCards.length >= 4) {
+      const slice = validCards.slice(0, 4);
+      questions.push({
+        id: `q-fc-match-${uid()}`,
+        type: 'matching',
+        difficulty: 'medium',
+        question: `Empareja cada concepto con su definición correspondiente:`,
+        matchingPairs: slice.map(c => ({
+          term: c.term,
+          definition: c.definition.length > 85 ? c.definition.slice(0, 80) + '…' : c.definition,
+        })),
+        topic: 'Emparejamiento de Flashcards',
+        explanation: 'Correspondencias correctas:\n' + slice.map(c => `• ${c.term}: ${c.definition}`).join('\n')
+      });
+    }
+  }
+
+  // Eliminar duplicados por enunciado y mezclar
+  const seen = new Set<string>();
+  const uniqueQuestions: Question[] = [];
+  for (const q of questions) {
+    const key = (q.question || '').trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueQuestions.push(q);
+    }
+  }
+
+  return uniqueQuestions.sort(() => Math.random() - 0.5);
+}
+
 

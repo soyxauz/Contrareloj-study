@@ -43,7 +43,9 @@ import {
   Brain,
   SkipForward,
   Share2,
+  RefreshCw,
 } from 'lucide-react';
+import { generateKitQuestions } from '../engine/contentProcessor';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
 import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
@@ -420,6 +422,41 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       }
     }
   }, [kit?.id]);
+
+  const [isAutoGeneratingQuestions, setIsAutoGeneratingQuestions] = useState(false);
+
+  // Auto-recuperación y generación instantánea si el kit carece de preguntas interactivas (evita pantalla infinita de carga)
+  useEffect(() => {
+    const hasQuestions = Array.isArray(kit?.questions) && kit.questions.length > 0;
+    if (hasQuestions || isAutoGeneratingQuestions) return;
+
+    const hasBaseContent = Boolean(
+      (kit?.sourceText && kit.sourceText.trim().length > 30) ||
+      (kit?.chunks && kit.chunks.length > 0) ||
+      (kit?.flashcards && kit.flashcards.length > 0) ||
+      (kit?.sourceMaterials && kit.sourceMaterials.length > 0)
+    );
+
+    if (hasBaseContent) {
+      setIsAutoGeneratingQuestions(true);
+      try {
+        const fresh = generateKitQuestions(kit);
+        if (fresh && fresh.length > 0) {
+          if (onUpdateKit) {
+            onUpdateKit({
+              ...kit,
+              questions: fresh,
+            });
+          }
+          setCurrentQuestion(fresh[0]);
+        }
+      } catch (err) {
+        console.warn('[SmartStudyView] Error auto-generando preguntas de kit:', err);
+      } finally {
+        setIsAutoGeneratingQuestions(false);
+      }
+    }
+  }, [kit?.id, kit?.questions?.length]);
 
   // ── Session Restoration (Memoria Total en Tiempo Real) ────────────────────
   const savedSession = useMemo(() => {
@@ -3767,21 +3804,82 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // Salvaguarda: si el kit aún no tiene preguntas disponibles o se están cargando
   if (!kit.questions || kit.questions.length === 0 || !currentQ || currentQ.id === 'thea-placeholder-loading') {
+    const handleManualGenerate = () => {
+      setIsAutoGeneratingQuestions(true);
+      setTimeout(() => {
+        try {
+          const fresh = generateKitQuestions(kit);
+          if (fresh && fresh.length > 0) {
+            if (onUpdateKit) {
+              onUpdateKit({ ...kit, questions: fresh });
+            }
+            setCurrentQuestion(fresh[0]);
+          }
+        } catch (e) {
+          console.warn('[SmartStudyView] Error generando preguntas:', e);
+        } finally {
+          setIsAutoGeneratingQuestions(false);
+        }
+      }, 50);
+    };
+
     return (
-      <div className="max-w-md mx-auto px-6 py-24 text-center animate-fadeIn">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
-          <BookOpen className="w-8 h-8" />
+      <div className="max-w-md mx-auto px-6 py-24 text-center animate-fadeIn select-none">
+        <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
+          theme === 'kitty'
+            ? 'bg-pink-100 text-pink-600 border border-pink-300'
+            : theme === 'light'
+            ? 'bg-sky-100 text-sky-700 border border-sky-300'
+            : 'bg-violet-600/20 text-violet-400 border border-violet-500/30'
+        }`}>
+          {isAutoGeneratingQuestions ? (
+            <RefreshCw className="w-8 h-8 animate-spin" />
+          ) : (
+            <BookOpen className="w-8 h-8" />
+          )}
         </div>
-        <h3 className="text-xl font-bold text-white mb-2">Cargando preguntas del kit...</h3>
-        <p className="text-sm text-slate-400 mb-6">
-          Estamos preparando los contenidos interactivos de este kit de estudio.
+        <h3 className={`text-xl font-extrabold mb-2 tracking-tight ${
+          theme === 'kitty' ? 'text-pink-900' : theme === 'light' ? 'text-zinc-900' : 'text-white'
+        }`}>
+          {isAutoGeneratingQuestions ? 'Generando preguntas interactivas...' : 'Preparando preguntas de estudio'}
+        </h3>
+        <p className={`text-sm mb-6 max-w-sm mx-auto leading-relaxed ${
+          theme === 'kitty' ? 'text-pink-700/80 font-medium' : theme === 'light' ? 'text-zinc-600 font-medium' : 'text-slate-400'
+        }`}>
+          {isAutoGeneratingQuestions
+            ? 'Analizando el material base del kit para crear preguntas con progreso limpio a 0%...'
+            : 'Este kit no tiene preguntas activas aún. Puedes generarlas de inmediato a partir del contenido base.'}
         </p>
-        <button
-          onClick={() => onNavigate && onNavigate('home')}
-          className="px-5 py-2.5 rounded-xl bg-thea-surface border border-thea-border text-slate-300 hover:text-white text-sm font-semibold transition-all cursor-pointer"
-        >
-          Volver al Inicio
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={handleManualGenerate}
+            disabled={isAutoGeneratingQuestions}
+            className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 ${
+              theme === 'kitty'
+                ? 'bg-pink-600 hover:bg-pink-700 text-white shadow-pink-900/20'
+                : theme === 'light'
+                ? 'bg-sky-600 hover:bg-sky-700 text-white shadow-sky-900/20'
+                : 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/30'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${isAutoGeneratingQuestions ? 'animate-spin' : ''}`} />
+            <span>{isAutoGeneratingQuestions ? 'Generando...' : 'Iniciar Preguntas de Estudio'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate && onNavigate('home')}
+            className={`w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer border active:scale-95 ${
+              theme === 'kitty'
+                ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700'
+                : theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                : 'bg-thea-surface border-thea-border text-slate-300 hover:text-white'
+            }`}
+          >
+            Volver al Inicio
+          </button>
+        </div>
       </div>
     );
   }

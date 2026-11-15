@@ -35,6 +35,7 @@ import {
   type CustomMateria
 } from './materiaService';
 import { getStoredTheme, setStoredTheme } from './themeService';
+import { generateKitQuestions } from '../engine/contentProcessor';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
 
@@ -3799,12 +3800,21 @@ export const googleDriveService = {
       throw new Error('El archivo de Google Drive no contiene un kit de estudio válido.');
     }
 
-    // 2. Asociar al usuario actual y marcar como importado con contenido limpio
+    // 2. Asociar al usuario actual y generar preguntas inmediatas de práctica si venían vacías
     const now = Date.now();
+    let questions = Array.isArray(rawKit.questions) && rawKit.questions.length > 0 ? rawKit.questions : [];
+    if (questions.length === 0) {
+      try {
+        questions = generateKitQuestions(rawKit);
+      } catch (genErr) {
+        console.warn('[GoogleDriveService] Aviso generando preguntas automáticas de kit:', genErr);
+      }
+    }
+
     const importedKit: StudyKit = {
       ...rawKit,
       studyGuideMarkdown: '',
-      questions: [],
+      questions,
       updatedAt: now,
       isImported: true,
     };
