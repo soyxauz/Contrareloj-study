@@ -645,12 +645,9 @@ html {
 }
 
 /* ── FONDO BLANCO OBLIGATORIO PARA TODAS LAS IMÁGENES (SEA EL TEMA QUE SEA) ── */
-.aspect-video,
 .aspect-video img,
-.explanation-figure,
 .explanation-figure img,
-.explanation-figure div,
-[class*="aspect-video"],
+.explanation-img-box,
 img[alt*="Figura"],
 img[alt*="diagrama"],
 img[alt*="Ilustración"],
@@ -659,6 +656,20 @@ img[alt*="Gráfico"],
 .image-zoom-container,
 .image-zoom-container img {
   background-color: #ffffff !important;
+}
+
+/* El overlay de zoom en hover debe conservar siempre su fondo oscuro translúcido */
+.explanation-hover-overlay,
+.explanation-figure div[class*="inset-0"],
+.explanation-figure div[class*="bg-black"],
+.group > div.absolute.inset-0[class*="bg-black"] {
+  background-color: rgba(0, 0, 0, 0.45) !important;
+}
+
+.explanation-hover-overlay > div,
+.explanation-figure div[class*="rounded-full"][class*="bg-white"] {
+  background-color: #ffffff !important;
+  color: #09090b !important;
 }
 
 /* Colores más vivos y saturados en modo claro y kitty */

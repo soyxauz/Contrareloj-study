@@ -264,7 +264,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
         >
           <div
             onClick={handleImageClick}
-            className="group relative w-full rounded-2xl overflow-hidden bg-white shadow-md cursor-pointer border border-slate-200 hover:border-slate-300 transition-all flex items-center justify-center min-h-[160px] max-h-[260px] p-2 active-press"
+            className="explanation-img-box group relative w-full rounded-2xl overflow-hidden bg-white shadow-md cursor-pointer border border-slate-200 hover:border-slate-300 transition-[border-color,box-shadow,transform] duration-200 flex items-center justify-center min-h-[160px] max-h-[260px] p-2 active:scale-[0.985]"
             title="Clic para ampliar diagrama en alta definición"
           >
             <img
@@ -273,9 +273,9 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
               onLoad={() => setIsImgLoaded(true)}
               className="w-full h-auto max-h-[244px] object-contain rounded-xl group-hover:scale-[1.02] transition-transform duration-300 bg-white"
             />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
-              <div className="w-8 h-8 rounded-full bg-white/30 text-white flex items-center justify-center shadow-lg">
-                <ZoomIn className="w-4 h-4" />
+            <div className="explanation-hover-overlay absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center rounded-2xl pointer-events-none">
+              <div className="w-9 h-9 rounded-full bg-white text-zinc-950 flex items-center justify-center shadow-xl transform translate-y-1 group-hover:translate-y-0 transition-transform duration-150 ease-out">
+                <ZoomIn className="w-4 h-4 stroke-[2.2]" />
               </div>
             </div>
           </div>
