@@ -42,6 +42,7 @@ import {
   CheckCheck,
   Brain,
   SkipForward,
+  Share2,
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
@@ -156,6 +157,7 @@ interface SmartStudyViewProps {
   userId?: string | null;
   onUpdateKit?: (updatedKit: StudyKit) => void;
   onNavigate?: (mode: StudyMode) => void;
+  onShareKit?: (kit: StudyKit) => void;
 }
 
 // Réplica exacta de Thea para la justificación (3 viñetas + ilustración médica con enlace a fuente)
@@ -394,7 +396,7 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
 
 const normalizeQId = (id: string): string => (!id ? '' : id.replace(/^(?:tf-|sa-|mc-|dd-|drag-drop-)/, ''));
 
-export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate }) => {
+export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onUpdateKit, onNavigate, onShareKit }) => {
   // Conversion automatica de preguntas obsoletas de tipo 'image-labeling' a formato conceptual
   useEffect(() => {
     const needsConversion = kit?.questions?.some(q =>
@@ -4169,8 +4171,27 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </div>
             </div>
 
-            {/* Right: LevelIndicator + Settings Gear */}
-            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Right: Share + LevelIndicator + Settings Gear */}
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+
+              {onShareKit && (
+                <button
+                  type="button"
+                  onClick={() => onShareKit(kit)}
+                  title="Compartir contenido base de este kit con enlace público de Google Drive"
+                  className={`p-1.5 px-2.5 rounded-full border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer active-press ${
+                    theme === 'light'
+                      ? 'bg-slate-100/90 hover:bg-slate-200 border-slate-300/80 text-sky-700 shadow-xs'
+                      : theme === 'kitty'
+                      ? 'bg-pink-100/90 hover:bg-pink-200 border-pink-300 text-pink-700 shadow-xs'
+                      : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-sky-400 shadow-sm'
+                  }`}
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Compartir</span>
+                </button>
+              )}
+
               <LevelIndicator currentLevel={level} onResetClick={() => setShowResetConfirmModal(true)} />
 
               <button

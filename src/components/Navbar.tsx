@@ -130,7 +130,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className={`text-sm sm:text-base font-semibold tracking-tight ${
                 theme === 'dark' ? 'text-white' : 'text-zinc-950'
               }`}>
-                {theme === 'kitty' ? 'Kitty' : 'Contrareloj'}
+                {theme === 'kitty' ? 'Kitty' : 'ContraReloj'}
               </span>
               <span className={`ml-1 text-xs font-normal ${
                 theme === 'kitty' ? 'text-pink-600 font-medium' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'

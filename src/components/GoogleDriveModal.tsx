@@ -303,11 +303,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Carpeta remota en Drive:</span>
-                <span className="font-mono text-zinc-300">TheaPlus_CloudData</span>
+                <span className="font-mono text-zinc-300">ContraReloj_CloudData</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Subcarpeta de imágenes:</span>
-                <span className="font-mono text-zinc-300">TheaPlus_CloudData/assets</span>
+                <span className="font-mono text-zinc-300">ContraReloj_CloudData/assets</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Última sincronización:</span>

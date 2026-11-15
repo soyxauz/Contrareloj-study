@@ -18,7 +18,8 @@ import {
   isKitDeletedByTombstone,
   RETIRED_TEST_KIT_IDS,
   registerDriveAssetDownloader,
-  safeLocalStorageSetItem
+  safeLocalStorageSetItem,
+  stripAssetDataUrlsFromKit
 } from './storageService';
 import { isSmoothScrollActive } from '../utils/smoothScroll';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, GROQ_PRIMARY_MODEL, type AISettings } from './aiService';
@@ -59,7 +60,8 @@ const STORAGE_AUTH_TYPE_KEY = 'thea_gdrive_auth_type';
 const STORAGE_PROFILE_KEY = 'thea_gdrive_profile';
 const STORAGE_LAST_SYNC_KEY = 'thea_gdrive_last_sync';
 
-const DRIVE_ROOT_FOLDER = 'TheaPlus_CloudData';
+const DRIVE_ROOT_FOLDER = 'ContraReloj_CloudData';
+const LEGACY_DRIVE_ROOT_FOLDER = 'TheaPlus_CloudData';
 const DRIVE_ASSETS_FOLDER = 'assets';
 
 // Listener registry for live UI indicators
@@ -1692,6 +1694,9 @@ export const googleDriveService = {
    */
   async getOrCreateFolder(token: string, folderName: string, parentFolderId?: string): Promise<string> {
     let q = `mimeType = 'application/vnd.google-apps.folder' and name = '${folderName}' and trashed = false`;
+    if (folderName === DRIVE_ROOT_FOLDER && !parentFolderId) {
+      q = `mimeType = 'application/vnd.google-apps.folder' and (name = '${DRIVE_ROOT_FOLDER}' or name = '${LEGACY_DRIVE_ROOT_FOLDER}') and trashed = false`;
+    }
     if (parentFolderId) {
       q += ` and '${parentFolderId}' in parents`;
     }
@@ -3599,6 +3604,161 @@ export const googleDriveService = {
     hasPendingPodcastSync = false;
     if (!hadPending || !targetUser || targetUser === 'guest') return;
     this.syncPodcastsToDrive(targetUser, targetKits).catch(() => {});
+  },
+
+  /**
+   * Sube un kit de estudio a Google Drive con permisos públicos de lectura y genera un enlace
+   * jerárquico compartible para cualquier otro usuario de ContraReloj+.
+   * Comparte exclusivamente el contenido base en el cual está basado el kit (documentos, apuntes,
+   * fragmentos, imágenes y flashcards), excluyendo la guía de estudio pre-redactada y las preguntas
+   * previas de Smart Study.
+   */
+  async shareKitPublicly(
+    kit: StudyKit,
+    _mode?: string,
+    _subtopic?: string
+  ): Promise<{ shareUrl: string; fileId: string }> {
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) {
+      token = await this.requestGoogleAccess();
+    }
+    if (!token) {
+      throw new Error('Debes iniciar sesión con Google Drive para compartir este kit.');
+    }
+
+    // 1. Obtener o crear carpeta raíz ContraReloj_CloudData y subcarpeta 'shared_kits'
+    const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
+    const sharedFolderId = await this.getOrCreateFolder(token, 'shared_kits', rootFolderId);
+
+    // 2. Preparar el payload del kit basado exclusivamente en su contenido original
+    const baseCleanKit = stripAssetDataUrlsFromKit(kit, true);
+    const contentBasedKit: StudyKit = {
+      ...baseCleanKit,
+      id: kit.id,
+      title: kit.title,
+      description: kit.description,
+      category: kit.category,
+      icon: kit.icon,
+      color: kit.color,
+      sourceText: kit.sourceText,
+      sourceMaterials: kit.sourceMaterials,
+      chunks: kit.chunks,
+      assets: baseCleanKit.assets,
+      flashcards: kit.flashcards,
+      podcast: null,
+      updatedAt: kit.updatedAt || Date.now(),
+      // Excluir explícitamente guía de estudio redactada y preguntas previas de Smart Study
+      studyGuideMarkdown: '',
+      questions: [],
+    };
+    const fileName = `contrareloj_shared_kit_${kit.id}.json`;
+
+    // 3. Subir o actualizar el kit compartido
+    const fileId = await this.uploadOrUpdateJson(token, sharedFolderId, fileName, {
+      version: 2,
+      kit: contentBasedKit,
+      sharedAt: Date.now(),
+      ownerName: currentState.userName || 'Usuario de ContraReloj+',
+    });
+
+    // 4. Asignar permiso público en Drive (role: reader, type: anyone)
+    try {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: 'reader',
+          type: 'anyone',
+        }),
+      });
+    } catch (permErr) {
+      console.warn('[GoogleDriveService] Aviso asignando permiso público de Drive:', permErr);
+    }
+
+    // 5. Construir la URL absoluta basada en el kit de estudio
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+    const shareUrl = `${origin}/kit/${kit.id}?shared_drive_id=${fileId}`;
+
+    return { shareUrl, fileId };
+  },
+
+  /**
+   * Descarga un kit de estudio compartido desde Google Drive usando el token del usuario actual,
+   * inicializa su progreso a 0% limpio (Nivel 1, 0 aciertos) y lo guarda en su biblioteca local.
+   */
+  async importSharedKitFromDrive(fileId: string, currentUserId: string): Promise<StudyKit> {
+    let token = this.getValidAccessToken();
+    if (!token && this.isLinked()) {
+      token = await this.attemptSilentTokenRefresh();
+    }
+    if (!token) {
+      token = await this.requestGoogleAccess();
+    }
+    if (!token) {
+      throw new Error('Inicia sesión con Google Drive para poder importar el kit compartido.');
+    }
+
+    // 1. Descargar el archivo desde Google Drive
+    const rawData = await this.readJsonFromDrive<any>(token, fileId);
+    const rawKit: StudyKit = rawData?.kit || rawData;
+
+    if (!rawKit || !rawKit.id || !rawKit.title) {
+      throw new Error('El archivo de Google Drive no contiene un kit de estudio válido.');
+    }
+
+    // 2. Asociar al usuario actual y marcar como importado con contenido limpio
+    const now = Date.now();
+    const importedKit: StudyKit = {
+      ...rawKit,
+      studyGuideMarkdown: '',
+      questions: [],
+      updatedAt: now,
+      isImported: true,
+    };
+
+    // 3. Resetear el progreso de flashcards y SmartStudy a 0% limpio
+    try {
+      flashcardProgressService.saveFlashcardProgress(currentUserId, importedKit.id, {
+        version: 1,
+        kitId: importedKit.id,
+        masteryMap: {},
+        currentIdx: 0,
+        resetAt: now,
+        updatedAt: now,
+      });
+      authService.clearSmartStudySession(currentUserId, importedKit.id);
+    } catch (progErr) {
+      console.warn('[GoogleDriveService] Error reseteando progreso del kit importado:', progErr);
+    }
+
+    // 4. Guardar activos si existen en IndexedDB
+    if (Array.isArray(importedKit.assets) && importedKit.assets.length > 0) {
+      saveAssetsToIndexedDB(importedKit.assets).catch(() => {});
+    }
+
+    // 5. Guardar en los kits del usuario receptor
+    const existingKits = authService.getUserKits(currentUserId);
+    const idx = existingKits.findIndex(k => k.id === importedKit.id);
+    let nextKits: StudyKit[];
+    if (idx >= 0) {
+      nextKits = [...existingKits];
+      nextKits[idx] = importedKit;
+    } else {
+      nextKits = [importedKit, ...existingKits];
+    }
+    authService.saveUserKits(currentUserId, nextKits);
+    await authService.saveUserKitsAsync(currentUserId, nextKits);
+
+    // 6. Programar respaldo hacia su propio Google Drive
+    this.scheduleAutoSync(currentUserId, nextKits, 200);
+
+    return importedKit;
   },
 
   /**

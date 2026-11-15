@@ -32,7 +32,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
   onNavigateToOral,
 }) => {
   const { theme } = useTheme();
-  const botName = theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study';
+  const botName = theme === 'kitty' ? 'Kitty Study' : 'ContraReloj Study';
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -233,7 +233,7 @@ export const AskTheaView: React.FC<AskTheaViewProps> = ({
                   msg.sender === 'user' && theme !== 'dark' ? 'text-white/80' : 'opacity-70'
                 }`}>
                   <span className="font-semibold uppercase tracking-wider">
-                    {msg.sender === 'thea' ? (theme === 'kitty' ? 'Kitty Tutor' : 'Tutor Contrareloj') : 'Tú'}
+                    {msg.sender === 'thea' ? (theme === 'kitty' ? 'Kitty Tutor' : 'Tutor ContraReloj') : 'Tú'}
                   </span>
                   <span className="font-mono tabular-nums">{msg.timestamp}</span>
                 </div>

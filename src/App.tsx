@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
-import { BookOpen, AlertCircle } from 'lucide-react';
+import { BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { GoogleDriveAuthGate } from './components/GoogleDriveAuthGate';
+import { ShareKitModal } from './components/ShareKitModal';
 import { authService } from './services/authService';
 import {
   isCorruptedKit,
@@ -112,8 +114,41 @@ interface AppHistoryState {
 }
 
 export const App: React.FC = () => {
-  // User Authentication State
-  const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
+  // User Authentication & Google Drive Auth Gate State
+  const [isDriveLinked, setIsDriveLinked] = useState<boolean>(() => googleDriveService.isLinked());
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const user = authService.getCurrentUser();
+    if (user) return user;
+    if (typeof localStorage !== 'undefined') {
+      const gProf = localStorage.getItem('thea_gdrive_profile');
+      if (gProf) {
+        try {
+          const p = JSON.parse(gProf);
+          return {
+            id: `usr_g_${p.id}`,
+            username: p.email ? p.email.split('@')[0] : 'usuario',
+            displayName: p.name || 'Usuario Google',
+            createdAt: new Date().toISOString(),
+            email: p.email || '',
+            googleId: p.id,
+            avatarUrl: p.picture,
+          };
+        } catch {}
+      }
+    }
+    return null;
+  });
+
+  // Estado para importar Kit compartido desde URL (?shared_drive_id=...)
+  const [sharedFileId, setSharedFileId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('shared_drive_id');
+  });
+  const [isImportingSharedKit, setIsImportingSharedKit] = useState(false);
+  const [toastNotification, setToastNotification] = useState<string | null>(null);
+  const [kitToShare, setKitToShare] = useState<{ kit: StudyKit } | null>(null);
+
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
@@ -127,9 +162,61 @@ export const App: React.FC = () => {
     const unsubscribe = googleDriveService.subscribe((state) => {
       const needs = state.status === 'needs_reauth';
       setDriveNeedsReauth(prev => prev !== needs ? needs : prev);
+      setIsDriveLinked(googleDriveService.isLinked());
     });
     return unsubscribe;
   }, []);
+
+  // Importación reactiva de kit de estudio compartido desde Google Drive
+  useEffect(() => {
+    if (!isDriveLinked || !sharedFileId || isImportingSharedKit) return;
+    let targetUserId = currentUser?.id || authService.getCurrentUser()?.id;
+    if (!targetUserId && typeof localStorage !== 'undefined') {
+      const gProf = localStorage.getItem('thea_gdrive_profile');
+      if (gProf) {
+        try {
+          const p = JSON.parse(gProf);
+          targetUserId = `usr_g_${p.id}`;
+        } catch {}
+      }
+    }
+    if (!targetUserId) return;
+
+    let isMounted = true;
+    setIsImportingSharedKit(true);
+
+    (async () => {
+      try {
+        const imported = await googleDriveService.importSharedKitFromDrive(sharedFileId, targetUserId);
+        if (!isMounted) return;
+
+        setKits(prev => [imported, ...prev.filter(k => k.id !== imported.id)]);
+        setCurrentKit(imported);
+        safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, imported.id);
+
+        // Limpiar el parámetro shared_drive_id de la URL preservando la ruta y otros parámetros
+        const url = new URL(window.location.href);
+        url.searchParams.delete('shared_drive_id');
+        window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+        setSharedFileId(null);
+
+        setToastNotification(`¡Kit "${imported.title}" importado con su contenido base listo para estudiar!`);
+        setTimeout(() => setToastNotification(null), 5000);
+
+        // Abrir el kit importado directamente en su modo de estudio principal (Flashcards)
+        handleSelectMode('flashcards', false);
+      } catch (err: any) {
+        console.error('[App] Error al importar kit compartido:', err);
+        setToastNotification(`Error al importar kit: ${err?.message || 'Archivo no encontrado'}`);
+        setTimeout(() => setToastNotification(null), 6000);
+        setSharedFileId(null);
+      } finally {
+        if (isMounted) setIsImportingSharedKit(false);
+      }
+    })();
+
+    return () => { isMounted = false; };
+  }, [isDriveLinked, sharedFileId, currentUser?.id]);
 
   // Motor de scroll inercial suave ultraligero (0 dependencias, 0% CPU en reposo)
   useEffect(() => {
@@ -181,7 +268,7 @@ export const App: React.FC = () => {
   const [currentKit, setCurrentKit] = useState<StudyKit | null>(() => {
     let targetKitId: string | null = null;
     if (typeof window !== 'undefined') {
-      const match = window.location.pathname.match(/^\/(?:study|smartStudy)\/([^/?#]+)/i);
+      const match = window.location.pathname.match(/^\/(?:study|smartStudy|kit|flashcards)\/([^/?#]+)/i);
       if (match && match[1]) {
         targetKitId = decodeURIComponent(match[1]);
       }
@@ -352,6 +439,7 @@ export const App: React.FC = () => {
   const [currentMode, setCurrentMode] = useState<StudyMode>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
+      if (path.startsWith('/kit/')) return 'flashcards';
       if (path.startsWith('/smartStudy/')) return 'smart-study';
       if (path.startsWith('/study/')) return 'study-guide';
       if (path.startsWith('/flashcards')) return 'flashcards';
@@ -840,6 +928,7 @@ export const App: React.FC = () => {
         const silentToken = await googleDriveService.attemptSilentTokenRefresh();
         if (silentToken) {
           setDriveNeedsReauth(false);
+          setIsDriveLinked(true);
           const res = await googleDriveService.pullFromDrive(currentUser?.id || '');
           if (res && res.length > 0) {
             const clean = res.filter(k => !isCorruptedKit(k));
@@ -859,6 +948,7 @@ export const App: React.FC = () => {
         }
       }
       setDriveNeedsReauth(false);
+      setIsDriveLinked(true);
     } catch (err) {
       console.error('Error al reconectar Google Drive:', err);
     }
@@ -866,6 +956,7 @@ export const App: React.FC = () => {
 
   const handleLogout = () => {
     isLoggingOutRef.current = true;
+    setIsDriveLinked(false);
     const prevUserId = currentUser?.id || null;
     const wasDriveLinked = Boolean(
       googleDriveService.isLinked() ||
@@ -1106,6 +1197,30 @@ export const App: React.FC = () => {
   // Study modes designed to fit within the desktop viewport but allow internal fluid scrolling on mobile, tablets, and smaller screens
   const isScreenFittingMode = currentMode === 'podcast' || currentMode === 'ask-thea' || currentMode === 'oral-lesson';
 
+  const handleAuthGateSuccess = (user: User, pulledKits: StudyKit[] | null) => {
+    setIsDriveLinked(true);
+    setCurrentUser(user);
+    if (pulledKits && pulledKits.length > 0) {
+      const clean = pulledKits.filter(k => !isCorruptedKit(k));
+      if (clean.length > 0) {
+        setKits(clean);
+        const first = clean[0] || null;
+        setCurrentKit(first);
+        if (first) safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, first.id);
+      }
+    }
+  };
+
+  // Control de Acceso Estricto (Auth Gate): la aplicación solo se puede usar si la sesión de Google Drive está iniciada
+  if (!isDriveLinked) {
+    return (
+      <GoogleDriveAuthGate
+        pendingSharedFileId={sharedFileId}
+        onAuthSuccess={handleAuthGateSuccess}
+      />
+    );
+  }
+
   return (
     <div className={`min-h-screen min-h-[100dvh] bg-thea-bg flex flex-col selection:bg-violet-600 selection:text-white ${
       theme === 'dark' ? 'text-slate-100' : 'text-zinc-950'
@@ -1162,6 +1277,7 @@ export const App: React.FC = () => {
             userId={currentUser?.id || authService.getCurrentUser()?.id || null}
             onOpenAISettings={handleOpenAIModal}
             onOpenAuth={handleOpenAuthModal}
+            onShareKit={(k) => setKitToShare({ kit: k })}
           />
         )}
         {currentMode === 'create' && (
@@ -1184,10 +1300,16 @@ export const App: React.FC = () => {
                 userId={currentUser?.id || authService.getCurrentUser()?.id || null}
                 onUpdateKit={handleUpdateKit}
                 onNavigate={handleNavigate}
+                onShareKit={(k) => setKitToShare({ kit: k })}
               />
             )}
             {currentMode === 'study-guide' && (
-              <StudyGuideView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />
+              <StudyGuideView
+                key={currentKit.id}
+                kit={currentKit}
+                onUpdateKit={handleUpdateKit}
+                onShareKit={(k) => setKitToShare({ kit: k })}
+              />
             )}
             {currentMode === 'images' && (
               <ImagesGalleryView key={currentKit.id} kit={currentKit} onUpdateKit={handleUpdateKit} />
@@ -1321,7 +1443,7 @@ export const App: React.FC = () => {
       {/* Footer (hidden on small screens to prioritize clean mobile viewport) */}
       <footer className="hidden md:block py-6 border-t border-thea-border text-center text-xs text-slate-500">
         <p>
-          {theme === 'kitty' ? 'Kitty Study' : 'Contrareloj Study'} • Plataforma de Aprendizaje Adaptativo con Inteligencia Pedagógica y RAG
+          {theme === 'kitty' ? 'Kitty Study' : 'ContraReloj Study'} • Plataforma de Aprendizaje Adaptativo con Inteligencia Pedagógica y RAG
         </p>
       </footer>
 
@@ -1335,6 +1457,31 @@ export const App: React.FC = () => {
         currentUser={currentUser}
         currentKit={currentKit}
       />
+
+      {/* Modal para Compartir Kit con Enlace Público de Google Drive */}
+      {kitToShare && (
+        <ShareKitModal
+          isOpen={Boolean(kitToShare)}
+          onClose={() => setKitToShare(null)}
+          kit={kitToShare.kit}
+        />
+      )}
+
+      {/* Notificación Toast Flotante */}
+      {toastNotification && (
+        <div className="fixed bottom-6 right-6 z-[99999] bg-zinc-900/95 text-white border border-white/10 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 backdrop-blur-xl animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-xs font-semibold">{toastNotification}</span>
+        </div>
+      )}
+
+      {/* Banner de Descarga e Importación Activa de Kit Compartido */}
+      {isImportingSharedKit && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-[#0e0b16]/95 border border-sky-400/40 text-sky-200 px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 backdrop-blur-xl animate-fadeIn text-xs font-semibold">
+          <div className="w-3.5 h-3.5 rounded-full border-2 border-sky-400/30 border-t-sky-400 animate-spin" />
+          <span>Descargando e importando kit de estudio desde Google Drive...</span>
+        </div>
+      )}
     </div>
   );
 };

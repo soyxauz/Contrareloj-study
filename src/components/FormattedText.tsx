@@ -15,19 +15,102 @@ export interface FormattedTextProps {
 }
 
 /**
+ * Balancea llaves { } faltantes en expresiones matemáticas incompletas.
+ */
+const balanceCurlyBraces = (str: string): string => {
+  let openCount = 0;
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === '{' && (i === 0 || str[i - 1] !== '\\')) {
+      openCount++;
+    } else if (str[i] === '}' && (i === 0 || str[i - 1] !== '\\')) {
+      if (openCount > 0) openCount--;
+    }
+  }
+  return str + '}'.repeat(openCount);
+};
+
+/**
+ * Convierte código LaTeX roto en un flujo visual limpio y elegante con flechas UTF-8 si KaTeX no lo puede compilar.
+ */
+const latexToCleanVisualFlow = (latex: string): string => {
+  return (latex || '')
+    .replace(/\${1,2}/g, ' ')
+    .replace(/\\xrightarrow\s*\{\s*(?:\\text\s*\{)?([^}]+)\}?\}/g, ' → [$1] → ')
+    .replace(/\\xrightarrow\b/g, ' → ')
+    .replace(/\\(?:rightarrow|to)\b/g, ' → ')
+    .replace(/\\leftarrow\b/g, ' ← ')
+    .replace(/\\leftrightarrow\b/g, ' ⟷ ')
+    .replace(/\\implies\b/g, ' ⇒ ')
+    .replace(/\\iff\b/g, ' ⇔ ')
+    .replace(/\\pm\b/g, ' ± ')
+    .replace(/\\times\b/g, ' × ')
+    .replace(/\\le(?:q)?\b/g, ' ≤ ')
+    .replace(/\\ge(?:q)?\b/g, ' ≥ ')
+    .replace(/\\text(?:bf|it)?\s*\{([^}]+)\}/g, '$1')
+    .replace(/\\[a-zA-Z]+/g, ' ')
+    .replace(/[{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+/**
+ * Repara cadenas LaTeX generadas por IA que contengan tokens abortados, delimitadores $$ anidados o llaves rotas.
+ */
+const repairMathString = (raw: string): string => {
+  let str = (raw || '').trim();
+  if (!str) return '';
+
+  // Si contiene delimitadores $$ o $ internos (ej: fórmula abortada y reiniciada en la misma línea)
+  if (str.includes('$$')) {
+    const segments = str.split('$$').map(s => s.trim()).filter(Boolean);
+    // Buscar si el segmento final o alguno intermedio compila limpiamente por sí solo
+    let bestSegment = '';
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const seg = segments[i];
+      try {
+        katex.renderToString(balanceCurlyBraces(seg), { throwOnError: true, strict: false });
+        bestSegment = seg;
+        break;
+      } catch {}
+    }
+
+    if (bestSegment) {
+      str = bestSegment;
+    } else {
+      str = segments.reduce((a, b) => (b.length > a.length ? b : a), '');
+    }
+  }
+
+  // Eliminar delimitadores $ sueltos sin escapar dentro de la fórmula
+  str = str.replace(/(?<!\\)\$/g, '');
+
+  // Limpiar comandos cortados o sin completar al final de la expresión
+  str = str.replace(/\\(?:xrightarrow|rightarrow|to|text|textbf|mathbf)\s*\{[^}]*$/g, '');
+
+  // Balancear llaves
+  str = balanceCurlyBraces(str);
+
+  return str.trim();
+};
+
+/**
  * Renderiza de forma segura una expresión matemática o lógica con KaTeX.
+ * CERO errores rojos en pantalla: ante cualquier fallo de sintaxis, se repara automáticamente
+ * o se degrada a un flujo visual con tipografía impecable y flechas limpias.
  */
 const renderKatexSafe = (math: string, displayMode: boolean = false): string => {
+  const repaired = repairMathString(math);
   try {
-    return katex.renderToString(math.trim(), {
+    return katex.renderToString(repaired, {
       displayMode,
-      throwOnError: false,
+      throwOnError: true, // Impedir que KaTeX inserte código crudo rojo con clase 'katex-error'
       output: 'htmlAndMathml',
       strict: false,
     });
   } catch (err) {
-    console.warn('[KaTeX Render Warning]', err);
-    return math;
+    console.warn('[KaTeX Render Recovered with Visual Flow]', err);
+    const flow = latexToCleanVisualFlow(math);
+    return `<span class="katex-visual-flow inline-flex flex-wrap items-center gap-1.5 px-3 py-1 my-1 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-semibold text-zinc-200 tracking-wide">${flow}</span>`;
   }
 };
 
@@ -104,6 +187,39 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
 }) => {
   const { theme } = useTheme();
   if (!text) return null;
+
+  // Reemplazar "Perla Clave:" por "Nota:", suprimir "diapositiva" y normalizar fórmulas KaTeX
+  const safeText = useMemo(() => {
+    if (!text) return '';
+    let out = text.replace(/\bPerlas?\s+Claves?\b\s*:/gi, 'Nota:');
+
+    // No mencionar la palabra diapositiva en la guía de estudio
+    out = out
+      .replace(/\bdiapositiva\s+por\s+diapositiva\b/gi, 'sección por sección')
+      .replace(/\bsecci[oó]n\s+por\s+secci[oó]n\s*\/\s*diapositiva\s+por\s+diapositiva\b/gi, 'sección por sección')
+      .replace(/\bdiapositiva\s*[\/\-]\s*secci[oó]n\b/gi, 'sección')
+      .replace(/\bsecci[oó]n\s*[\/\-]\s*diapositiva\b/gi, 'sección')
+      .replace(/\b(?:en|de|la|esta|cada)\s+diapositivas?\b/gi, (match) => {
+        return match.replace(/diapositivas?/i, (m) => m.toLowerCase().endsWith('s') ? 'secciones' : 'sección');
+      })
+      .replace(/\bDiapositivas?\s+(\d+)\b/g, 'Sección $1')
+      .replace(/\bdiapositivas?\s+(\d+)\b/g, 'sección $1')
+      .replace(/\bDiapositivas\b/g, 'Secciones')
+      .replace(/\bDiapositiva\b/g, 'Sección')
+      .replace(/\bdiapositivas\b/g, 'secciones')
+      .replace(/\bdiapositiva\b/g, 'sección');
+
+    // Reparar bloques KaTeX multilínea o en línea que tengan $$ duplicados o partidos internamente
+    out = out.replace(/\$\$([\s\S]+?)\$\$/g, (match, inner) => {
+      if (inner.includes('$$')) {
+        const repaired = repairMathString(inner);
+        return `$$${repaired}$$`;
+      }
+      return match;
+    });
+
+    return out;
+  }, [text]);
 
   // Mapa de conceptos en minúsculas para resolución O(1)
   const glossaryMap = useMemo(() => {
@@ -352,12 +468,12 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
   };
 
   if (inlineOnly) {
-    return <span className={className}>{renderInline(text)}</span>;
+    return <span className={className}>{renderInline(safeText)}</span>;
   }
 
   // Normalizar bloques ```markdown / ```md / ```latex y distribuir énfasis multi-línea (**...\n...**) por línea
   const normalizedInputText = balanceMultilineEmphasis(
-    text.replace(/```(?:markdown|md|latex)\s*\n([\s\S]*?)```/gi, '$1')
+    safeText.replace(/```(?:markdown|md|latex)\s*\n([\s\S]*?)```/gi, '$1')
   );
 
   // Parseo estructurado por bloques (código, tablas, matemáticas multi-línea, encabezados, citas, listas, párrafos)

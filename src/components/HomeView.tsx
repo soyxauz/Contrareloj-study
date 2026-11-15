@@ -54,6 +54,7 @@ import {
   Hospital,
   LogIn,
   Mic,
+  Share2,
 } from 'lucide-react';
 import { getGlobalRealStats, getBookRealStats } from '../services/statsService';
 import {
@@ -161,6 +162,7 @@ interface HomeViewProps {
   onOpenAuth?: () => void;
   onDeleteKitsBatch?: (kitIds: string[]) => void;
   onChangeCategoryBatch?: (kitIds: string[], newCategory: string) => void;
+  onShareKit?: (kit: StudyKit) => void;
 }
 
 const QUICK_ACTIONS: { id: StudyMode; label: string; desc: string; icon: React.ReactNode; gradient: string }[] = [
@@ -185,6 +187,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenAuth,
   onDeleteKitsBatch,
   onChangeCategoryBatch,
+  onShareKit,
 }) => {
   const { theme } = useTheme();
 
@@ -984,6 +987,24 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                               }`}
                               onClick={e => e.stopPropagation()}
                             >
+                              {onShareKit && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKitMenuOpenId(null);
+                                    onShareKit(kit);
+                                  }}
+                                  className={`w-full px-3.5 py-2 text-left text-xs flex items-center gap-2 transition-colors cursor-pointer ${
+                                    theme === 'dark'
+                                      ? 'text-slate-200 hover:bg-thea-surfaceLight hover:text-white'
+                                      : 'text-slate-700 hover:bg-slate-100 hover:text-zinc-950 font-medium'
+                                  }`}
+                                >
+                                  <Share2 className="w-3.5 h-3.5 text-sky-400" />
+                                  <span>Compartir Kit</span>
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => {

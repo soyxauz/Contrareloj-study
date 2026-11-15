@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { GeminiIcon } from './GeminiIcon';
 import { ImageZoomModal } from './ImageZoomModal';
-import { getAssetsMap, getAssetById } from '../services/storageService';
+import { getAssetsMap, getAssetById, saveAssetsToIndexedDB } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
@@ -186,10 +186,13 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
         return;
       }
 
-      // 2. Descargar prioritariamente desde Google Drive con reintentos
+      // 2. Descargar prioritariamente desde Google Drive con reintentos y guardar en IndexedDB
       const driveMap = await googleDriveService.prioritizeAssetsDownload([assetId]);
       if (driveMap.has(assetId)) {
         const downloaded = driveMap.get(assetId)!;
+        try {
+          await saveAssetsToIndexedDB([downloaded]);
+        } catch {}
         setAssets(prev => prev.map(a => (a.id === assetId ? { ...a, dataUrl: downloaded.dataUrl } : a)));
         return;
       }
@@ -219,7 +222,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       if (localMap.size > 0) {
         setAssets(prev =>
           prev.map(a => {
-            if (!a.dataUrl && localMap.has(a.id)) {
+            if (!a.dataUrl && localMap.has(a.id) && localMap.get(a.id)?.dataUrl) {
               return { ...a, dataUrl: localMap.get(a.id)!.dataUrl };
             }
             return a;
@@ -227,9 +230,10 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
         );
       }
 
-      const stillMissingIds = missingIds.filter(id => !localMap.has(id));
+      // 2. Detectar cuáles realmente siguen sin dataUrl (no solo por estar en localMap, sino porque tengan datos binarios válidos)
+      const stillMissingIds = missingIds.filter(id => !localMap.has(id) || !localMap.get(id)?.dataUrl);
 
-      // 2. Si todavía faltan imágenes en la página actual, descargarlas desde Google Drive
+      // 3. Descargar inmediatamente de Google Drive las que falten y persistir en IndexedDB
       if (stillMissingIds.length > 0) {
         setSyncProgress({ completed: 0, total: stillMissingIds.length });
         const driveMap = await googleDriveService.prioritizeAssetsDownload(
@@ -237,6 +241,10 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
           (done, total) => setSyncProgress({ completed: done, total })
         );
         if (driveMap.size > 0) {
+          const downloaded = Array.from(driveMap.values());
+          try {
+            await saveAssetsToIndexedDB(downloaded);
+          } catch {}
           setAssets(prev =>
             prev.map(a => {
               if (!a.dataUrl && driveMap.has(a.id)) {
@@ -321,6 +329,12 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       });
     }
     showNotification(`Se purgaron ${purgedCount} imágenes de diseño del kit`);
+
+    // Inmediatamente rehidratar los nuevos elementos que ahora ocupan la página visible
+    setTimeout(() => {
+      const newVisible = cleanAssets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+      loadMissingAssetsForCurrentPage(newVisible);
+    }, 50);
   };
 
   const showNotification = (msg: string) => {

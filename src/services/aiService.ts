@@ -3323,7 +3323,7 @@ export function partitionDocumentIntoSections(
 }
 
 /**
- * Motor de Inteligencia Pedagógica Contrareloj Study
+ * Motor de Inteligencia Pedagógica ContraReloj Study
  * FASE 1: Análisis profundo del texto (disciplina, naturaleza, anclaje y limpieza).
  * FASE 2: Preguntas de alta calidad con sentido lógico, contexto, distractores inteligentes y retroalimentación trifásica.
  */
@@ -3355,7 +3355,7 @@ export async function generateAIPedagogicalQuestions(
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres el motor de inteligencia pedagógica de Contrareloj Study, una plataforma de estudio adaptativo de alta exigencia académica. Tu objetivo es recibir un texto de estudio (apuntes, artículos, libros o guías), comprender profundamente de qué trata, extraer sus núcleos conceptuales más importantes y transformarlos en preguntas de evaluación variadas, atractivas y de alto impacto memorístico.
+  const systemPrompt = `Eres el motor de inteligencia pedagógica de ContraReloj Study, una plataforma de estudio adaptativo de alta exigencia académica. Tu objetivo es recibir un texto de estudio (apuntes, artículos, libros o guías), comprender profundamente de qué trata, extraer sus núcleos conceptuales más importantes y transformarlos en preguntas de evaluación variadas, atractivas y de alto impacto memorístico.
 
 ${translationDirective}
 
@@ -3725,7 +3725,7 @@ Genera el JSON completo respetando la estructura exigida:`;
     return filterCompliantQuestions(mappedQuestions);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Contrareloj Study AI Engine] Error generando preguntas (${difficulty}):`, msg);
+    console.error(`[ContraReloj Study AI Engine] Error generando preguntas (${difficulty}):`, msg);
     throw new Error(`Fallo en llamada a IA (${difficulty}): ${msg}`);
   }
 }
@@ -3892,7 +3892,7 @@ export async function generateAIFlashcards(
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada de Contrareloj Study.
+  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada de ContraReloj Study.
 A partir del texto del estudiante, extrae conceptos clave esenciales y genera exactamente entre 8 y 12 flashcards rigurosas en español.
 
 ${translationDirective}
@@ -3962,7 +3962,7 @@ export async function generateAdditionalAIFlashcards(
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada de Contrareloj Study.
+  const systemPrompt = `Eres un docente experto en técnicas de estudio activo y repetición espaciada de ContraReloj Study.
 A partir del texto del estudiante, extrae conceptos o términos clave esenciales NO vistos previamente y genera exactamente ${count} flashcards rigurosas en español.
 
 ${translationDirective}
@@ -4094,7 +4094,7 @@ export async function generateTargetedAIFlashcards(
 Concéntrate rigurosa y exclusivamente en el subtema: "${focusTopic}". Extrae conceptos y formula preguntas directas sobre este núcleo temático.`
     : 'Aborda los núcleos conceptuales y procedimentales más importantes del texto.';
 
-  const systemPrompt = `Eres el tutor pedagógico experto en repetición espaciada y Active Recall de Contrareloj Study.
+  const systemPrompt = `Eres el tutor pedagógico experto en repetición espaciada y Active Recall de ContraReloj Study.
 Tu objetivo es formular exactamente ${count} flashcards de alta efectividad memorística calibradas al enfoque solicitado.
 
 ${translationDirective}
@@ -4186,7 +4186,7 @@ export async function generateAIGuessWhoCases(
     .slice(0, 25)
     .join(', ');
 
-  const systemPrompt = `Eres un docente y pedagogo de élite diseñando el juego interactivo "Adivina Quién / Pistas Progresivas" de Contrareloj Study.
+  const systemPrompt = `Eres un docente y pedagogo de élite diseñando el juego interactivo "Adivina Quién / Pistas Progresivas" de ContraReloj Study.
 El estudiante debe deducir una entidad misteriosa oculta a través de 4 pistas progresivas.
 
 ${translationDirective}
@@ -4298,7 +4298,7 @@ export async function generateFalseConceptQuestions(
     sourceRepresentation = rawText.slice(0, 18000);
   }
 
-  const systemPrompt = `Eres un docente y evaluador universitario de élite en Contrareloj Study.
+  const systemPrompt = `Eres un docente y evaluador universitario de élite en ContraReloj Study.
 Tu especialidad es la técnica pedagógica de discriminación analítica: "Detección del Concepto Equivocado, Afirmación Falsa o Elemento Impostor".
 
 ${translationDirective}
@@ -4642,6 +4642,33 @@ export function stripExecutiveSummaryPreamble(markdownText: string): string {
   cleaned = normalizeStudyGuideBullets(cleaned);
   cleaned = sanitizeRepetitionLoops(cleaned);
   cleaned = stripStudyGuideEmojis(cleaned);
+  cleaned = cleaned.replace(/\bPerlas?\s+Claves?\b\s*:/gi, 'Nota:');
+
+  // 4. Prohibido mencionar la palabra "diapositiva" en la guía de estudio
+  cleaned = cleaned
+    .replace(/\bdiapositiva\s+por\s+diapositiva\b/gi, 'sección por sección')
+    .replace(/\bsecci[oó]n\s+por\s+secci[oó]n\s*\/\s*diapositiva\s+por\s+diapositiva\b/gi, 'sección por sección')
+    .replace(/\bdiapositiva\s*[\/\-]\s*secci[oó]n\b/gi, 'sección')
+    .replace(/\bsecci[oó]n\s*[\/\-]\s*diapositiva\b/gi, 'sección')
+    .replace(/\b(?:en|de|la|esta|cada)\s+diapositivas?\b/gi, (match) => {
+      return match.replace(/diapositivas?/i, (m) => m.toLowerCase().endsWith('s') ? 'secciones' : 'sección');
+    })
+    .replace(/\bDiapositivas?\s+(\d+)\b/g, 'Sección $1')
+    .replace(/\bdiapositivas?\s+(\d+)\b/g, 'sección $1')
+    .replace(/\bDiapositivas\b/g, 'Secciones')
+    .replace(/\bDiapositiva\b/g, 'Sección')
+    .replace(/\bdiapositivas\b/g, 'secciones')
+    .replace(/\bdiapositiva\b/g, 'sección');
+
+  // 5. Reparar delimitadores $$ duplicados o partidos internamente
+  cleaned = cleaned.replace(/\$\$([\s\S]+?)\$\$/g, (match, inner) => {
+    if (inner.includes('$$')) {
+      const parts = inner.split('$$').map((p: string) => p.trim()).filter(Boolean);
+      const longest = parts.reduce((a: string, b: string) => (b.length > a.length ? b : a), '');
+      return `$$${longest}$$`;
+    }
+    return match;
+  });
 
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -4657,8 +4684,11 @@ const STUDY_GUIDE_RICH_FORMAT_RULES = `FORMATO DIDÁCTICO RICO, JERÁRQUICO Y EQ
   | :--- | :--- | :--- | :--- | :--- | :--- |
   | Dato A | Dato B | Dato C | Dato D | Dato E | Dato F |
   Sin líneas en blanco entre filas y SIN encerrar tablas en bloques \`\`\`.
-- INCLUYE bloques de perla/alerta usando citas: \`> **Perla Clave:** ...\` o \`> **Error Frecuente:** ...\`.
-- USA KaTeX en fórmulas, parámetros numéricos o flechas causales (ej. \`$\\text{Estímulo} \\rightarrow \\text{Mecanismo} \\rightarrow \\text{Efecto}$\`).
+- INCLUYE bloques de nota/alerta usando citas: \`> **Nota:** ...\` o \`> **Error Frecuente:** ...\`.
+- USA KaTeX en fórmulas, parámetros numéricos o flechas causales (ej. \`$$\\text{Estímulo} \\xrightarrow{\\text{Mecanismo}} \\text{Efecto}$$\`).
+- REGLAS ESTRICTAS DE FORMATO Y SINTAXIS KATEX:
+  * PROHIBIDO USAR LA PALABRA 'DIAPOSITIVA' O 'DIAPOSITIVAS': En títulos, subtítulos, párrafos, tablas o viñetas de la guía de estudio, NUNCA utilices las palabras 'diapositiva', 'diapositivas' ni 'slide'. Utiliza en su lugar 'Sección', 'Tema', 'Apartado' o titula directamente con el nombre del concepto académico.
+  * SINTAXIS KATEX VÁLIDA Y EQUILIBRADA: Toda expresión matemática o secuencia debe tener sintaxis LaTeX balanceada. NUNCA anides delimitadores $$ o $ dentro de una fórmula o dentro de un comando \\text{}. Cierra siempre cada comando antes de continuar (ej. \`$$\\text{Tejidos Periféricos} \\xrightarrow{\\text{Esterificación}} \\text{Colesterol Esterificado}$$\`).
 - PROHIBIDO usar emojis, pictogramas ni íconos Unicode (ej. 🟢, 📘, 🔴, 🟡, 💡, 📌, ⚠️, ✅, ❌, 🎯, 🚀) en títulos, listas, tablas o párrafos; utiliza únicamente texto académico formal en español.`;
 
 function buildBalancedStudyExcerpt(text: string, maxChars: number): string {
@@ -4760,7 +4790,7 @@ export async function generateAIStudyGuide(
 
   // --- MODO 1: ESENCIAL (1x - Síntesis y núcleos conceptuales rápidos) ---
   if (depth === 'essential') {
-    const systemPrompt = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
+    const systemPrompt = `Eres un catedrático universitario de élite y redactor académico principal de ContraReloj Study.
 Tu misión es generar una GUÍA DE ESTUDIO ESENCIAL Y DE ALTO IMPACTO (1x) en Markdown.
 Condensa los pilares teóricos, núcleos conceptuales ineludibles, definiciones clave y cuadros comparativos rápidos para consolidación veloz.
 
@@ -4808,9 +4838,9 @@ Genera la Guía de Estudio Esencial completa en español (Markdown) incluyendo t
 
   // --- MODO 2: COMPLETA (2x - Desarrollo sección por sección y tablas comparativas) ---
   if (depth === 'complete') {
-    const phase1System = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
+    const phase1System = `Eres un catedrático universitario de élite y redactor académico principal de ContraReloj Study.
 Tu misión es redactar la PRIMERA PARTE (Fase 1) de una GUÍA DE ESTUDIO COMPLETA Y DETALLADA (2x) en Markdown.
-Esta fase debe cubrir con exhaustividad los fundamentos teóricos y el recorrido sistemático sección por sección / diapositiva por diapositiva.
+Esta fase debe cubrir con exhaustividad los fundamentos teóricos y el recorrido sistemático sección por sección.
 
 ${translationDirective}
 
@@ -4826,8 +4856,8 @@ ESTRUCTURA DE LA FASE 1:
 ## 1. Fundamentos y Marco Teórico Integral
 (Principios basales, taxonomía, definiciones formales, fórmulas/cadenas causales y cuadro resumen inicial en Markdown)
 
-## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección / Diapositiva por Diapositiva)
-(Desarrollo minucioso de CADA diapositiva, subtema y elemento del material original estructurado mediante subtítulos '### [Nombre del Tema]', una breve contextualización en prosa y viñetas didácticas limpias de primer nivel '* **Propiedad/Mecanismo:** Detalle' para que el texto sea ágil de leer sin ser un bloque denso ni una cascada de listas anidadas, además de tablas comparativas y bloques \`> **Perla Clave:**\`)`;
+## 2. Desarrollo Sistemático Exhaustivo (Sección por Sección)
+(Desarrollo minucioso de cada tema, subtema y elemento del material original estructurado mediante subtítulos '### [Nombre del Tema]', una breve contextualización en prosa y viñetas didácticas limpias de primer nivel '* **Propiedad/Mecanismo:** Detalle' para que el texto sea ágil de leer sin ser un bloque denso ni una cascada de listas anidadas, además de tablas comparativas y bloques \`> **Nota:**\`)`;
 
     const phase1User = `DOCUMENTO ORIGINAL ("${title}" - ${category}):
 ${effectiveStudyInput}
@@ -4842,7 +4872,7 @@ Redacta la Fase 1 de la Guía de Estudio Completa en español (Markdown). Cubre 
       8192
     );
 
-    const phase2System = `Eres un catedrático universitario de élite y redactor académico principal de Contrareloj Study.
+    const phase2System = `Eres un catedrático universitario de élite y redactor académico principal de ContraReloj Study.
 Tu misión es redactar la SEGUNDA PARTE (Fase 2) de la GUÍA DE ESTUDIO COMPLETA (2x) en Markdown.
 Debes crear tablas comparativas exhaustivas, casos prácticos, perlas clínicas/analíticas y mnemotecnias avanzadas que complementen la Fase 1.
 
@@ -4882,7 +4912,7 @@ Redacta la Fase 2 (Tablas comparativas Markdown obligatorias, perlas de examen y
   }
 
   // --- MODO 3: ULTRA-EXHAUSTIVA (3x - Tratado académico profundo sin límites) ---
-  const p1System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
+  const p1System = `Eres un catedrático de honor y redactor de tratados académicos para ContraReloj Study.
 Tu misión es redactar el MÓDULO 1 de una GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
 Este módulo debe ser de máxima profundidad científica y académica, sin recortar ni condensar nada.
 
@@ -4916,9 +4946,9 @@ Redacta el Módulo 1 con máxima amplitud, rigor y tabla taxonómica Markdown en
     8192
   );
 
-  const p2System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
+  const p2System = `Eres un catedrático de honor y redactor de tratados académicos para ContraReloj Study.
 Tu misión es redactar el MÓDULO 2 de la GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
-DEBES RECORRER CADA DIAPOSITIVA Y SECCIÓN DEL DOCUMENTO ORIGINAL SIN SALTARTE NINGUNA.
+DEBES RECORRER CADA TEMA Y SECCIÓN DEL DOCUMENTO ORIGINAL SIN SALTARTE NINGUNO.
 Desglosa cada concepto, fórmula, fármaco, reacción o estructura con detalle anatómico/molecular/conceptual.
 
 ${translationDirective}
@@ -4926,7 +4956,7 @@ ${translationDirective}
 ${STUDY_GUIDE_RICH_FORMAT_RULES}
 
 ESTRUCTURA DEL MÓDULO 2:
-## 3. Desarrollo Sistemático Minucioso (Diapositiva por Diapositiva / Sección por Sección)
+## 3. Desarrollo Sistemático Minucioso (Sección por Sección)
 (Desarrolla cada sección o subtema con subtítulo '### [Nombre del Tema]', combinando párrafos breves de contextualización, viñetas didácticas limpias de primer nivel '* **Aspecto Clave:** explicación' para propiedades/mecanismos/efectos/criterios, tablas comparativas y fórmulas KaTeX. Evita bloques densos de puro texto y evita listas anidadas con sangrías profundas:
 - Explica el mecanismo detallado, fisiología o derivación con viñetas claras o tablas.
 - Desarrolla implicaciones prácticas y clínicas con rigor explicativo y lectura ágil.
@@ -4936,17 +4966,17 @@ ESTRUCTURA DEL MÓDULO 2:
   const p2User = `DOCUMENTO COMPLETO ("${title}" - ${category}):
 ${effectiveStudyInput}
 
-Redacta el Módulo 2 con desarrollo exhaustivo diapositiva por diapositiva y tablas de síntesis en español (Markdown):`;
+Redacta el Módulo 2 con desarrollo exhaustivo sección por sección y tablas de síntesis en español (Markdown):`;
 
   const mod2 = await runModule(
-    'Fase 2/3: Recorrido minucioso diapositiva por diapositiva / sección por sección (3x)...',
+    'Fase 2/3: Recorrido minucioso sección por sección (3x)...',
     45,
     p2System,
     p2User,
     10240
   );
 
-  const p3System = `Eres un catedrático de honor y redactor de tratados académicos para Contrareloj Study.
+  const p3System = `Eres un catedrático de honor y redactor de tratados académicos para ContraReloj Study.
 Tu misión es redactar el MÓDULO 3 de la GUÍA DE ESTUDIO MAGNA ULTRA-EXHAUSTIVA (3x) en Markdown.
 Construye las tablas comparativas más exhaustivas posibles, casos de examen analítico y mnemotecnias de consolidación.
 
@@ -5273,7 +5303,7 @@ export async function askTheaAI(
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         {
           role: 'system',
-          content: `Eres la Tutora Académica Inteligente de Contrareloj Study para el tema: "${kit.title}" (${kit.category}).
+          content: `Eres la Tutora Académica Inteligente de ContraReloj Study para el tema: "${kit.title}" (${kit.category}).
 
 Contexto del material de estudio del estudiante:
 ${kit.studyGuideMarkdown.slice(0, 5000)}
@@ -5461,7 +5491,7 @@ export async function researchTopicAndGenerateKit(
   // 2. Síntesis pedagógica profunda basada en evidencia científica con IA
   if (settings.enabled) {
     try {
-      const systemPrompt = `Eres un investigador científico de élite y educador universitario de la plataforma Contrareloj Study.
+      const systemPrompt = `Eres un investigador científico de élite y educador universitario de la plataforma ContraReloj Study.
 Tu misión es redactar un DOSSIER DE ESTUDIO ACADÉMICO riguroso, exhaustivo y estructurado, fundamentado en EVIDENCIA CIENTÍFICA, consensos académicos y literatura comprobada.
 
 REGLAS OBLIGATORIAS:
@@ -5558,7 +5588,7 @@ export async function generateSocraticReformulatedQuestion(
   }
 
   const translationDirective = getSpanishTranslationDirective();
-  const systemPrompt = `Eres el motor de tutoría socrática de Contrareloj Study, plataforma adaptativa de alto rendimiento académico.
+  const systemPrompt = `Eres el motor de tutoría socrática de ContraReloj Study, plataforma adaptativa de alto rendimiento académico.
 Tu misión pedagógica es verificar la comprensión profunda y el dominio conceptual real de un estudiante mediante Active Recall y reformulación socrática.
 
 ${translationDirective}
@@ -5778,7 +5808,7 @@ export async function generateTargetedPedagogicalQuestions(
   const langDetection = detectDocumentLanguage(rawText);
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres el evaluador de alta exigencia académica de Contrareloj Study.
+  const systemPrompt = `Eres el evaluador de alta exigencia académica de ContraReloj Study.
 Tu objetivo es formular preguntas de evaluación altamente especializadas, enfocadas rigurosamente en el subtema solicitado por el usuario y calibradas al nivel pedagógico elegido.
 
 ${translationDirective}
@@ -6502,7 +6532,7 @@ export async function classifyDocumentWithAI(
 
   const translationDirective = getSpanishTranslationDirective(langDetection.detectedLanguage);
 
-  const systemPrompt = `Eres el clasificador académico experto de Contrareloj Study.
+  const systemPrompt = `Eres el clasificador académico experto de ContraReloj Study.
 Tu objetivo es analizar el contenido de un documento educativo y clasificarlo con alta precisión académica.
 
 ${translationDirective}
@@ -6653,7 +6683,7 @@ export async function evaluateShortAnswer(
     };
   }
 
-  const systemPrompt = `Eres un catedrático universitario y evaluador académico riguroso de Contrareloj Study.
+  const systemPrompt = `Eres un catedrático universitario y evaluador académico riguroso de ContraReloj Study.
 Tu cometido es analizar una respuesta abierta formulada por un alumno y contrastarla con la respuesta modelo del profesor para cuantificar su similitud conceptual y exactitud técnica (0% a 100%).
 
 CRITERIOS DE CALIFICACIÓN:
@@ -6797,7 +6827,7 @@ export async function generateSpecializedExamQuestions(
       ? 'Genera EXCLUSIVAMENTE preguntas de opción múltiple rigurosa ("multiple-choice") con 4 alternativas.'
       : 'Genera un formato MIXTO balanceado: 50% de preguntas de opción múltiple ("multiple-choice") y 50% de preguntas abiertas cortas ("short-answer").';
 
-  const systemPrompt = `Eres el Catedrático y Diseñador Principal de Evaluaciones Universitarias de Contrareloj Study.
+  const systemPrompt = `Eres el Catedrático y Diseñador Principal de Evaluaciones Universitarias de ContraReloj Study.
 Tu objetivo es elaborar un examen formal, de alto rigor analítico y adaptado con absoluta fidelidad a la disciplina académica: "${effectiveDiscipline}".
 
 DIRECTRICES DE EXCELENCIA ACADÉMICA:

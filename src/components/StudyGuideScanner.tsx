@@ -36,7 +36,7 @@ const DEPTH_LABELS: Record<StudyGuideDepth, { name: string; multiplier: string; 
     multiplier: '3x Extensión',
     phases: [
       'Fundamentación Estructural & Glosario',
-      'Recorrido Diapositiva por Diapositiva',
+      'Recorrido Sección por Sección',
       'Grandes Matrices & Casos de Examen'
     ]
   }

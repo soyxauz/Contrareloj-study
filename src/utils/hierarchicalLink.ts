@@ -38,7 +38,7 @@ export function buildTheaHierarchicalUrl(
   const query = token ? `?st=${token}` : '';
   const path = `/${mode}/${kitId}${query}`;
 
-  const theaDisplayUrl = `thea.study${path}`;
+  const theaDisplayUrl = `contrareloj.study${path}`;
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
   const absoluteUrl = `${origin}${path}`;
 

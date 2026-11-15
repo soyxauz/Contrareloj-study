@@ -18,7 +18,8 @@ import {
   X,
   BookOpen,
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  Share2,
 } from 'lucide-react';
 
 export const DEPTH_OPTIONS: Array<{
@@ -49,7 +50,7 @@ export const DEPTH_OPTIONS: Array<{
     name: 'Completa',
     multiplier: '2x Extensión',
     badge: 'Doble de Profundidad',
-    desc: 'Desarrollo sistemático diapositiva por diapositiva con tablas comparativas completas y relaciones causales.',
+    desc: 'Desarrollo sistemático sección por sección con tablas comparativas completas y relaciones causales.',
     features: [
       'Recorrido exhaustivo sección por sección',
       'Desglose causal y fisiopatológico',
@@ -65,7 +66,7 @@ export const DEPTH_OPTIONS: Array<{
     badge: 'Tratado Académico Máximo',
     desc: 'Tratado exhaustivo sin límites que cubre estrictamente todo el documento, casos de examen, tablas matriciales y mnemotecnias avanzadas.',
     features: [
-      'Cobertura estricta de cada diapositiva/página',
+      'Cobertura estricta de cada tema y página del documento',
       'Glosario técnico y marco conceptual profundo',
       'Grandes cuadros matriciales y diferenciales',
       'Casos clínicos/prácticos y preguntas trampa'
@@ -86,9 +87,10 @@ import { syncBrowserHierarchicalUrl } from '../utils/hierarchicalLink';
 interface StudyGuideViewProps {
   kit: StudyKit;
   onUpdateKit?: (updatedKit: StudyKit) => void;
+  onShareKit?: (kit: StudyKit) => void;
 }
 
-export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit }) => {
+export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit, onShareKit }) => {
   const { theme } = useTheme();
   const [currentKitState, setCurrentKitState] = useState<StudyKit>(kit);
   const [activeTab, setActiveTab] = useState<'guide' | 'gallery'>('guide');
@@ -229,7 +231,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         (kit.sourceText && kit.sourceText.length > 100)
           ? kit.sourceText
           : (kit.chunks && kit.chunks.length > 0)
-          ? kit.chunks.map(c => `## ${c.heading || `Diapositiva / Sección ${c.pageOrSlide || c.chunkIndex + 1}`}\n${c.text}`).join('\n\n')
+          ? kit.chunks.map(c => `## ${c.heading || `Sección ${c.pageOrSlide || c.chunkIndex + 1}`}\n${c.text}`).join('\n\n')
           : (kit.sourceMaterials && kit.sourceMaterials.length > 0)
           ? kit.sourceMaterials.map(m => m.name).join(', ')
           : kit.description;
@@ -373,14 +375,15 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       return;
     }
 
-    const sentences = splitSentences(stripExecutiveSummaryPreamble(markdown).slice(0, 2500));
+    const sentences = splitSentences(stripExecutiveSummaryPreamble(markdown).slice(0, 25000));
     if (sentences.length === 0) return;
 
     audioStopRequestedRef.current = false;
     setIsAudioLoading(true);
     setIsSpeaking(true);
 
-    const voice = 'es-ES-ElviraNeural';
+    // Voz exclusiva de Microsoft Azure Edge Neural (femenina de Colombia: Salomé)
+    const voice = 'es-CO-SalomeNeural';
 
     const failAzurePlayback = (message: string) => {
       if (audioStopRequestedRef.current) return;
@@ -493,6 +496,19 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         <div className="flex items-center gap-2 flex-wrap">
           {activeTab === 'guide' && (
             <>
+              {/* Botón Compartir Kit */}
+              {onShareKit && (
+                <button
+                  type="button"
+                  onClick={() => onShareKit(currentKitState)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-sky-400 hover:text-sky-300 transition-all cursor-pointer shadow-xs active:scale-[0.985]"
+                  title="Compartir contenido base de este kit con enlace público de Google Drive"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Compartir Kit</span>
+                </button>
+              )}
+
               {/* Opción de Rehacer la Guía con Diferente Extensión */}
               <button
                 onClick={() => {
@@ -516,20 +532,25 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 <span>Smart Edit</span>
               </button>
 
+              {/* Reproductor exclusivo con voz Salomé (Microsoft Azure Neural) */}
               <button
                 onClick={handleReadAloud}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 cursor-pointer active:scale-[0.97] ${
-                  isSpeaking ? 'bg-white/10 text-white border-white/20 shadow-md' : 'bg-white/[0.03] text-zinc-300 hover:text-white hover:bg-white/[0.06] border-white/[0.08]'
+                disabled={isAudioLoading}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-[background-color,border-color,color,transform] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer active:scale-[0.97] ${
+                  isSpeaking
+                    ? 'bg-sky-500/20 text-sky-200 border-sky-400/40 shadow-xs'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-zinc-300 hover:text-white shadow-xs'
                 }`}
+                title={isSpeaking ? 'Detener lectura en voz alta' : 'Leer guía en voz alta'}
               >
                 {isAudioLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-zinc-300" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
                 ) : isSpeaking ? (
-                  <VolumeX className="w-4 h-4" />
+                  <VolumeX className="w-3.5 h-3.5 text-sky-400" />
                 ) : (
-                  <Volume2 className="w-4 h-4" />
+                  <Volume2 className="w-3.5 h-3.5 text-sky-400" />
                 )}
-                <span>{isAudioLoading ? 'Cargando audio...' : isSpeaking ? 'Detener Voz' : 'Leer en Voz Alta'}</span>
+                <span>{isAudioLoading ? 'Cargando audio...' : isSpeaking ? 'Detener' : 'Leer en voz alta'}</span>
               </button>
 
               <button
@@ -871,7 +892,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               </div>
               <h3 className="text-lg font-bold text-white mb-2">Sin Recursos Visuales Extraídos</h3>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-                El documento original no contenía figuras o diagramas embebidos. Al subir diapositivas de PowerPoint (.pptx) o archivos Word (.docx) con diagramas, se organizarán aquí automáticamente.
+                El documento original no contenía figuras o diagramas embebidos. Al subir presentaciones de PowerPoint (.pptx) o archivos Word (.docx) con diagramas, se organizarán aquí automáticamente.
               </p>
             </div>
           ) : (
@@ -1023,7 +1044,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                   </h3>
                   {selectedAsset.pageOrSlide && (
                     <span className="text-xs text-slate-400">
-                      Ubicación original: Diapositiva / Página {selectedAsset.pageOrSlide}
+                      Ubicación original: Sección / Página {selectedAsset.pageOrSlide}
                     </span>
                   )}
                 </div>

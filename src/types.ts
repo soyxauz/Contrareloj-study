@@ -200,6 +200,7 @@ export interface StudyKit {
   archivedFlashcards?: Flashcard[];
   sourceLanguage?: string;
   updatedAt?: number;
+  isImported?: boolean;
 }
 
 
