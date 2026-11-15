@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { StudyKit, DocumentAsset } from '../types';
 import {
   Image as ImageIcon,
@@ -46,11 +46,36 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
   // Paginación eficiente para mantener el uso de memoria bajo control (máximo 12 imágenes en DOM a la vez)
   const PAGE_SIZE = 12;
   const [currentPage, setCurrentPage] = useState(1);
+  const prevKitIdRef = useRef(kit.id);
 
-  // Mantener activos sincronizados y resetear página cuando cambia el kit
+  // Mantener activos sincronizados preservando estrictamente las dataUrl ya cargadas en memoria
   useEffect(() => {
-    setAssets(kit.assets || []);
-    setCurrentPage(1);
+    const isNewKit = kit.id !== prevKitIdRef.current;
+    prevKitIdRef.current = kit.id;
+
+    if (isNewKit) {
+      setAssets(kit.assets || []);
+      setCurrentPage(1);
+    } else {
+      // Mismo kit: actualización (ej. tras depurar elementos de diseño o eliminar).
+      // PRESERVAR rigurosamente las dataUrl hidratadas en RAM para evitar que vuelvan a 'Sin previsualización'
+      setAssets(prev => {
+        const incoming = kit.assets || [];
+        const prevMap = new Map(prev.map(a => [a.id, a]));
+        return incoming.map(inc => {
+          const existing = prevMap.get(inc.id);
+          if (existing?.dataUrl && !inc.dataUrl) {
+            return { ...inc, dataUrl: existing.dataUrl };
+          }
+          return inc;
+        });
+      });
+      // Asegurarse de que la página actual no desborde si el número total se redujo
+      setCurrentPage(prevPage => {
+        const total = Math.max(1, Math.ceil((kit.assets?.length || 0) / PAGE_SIZE));
+        return prevPage > total ? total : prevPage;
+      });
+    }
   }, [kit.id, kit.assets]);
 
   // Clasificación continua y asíncrona de activos documentales (detectar fondos planos, banners y logos de licencia)
@@ -158,8 +183,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       // 1. Consultar IndexedDB local
       const local = await getAssetById(assetId);
       if (local?.dataUrl) {
-        const updated = assets.map(a => (a.id === assetId ? { ...a, dataUrl: local.dataUrl } : a));
-        setAssets(updated);
+        setAssets(prev => prev.map(a => (a.id === assetId ? { ...a, dataUrl: local.dataUrl } : a)));
         return;
       }
 
@@ -167,8 +191,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
       const driveMap = await googleDriveService.prioritizeAssetsDownload([assetId]);
       if (driveMap.has(assetId)) {
         const downloaded = driveMap.get(assetId)!;
-        const updated = assets.map(a => (a.id === assetId ? { ...a, dataUrl: downloaded.dataUrl } : a));
-        setAssets(updated);
+        setAssets(prev => prev.map(a => (a.id === assetId ? { ...a, dataUrl: downloaded.dataUrl } : a)));
         return;
       }
     } catch (err) {
@@ -188,26 +211,24 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
     if (missing.length === 0) return;
 
     const missingIds = missing.map(a => a.id);
-    setLoadingAssetIds(new Set(missingIds));
+    setLoadingAssetIds(prev => new Set([...prev, ...missingIds]));
     setIsHydrating(true);
 
     try {
       // 1. Consultar IndexedDB local primero
       const localMap = await getAssetsMap(missingIds);
-      let updatedAssets = assets.map(a => {
-        if (!a.dataUrl && localMap.has(a.id)) {
-          return { ...a, dataUrl: localMap.get(a.id)!.dataUrl };
-        }
-        return a;
-      });
+      if (localMap.size > 0) {
+        setAssets(prev =>
+          prev.map(a => {
+            if (!a.dataUrl && localMap.has(a.id)) {
+              return { ...a, dataUrl: localMap.get(a.id)!.dataUrl };
+            }
+            return a;
+          })
+        );
+      }
 
-      setAssets(updatedAssets);
-
-      const stillMissing = updatedAssets
-        .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-        .filter(a => !a.dataUrl && a.id);
-      const stillMissingIds = stillMissing.map(a => a.id);
-      setLoadingAssetIds(new Set(stillMissingIds));
+      const stillMissingIds = missingIds.filter(id => !localMap.has(id));
 
       // 2. Si todavía faltan imágenes en la página actual, descargarlas desde Google Drive
       if (stillMissingIds.length > 0) {
@@ -217,28 +238,36 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
           (done, total) => setSyncProgress({ completed: done, total })
         );
         if (driveMap.size > 0) {
-          updatedAssets = updatedAssets.map(a => {
-            if (!a.dataUrl && driveMap.has(a.id)) {
-              return { ...a, dataUrl: driveMap.get(a.id)!.dataUrl };
-            }
-            return a;
-          });
-          setAssets(updatedAssets);
+          setAssets(prev =>
+            prev.map(a => {
+              if (!a.dataUrl && driveMap.has(a.id)) {
+                return { ...a, dataUrl: driveMap.get(a.id)!.dataUrl };
+              }
+              return a;
+            })
+          );
         }
       }
     } catch (err) {
       console.warn('[ImagesGalleryView] Error al cargar activos de página:', err);
     } finally {
-      setLoadingAssetIds(new Set());
+      setLoadingAssetIds(prev => {
+        const next = new Set(prev);
+        missingIds.forEach(id => next.delete(id));
+        return next;
+      });
       setIsHydrating(false);
       setSyncProgress(null);
     }
   };
 
-  // Ejecutar carga de imágenes al montar, cambiar kit, filtro o cambiar de página
+  // Clave representativa de las imágenes visibles en pantalla para re-hidratación inmediata
+  const visibleIdsKey = useMemo(() => visibleAssets.map(a => a.id).join(','), [visibleAssets]);
+
+  // Ejecutar carga de imágenes al montar, cambiar kit, filtro, página o cambiar las figuras visibles
   useEffect(() => {
-    loadMissingAssetsForCurrentPage();
-  }, [kit.id, currentPage, filterMode]);
+    loadMissingAssetsForCurrentPage(visibleAssets);
+  }, [kit.id, currentPage, filterMode, visibleIdsKey]);
 
   // Reaccionar inmediatamente cuando la sincronización en segundo plano guarda nuevas imágenes
   useEffect(() => {
