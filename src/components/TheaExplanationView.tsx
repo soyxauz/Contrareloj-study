@@ -91,22 +91,22 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
       .slice(0, 3);
   }, [question]);
 
-  // 2. Término de búsqueda para la consulta e ilustración web
+  // 2. Término de búsqueda para la consulta e ilustración web (priorizando el término específico de imagen)
   const searchTerm = React.useMemo(() => {
-    if (question?.googleOverview?.query) {
-      return question.googleOverview.query;
+    if (question?.googleOverview?.imageSearchTerm && question.googleOverview.imageSearchTerm.trim().length > 2) {
+      return question.googleOverview.imageSearchTerm.trim();
     }
-    if (question?.googleOverview?.imageSearchTerm) {
-      return question.googleOverview.imageSearchTerm;
+    if (question?.googleOverview?.query && question.googleOverview.query.trim().length > 2) {
+      return question.googleOverview.query.trim();
     }
-    if (question?.topic && question.topic.length > 3) {
-      return question.topic;
+    if (question?.topic && question.topic.trim().length > 2 && question.topic.toLowerCase() !== 'general') {
+      return question.topic.trim();
     }
     const safeQ = question?.question || 'Concepto de estudio';
     return safeQ.replace(/\*\*([^*]+)\*\*/g, '$1').slice(0, 80);
   }, [question]);
 
-  // 3. Buscar ilustración en la web (Wikipedia / Wikimedia / Fallback)
+  // 3. Buscar ilustración en la web (Wikipedia / Wikimedia / Fallback con estricta pertinencia)
   useEffect(() => {
     let isMounted = true;
     setIsImgLoaded(false);
@@ -126,7 +126,24 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
       return;
     }
 
-    searchIllustrationForQuestion(searchTerm, question?.topic || 'General', kitAssets)
+    const correctOpt =
+      question?.options && question.correctIndex !== undefined
+        ? question.options[question.correctIndex]
+        : question?.idealAnswer || '';
+
+    searchIllustrationForQuestion(
+      searchTerm,
+      {
+        query: question?.googleOverview?.query || searchTerm,
+        imageSearchTerm: question?.googleOverview?.imageSearchTerm,
+        topic: question?.topic,
+        questionText: question?.question,
+        correctAnswer: correctOpt,
+        bullets,
+        kitAssets,
+      },
+      kitAssets
+    )
       .then(res => {
         if (!isMounted) return;
         if (res && res.imageUrl) {
@@ -135,7 +152,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
             setImageResult({ ...res, imageUrl: cleaned });
           });
         } else {
-          // Si no hubo imagen web, verificar activo del documento
+          // Si no hubo imagen web estrictamente pertinente, verificar activo del documento
           const docAsset = kitAssets.find(a => a.dataUrl);
           if (docAsset && docAsset.dataUrl) {
             cleanImageBlackBackground(docAsset.dataUrl).then(cleaned => {
@@ -149,6 +166,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
               });
             });
           } else {
+            // Política estricta: No inventar imagen; dejar en blanco para que el texto tome el ancho completo
             setImageResult({
               imageUrl: '',
               sourceUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`,
@@ -167,7 +185,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [searchTerm, question, kitAssets]);
+  }, [searchTerm, question, kitAssets, bullets]);
 
   const handleImageClick = () => {
     if (!onZoomImage || !imageResult?.imageUrl) return;
@@ -180,10 +198,14 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
     onZoomImage(assetToZoom);
   };
 
+  const hasValidImage = Boolean(imageResult && imageResult.imageUrl);
+
   return (
-    <div className="explanation-wrapper w-full flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-10 mt-6 pt-4 text-left animate-fadeIn">
+    <div className={`explanation-wrapper w-full flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-10 mt-6 pt-4 text-left animate-fadeIn ${
+      hasValidImage ? '' : 'max-w-4xl'
+    }`}>
       {/* ── COLUMNA IZQUIERDA: BÚSQUEDA INTERACTIVA Y EXACTAMENTE 3 VIÑETAS ── */}
-      <div className="explanation-body flex-1 min-w-0 max-w-2xl">
+      <div className={`explanation-body flex-1 min-w-0 ${hasValidImage ? 'max-w-2xl' : 'w-full'}`}>
         <div className="top-level-explanation space-y-3.5">
           {/* Barra de Búsqueda Interactiva Externa (Google / Wikipedia) */}
           <div className={`flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs border ${
@@ -256,7 +278,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
       </div>
 
       {/* ── COLUMNA DERECHA: IMAGEN / DIAGRAMA CON CRÉDITO Y ENLACE A LA FUENTE ── */}
-      {imageResult && imageResult.imageUrl ? (
+      {hasValidImage && imageResult ? (
         <figure
           className={`explanation-figure w-full md:w-[320px] lg:w-[360px] shrink-0 text-center flex flex-col items-center transition-opacity duration-500 ${
             isImgLoaded ? 'opacity-100' : 'opacity-80'
@@ -299,33 +321,6 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
               <ExternalLink className="w-3 h-3 opacity-70 shrink-0" />
             </a>
           </figcaption>
-        </figure>
-      ) : imageResult?.sourceUrl ? (
-        <figure className="explanation-figure w-full md:w-[260px] shrink-0 text-center flex flex-col items-center">
-          <a
-            href={imageResult.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`w-full p-4 rounded-2xl border border-dashed transition-all flex flex-col items-center justify-center gap-2 text-center group cursor-pointer active-press ${
-              theme === 'dark'
-                ? 'border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20'
-                : theme === 'kitty'
-                ? 'border-pink-200 bg-pink-50/50 hover:bg-pink-100/50'
-                : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
-            }`}
-          >
-            <ExternalLink className={`w-5 h-5 group-hover:scale-110 transition-transform ${
-              theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-500' : 'text-slate-400'
-            }`} />
-            <span className={`text-xs font-semibold ${
-              theme === 'dark' ? 'text-slate-300' : 'text-zinc-900'
-            }`}>Ver diagrama en la fuente</span>
-            <span className={`text-[11px] underline truncate max-w-[220px] ${
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-            }`}>
-              {imageResult.sourceName || 'Enlace a la fuente'}
-            </span>
-          </a>
         </figure>
       ) : null}
     </div>
