@@ -9,7 +9,6 @@ import {
   Trash2,
   Filter,
   Eye,
-  EyeOff,
   CheckCircle2
 } from 'lucide-react';
 import { GeminiIcon } from './GeminiIcon';
@@ -489,46 +488,6 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
           )}
         </div>
       </div>
-
-      {/* Banner Informativo cuando hay imágenes de plantilla ocultadas */}
-      {filterMode === 'pedagogical' && decorativeCount > 0 && (
-        <div className={`mb-6 p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
-          theme === 'dark'
-            ? 'bg-violet-950/30 border-violet-800/40 text-violet-200'
-            : theme === 'kitty'
-            ? 'bg-pink-50 border-pink-200 text-pink-900'
-            : 'bg-slate-50 border-slate-200 text-slate-700'
-        }`}>
-          <div className="flex items-center gap-2">
-            <EyeOff className="w-4 h-4 text-violet-400 shrink-0" />
-            <span>
-              Filtro activo: se han ocultado <strong>{decorativeCount} imágenes de diseño</strong> (logos de licencia, cajas de plantilla o banners de fondo).
-            </span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setFilterMode('all')}
-              className="underline font-semibold hover:text-white cursor-pointer active:scale-95"
-            >
-              Ver todas
-            </button>
-            {onUpdateKit && (
-              <>
-                <span className="opacity-40">•</span>
-                <button
-                  type="button"
-                  onClick={handlePurgeDecorativeAssets}
-                  className="font-bold text-amber-400 hover:text-amber-300 cursor-pointer active:scale-95 flex items-center gap-1.5"
-                >
-                  <GeminiIcon className="w-3.5 h-3.5" variant="gradient" />
-                  Purgar del Kit
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Empty State */}
       {filteredAssets.length === 0 ? (
