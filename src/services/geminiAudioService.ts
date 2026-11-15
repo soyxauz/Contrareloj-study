@@ -59,7 +59,7 @@ export const GEMINI_VOICES: GeminiVoiceOption[] = [
 ];
 
 const DB_NAME = 'ContrarelojAudioDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'podcast_audio_cache';
 
 const MAX_ACTIVE_AUDIO_URLS = 4;
@@ -364,7 +364,7 @@ async function getCachedAudioUrl(cacheKey: string): Promise<string | null> {
   }
 
   const db = await getAudioDatabase();
-  if (!db) return null;
+  if (!db || !db.objectStoreNames.contains(STORE_NAME)) return null;
 
   return new Promise((resolve) => {
     try {
@@ -401,7 +401,7 @@ export async function prunePodcastAudioCacheIfNeeded(maxEntries = 40, maxAgeDays
 
   try {
     const db = await getAudioDatabase();
-    if (!db) return;
+    if (!db || !db.objectStoreNames.contains(STORE_NAME)) return;
 
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
@@ -446,7 +446,7 @@ export async function prunePodcastAudioCacheIfNeeded(maxEntries = 40, maxAgeDays
  */
 async function saveAudioBlobToCache(cacheKey: string, blob: Blob): Promise<void> {
   const db = await getAudioDatabase();
-  if (!db) return;
+  if (!db || !db.objectStoreNames.contains(STORE_NAME)) return;
 
   try {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -984,7 +984,7 @@ export function preloadEntirePodcast(
 export async function clearPodcastAudioCache(): Promise<void> {
   revokeAllPodcastAudioUrls();
   const db = await getAudioDatabase();
-  if (!db) return;
+  if (!db || !db.objectStoreNames.contains(STORE_NAME)) return;
   try {
     const tx = db.transaction([STORE_NAME], 'readwrite');
     tx.objectStore(STORE_NAME).clear();

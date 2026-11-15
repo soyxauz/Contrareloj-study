@@ -107,7 +107,7 @@ export const AZURE_EDGE_VOICES: AzureEdgeVoiceOption[] = [
 ];
 
 const DB_NAME = 'ContrarelojAudioDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'azure_edge_audio_cache';
 
 const MAX_ACTIVE_AUDIO_URLS = 4;
@@ -247,7 +247,7 @@ interface CachedAudioRecord {
 
 async function getCachedAudioRecord(key: string): Promise<CachedAudioRecord | null> {
   const db = await getAudioDatabase();
-  if (!db) return null;
+  if (!db || !db.objectStoreNames.contains(STORE_NAME)) return null;
 
   return new Promise((resolve) => {
     try {
@@ -283,7 +283,7 @@ export async function pruneAudioCacheIfNeeded(maxEntries = 120, maxAgeDays = 14)
 
   try {
     const db = await getAudioDatabase();
-    if (!db) return;
+    if (!db || !db.objectStoreNames.contains(STORE_NAME)) return;
 
     const tx = db.transaction([STORE_NAME], 'readwrite');
     const store = tx.objectStore(STORE_NAME);
@@ -327,7 +327,7 @@ export async function pruneAudioCacheIfNeeded(maxEntries = 120, maxAgeDays = 14)
 
 async function saveAudioBlobToCache(key: string, blob: Blob, durationSec?: number): Promise<void> {
   const db = await getAudioDatabase();
-  if (!db) return;
+  if (!db || !db.objectStoreNames.contains(STORE_NAME)) return;
 
   try {
     const tx = db.transaction([STORE_NAME], 'readwrite');
@@ -591,7 +591,7 @@ export async function clearAzureAudioCache(): Promise<void> {
   revokeAllAzureAudioUrls();
   audioDurationCache.clear();
   const db = await getAudioDatabase();
-  if (!db) return;
+  if (!db || !db.objectStoreNames.contains(STORE_NAME)) return;
   try {
     const tx = db.transaction([STORE_NAME], 'readwrite');
     tx.objectStore(STORE_NAME).clear();
