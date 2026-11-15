@@ -19,7 +19,8 @@ import {
   RETIRED_TEST_KIT_IDS,
   registerDriveAssetDownloader,
   safeLocalStorageSetItem,
-  hydrateKitAssets
+  hydrateKitAssets,
+  unrecordDeletedKitId
 } from './storageService';
 import { isSmoothScrollActive } from '../utils/smoothScroll';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, GROQ_PRIMARY_MODEL, type AISettings } from './aiService';
@@ -3730,7 +3731,7 @@ export const googleDriveService = {
    * 2. Proxy de descarga segura sin CORS (/api/drive/shared?fileId=...).
    * 3. Descarga directa con el token del usuario receptor (sin popups bloqueados).
    */
-  async importSharedKitFromDrive(fileId: string, currentUserId: string, compressedPayload?: string | null): Promise<StudyKit> {
+  async importSharedKitFromDrive(fileId: string, currentUserId: string | null, compressedPayload?: string | null): Promise<StudyKit> {
     let rawKit: StudyKit | null = null;
 
     // Obtener payload desde argumento, hash de la ventana o query search
@@ -3829,17 +3830,26 @@ export const googleDriveService = {
       }
     }
 
+    // Generar un ID único nuevo e independiente para el receptor
+    const newKitId = `kit-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    try {
+      unrecordDeletedKitId(newKitId);
+    } catch {}
+
     const importedKit: StudyKit = {
       ...rawKit,
+      id: newKitId,
       studyGuideMarkdown: '',
       questions,
       updatedAt: now,
       isImported: true,
     };
 
+    const normalizedUserId = (!currentUserId || currentUserId === 'guest') ? null : currentUserId;
+
     // 3. Resetear el progreso de flashcards y SmartStudy a 0% limpio
     try {
-      flashcardProgressService.saveFlashcardProgress(currentUserId, importedKit.id, {
+      flashcardProgressService.saveFlashcardProgress(normalizedUserId, importedKit.id, {
         version: 1,
         kitId: importedKit.id,
         masteryMap: {},
@@ -3847,7 +3857,7 @@ export const googleDriveService = {
         resetAt: now,
         updatedAt: now,
       });
-      authService.clearSmartStudySession(currentUserId, importedKit.id);
+      authService.clearSmartStudySession(normalizedUserId, importedKit.id);
     } catch (progErr) {
       console.warn('[GoogleDriveService] Error reseteando progreso del kit importado:', progErr);
     }
@@ -3861,21 +3871,19 @@ export const googleDriveService = {
       }).catch(() => {});
     }
 
-    // 5. Guardar en los kits del usuario receptor
-    const existingKits = authService.getUserKits(currentUserId);
-    const idx = existingKits.findIndex(k => k.id === importedKit.id);
-    let nextKits: StudyKit[];
-    if (idx >= 0) {
-      nextKits = [...existingKits];
-      nextKits[idx] = importedKit;
-    } else {
-      nextKits = [importedKit, ...existingKits];
-    }
-    authService.saveUserKits(currentUserId, nextKits);
-    await authService.saveUserKitsAsync(currentUserId, nextKits);
+    // 5. Guardar en los kits del usuario receptor asegurando disponibilidad inmediata y persistencia
+    const existingKits = authService.getUserKits(normalizedUserId);
+    const nextKits = [importedKit, ...existingKits.filter(k => k.id !== importedKit.id)];
+    authService.saveUserKits(normalizedUserId, nextKits);
+    await authService.saveUserKitsAsync(normalizedUserId, nextKits);
 
-    // 6. Programar respaldo hacia su propio Google Drive
-    this.scheduleAutoSync(currentUserId, nextKits, 200);
+    // 6. Sincronizar automáticamente hacia su propio Google Drive
+    if (normalizedUserId) {
+      this.pushKitImmediately(normalizedUserId, importedKit, nextKits).catch((err) => {
+        console.warn('[GoogleDriveService] Error sincronizando kit importado en Drive:', err);
+      });
+      this.scheduleAutoSync(normalizedUserId, nextKits, 200);
+    }
 
     return importedKit;
   },

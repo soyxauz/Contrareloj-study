@@ -15,6 +15,7 @@ import {
   stripAssetDataUrlsFromKit,
   cleanOrphanAssetsFromIndexedDB,
   safeLocalStorageSetItem,
+  unrecordDeletedKitId,
 } from './services/storageService';
 import { purgeImageCleanerCache } from './utils/imageCleaner';
 import { recoverAndPurgeCorruptedKeys } from './utils/storageKeys';
@@ -226,19 +227,8 @@ export const App: React.FC = () => {
     const currentImportKey = `${sharedFileId || ''}::${sharedPayload ? sharedPayload.slice(0, 32) : ''}`;
     if (activeImportKeyRef.current === currentImportKey) return;
 
-    let targetUserId = currentUser?.id || authService.getCurrentUser()?.id;
-    if (!targetUserId && typeof localStorage !== 'undefined') {
-      const gProf = localStorage.getItem('thea_gdrive_profile');
-      if (gProf) {
-        try {
-          const p = JSON.parse(gProf);
-          targetUserId = `usr_g_${p.id}`;
-        } catch {}
-      }
-    }
-    if (!targetUserId) {
-      targetUserId = 'guest';
-    }
+    const activeUser = currentUser || authService.getCurrentUser();
+    const effectiveUserId = activeUser ? activeUser.id : null;
 
     activeImportKeyRef.current = currentImportKey;
     setIsImportingSharedKit(true);
@@ -252,16 +242,40 @@ export const App: React.FC = () => {
 
     (async () => {
       try {
-        const imported = await googleDriveService.importSharedKitFromDrive(sharedFileId || '', targetUserId, sharedPayload);
+        const imported = await googleDriveService.importSharedKitFromDrive(sharedFileId || '', effectiveUserId, sharedPayload);
 
         clearTimeout(safetyTimer);
-        setKits(prev => [imported, ...prev.filter(k => k.id !== imported.id)]);
-        setCurrentKit(imported);
+        unrecordDeletedKitId(imported.id);
+        const strippedImported = stripAssetDataUrlsFromKit(imported, true);
+
+        // 1. Guardar y persistir inmediatamente en el estado y en el almacén local del receptor
+        setKits(prev => {
+          const updated = [strippedImported, ...prev.filter(k => k.id !== imported.id)];
+          try {
+            authService.saveUserKits(effectiveUserId, updated);
+            authService.saveUserKitsAsync(effectiveUserId, updated).catch(() => {});
+          } catch (e) {
+            console.error('[App] Error al persistir kit importado:', e);
+          }
+          return updated;
+        });
+
+        setCurrentKit(strippedImported);
         safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, imported.id);
 
-        // Limpiar la URL corta /s/:id y los parámetros reemplazando por /kit/:id
+        // 2. Sincronizar inmediatamente a Google Drive si el usuario está conectado
+        if (effectiveUserId) {
+          googleDriveService.pushKitImmediately(effectiveUserId, imported, [imported, ...kits.filter(k => k.id !== imported.id)]).catch(() => {});
+          googleDriveService.scheduleAutoSync(effectiveUserId, [imported, ...kits.filter(k => k.id !== imported.id)], 200);
+        }
+
+        // 3. Limpiar la URL de importación reemplazándola limpiamente por la ruta directa de Smart Study (/smartStudy/:id)
         try {
-          window.history.replaceState(window.history.state, '', `/kit/${imported.id}`);
+          window.history.replaceState({
+            mode: 'smart-study',
+            kitId: imported.id,
+            modal: null,
+          }, '', `/smartStudy/${imported.id}`);
         } catch {
           try {
             const url = new URL(window.location.href);
@@ -269,18 +283,22 @@ export const App: React.FC = () => {
             url.searchParams.delete('d');
             url.searchParams.delete('sk');
             url.hash = '';
-            window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+            window.history.replaceState({
+              mode: 'smart-study',
+              kitId: imported.id,
+              modal: null,
+            }, '', url.pathname + (url.search ? url.search : ''));
           } catch {}
         }
 
         setSharedFileId(null);
         setSharedPayload(null);
 
-        setToastNotification(`¡Kit "${imported.title}" importado con su contenido base listo para estudiar!`);
+        setToastNotification(`¡Kit "${imported.title}" importado con éxito y sincronizado!`);
         setTimeout(() => setToastNotification(null), 5000);
 
-        // Abrir el kit importado directamente en su modo de estudio principal (Flashcards)
-        handleSelectMode('flashcards', false);
+        // 4. Redirigir directa y limpiamente a Smart Study
+        handleSelectMode('smart-study', false);
       } catch (err: any) {
         clearTimeout(safetyTimer);
         console.error('[App] Error al importar kit compartido:', err);
@@ -534,7 +552,7 @@ export const App: React.FC = () => {
   const [currentMode, setCurrentMode] = useState<StudyMode>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
-      if (path.startsWith('/kit/') || path.startsWith('/s/')) return 'flashcards';
+      if (path.startsWith('/kit/') || path.startsWith('/s/')) return 'smart-study';
       if (path.startsWith('/smartStudy/')) return 'smart-study';
       if (path.startsWith('/study/')) return 'study-guide';
       if (path.startsWith('/flashcards')) return 'flashcards';
@@ -696,6 +714,8 @@ export const App: React.FC = () => {
           handleSelectMode('smart-study', false);
         } else if (path.startsWith('/study/')) {
           handleSelectMode('study-guide', false);
+        } else if (path.startsWith('/kit/') || path.startsWith('/s/')) {
+          handleSelectMode('smart-study', false);
         } else {
           setCurrentMode('home');
         }
@@ -1299,9 +1319,12 @@ export const App: React.FC = () => {
       const clean = pulledKits.filter(k => !isCorruptedKit(k));
       if (clean.length > 0) {
         setKits(clean);
-        const first = clean[0] || null;
-        setCurrentKit(first);
-        if (first) safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, first.id);
+        // Solo sobreescribir kit activo si NO hay un kit compartido pendiente por importar
+        if (!sharedFileId && !sharedPayload) {
+          const first = clean[0] || null;
+          setCurrentKit(first);
+          if (first) safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, first.id);
+        }
       }
     }
   };

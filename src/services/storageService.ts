@@ -890,6 +890,20 @@ export function recordDeletedKitIds(ids: string[], minUpdatedAt?: number): void 
   }
 }
 
+export function unrecordDeletedKitId(id: string): void {
+  if (!id) return;
+  try {
+    const tombstones = getDeletedKitTombstones();
+    if (tombstones[id]) {
+      delete tombstones[id];
+      persistDeletedKitTombstones(tombstones);
+    }
+  } catch (e) {
+    console.warn('[StorageService] Error al desregistrar kit eliminado:', e);
+  }
+}
+
+
 /**
  * Guarda kits completos en IndexedDB esperando a que la transacción culmine (cero demoras / sin pérdidas).
  * Protege estrictamente los dataUrls de los activos preservando lo ya almacenado en IndexedDB si la entrada viene aligerada.
