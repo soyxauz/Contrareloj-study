@@ -8,7 +8,8 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Trash2
 } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
@@ -26,6 +27,7 @@ export interface ImageZoomModalProps {
   hasNext?: boolean;
   currentIndex?: number;
   totalCount?: number;
+  onDelete?: () => void;
 }
 
 export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
@@ -40,7 +42,8 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
   hasPrev = false,
   hasNext = false,
   currentIndex,
-  totalCount
+  totalCount,
+  onDelete
 }) => {
   const { theme } = useTheme();
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -468,6 +471,27 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               >
                 <Download className="w-4 h-4" />
               </a>
+            )}
+
+            {/* Eliminar de la Galería */}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('¿Deseas eliminar esta figura del material de estudio?')) {
+                    onDelete();
+                    onClose();
+                  }
+                }}
+                title="Eliminar figura del kit"
+                className={`p-2 rounded-xl border transition-colors active:scale-95 cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:text-white hover:bg-rose-500/30'
+                    : 'bg-rose-50 border-rose-200 text-rose-600 hover:text-rose-700 hover:bg-rose-100 shadow-xs'
+                }`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             )}
 
             {/* Cerrar Visor */}

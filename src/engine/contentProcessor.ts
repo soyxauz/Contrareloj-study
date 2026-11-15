@@ -7,6 +7,7 @@ import {
 import { detectDocumentLanguage } from '../services/languageService';
 import { chunkDocument } from './chunker';
 import { LocalVectorStore } from './vectorStore';
+import { analyzeCanvasContent, IMAGE_FILTER_CONFIG } from '../utils/imageClassifier';
 import JSZip from 'jszip';
 
 /**
@@ -1330,19 +1331,32 @@ async function extractEmbeddedImagesFromBinary(
       const blob = new Blob([imgBytes], { type: cand.type });
       const dims = await getBlobDimensions(blob);
 
-      if (dims && dims.w >= 60 && dims.h >= 60) {
-        const dataUrl = await blobToOptimizedDataUrl(blob, 1200);
-        if (dataUrl && dataUrl.length > 250) {
-          const sig = getImageSignature(dataUrl);
-          if (!seenSigs.has(sig)) {
-            seenSigs.add(sig);
-            assets.push({
-              id: `asset-img-${uid()}`,
-              type: 'image',
-              dataUrl,
-              caption: `Figura ${assets.length + 1} (${fileName})`,
-              contextNearby: `Recurso visual extraído de ${fileName}`,
-            });
+      if (
+        dims &&
+        dims.w >= IMAGE_FILTER_CONFIG.MIN_WIDTH &&
+        dims.h >= IMAGE_FILTER_CONFIG.MIN_HEIGHT
+      ) {
+        const ratio = dims.w / dims.h;
+        if (
+          ratio >= IMAGE_FILTER_CONFIG.MIN_ASPECT_RATIO &&
+          ratio <= IMAGE_FILTER_CONFIG.MAX_ASPECT_RATIO
+        ) {
+          const dataUrl = await blobToOptimizedDataUrl(blob, 1200);
+          if (dataUrl && dataUrl.length > 250) {
+            const sig = getImageSignature(dataUrl);
+            if (!seenSigs.has(sig)) {
+              seenSigs.add(sig);
+              assets.push({
+                id: `asset-img-${uid()}`,
+                type: 'image',
+                dataUrl,
+                caption: `Figura ${assets.length + 1} (${fileName})`,
+                contextNearby: `Recurso visual extraído de ${fileName}`,
+                width: dims.w,
+                height: dims.h,
+                isDecorative: false,
+              });
+            }
           }
         }
       }
@@ -1508,60 +1522,41 @@ async function extractContentFromPDF(file: File): Promise<{ text: string; assets
                     try {
                       const w = imgObj.width || (imgObj.bitmap && imgObj.bitmap.width);
                       const h = imgObj.height || (imgObj.bitmap && imgObj.bitmap.height);
-                      // Filtro dimensional estricto: descartar elementos menores a 60x60 (iconos, separadores)
-                      if (w >= 60 && h >= 60) {
-                        const MAX_DIM = 1200;
-                        let targetW = w;
-                        let targetH = h;
-                        if (targetW > MAX_DIM || targetH > MAX_DIM) {
-                          if (targetW >= targetH) {
-                            targetH = Math.round((targetH * MAX_DIM) / targetW);
-                            targetW = MAX_DIM;
-                          } else {
-                            targetW = Math.round((targetW * MAX_DIM) / targetH);
-                            targetH = MAX_DIM;
+                      // Filtro dimensional estricto: descartar elementos menores a 180x180 (iconos, separadores, logos de plantilla)
+                      if (w >= IMAGE_FILTER_CONFIG.MIN_WIDTH && h >= IMAGE_FILTER_CONFIG.MIN_HEIGHT) {
+                        const ratio = w / h;
+                        if (
+                          ratio >= IMAGE_FILTER_CONFIG.MIN_ASPECT_RATIO &&
+                          ratio <= IMAGE_FILTER_CONFIG.MAX_ASPECT_RATIO
+                        ) {
+                          const MAX_DIM = 1200;
+                          let targetW = w;
+                          let targetH = h;
+                          if (targetW > MAX_DIM || targetH > MAX_DIM) {
+                            if (targetW >= targetH) {
+                              targetH = Math.round((targetH * MAX_DIM) / targetW);
+                              targetW = MAX_DIM;
+                            } else {
+                              targetW = Math.round((targetW * MAX_DIM) / targetH);
+                              targetH = MAX_DIM;
+                            }
                           }
-                        }
 
-                        const canvas = document.createElement('canvas');
-                        canvas.width = targetW;
-                        canvas.height = targetH;
-                        const ctx = canvas.getContext('2d');
-                        try {
-                          if (ctx) {
-                            ctx.fillStyle = '#ffffff';
-                            ctx.fillRect(0, 0, targetW, targetH);
-                            if (imgObj.bitmap) {
-                              ctx.drawImage(imgObj.bitmap, 0, 0, targetW, targetH);
-                            } else if (imgObj.data) {
-                              if (targetW === w && targetH === h) {
-                                const imgDataObj = ctx.createImageData(w, h);
-                                if (imgObj.data.length === w * h * 4) {
-                                  // Mezclar canal alfa transparente sobre fondo blanco puro (#ffffff) para evitar fondo negro en JPEG
-                                  for (let p = 0; p < imgObj.data.length; p += 4) {
-                                    const a = imgObj.data[p + 3] / 255;
-                                    imgDataObj.data[p] = Math.round(imgObj.data[p] * a + 255 * (1 - a));
-                                    imgDataObj.data[p + 1] = Math.round(imgObj.data[p + 1] * a + 255 * (1 - a));
-                                    imgDataObj.data[p + 2] = Math.round(imgObj.data[p + 2] * a + 255 * (1 - a));
-                                    imgDataObj.data[p + 3] = 255;
-                                  }
-                                } else if (imgObj.data.length === w * h * 3) {
-                                  for (let p = 0, q = 0; p < imgObj.data.length; p += 3, q += 4) {
-                                    imgDataObj.data[q] = imgObj.data[p];
-                                    imgDataObj.data[q + 1] = imgObj.data[p + 1];
-                                    imgDataObj.data[q + 2] = imgObj.data[p + 2];
-                                    imgDataObj.data[q + 3] = 255;
-                                  }
-                                }
-                                ctx.putImageData(imgDataObj, 0, 0);
-                              } else {
-                                const bufferCanvas = document.createElement('canvas');
-                                bufferCanvas.width = w;
-                                bufferCanvas.height = h;
-                                const bufCtx = bufferCanvas.getContext('2d');
-                                if (bufCtx) {
-                                  const imgDataObj = bufCtx.createImageData(w, h);
+                          const canvas = document.createElement('canvas');
+                          canvas.width = targetW;
+                          canvas.height = targetH;
+                          const ctx = canvas.getContext('2d');
+                          try {
+                            if (ctx) {
+                              ctx.fillStyle = '#ffffff';
+                              ctx.fillRect(0, 0, targetW, targetH);
+                              if (imgObj.bitmap) {
+                                ctx.drawImage(imgObj.bitmap, 0, 0, targetW, targetH);
+                              } else if (imgObj.data) {
+                                if (targetW === w && targetH === h) {
+                                  const imgDataObj = ctx.createImageData(w, h);
                                   if (imgObj.data.length === w * h * 4) {
+                                    // Mezclar canal alfa transparente sobre fondo blanco puro (#ffffff) para evitar fondo negro en JPEG
                                     for (let p = 0; p < imgObj.data.length; p += 4) {
                                       const a = imgObj.data[p + 3] / 255;
                                       imgDataObj.data[p] = Math.round(imgObj.data[p] * a + 255 * (1 - a));
@@ -1577,38 +1572,69 @@ async function extractContentFromPDF(file: File): Promise<{ text: string; assets
                                       imgDataObj.data[q + 3] = 255;
                                     }
                                   }
-                                  bufCtx.putImageData(imgDataObj, 0, 0);
-                                  ctx.drawImage(bufferCanvas, 0, 0, targetW, targetH);
+                                  ctx.putImageData(imgDataObj, 0, 0);
+                                } else {
+                                  const bufferCanvas = document.createElement('canvas');
+                                  bufferCanvas.width = w;
+                                  bufferCanvas.height = h;
+                                  const bufCtx = bufferCanvas.getContext('2d');
+                                  if (bufCtx) {
+                                    const imgDataObj = bufCtx.createImageData(w, h);
+                                    if (imgObj.data.length === w * h * 4) {
+                                      for (let p = 0; p < imgObj.data.length; p += 4) {
+                                        const a = imgObj.data[p + 3] / 255;
+                                        imgDataObj.data[p] = Math.round(imgObj.data[p] * a + 255 * (1 - a));
+                                        imgDataObj.data[p + 1] = Math.round(imgObj.data[p + 1] * a + 255 * (1 - a));
+                                        imgDataObj.data[p + 2] = Math.round(imgObj.data[p + 2] * a + 255 * (1 - a));
+                                        imgDataObj.data[p + 3] = 255;
+                                      }
+                                    } else if (imgObj.data.length === w * h * 3) {
+                                      for (let p = 0, q = 0; p < imgObj.data.length; p += 3, q += 4) {
+                                        imgDataObj.data[q] = imgObj.data[p];
+                                        imgDataObj.data[q + 1] = imgObj.data[p + 1];
+                                        imgDataObj.data[q + 2] = imgObj.data[p + 2];
+                                        imgDataObj.data[q + 3] = 255;
+                                      }
+                                    }
+                                    bufCtx.putImageData(imgDataObj, 0, 0);
+                                    ctx.drawImage(bufferCanvas, 0, 0, targetW, targetH);
+                                  }
+                                  bufferCanvas.width = 0;
+                                  bufferCanvas.height = 0;
                                 }
-                                bufferCanvas.width = 0;
-                                bufferCanvas.height = 0;
+                              } else if (imgObj instanceof Image || (typeof Image !== 'undefined' && imgObj instanceof Image)) {
+                                ctx.drawImage(imgObj, 0, 0, targetW, targetH);
                               }
-                            } else if (imgObj instanceof Image || (typeof Image !== 'undefined' && imgObj instanceof Image)) {
-                              ctx.drawImage(imgObj, 0, 0, targetW, targetH);
-                            }
 
-                            // Descartar rectángulos de color plano, negros sólidos o fondos sin valor pedagógico
-                            if (!isSolidOrBlankCanvas(ctx, targetW, targetH)) {
-                              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                              if (dataUrl && dataUrl.length > 250) {
-                                const sig = getImageSignature(dataUrl);
-                                if (!seenSignatures.has(sig)) {
-                                  seenSignatures.add(sig);
-                                  assets.push({
-                                    id: `asset-img-${uid()}`,
-                                    type: 'image',
-                                    dataUrl,
-                                    pageOrSlide: i,
-                                    caption: `Figura de la página ${i} (${file.name})`,
-                                    contextNearby: pageStr.slice(0, 200) || `Página ${i}`,
-                                  });
+                              // Descartar rectángulos de color plano, negros sólidos o fondos sin valor pedagógico
+                              if (!isSolidOrBlankCanvas(ctx, targetW, targetH)) {
+                                const analysis = analyzeCanvasContent(canvas, w, h);
+                                if (!analysis.isDecorative) {
+                                  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                                  if (dataUrl && dataUrl.length > 250) {
+                                    const sig = getImageSignature(dataUrl);
+                                    if (!seenSignatures.has(sig)) {
+                                      seenSignatures.add(sig);
+                                      assets.push({
+                                        id: `asset-img-${uid()}`,
+                                        type: 'image',
+                                        dataUrl,
+                                        pageOrSlide: i,
+                                        caption: `Figura de la página ${i} (${file.name})`,
+                                        contextNearby: pageStr.slice(0, 200) || `Página ${i}`,
+                                        width: w,
+                                        height: h,
+                                        isDecorative: false,
+                                      });
+                                    }
+                                  }
                                 }
                               }
                             }
+                          } finally {
+                            canvas.width = 0;
+                            canvas.height = 0;
                           }
-                        } finally {
-                          canvas.width = 0;
-                          canvas.height = 0;
                         }
                       }
                     } catch {

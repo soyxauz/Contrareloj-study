@@ -1,24 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { StudyKit, DocumentAsset } from '../types';
 import {
   Image as ImageIcon,
   ZoomIn,
   Table as TableIcon,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  Sparkles,
+  Filter,
+  Eye,
+  EyeOff,
+  CheckCircle2
 } from 'lucide-react';
 import { ImageZoomModal } from './ImageZoomModal';
 import { getAssetsMap, getAssetById } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
+import {
+  classifyDocumentAsset,
+  type ImageClassificationResult
+} from '../utils/imageClassifier';
 
 interface ImagesGalleryViewProps {
   kit: StudyKit;
   onUpdateKit?: (updatedKit: StudyKit) => void;
 }
 
-export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => {
+type FilterMode = 'pedagogical' | 'all' | 'high_res';
+
+export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpdateKit }) => {
   const { theme } = useTheme();
   const [assets, setAssets] = useState<DocumentAsset[]>(() => kit.assets || []);
   const [selectedAsset, setSelectedAsset] = useState<DocumentAsset | null>(null);
@@ -26,17 +38,85 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
   const [isHydrating, setIsHydrating] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ completed: number; total: number } | null>(null);
 
+  // Modo de filtrado: 'pedagogical' (default recomendado), 'all' (todo), 'high_res' (≥400px)
+  const [filterMode, setFilterMode] = useState<FilterMode>('pedagogical');
+  const [classificationMap, setClassificationMap] = useState<Map<string, ImageClassificationResult>>(new Map());
+  const [notification, setNotification] = useState<string | null>(null);
+
   // Paginación eficiente para mantener el uso de memoria bajo control (máximo 12 imágenes en DOM a la vez)
   const PAGE_SIZE = 12;
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(assets.length / PAGE_SIZE));
-  const visibleAssets = assets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // Mantener activos sincronizados y resetear página cuando cambia el kit
   useEffect(() => {
     setAssets(kit.assets || []);
     setCurrentPage(1);
   }, [kit.id, kit.assets]);
+
+  // Clasificación continua y asíncrona de activos documentales (detectar fondos planos, banners y logos de licencia)
+  useEffect(() => {
+    let isMounted = true;
+
+    const runClassification = async () => {
+      let hasUpdates = false;
+      const nextMap = new Map(classificationMap);
+
+      for (const asset of assets) {
+        const existing = nextMap.get(asset.id);
+        if (!existing || existing.pending) {
+          const res = await classifyDocumentAsset(asset);
+          if (!isMounted) return;
+          if (!res.pending || !existing) {
+            nextMap.set(asset.id, res);
+            hasUpdates = true;
+          }
+        }
+      }
+
+      if (isMounted && hasUpdates) {
+        setClassificationMap(nextMap);
+      }
+    };
+
+    runClassification();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [assets]);
+
+  // Cantidad de elementos de diseño/plantilla clasificados
+  const decorativeCount = useMemo(() => {
+    return assets.filter(a => {
+      const info = classificationMap.get(a.id);
+      return a.isDecorative === true || info?.isDecorative === true;
+    }).length;
+  }, [assets, classificationMap]);
+
+  // Activos resultantes según el filtro activo
+  const filteredAssets = useMemo(() => {
+    if (filterMode === 'all') return assets;
+
+    return assets.filter(a => {
+      const info = classificationMap.get(a.id);
+      const isDecorative = a.isDecorative === true || info?.isDecorative === true;
+
+      if (filterMode === 'pedagogical') {
+        return !isDecorative;
+      }
+
+      if (filterMode === 'high_res') {
+        const w = a.width || info?.width || 0;
+        const h = a.height || info?.height || 0;
+        return !isDecorative && w >= 400 && h >= 400;
+      }
+
+      return true;
+    });
+  }, [assets, classificationMap, filterMode]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / PAGE_SIZE));
+  const visibleAssets = filteredAssets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // Garantizar fondo blanco puro (#ffffff) eliminando fondos negros de transparencia JPEG solo en la página visible
   useEffect(() => {
@@ -155,10 +235,10 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
     }
   };
 
-  // Ejecutar carga de imágenes al montar, cambiar kit o cambiar de página
+  // Ejecutar carga de imágenes al montar, cambiar kit, filtro o cambiar de página
   useEffect(() => {
     loadMissingAssetsForCurrentPage();
-  }, [kit.id, currentPage]);
+  }, [kit.id, currentPage, filterMode]);
 
   // Reaccionar inmediatamente cuando la sincronización en segundo plano guarda nuevas imágenes
   useEffect(() => {
@@ -184,29 +264,75 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
     };
   }, [assets]);
 
+  // Eliminación individual de un activo del Study Kit
+  const handleDeleteAsset = (assetId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updated = assets.filter(a => a.id !== assetId);
+    setAssets(updated);
+    if (onUpdateKit) {
+      onUpdateKit({
+        ...kit,
+        assets: updated,
+      });
+    }
+    showNotification('Figura eliminada del material de estudio');
+  };
+
+  // Purgar permanentemente todos los adornos y elementos de plantilla detectados
+  const handlePurgeDecorativeAssets = () => {
+    const cleanAssets = assets.filter(a => {
+      const info = classificationMap.get(a.id);
+      return !(a.isDecorative === true || info?.isDecorative === true);
+    });
+    const purgedCount = assets.length - cleanAssets.length;
+    setAssets(cleanAssets);
+    if (onUpdateKit) {
+      onUpdateKit({
+        ...kit,
+        assets: cleanAssets,
+      });
+    }
+    showNotification(`Se purgaron ${purgedCount} imágenes de diseño del kit`);
+  };
+
+  const showNotification = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => {
+      setNotification(prev => (prev === msg ? null : prev));
+    }, 3500);
+  };
+
   const currentIndex = selectedAsset
-    ? assets.findIndex((a) => a.id === selectedAsset.id || a.dataUrl === selectedAsset.dataUrl)
+    ? filteredAssets.findIndex((a) => a.id === selectedAsset.id || a.dataUrl === selectedAsset.dataUrl)
     : -1;
 
   const hasPrev = currentIndex > 0;
-  const hasNext = currentIndex >= 0 && currentIndex < assets.length - 1;
+  const hasNext = currentIndex >= 0 && currentIndex < filteredAssets.length - 1;
 
   const handlePrev = () => {
     if (hasPrev) {
-      setSelectedAsset(assets[currentIndex - 1]);
+      setSelectedAsset(filteredAssets[currentIndex - 1]);
     }
   };
 
   const handleNext = () => {
     if (hasNext) {
-      setSelectedAsset(assets[currentIndex + 1]);
+      setSelectedAsset(filteredAssets[currentIndex + 1]);
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeIn">
+      {/* Toast Notification */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-[99999] bg-zinc-900/95 text-white border border-white/10 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 backdrop-blur-xl animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-xs font-semibold">{notification}</span>
+        </div>
+      )}
+
       {/* View Header */}
-      <div className={`mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b ${
+      <div className={`mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b ${
         theme === 'dark' ? 'border-thea-border/60' : theme === 'kitty' ? 'border-pink-200' : 'border-slate-200'
       }`}>
         <div>
@@ -231,7 +357,10 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                   ? 'bg-slate-100 text-slate-700 border-slate-200'
                   : 'bg-violet-500/20 text-violet-300 border-violet-500/30'
               }`}>
-                {assets.length} {assets.length === 1 ? 'activo extraído' : 'activos extraídos'}
+                {filteredAssets.length} {filteredAssets.length === 1 ? 'figura' : 'figuras'}
+                {decorativeCount > 0 && filterMode === 'pedagogical' && (
+                  <span className="opacity-75 font-normal ml-1">({decorativeCount} de diseño ocultadas)</span>
+                )}
               </span>
             </h1>
 
@@ -249,23 +378,6 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                 </span>
               </span>
             )}
-
-            {!isHydrating && assets.some(a => !a.dataUrl) && (
-              <button
-                type="button"
-                onClick={() => loadMissingAssetsForCurrentPage()}
-                className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  theme === 'kitty'
-                    ? 'bg-pink-100 hover:bg-pink-200 text-pink-800 border-pink-300'
-                    : theme === 'light'
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
-                    : 'bg-violet-600/30 hover:bg-violet-600 text-violet-200 border-violet-500/40'
-                }`}
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Cargar imágenes faltantes</span>
-              </button>
-            )}
           </div>
           <p className={`text-xs sm:text-sm max-w-2xl ${
             theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
@@ -273,10 +385,124 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
             Todas las figuras, diagramas, esquemas y tablas extraídos de &quot;{kit.title}&quot;.
           </p>
         </div>
+
+        {/* Toolbar de Filtro y Limpieza */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className={`p-1 rounded-xl border flex items-center gap-1 ${
+            theme === 'dark'
+              ? 'bg-[#120d24]/90 border-white/[0.08]'
+              : theme === 'kitty'
+              ? 'bg-pink-50 border-pink-200'
+              : 'bg-slate-100 border-slate-200'
+          }`}>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterMode('pedagogical');
+                setCurrentPage(1);
+              }}
+              title="Mostrar solo diagramas y figuras pedagógicas (sin adornos ni logos)"
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-transform duration-150 cursor-pointer active:scale-95 flex items-center gap-1.5 ${
+                filterMode === 'pedagogical'
+                  ? theme === 'dark'
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
+                    : theme === 'kitty'
+                    ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                    : 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Diagramas ({assets.length - decorativeCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setFilterMode('all');
+                setCurrentPage(1);
+              }}
+              title="Mostrar todas las imágenes del documento incluyendo elementos de plantilla"
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-transform duration-150 cursor-pointer active:scale-95 flex items-center gap-1.5 ${
+                filterMode === 'all'
+                  ? theme === 'dark'
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
+                    : theme === 'kitty'
+                    ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                    : 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Todas ({assets.length})</span>
+            </button>
+          </div>
+
+          {/* Botón Purgar Adornos (solo visible si existen elementos decorativos) */}
+          {decorativeCount > 0 && onUpdateKit && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`¿Deseas purgar permanentemente ${decorativeCount} imágenes de diseño/plantilla de este Study Kit?`)) {
+                  handlePurgeDecorativeAssets();
+                }
+              }}
+              title="Eliminar permanentemente los fondos planos, logos de licencia y banners de plantilla"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-transform duration-150 cursor-pointer active:scale-95 flex items-center gap-1.5 border shadow-sm ${
+                theme === 'dark'
+                  ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 hover:border-amber-500/50'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Limpiar {decorativeCount} adornos</span>
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* Banner Informativo cuando hay imágenes de plantilla ocultadas */}
+      {filterMode === 'pedagogical' && decorativeCount > 0 && (
+        <div className={`mb-6 p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+          theme === 'dark'
+            ? 'bg-violet-950/30 border-violet-800/40 text-violet-200'
+            : theme === 'kitty'
+            ? 'bg-pink-50 border-pink-200 text-pink-900'
+            : 'bg-slate-50 border-slate-200 text-slate-700'
+        }`}>
+          <div className="flex items-center gap-2">
+            <EyeOff className="w-4 h-4 text-violet-400 shrink-0" />
+            <span>
+              Filtro activo: se han ocultado <strong>{decorativeCount} imágenes de diseño</strong> (logos de licencia, cajas de plantilla o banners de fondo).
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setFilterMode('all')}
+              className="underline font-semibold hover:text-white cursor-pointer active:scale-95"
+            >
+              Ver todas
+            </button>
+            {onUpdateKit && (
+              <>
+                <span className="opacity-40">•</span>
+                <button
+                  type="button"
+                  onClick={handlePurgeDecorativeAssets}
+                  className="font-bold text-amber-400 hover:text-amber-300 cursor-pointer active:scale-95 flex items-center gap-1"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Purgar del Kit
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Empty State */}
-      {assets.length === 0 ? (
+      {filteredAssets.length === 0 ? (
         <div className={`max-w-xl mx-auto my-12 p-8 rounded-3xl border text-center space-y-4 shadow-xl ${
           theme === 'dark'
             ? 'bg-[#0e0b16]/95 border-white/[0.08] text-white'
@@ -286,14 +512,26 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
             <ImageIcon className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-white tracking-tight">No hay imágenes en este kit</h3>
+            <h3 className="text-base font-bold text-white tracking-tight">
+              {filterMode === 'pedagogical' && assets.length > 0
+                ? 'Solo se detectaron elementos decorativos de diseño'
+                : 'No hay imágenes en este kit'}
+            </h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Las figuras, diagramas y tablas se extraen automáticamente de archivos PDF, Word (DOCX) y presentaciones PowerPoint (PPTX) que contienen recursos visuales.
+              {filterMode === 'pedagogical' && assets.length > 0
+                ? 'Las imágenes extraídas corresponden a fondos planos o adornos de plantilla. Puedes pulsar "Ver todas" para examinarlas.'
+                : 'Las figuras, diagramas y tablas se extraen automáticamente de archivos PDF, Word (DOCX) y presentaciones PowerPoint (PPTX) que contienen recursos visuales.'}
             </p>
           </div>
-          <p className="text-[11px] text-zinc-500">
-            Si subes un archivo con esquemas o gráficos, aparecerán organizados y listos para consulta aquí.
-          </p>
+          {filterMode === 'pedagogical' && assets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilterMode('all')}
+              className="px-4 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-500 transition-transform active:scale-95 cursor-pointer shadow-lg"
+            >
+              Mostrar todas las imágenes ({assets.length})
+            </button>
+          )}
         </div>
       ) : (
         /* Image Grid */
@@ -304,6 +542,8 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
               const isImage = asset.type === 'image';
               const pageInfo = asset.pageOrSlide ? `Pág. / Diapositiva ${asset.pageOrSlide}` : `Elemento #${globalIndex + 1}`;
               const isAssetLoading = loadingAssetIds.has(asset.id);
+              const classInfo = classificationMap.get(asset.id);
+              const isDec = asset.isDecorative === true || classInfo?.isDecorative === true;
 
               return (
                 <div
@@ -315,13 +555,13 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                       loadSingleAsset(asset.id);
                     }
                   }}
-                  className={`group border rounded-2xl overflow-hidden transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col hover:scale-[1.015] active:scale-[0.985] ${
+                  className={`group relative border rounded-2xl overflow-hidden transition-[transform,border-color,box-shadow] duration-200 cursor-pointer flex flex-col hover:scale-[1.015] active:scale-[0.985] ${
                     theme === 'dark'
                       ? 'bg-[#0e0b16]/95 border-white/[0.08] hover:border-white/25 hover:shadow-2xl'
                       : 'thea-glass-card thea-glass-pill-hover text-zinc-950'
                   }`}
                 >
-                  {/* Image Box - Pure White Background in all themes per user request */}
+                  {/* Image Box - Pure White Background in all themes */}
                   <div className="relative aspect-video overflow-hidden flex items-center justify-center p-2 border-b bg-white border-slate-200">
                     {asset.dataUrl ? (
                       <img
@@ -365,7 +605,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                     )}
 
                     {/* Page/Slide Badge */}
-                    <span className={`absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md border tabular-nums ${
+                    <span className={`absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md border tabular-nums z-10 ${
                       theme === 'dark'
                         ? 'bg-black/85 border-white/10 text-zinc-200'
                         : theme === 'kitty'
@@ -375,17 +615,41 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                       {pageInfo}
                     </span>
 
-                    {/* Type Badge */}
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 absolute top-2 right-2 ${
-                      theme === 'dark'
-                        ? 'bg-white/[0.08] border-white/15 text-zinc-300'
-                        : theme === 'kitty'
-                        ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
-                        : 'bg-white/95 border-slate-200 text-slate-700 shadow-xs'
-                    }`}>
-                      {isImage ? <ImageIcon className="w-3 h-3" /> : <TableIcon className="w-3 h-3" />}
-                      <span>{isImage ? 'Figura' : 'Tabla'}</span>
-                    </span>
+                    {/* Badges Derecha: Tipo + Badge de Diseño si corresponde */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                      {isDec && filterMode === 'all' && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500 text-zinc-950 shadow-sm">
+                          Diseño
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                        theme === 'dark'
+                          ? 'bg-black/85 border-white/10 text-zinc-300'
+                          : theme === 'kitty'
+                          ? 'bg-white/95 border-pink-200 text-pink-700 shadow-xs'
+                          : 'bg-white/95 border-slate-200 text-slate-700 shadow-xs'
+                      }`}>
+                        {isImage ? <ImageIcon className="w-3 h-3" /> : <TableIcon className="w-3 h-3" />}
+                        <span>{isImage ? 'Figura' : 'Tabla'}</span>
+                      </span>
+                    </div>
+
+                    {/* Botón de Papelera Rápida para Eliminar Imagen Individual */}
+                    {onUpdateKit && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('¿Deseas quitar esta figura de tu Study Kit?')) {
+                            handleDeleteAsset(asset.id, e);
+                          }
+                        }}
+                        title="Eliminar figura del kit"
+                        className="absolute bottom-2 right-2 z-10 p-1.5 rounded-lg bg-black/75 hover:bg-rose-600 text-zinc-300 hover:text-white border border-white/20 transition-transform duration-150 active:scale-90 cursor-pointer opacity-0 group-hover:opacity-100 shadow-md"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Caption Footer */}
@@ -395,21 +659,30 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                     }`}>
                       {asset.caption || `Figura ${globalIndex + 1} extraída del material`}
                     </p>
-                    <span className={`text-[10px] mt-2 font-semibold flex items-center gap-1 ${
-                      theme === 'dark' ? 'text-zinc-400' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-500'
-                    }`}>
-                      {asset.dataUrl ? (
-                        <>
-                          <ZoomIn className="w-3 h-3" />
-                          <span>Clic para ampliar</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Clic para cargar</span>
-                        </>
+                    <div className="mt-2.5 flex items-center justify-between text-[10px]">
+                      <span className={`font-semibold flex items-center gap-1 ${
+                        theme === 'dark' ? 'text-zinc-400' : theme === 'kitty' ? 'text-pink-600' : 'text-slate-500'
+                      }`}>
+                        {asset.dataUrl ? (
+                          <>
+                            <ZoomIn className="w-3 h-3" />
+                            <span>Clic para ampliar</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-3 h-3" />
+                            <span>Clic para cargar</span>
+                          </>
+                        )}
+                      </span>
+
+                      {/* Dimensiones en píxeles si están disponibles */}
+                      {(classInfo?.width || asset.width) && (
+                        <span className="text-[10px] text-zinc-500 font-mono tabular-nums">
+                          {asset.width || classInfo?.width}x{asset.height || classInfo?.height} px
+                        </span>
                       )}
-                    </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -424,7 +697,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
                 : 'bg-slate-50 border-slate-200'
             }`}>
               <span className="text-xs text-zinc-400 font-medium tabular-nums">
-                Página {currentPage} de {totalPages} ({assets.length} figuras totales)
+                Página {currentPage} de {totalPages} ({filteredAssets.length} figuras visibles)
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -463,7 +736,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
         </div>
       )}
 
-      {/* Modal de Zoom Centrado */}
+      {/* Modal de Zoom Centrado con Soporte de Eliminación */}
       {selectedAsset && selectedAsset.dataUrl && (
         <ImageZoomModal
           isOpen={Boolean(selectedAsset)}
@@ -477,7 +750,8 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit }) => 
           hasPrev={hasPrev}
           hasNext={hasNext}
           currentIndex={currentIndex >= 0 ? currentIndex : undefined}
-          totalCount={assets.length}
+          totalCount={filteredAssets.length}
+          onDelete={onUpdateKit ? () => handleDeleteAsset(selectedAsset.id) : undefined}
         />
       )}
     </div>

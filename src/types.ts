@@ -24,6 +24,10 @@ export interface DocumentAsset {
   caption?: string; // e.g. "Figura 1.2: Vía metabólica"
   pageOrSlide?: number;
   contextNearby?: string; // nearby sentence/caption
+  width?: number;
+  height?: number;
+  isDecorative?: boolean;
+  decorativeReason?: string;
 }
 
 export interface DocumentChunk {
