@@ -3690,10 +3690,40 @@ export const googleDriveService = {
       console.warn('[GoogleDriveService] Aviso asignando permiso público de Drive:', permErr);
     }
 
-    // 5. Canal Resiliente: comprimir el kit base para transporte URL de alta fiabilidad
+    // 5. Canal Resiliente: comprimir el kit base para transporte URL instantáneo (0ms, inmune a 404)
     let skParam = '';
+    let skHash = '';
     try {
-      const jsonStr = JSON.stringify({ v: 2, kit: contentBasedKit });
+      const minifiedKit = {
+        id: contentBasedKit.id,
+        title: contentBasedKit.title,
+        description: contentBasedKit.description,
+        category: contentBasedKit.category,
+        icon: contentBasedKit.icon,
+        color: contentBasedKit.color,
+        sourceText: contentBasedKit.sourceText,
+        sourceMaterials: (contentBasedKit.sourceMaterials || []).map(m => ({
+          id: m.id,
+          name: m.name,
+          type: m.type,
+          rawText: m.rawText,
+        })),
+        chunks: (contentBasedKit.chunks || []).map(c => ({
+          id: c.id,
+          chunkIndex: c.chunkIndex,
+          text: c.text,
+          pageOrSlide: c.pageOrSlide,
+        })),
+        flashcards: (contentBasedKit.flashcards || []).map(fc => ({
+          id: fc.id,
+          term: fc.term,
+          definition: fc.definition,
+          mastery: 'to-learn',
+          type: fc.type || 'concept',
+        })),
+      };
+
+      const jsonStr = JSON.stringify({ v: 2, kit: minifiedKit });
       if (typeof CompressionStream !== 'undefined') {
         const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate-raw'));
         const buf = await new Response(stream).arrayBuffer();
@@ -3704,7 +3734,11 @@ export const googleDriveService = {
           binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
         }
         const b64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        // Si el tamaño comprimido cabe holgadamente en el límite de URLs de navegadores (<3500 caracteres)
+        // El hash (#sk=...) nunca se transmite al servidor HTTP de Vercel/Nginx, evitando límites de cabecera
+        if (b64.length < 48000) {
+          skHash = b64;
+        }
+        // Para compatibilidad con clientes que no leen hash
         if (b64.length < 3500) {
           skParam = `&sk=${encodeURIComponent(b64)}`;
         }
@@ -3715,7 +3749,10 @@ export const googleDriveService = {
 
     // 6. Construir la URL absoluta basada en el kit de estudio
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
-    const shareUrl = `${origin}/kit/${kit.id}?shared_drive_id=${fileId}${skParam}`;
+    let shareUrl = `${origin}/kit/${kit.id}?shared_drive_id=${fileId}${skParam}`;
+    if (skHash) {
+      shareUrl += `#sk=${encodeURIComponent(skHash)}`;
+    }
 
     return { shareUrl, fileId };
   },
@@ -3724,17 +3761,31 @@ export const googleDriveService = {
    * Descarga o descomprime un kit de estudio compartido desde Google Drive o el payload de enlace seguro.
    * Inicializa su progreso a 0% limpio (Nivel 1, 0 aciertos) y lo guarda en su biblioteca local.
    * Soporta 3 capas de resiliencia:
-   * 1. Descompresión instantánea del parámetro URL 'sk' (0ms, inmune a 404).
+   * 1. Descompresión instantánea del parámetro URL 'sk' o hash '#sk=' (0ms, inmune a 404 y CORS).
    * 2. Proxy de descarga segura sin CORS (/api/drive/shared?fileId=...).
-   * 3. Descarga directa con el token del usuario receptor.
+   * 3. Descarga directa con el token del usuario receptor (sin popups bloqueados).
    */
   async importSharedKitFromDrive(fileId: string, currentUserId: string, compressedPayload?: string | null): Promise<StudyKit> {
     let rawKit: StudyKit | null = null;
 
-    // Capa 1: Si viene payload comprimido en la URL, descomprimir inmediatamente
-    if (compressedPayload && compressedPayload.trim()) {
+    // Obtener payload desde argumento, hash de la ventana o query search
+    let targetPayload = (compressedPayload && compressedPayload.trim()) ? compressedPayload.trim() : null;
+    if (!targetPayload && typeof window !== 'undefined') {
+      if (window.location.hash) {
+        const hashClean = window.location.hash.replace(/^#/, '');
+        const hashParams = new URLSearchParams(hashClean);
+        targetPayload = hashParams.get('sk') || hashParams.get('payload');
+      }
+      if (!targetPayload && window.location.search) {
+        const searchParams = new URLSearchParams(window.location.search);
+        targetPayload = searchParams.get('sk');
+      }
+    }
+
+    // Capa 1: Si viene payload comprimido en la URL o hash, descomprimir inmediatamente (0ms)
+    if (targetPayload && targetPayload.trim()) {
       try {
-        let base64 = decodeURIComponent(compressedPayload.trim()).replace(/-/g, '+').replace(/_/g, '/');
+        let base64 = decodeURIComponent(targetPayload.trim()).replace(/-/g, '+').replace(/_/g, '/');
         while (base64.length % 4 !== 0) {
           base64 += '=';
         }
@@ -3761,7 +3812,12 @@ export const googleDriveService = {
     // Capa 2: Si no vino payload comprimido o falló, consultar proxy de servidor sin restricciones de CORS (/api/drive/shared)
     if (!rawKit && fileId) {
       try {
-        const proxyRes = await fetch(`/api/drive/shared?fileId=${encodeURIComponent(fileId)}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const proxyRes = await fetch(`/api/drive/shared?fileId=${encodeURIComponent(fileId)}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
         if (proxyRes.ok) {
           const proxyJson = await proxyRes.json();
           if (proxyJson?.success && proxyJson?.data) {
@@ -3774,30 +3830,27 @@ export const googleDriveService = {
       }
     }
 
-    // Capa 3: Fallback con el token del usuario actual
+    // Capa 3: Fallback con el token del usuario actual (NUNCA disparar popup interactivo en segundo plano)
     if (!rawKit && fileId) {
       let token = this.getValidAccessToken();
       if (!token && this.isLinked()) {
-        token = await this.attemptSilentTokenRefresh();
-      }
-      if (!token) {
-        token = await this.requestGoogleAccess();
-      }
-      if (!token) {
-        throw new Error('Inicia sesión con Google Drive para poder importar el kit compartido.');
+        try {
+          token = await this.attemptSilentTokenRefresh();
+        } catch {}
       }
 
-      try {
-        const rawData = await this.readJsonFromDrive<any>(token, fileId);
-        rawKit = rawData?.kit || rawData;
-      } catch (readErr: any) {
-        console.warn('[GoogleDriveService] Descarga directa de Drive falló:', readErr);
-        throw new Error(`Error al leer archivo de Drive (${readErr?.message || '404'})`);
+      if (token) {
+        try {
+          const rawData = await this.readJsonFromDrive<any>(token, fileId);
+          rawKit = rawData?.kit || rawData;
+        } catch (readErr: any) {
+          console.warn('[GoogleDriveService] Descarga directa de Drive falló:', readErr);
+        }
       }
     }
 
     if (!rawKit || !rawKit.id || !rawKit.title) {
-      throw new Error('El archivo de Google Drive no contiene un kit de estudio válido.');
+      throw new Error('No se pudo acceder al kit de Google Drive (código 404 o acceso restringido).');
     }
 
     // 2. Asociar al usuario actual y generar preguntas inmediatas de práctica si venían vacías

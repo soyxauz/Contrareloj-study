@@ -39,6 +39,7 @@ export default async function handler(req: any, res: any) {
     const resp1 = await fetch(url1, {
       headers: { 'User-Agent': userAgent },
       redirect: 'follow',
+      signal: AbortSignal.timeout(3500),
     });
 
     if (resp1.ok) {
@@ -61,6 +62,7 @@ export default async function handler(req: any, res: any) {
     const resp2 = await fetch(url2, {
       headers: { 'User-Agent': userAgent },
       redirect: 'follow',
+      signal: AbortSignal.timeout(3500),
     });
 
     if (resp2.ok) {
@@ -83,6 +85,7 @@ export default async function handler(req: any, res: any) {
       const url3 = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${apiKey}`;
       const resp3 = await fetch(url3, {
         headers: { 'User-Agent': userAgent },
+        signal: AbortSignal.timeout(3500),
       });
 
       if (resp3.ok) {

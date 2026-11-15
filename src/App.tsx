@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
-import { BookOpen, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { BookOpen, AlertCircle, CheckCircle2, RefreshCw, X } from 'lucide-react';
 import { GoogleDriveAuthGate } from './components/GoogleDriveAuthGate';
 import { ShareKitModal } from './components/ShareKitModal';
 import { authService } from './services/authService';
@@ -139,16 +139,28 @@ export const App: React.FC = () => {
     return null;
   });
 
-  // Estado para importar Kit compartido desde URL (?shared_drive_id=... o ?sk=...)
+  // Estado para importar Kit compartido desde URL (?shared_drive_id=... o ?sk=... o #sk=...)
   const [sharedFileId, setSharedFileId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
-    return params.get('shared_drive_id');
+    let id = params.get('shared_drive_id');
+    if (!id && window.location.hash) {
+      const hash = window.location.hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(hash);
+      id = hashParams.get('shared_drive_id') || hashParams.get('id');
+    }
+    return id;
   });
   const [sharedPayload, setSharedPayload] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
-    return params.get('sk');
+    let sk = params.get('sk');
+    if (!sk && window.location.hash) {
+      const hash = window.location.hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(hash);
+      sk = hashParams.get('sk') || hashParams.get('payload');
+    }
+    return sk;
   });
   const [isImportingSharedKit, setIsImportingSharedKit] = useState(false);
   const [toastNotification, setToastNotification] = useState<string | null>(null);
@@ -162,6 +174,7 @@ export const App: React.FC = () => {
   const isHydratedRef = useRef(false);
   const isStartupHydrationRef = useRef(true);
   const modeCleanupTimerRef = useRef<any>(null);
+  const activeImportKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = googleDriveService.subscribe((state) => {
@@ -172,9 +185,35 @@ export const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
+  // Escuchar cambios de hash o popstate para enlaces compartidos dinámicos
+  useEffect(() => {
+    const handleHashOrPopState = () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const hash = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
+      const hashParams = new URLSearchParams(hash);
+
+      const fId = searchParams.get('shared_drive_id') || hashParams.get('shared_drive_id') || hashParams.get('id');
+      const sk = searchParams.get('sk') || hashParams.get('sk') || hashParams.get('payload');
+
+      if (fId && fId !== sharedFileId) setSharedFileId(fId);
+      if (sk && sk !== sharedPayload) setSharedPayload(sk);
+    };
+
+    window.addEventListener('hashchange', handleHashOrPopState);
+    window.addEventListener('popstate', handleHashOrPopState);
+    return () => {
+      window.removeEventListener('hashchange', handleHashOrPopState);
+      window.removeEventListener('popstate', handleHashOrPopState);
+    };
+  }, [sharedFileId, sharedPayload]);
+
   // Importación reactiva de kit de estudio compartido desde Google Drive o payload directo
   useEffect(() => {
-    if (!isDriveLinked || (!sharedFileId && !sharedPayload) || isImportingSharedKit) return;
+    if (!sharedFileId && !sharedPayload) return;
+
+    const currentImportKey = `${sharedFileId || ''}::${sharedPayload ? sharedPayload.slice(0, 32) : ''}`;
+    if (activeImportKeyRef.current === currentImportKey) return;
+
     let targetUserId = currentUser?.id || authService.getCurrentUser()?.id;
     if (!targetUserId && typeof localStorage !== 'undefined') {
       const gProf = localStorage.getItem('thea_gdrive_profile');
@@ -185,25 +224,38 @@ export const App: React.FC = () => {
         } catch {}
       }
     }
-    if (!targetUserId) return;
+    if (!targetUserId) {
+      targetUserId = 'guest';
+    }
 
-    let isMounted = true;
+    activeImportKeyRef.current = currentImportKey;
     setIsImportingSharedKit(true);
+
+    // Timeout de seguridad estricto de 12s que garantiza que NUNCA quede congelado en bucle
+    const safetyTimer = setTimeout(() => {
+      setIsImportingSharedKit(false);
+      setSharedFileId(null);
+      setSharedPayload(null);
+    }, 12000);
 
     (async () => {
       try {
         const imported = await googleDriveService.importSharedKitFromDrive(sharedFileId || '', targetUserId, sharedPayload);
-        if (!isMounted) return;
 
+        clearTimeout(safetyTimer);
         setKits(prev => [imported, ...prev.filter(k => k.id !== imported.id)]);
         setCurrentKit(imported);
         safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, imported.id);
 
-        // Limpiar los parámetros de la URL preservando la ruta y otros parámetros
-        const url = new URL(window.location.href);
-        url.searchParams.delete('shared_drive_id');
-        url.searchParams.delete('sk');
-        window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+        // Limpiar los parámetros de la URL y el hash preservando la ruta
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('shared_drive_id');
+          url.searchParams.delete('sk');
+          url.hash = '';
+          window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+        } catch {}
+
         setSharedFileId(null);
         setSharedPayload(null);
 
@@ -213,18 +265,31 @@ export const App: React.FC = () => {
         // Abrir el kit importado directamente en su modo de estudio principal (Flashcards)
         handleSelectMode('flashcards', false);
       } catch (err: any) {
+        clearTimeout(safetyTimer);
         console.error('[App] Error al importar kit compartido:', err);
         setToastNotification(`Error al importar kit: ${err?.message || 'Archivo no encontrado'}`);
         setTimeout(() => setToastNotification(null), 6000);
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('shared_drive_id');
+          url.searchParams.delete('sk');
+          url.hash = '';
+          window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+        } catch {}
+
         setSharedFileId(null);
         setSharedPayload(null);
       } finally {
-        if (isMounted) setIsImportingSharedKit(false);
+        clearTimeout(safetyTimer);
+        setIsImportingSharedKit(false);
       }
     })();
 
-    return () => { isMounted = false; };
-  }, [isDriveLinked, sharedFileId, sharedPayload, currentUser?.id]);
+    return () => {
+      clearTimeout(safetyTimer);
+    };
+  }, [sharedFileId, sharedPayload, currentUser?.id]);
 
   // Motor de scroll inercial suave ultraligero (0 dependencias, 0% CPU en reposo)
   useEffect(() => {
@@ -1304,28 +1369,45 @@ export const App: React.FC = () => {
           <div className="max-w-md mx-auto px-6 py-28 text-center animate-fadeIn select-none">
             <div className="relative w-16 h-16 mx-auto mb-5 flex items-center justify-center">
               <div className={`absolute inset-0 rounded-2xl blur-xl animate-pulse ${
-                theme === 'kitty' ? 'bg-pink-400/25' : theme === 'light' ? 'bg-sky-400/25' : 'bg-sky-500/20'
+                theme === 'kitty' ? 'bg-pink-400/30' : theme === 'light' ? 'bg-sky-400/30' : 'bg-sky-500/20'
               }`} />
               <div className={`relative w-16 h-16 rounded-2xl border flex items-center justify-center shadow-inner ${
                 theme === 'kitty'
-                  ? 'bg-pink-100/90 border-pink-300 text-pink-600'
+                  ? 'bg-pink-100 border-pink-400 text-pink-700'
                   : theme === 'light'
-                  ? 'bg-sky-100/90 border-sky-300 text-sky-700'
+                  ? 'bg-sky-100 border-sky-400 text-sky-800'
                   : 'bg-white/[0.05] border-white/10 text-sky-400'
               }`}>
                 <RefreshCw className="w-8 h-8 animate-spin" />
               </div>
             </div>
-            <h3 className={`text-xl font-extrabold mb-2 tracking-tight ${
-              theme === 'kitty' ? 'text-pink-900' : theme === 'light' ? 'text-zinc-900' : 'text-white'
+            <h3 className={`text-xl font-black mb-2 tracking-tight ${
+              theme === 'kitty' ? 'text-pink-950 font-bold' : theme === 'light' ? 'text-zinc-950 font-bold' : 'text-white'
             }`}>
               Importando Kit Compartido...
             </h3>
-            <p className={`text-xs max-w-xs mx-auto leading-relaxed ${
-              theme === 'kitty' ? 'text-pink-700/80 font-medium' : theme === 'light' ? 'text-zinc-600 font-medium' : 'text-slate-400'
+            <p className={`text-sm max-w-xs mx-auto leading-relaxed mb-6 ${
+              theme === 'kitty' ? 'text-pink-800 font-medium' : theme === 'light' ? 'text-zinc-700 font-medium' : 'text-slate-400'
             }`}>
               Preparando el contenido base y configurando tu espacio de estudio con progreso 0% limpio.
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setIsImportingSharedKit(false);
+                setSharedFileId(null);
+                setSharedPayload(null);
+              }}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border active:scale-95 ${
+                theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border-pink-300 text-pink-800 shadow-sm'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-zinc-50 border-zinc-300 text-zinc-800 shadow-sm'
+                  : 'bg-white/10 hover:bg-white/15 border-white/10 text-white'
+              }`}
+            >
+              Cancelar
+            </button>
           </div>
         ) : currentKit ? (
           <React.Suspense fallback={<ViewLoadingFallback />}>
@@ -1513,21 +1595,36 @@ export const App: React.FC = () => {
 
       {/* Banner de Descarga e Importación Activa de Kit Compartido */}
       {isImportingSharedKit && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 backdrop-blur-xl animate-fadeIn text-xs font-bold transition-all ${
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 backdrop-blur-xl animate-fadeIn text-xs font-bold transition-all ${
           theme === 'kitty'
-            ? 'bg-white/95 border-2 border-pink-400 text-pink-700 shadow-[0_8px_30px_rgba(236,72,153,0.3)]'
+            ? 'bg-pink-100/98 border-2 border-pink-500 text-pink-900 shadow-[0_8px_30px_rgba(236,72,153,0.35)]'
             : theme === 'light'
-            ? 'bg-white/95 border-2 border-sky-400 text-sky-800 shadow-[0_8px_30px_rgba(14,165,233,0.3)]'
-            : 'bg-[#0e0b16]/95 border border-sky-400/40 text-sky-200 shadow-sky-950/40'
+            ? 'bg-sky-100/98 border-2 border-sky-600 text-sky-950 shadow-[0_8px_30px_rgba(14,165,233,0.35)]'
+            : 'bg-slate-900/98 border border-sky-400 text-white shadow-[0_8px_30px_rgba(0,0,0,0.6)]'
         }`}>
           <div className={`w-3.5 h-3.5 rounded-full border-2 animate-spin shrink-0 ${
             theme === 'kitty'
-              ? 'border-pink-300 border-t-pink-600'
+              ? 'border-pink-300 border-t-pink-700'
               : theme === 'light'
-              ? 'border-sky-300 border-t-sky-600'
-              : 'border-sky-400/30 border-t-sky-400'
+              ? 'border-sky-300 border-t-sky-700'
+              : 'border-sky-400/40 border-t-sky-300'
           }`} />
-          <span>Descargando e importando kit de estudio desde Google Drive...</span>
+          <span className="tracking-tight">Descargando e importando kit de estudio desde Google Drive...</span>
+          <button
+            type="button"
+            onClick={() => {
+              setIsImportingSharedKit(false);
+              setSharedFileId(null);
+              setSharedPayload(null);
+            }}
+            className={`ml-1 p-0.5 rounded-full hover:bg-black/10 transition-colors cursor-pointer ${
+              theme === 'kitty' ? 'text-pink-800' : theme === 'light' ? 'text-sky-900' : 'text-slate-300'
+            }`}
+            title="Cancelar importación"
+            aria-label="Cerrar"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>
