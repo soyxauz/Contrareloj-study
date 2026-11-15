@@ -1,26 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   X,
-  Send,
-  Sparkles,
-  FileText,
-  HelpCircle,
+  Search,
   Copy,
   Check,
-  RefreshCw,
-  Crop,
+  ExternalLink,
   Layers,
-  ExternalLink
+  Crop,
+  Globe,
+  FileText
 } from 'lucide-react';
 import { useTheme } from '../services/themeService';
-import { FormattedText } from './FormattedText';
-import { analyzeImageSelection, type LensTab } from '../services/lensVisionService';
-
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-}
 
 export interface LensInspectorPanelProps {
   isOpen: boolean;
@@ -37,7 +27,31 @@ export interface LensInspectorPanelProps {
 }
 
 /**
- * Icono SVG vectorial estilizado de Google Lens
+ * Logotipo oficial multicolor de Google (G)
+ */
+export const GoogleGLogo: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <path
+      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      fill="#4285F4"
+    />
+    <path
+      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      fill="#34A853"
+    />
+    <path
+      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      fill="#FBBC05"
+    />
+    <path
+      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      fill="#EA4335"
+    />
+  </svg>
+);
+
+/**
+ * Icono vectorial oficial estilizado de Google Lens
  */
 export const GoogleLensLogo: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
@@ -50,6 +64,54 @@ export const GoogleLensLogo: React.FC<{ className?: string }> = ({ className = '
   </svg>
 );
 
+/**
+ * Copia una imagen local o base64 al portapapeles del sistema
+ */
+async function copyDataUrlToClipboard(src: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !navigator.clipboard || !window.ClipboardItem) {
+    return false;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width || 300;
+        canvas.height = img.naturalHeight || img.height || 300;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(false);
+          return;
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            resolve(false);
+            return;
+          }
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                'image/png': blob,
+              }),
+            ]);
+            resolve(true);
+          } catch {
+            resolve(false);
+          }
+        }, 'image/png');
+      } catch {
+        resolve(false);
+      }
+    };
+    img.onerror = () => resolve(false);
+    img.src = src;
+  });
+}
+
 export const LensInspectorPanel: React.FC<LensInspectorPanelProps> = ({
   isOpen,
   onClose,
@@ -60,436 +122,326 @@ export const LensInspectorPanel: React.FC<LensInspectorPanelProps> = ({
   context,
 }) => {
   const { theme } = useTheme();
-  const [activeTab, setActiveTab] = useState<LensTab>('overview');
-  const [tabContents, setTabContents] = useState<Record<LensTab, string>>({
-    overview: '',
-    ocr: '',
-    exam: '',
-  });
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Chat conversacional sobre el recorte
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [inputQuery, setInputQuery] = useState<string>('');
-  const [isSendingQuery, setIsSendingQuery] = useState<boolean>(false);
-  const [hasCopied, setHasCopied] = useState<boolean>(false);
-
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Ejecuta el análisis de la pestaña activa cuando cambia el recorte o la pestaña
-  useEffect(() => {
-    if (!isOpen || !croppedDataUrl) return;
-
-    // Si la pestaña ya tiene contenido para este recorte, no re-ejecutar automáticamente
-    if (tabContents[activeTab]) return;
-
-    let isMounted = true;
-    setIsLoading(true);
-    setErrorMsg(null);
-
-    analyzeImageSelection(croppedDataUrl, activeTab, undefined, context)
-      .then((res) => {
-        if (!isMounted) return;
-        setTabContents((prev) => ({ ...prev, [activeTab]: res }));
-      })
-      .catch((err: any) => {
-        if (!isMounted) return;
-        setErrorMsg(err.message || 'Error al analizar la selección.');
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, croppedDataUrl, activeTab, context]);
-
-  // Limpiar estados cuando cambia el recorte de imagen
-  useEffect(() => {
-    setTabContents({ overview: '', ocr: '', exam: '' });
-    setChatMessages([]);
-    setErrorMsg(null);
-  }, [croppedDataUrl]);
-
-  // Manejador para recargar la pestaña actual
-  const handleReloadCurrentTab = async () => {
-    if (!croppedDataUrl || isLoading) return;
-    setIsLoading(true);
-    setErrorMsg(null);
-    try {
-      const res = await analyzeImageSelection(croppedDataUrl, activeTab, undefined, context);
-      setTabContents((prev) => ({ ...prev, [activeTab]: res }));
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error al actualizar el análisis.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Enviar pregunta del usuario en el chat
-  const handleSendQuery = async (queryText?: string) => {
-    const q = (queryText || inputQuery).trim();
-    if (!q || isSendingQuery || !croppedDataUrl) return;
-
-    const userMsgId = `u_${Date.now()}`;
-    const assistantMsgId = `a_${Date.now()}`;
-
-    setChatMessages((prev) => [
-      ...prev,
-      { id: userMsgId, role: 'user', content: q },
-      { id: assistantMsgId, role: 'assistant', content: 'Analizando con IA...' },
-    ]);
-    setInputQuery('');
-    setIsSendingQuery(true);
-
-    try {
-      const reply = await analyzeImageSelection(croppedDataUrl, activeTab, q, context);
-      setChatMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId ? { ...msg, content: reply } : msg
-        )
-      );
-    } catch (err: any) {
-      setChatMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId
-            ? { ...msg, content: `Error: ${err.message || 'No se pudo procesar la consulta.'}` }
-            : msg
-        )
-      );
-    } finally {
-      setIsSendingQuery(false);
-      setTimeout(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      }, 100);
-    }
-  };
-
-  // Copiar texto analizado al portapapeles
-  const handleCopyText = async () => {
-    const currentText = tabContents[activeTab];
-    if (!currentText) return;
-    try {
-      await navigator.clipboard.writeText(currentText);
-      setHasCopied(true);
-      setTimeout(() => setHasCopied(false), 2000);
-    } catch (err) {
-      console.warn('Error al copiar texto:', err);
-    }
-  };
+  const [activeTab, setActiveTab] = useState<'lens' | 'matches' | 'text'>('lens');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [hasCopiedImage, setHasCopiedImage] = useState<boolean>(false);
+  const [hasCopiedText, setHasCopiedText] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
+  // Términos para enlaces de búsqueda web
+  const searchTerm = (searchQuery.trim() || context.caption || context.title || 'diagrama cientifico').slice(0, 120);
+
+  const handleCopyCrop = async () => {
+    if (!croppedDataUrl) return;
+    const ok = await copyDataUrlToClipboard(croppedDataUrl);
+    if (ok) {
+      setHasCopiedImage(true);
+      setTimeout(() => setHasCopiedImage(false), 2500);
+    }
+  };
+
+  const handleCopyCaption = () => {
+    if (!context.caption) return;
+    navigator.clipboard.writeText(context.caption);
+    setHasCopiedText(true);
+    setTimeout(() => setHasCopiedText(false), 2500);
+  };
+
+  const handleExecuteSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = (searchQuery.trim() || context.caption || context.title || '').trim();
+    if (!q) return;
+    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+    window.open(googleUrl, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div
-      className={`w-full sm:w-[390px] md:w-[430px] lg:w-[470px] shrink-0 h-full flex flex-col border-l select-text z-30 transition-transform duration-200 ease-out ${
+      role="dialog"
+      aria-label="Google Lens Asistente Visual"
+      className={`absolute bottom-0 inset-x-0 max-h-[62vh] sm:max-h-[58vh] md:max-h-[52vh] z-30 rounded-t-3xl border-t select-none flex flex-col shadow-2xl transition-transform duration-200 ease-out backdrop-blur-2xl ${
         theme === 'dark'
-          ? 'bg-[#0f0c1b]/95 border-white/[0.08] text-white shadow-2xl'
+          ? 'bg-zinc-950/95 border-white/20 text-white shadow-[0_-8px_32px_rgba(0,0,0,0.8)]'
           : theme === 'kitty'
-          ? 'bg-pink-50/95 border-pink-200 text-pink-950 shadow-xl'
-          : 'bg-white/95 border-slate-200 text-slate-900 shadow-xl'
-      } backdrop-blur-xl`}
+          ? 'bg-pink-950/95 border-pink-400/40 text-white shadow-[0_-8px_32px_rgba(100,20,50,0.5)]'
+          : 'bg-zinc-900/95 border-zinc-700 text-white shadow-[0_-8px_32px_rgba(0,0,0,0.6)]'
+      }`}
     >
-      {/* Cabecera del Inspector */}
-      <div className={`p-3.5 sm:p-4 border-b flex items-center justify-between gap-2.5 shrink-0 ${
-        theme === 'dark' ? 'border-white/[0.06] bg-white/[0.02]' : 'border-slate-100 bg-slate-50/60'
-      }`}>
+      {/* Tirador superior táctil estilo Asistente Android */}
+      <div className="pt-2 pb-1 flex justify-center shrink-0 cursor-pointer" onClick={onClose}>
+        <div className="w-12 h-1 bg-white/30 rounded-full" />
+      </div>
+
+      {/* Cabecera del Asistente Google Lens */}
+      <div className="px-4 py-2 border-b border-white/10 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center shrink-0 shadow-xs">
-            <GoogleLensLogo className="w-4 h-4" />
-          </div>
+          <GoogleGLogo className="w-5 h-5 shrink-0" />
           <div className="min-w-0">
             <h4 className="font-bold text-xs sm:text-sm tracking-tight truncate flex items-center gap-1.5">
               <span>Google Lens</span>
-              <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                IA Multimodal
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                Búsqueda Visual Nativa
               </span>
             </h4>
-            <p className="text-[11px] opacity-60 truncate">
-              {context.title || 'Análisis de selección'}
+            <p className="text-[11px] text-zinc-400 truncate">
+              {context.title || 'Recorte de imagen activo'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          {onOpenExternalLens && (
-            <button
-              type="button"
-              onClick={onOpenExternalLens}
-              title="Abrir este recorte en Google Lens externo"
-              className="p-1.5 rounded-lg border border-white/10 hover:bg-white/10 active:scale-95 transition-transform text-xs flex items-center gap-1 cursor-pointer"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline text-[11px]">Lens Web</span>
-            </button>
-          )}
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onNewCrop}
-            title="Trazar nuevo recorte en la figura"
-            className="p-1.5 rounded-lg border border-white/10 hover:bg-white/10 active:scale-95 transition-transform text-xs flex items-center gap-1 cursor-pointer"
+            title="Trazar nuevo encuadre en la figura"
+            className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-xs text-zinc-200 active:scale-95 transition-transform flex items-center gap-1.5 cursor-pointer"
           >
             <Crop className="w-3.5 h-3.5" />
-            <span className="hidden md:inline text-[11px]">Recortar</span>
+            <span className="hidden sm:inline text-[11px] font-medium">Re-encuadrar</span>
           </button>
           <button
             type="button"
             onClick={onClose}
-            title="Cerrar panel de análisis"
-            className="p-1.5 rounded-lg border border-white/10 hover:bg-white/10 active:scale-95 transition-transform cursor-pointer"
+            title="Cerrar asistente"
+            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-zinc-300 hover:text-white active:scale-95 transition-transform cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Miniatura del Recorte Activo */}
-      <div className="p-3 border-b border-white/[0.06] bg-black/10 shrink-0 flex items-center gap-3">
-        <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/20 bg-white shrink-0 shadow-sm flex items-center justify-center">
-          <img
-            src={croppedDataUrl}
-            alt="Área seleccionada"
-            className="w-full h-full object-contain p-0.5"
-          />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Área activa
-            </span>
-          </div>
-          <p className="text-[11px] opacity-70 truncate mt-0.5">
-            {context.caption || 'Región encuadrada con el puntero'}
-          </p>
-          <div className="flex items-center gap-2 mt-1.5">
-            <button
-              type="button"
-              onClick={onSelectFullImage}
-              title="Analizar la figura completa"
-              className="text-[10px] font-semibold text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center gap-1 cursor-pointer"
-            >
-              <Layers className="w-3 h-3" />
-              Analizar figura entera
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Pestañas de Análisis */}
-      <div className="flex items-center border-b border-white/[0.06] px-2 pt-1 gap-1 shrink-0 bg-white/[0.01]">
-        <button
-          type="button"
-          onClick={() => setActiveTab('overview')}
-          className={`flex-1 py-2 px-1 text-center text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'overview'
-              ? 'border-blue-500 text-blue-400'
-              : 'border-transparent opacity-60 hover:opacity-90'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Visión IA</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('ocr')}
-          className={`flex-1 py-2 px-1 text-center text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'ocr'
-              ? 'border-blue-500 text-blue-400'
-              : 'border-transparent opacity-60 hover:opacity-90'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Texto y Fórmulas</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('exam')}
-          className={`flex-1 py-2 px-1 text-center text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'exam'
-              ? 'border-blue-500 text-blue-400'
-              : 'border-transparent opacity-60 hover:opacity-90'
-          }`}
-        >
-          <HelpCircle className="w-3.5 h-3.5" />
-          <span>Examen</span>
-        </button>
-      </div>
-
-      {/* Cuerpo Desplazable con el Análisis */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 text-xs sm:text-sm">
-        {/* Barra superior de herramientas de contenido */}
-        <div className="flex items-center justify-between text-[11px] opacity-70">
-          <span className="font-semibold uppercase tracking-wider text-[10px]">
-            {activeTab === 'overview' && '✦ Explicación Conceptual y Fisiológica'}
-            {activeTab === 'ocr' && '✦ Transcripción y Ecuaciones KaTeX'}
-            {activeTab === 'exam' && '✦ Preguntas de Opción Múltiple'}
-          </span>
-          <div className="flex items-center gap-1">
-            {tabContents[activeTab] && (
-              <button
-                type="button"
-                onClick={handleCopyText}
-                title="Copiar texto del análisis"
-                className="p-1 rounded-md hover:bg-white/10 active:scale-95 transition-transform flex items-center gap-1 cursor-pointer"
-              >
-                {hasCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span className="text-[10px]">{hasCopied ? 'Copiado' : 'Copiar'}</span>
-              </button>
+      {/* Barra de Búsqueda estilo Asistente Google */}
+      <div className="p-3 border-b border-white/10 shrink-0 bg-black/20">
+        <form onSubmit={handleExecuteSearch} className="flex items-center gap-2">
+          <div className="relative flex-1 flex items-center bg-white/[0.08] hover:bg-white/[0.12] focus-within:bg-white/[0.14] border border-white/15 focus-within:border-blue-400/80 rounded-2xl px-3 py-1.5 transition-colors">
+            <GoogleGLogo className="w-4 h-4 shrink-0 mr-2" />
+            {croppedDataUrl && (
+              <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/30 bg-white shrink-0 mr-2 shadow-xs">
+                <img src={croppedDataUrl} alt="Crop" className="w-full h-full object-contain p-0.5" />
+              </div>
             )}
-            <button
-              type="button"
-              onClick={handleReloadCurrentTab}
-              disabled={isLoading}
-              title="Regenerar análisis con IA"
-              className="p-1 rounded-md hover:bg-white/10 active:scale-95 transition-transform cursor-pointer disabled:opacity-40"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-400' : ''}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Estado de Carga */}
-        {isLoading && (
-          <div className="p-6 rounded-2xl border border-white/10 bg-white/[0.02] flex flex-col items-center justify-center text-center space-y-3">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full border-2 border-blue-500/20 border-t-blue-500 animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <GoogleLensLogo className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <p className="font-semibold text-xs">Analizando figura con IA multimodal...</p>
-              <p className="text-[11px] opacity-60 mt-0.5">Identificando patrones, texto y relaciones clave</p>
-            </div>
-          </div>
-        )}
-
-        {/* Mensaje de Error */}
-        {errorMsg && !isLoading && (
-          <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs space-y-2">
-            <p className="font-semibold">No se pudo completar el análisis</p>
-            <p className="opacity-90">{errorMsg}</p>
-            <button
-              type="button"
-              onClick={handleReloadCurrentTab}
-              className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg text-xs font-semibold cursor-pointer active:scale-95 transition-transform"
-            >
-              Reintentar
-            </button>
-          </div>
-        )}
-
-        {/* Contenido Renderizado con KaTeX */}
-        {!isLoading && !errorMsg && tabContents[activeTab] && (
-          <div className="space-y-3 leading-relaxed">
-            <FormattedText
-              text={tabContents[activeTab]}
-              className="text-xs sm:text-[13px] text-zinc-200 dark:text-zinc-200 leading-relaxed font-sans"
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Pregunta o busca en Google acerca de esta imagen..."
+              className="flex-1 bg-transparent text-xs text-white placeholder-zinc-400 outline-none"
             />
+            <button
+              type="submit"
+              className="p-1 rounded-lg text-zinc-300 hover:text-white active:scale-95 transition-transform cursor-pointer"
+              title="Buscar en Google"
+            >
+              <Search className="w-4 h-4" />
+            </button>
           </div>
-        )}
 
-        {/* Historial de Preguntas en Chat sobre esta selección */}
-        {chatMessages.length > 0 && (
-          <div className="pt-4 border-t border-white/[0.08] space-y-3">
-            <h5 className="text-[11px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
-              <span>Conversación sobre la figura</span>
-            </h5>
-            {chatMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`p-3 rounded-xl text-xs space-y-1 ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100 ml-4'
-                    : 'bg-white/[0.04] border border-white/[0.08] text-zinc-200 mr-2'
-                }`}
-              >
-                <div className="text-[10px] font-bold opacity-60">
-                  {msg.role === 'user' ? 'Tú' : '✦ Lens Tutor IA'}
-                </div>
-                <FormattedText text={msg.content} />
-              </div>
-            ))}
-          </div>
-        )}
+          {onOpenExternalLens && (
+            <button
+              type="button"
+              onClick={onOpenExternalLens}
+              title="Analizar con Google Lens Oficial"
+              className="px-3.5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg active:scale-95 transition-transform cursor-pointer shrink-0"
+            >
+              <GoogleLensLogo className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Buscar en Lens</span>
+            </button>
+          )}
+        </form>
 
-        {/* Sugerencias Rápidas de Preguntas */}
-        <div className="pt-2">
-          <p className="text-[10px] font-bold opacity-50 uppercase tracking-wider mb-2">
-            Preguntas rápidas sugeridas:
-          </p>
-          <div className="flex flex-wrap gap-1.5">
+        {/* Chips de filtro estilo Asistente de móvil */}
+        <div className="flex items-center gap-2 mt-2 overflow-x-auto pb-0.5 text-xs select-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab('lens')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap active:scale-95 transition-transform cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'lens'
+                ? 'bg-white text-zinc-950 shadow-md font-bold'
+                : 'bg-white/10 text-zinc-300 hover:bg-white/15'
+            }`}
+          >
+            <GoogleLensLogo className="w-3.5 h-3.5" />
+            <span>Google Lens</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('matches')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap active:scale-95 transition-transform cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'matches'
+                ? 'bg-white text-zinc-950 shadow-md font-bold'
+                : 'bg-white/10 text-zinc-300 hover:bg-white/15'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Concordancias Web</span>
+          </button>
+
+          {context.caption && (
             <button
               type="button"
-              onClick={() => handleSendQuery('¿Qué principio o fórmula matemática rige este gráfico?')}
-              className="px-2.5 py-1 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] text-zinc-300 transition-all active:scale-95 cursor-pointer"
+              onClick={() => setActiveTab('text')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap active:scale-95 transition-transform cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'text'
+                  ? 'bg-white text-zinc-950 shadow-md font-bold'
+                  : 'bg-white/10 text-zinc-300 hover:bg-white/15'
+              }`}
             >
-              ¿Qué principio rige este gráfico?
+              <FileText className="w-3.5 h-3.5" />
+              <span>Texto Detectado</span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleSendQuery('Explica el significado de cada eje, curva o flecha en este diagrama')}
-              className="px-2.5 py-1 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] text-zinc-300 transition-all active:scale-95 cursor-pointer"
-            >
-              Explicar ejes y flechas
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSendQuery('¿Cuál es la aplicación práctica o caso clínico más frecuente de esta figura?')}
-              className="px-2.5 py-1 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] text-zinc-300 transition-all active:scale-95 cursor-pointer"
-            >
-              Aplicación clínica / práctica
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Barra Inferior para Preguntar acerca de esta selección (Estilo Google Lens) */}
-      <div className={`p-3 border-t shrink-0 ${
-        theme === 'dark' ? 'border-white/[0.08] bg-black/30' : 'border-slate-200 bg-slate-50'
-      }`}>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendQuery();
-          }}
-          className="flex items-center gap-2"
-        >
-          <div className="relative flex-1">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <GoogleLensLogo className="w-3.5 h-3.5" />
+      {/* Cuerpo del Asistente con Resultados Visuales Reales */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 text-xs sm:text-sm select-text">
+        {/* Pestaña 1: Google Lens Visual Nativo */}
+        {activeTab === 'lens' && (
+          <div className="space-y-3">
+            <div className="p-4 rounded-2xl border border-white/15 bg-white/[0.04] flex flex-col sm:flex-row items-center gap-4 shadow-xl">
+              <div className="relative w-28 h-28 rounded-2xl overflow-hidden border border-white/20 bg-white shrink-0 shadow-lg flex items-center justify-center p-1">
+                <img
+                  src={croppedDataUrl}
+                  alt="Recorte de Lens"
+                  className="w-full h-full object-contain"
+                />
+                <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-[#EA4335]" />
+                <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 border-[#4285F4]" />
+                <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 border-[#FBBC05]" />
+                <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 border-[#34A853]" />
+              </div>
+
+              <div className="flex-1 space-y-2 text-center sm:text-left min-w-0">
+                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <span className="text-xs font-bold text-blue-400 flex items-center gap-1">
+                    <GoogleLensLogo className="w-3.5 h-3.5" />
+                    Procesamiento Oficial Google Lens
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Identifica la fuente exacta del diagrama, imágenes idénticas en publicaciones científicas y artículos médicos mediante la red visual de Google.
+                </p>
+
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                  {onOpenExternalLens && (
+                    <button
+                      type="button"
+                      onClick={onOpenExternalLens}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-transform cursor-pointer"
+                    >
+                      <GoogleLensLogo className="w-4 h-4" />
+                      <span>Abrir Resultados en Google Lens</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleCopyCrop}
+                    className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-transform cursor-pointer"
+                  >
+                    {hasCopiedImage ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{hasCopiedImage ? '¡Recorte Copiado!' : 'Copiar Imagen'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onSelectFullImage}
+                    className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-transform cursor-pointer"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Toda la Figura</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputQuery}
-              onChange={(e) => setInputQuery(e.target.value)}
-              placeholder="Pregunta acerca de esta imagen..."
-              disabled={isSendingQuery}
-              className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none transition-all ${
-                theme === 'dark'
-                  ? 'bg-white/[0.05] border-white/10 text-white placeholder-zinc-500 focus:border-blue-500/70 focus:bg-white/[0.08]'
-                  : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-              }`}
-            />
           </div>
-          <button
-            type="submit"
-            disabled={!inputQuery.trim() || isSendingQuery}
-            className="p-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white shadow-md active:scale-95 transition-transform cursor-pointer"
-            title="Enviar pregunta"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
-        </form>
+        )}
+
+        {/* Pestaña 2: Concordancias Web */}
+        {activeTab === 'matches' && (
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-300">
+              Concordancias visuales directas y fuentes indexadas en la web para esta figura:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <a
+                href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 flex items-center justify-between gap-2 active:scale-95 transition-transform"
+              >
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <GoogleGLogo className="w-3.5 h-3.5" />
+                    <span>Google Imágenes</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-0.5">Buscar diagramas similares</p>
+                </div>
+                <ExternalLink className="w-4 h-4 text-zinc-400 shrink-0" />
+              </a>
+
+              <a
+                href={`https://scholar.google.com/scholar?q=${encodeURIComponent(searchTerm)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 flex items-center justify-between gap-2 active:scale-95 transition-transform"
+              >
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Google Académico</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-0.5">Artículos científicos y libros</p>
+                </div>
+                <ExternalLink className="w-4 h-4 text-zinc-400 shrink-0" />
+              </a>
+
+              <a
+                href={`https://www.google.com/search?q=${encodeURIComponent(searchTerm)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 flex items-center justify-between gap-2 active:scale-95 transition-transform"
+              >
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Search className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Búsqueda Web</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-0.5">Definiciones y guías</p>
+                </div>
+                <ExternalLink className="w-4 h-4 text-zinc-400 shrink-0" />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Pestaña 3: Texto de la figura */}
+        {activeTab === 'text' && context.caption && (
+          <div className="space-y-3">
+            <div className="p-3.5 rounded-xl bg-white/[0.04] border border-white/10 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                  Texto del documento
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyCaption}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-zinc-200 flex items-center gap-1 active:scale-95 transition-transform cursor-pointer"
+                >
+                  {hasCopiedText ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{hasCopiedText ? 'Copiado' : 'Copiar'}</span>
+                </button>
+              </div>
+              <p className="text-xs text-zinc-200 leading-relaxed font-sans select-text">
+                {context.caption}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
