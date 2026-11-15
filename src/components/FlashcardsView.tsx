@@ -5,6 +5,7 @@ import { googleDriveService } from '../services/googleDriveService';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { GeminiIcon } from './GeminiIcon';
 import { generateAdditionalAIFlashcards } from '../services/aiService';
+import { useTheme } from '../services/themeService';
 
 // Subcomponents
 import { FlashcardsListView } from './flashcards/FlashcardsListView';
@@ -36,6 +37,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
 }) => {
   // Load persisted progress
   const savedProgress = authService.getFlashcardProgress(userId, kit.id);
+  const { theme } = useTheme();
 
   const getCardMastery = (card: Flashcard, map?: Record<string, 'to-learn' | 'known' | 'mastered'> | null): 'to-learn' | 'known' | 'mastered' => {
     if (!map) return card.mastery || 'to-learn';
@@ -392,10 +394,22 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 pb-8 md:pb-6 flex-1 flex flex-col animate-fadeIn">
-      {/* Top Navigation Tabs Header matching Screenshot 1 */}
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/[0.08]">
+      {/* Top Navigation Tabs Header */}
+      <div className={`flex items-center justify-between mb-4 pb-2 border-b ${
+        theme === 'kitty'
+          ? 'border-pink-200/70'
+          : theme === 'light'
+          ? 'border-slate-200'
+          : 'border-white/[0.08]'
+      }`}>
         {/* Pills Toggle: Lista | Mazo | Juegos */}
-        <div className="inline-flex items-center gap-1.5 p-1 rounded-full bg-white/[0.04] border border-white/[0.1]">
+        <div className={`inline-flex items-center gap-1.5 p-1 rounded-full ${
+          theme === 'kitty'
+            ? 'bg-pink-100/70 border border-pink-200/90 shadow-xs'
+            : theme === 'light'
+            ? 'bg-slate-100 border border-slate-200 shadow-xs'
+            : 'bg-white/[0.04] border border-white/[0.1]'
+        }`}>
           <button
             type="button"
             onClick={() => {
@@ -405,7 +419,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
             }}
             className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all duration-150 cursor-pointer ${
               activeTab === 'lista'
-                ? 'bg-transparent text-white border border-white/80 shadow-sm'
+                ? theme === 'kitty'
+                  ? 'bg-white text-pink-900 border border-pink-300 shadow-sm'
+                  : theme === 'light'
+                  ? 'bg-white text-slate-900 border border-slate-300 shadow-sm'
+                  : 'bg-transparent text-white border border-white/80 shadow-sm'
+                : theme === 'kitty'
+                ? 'text-pink-700/80 hover:text-pink-950'
+                : theme === 'light'
+                ? 'text-slate-600 hover:text-slate-900'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -421,7 +443,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
             }}
             className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all duration-150 cursor-pointer ${
               activeTab === 'mazo'
-                ? 'bg-transparent text-white border border-white/80 shadow-sm'
+                ? theme === 'kitty'
+                  ? 'bg-white text-pink-900 border border-pink-300 shadow-sm'
+                  : theme === 'light'
+                  ? 'bg-white text-slate-900 border border-slate-300 shadow-sm'
+                  : 'bg-transparent text-white border border-white/80 shadow-sm'
+                : theme === 'kitty'
+                ? 'text-pink-700/80 hover:text-pink-950'
+                : theme === 'light'
+                ? 'text-slate-600 hover:text-slate-900'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -437,7 +467,15 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
             }}
             className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all duration-150 cursor-pointer ${
               activeTab === 'juegos'
-                ? 'bg-transparent text-white border border-white/80 shadow-sm'
+                ? theme === 'kitty'
+                  ? 'bg-white text-pink-900 border border-pink-300 shadow-sm'
+                  : theme === 'light'
+                  ? 'bg-white text-slate-900 border border-slate-300 shadow-sm'
+                  : 'bg-transparent text-white border border-white/80 shadow-sm'
+                : theme === 'kitty'
+                ? 'text-pink-700/80 hover:text-pink-950'
+                : theme === 'light'
+                ? 'text-slate-600 hover:text-slate-900'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -451,7 +489,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
             type="button"
             onClick={handleAddMoreFlashcards}
             disabled={isGeneratingMore}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-xs font-bold text-purple-200 hover:text-white transition-all cursor-pointer shadow-sm active-press"
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active-press ${
+              theme === 'kitty'
+                ? 'bg-pink-100 hover:bg-pink-200/80 border border-pink-300 text-pink-700 hover:text-pink-900 shadow-xs'
+                : theme === 'light'
+                ? 'bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 hover:text-slate-950 shadow-xs'
+                : 'bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 hover:text-white'
+            }`}
           >
             {isGeneratingMore ? (
               <>
@@ -471,7 +515,13 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
       {/* Floating Status Notification */}
       {statusNotification && (
         <div className="fixed bottom-6 right-6 z-50 animate-fadeIn">
-          <div className="px-4 py-3 rounded-2xl bg-[#1f1542] border border-purple-400/50 shadow-2xl text-xs font-bold text-white flex items-center gap-2">
+          <div className={`px-4 py-3 rounded-2xl border shadow-2xl text-xs font-bold flex items-center gap-2 ${
+            theme === 'kitty'
+              ? 'bg-white border-pink-300 text-pink-950 shadow-pink-200/50'
+              : theme === 'light'
+              ? 'bg-white border-slate-300 text-slate-900'
+              : 'bg-[#1f1542] border-purple-400/50 text-white'
+          }`}>
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>{statusNotification}</span>
           </div>

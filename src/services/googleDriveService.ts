@@ -19,7 +19,7 @@ import {
   RETIRED_TEST_KIT_IDS,
   registerDriveAssetDownloader,
   safeLocalStorageSetItem,
-  stripAssetDataUrlsFromKit
+  hydrateKitAssets
 } from './storageService';
 import { isSmoothScrollActive } from '../utils/smoothScroll';
 import { getAISettings, saveAISettings, resetAISettingsToDefault, GROQ_PRIMARY_MODEL, type AISettings } from './aiService';
@@ -3638,10 +3638,15 @@ export const googleDriveService = {
     const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
     const sharedFolderId = await this.getOrCreateFolder(token, 'shared_kits', rootFolderId);
 
-    // 2. Preparar el payload del kit basado exclusivamente en su contenido original
-    const baseCleanKit = stripAssetDataUrlsFromKit(kit, true);
+    // 2. Preparar el payload del kit basado exclusivamente en su contenido original con imágenes hidratadas
+    let hydratedKit = kit;
+    try {
+      hydratedKit = await hydrateKitAssets(kit);
+    } catch (e) {
+      console.warn('[GoogleDriveService] Aviso hidratando activos para compartir:', e);
+    }
+
     const contentBasedKit: StudyKit = {
-      ...baseCleanKit,
       id: kit.id,
       title: kit.title,
       description: kit.description,
@@ -3651,7 +3656,7 @@ export const googleDriveService = {
       sourceText: kit.sourceText,
       sourceMaterials: kit.sourceMaterials,
       chunks: kit.chunks,
-      assets: baseCleanKit.assets,
+      assets: hydratedKit.assets || kit.assets || [],
       flashcards: kit.flashcards,
       podcast: null,
       updatedAt: kit.updatedAt || Date.now(),
@@ -3847,9 +3852,13 @@ export const googleDriveService = {
       console.warn('[GoogleDriveService] Error reseteando progreso del kit importado:', progErr);
     }
 
-    // 4. Guardar activos si existen en IndexedDB
+    // 4. Guardar activos si existen en IndexedDB y notificar a la galería
     if (Array.isArray(importedKit.assets) && importedKit.assets.length > 0) {
-      saveAssetsToIndexedDB(importedKit.assets).catch(() => {});
+      saveAssetsToIndexedDB(importedKit.assets).then(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('thea_assets_synced'));
+        }
+      }).catch(() => {});
     }
 
     // 5. Guardar en los kits del usuario receptor

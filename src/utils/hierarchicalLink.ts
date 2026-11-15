@@ -30,7 +30,7 @@ export interface HierarchicalLinkInfo {
  * Construye tanto la URL canónica de visualización estilo ContraReloj (contrareloj.study/...)
  * como la URL absoluta del entorno local o desplegado lista para compartir y copiar al portapapeles.
  */
-export function buildTheaHierarchicalUrl(
+export function buildContraRelojHierarchicalUrl(
   mode: 'study' | 'smartStudy',
   kitId: string,
   subtopic?: string
@@ -51,6 +51,8 @@ export function buildTheaHierarchicalUrl(
   };
 }
 
+export const buildTheaHierarchicalUrl = buildContraRelojHierarchicalUrl;
+
 /**
  * Actualiza de forma atómica y sin recarga la barra de direcciones del navegador
  * usando la API nativa de History.
@@ -61,7 +63,7 @@ export function syncBrowserHierarchicalUrl(
   subtopic?: string
 ): void {
   if (typeof window === 'undefined') return;
-  const { absoluteUrl } = buildTheaHierarchicalUrl(mode, kitId, subtopic);
+  const { absoluteUrl } = buildContraRelojHierarchicalUrl(mode, kitId, subtopic);
   const currentUrl = window.location.pathname + window.location.search;
   const targetPathAndQuery = absoluteUrl.replace(window.location.origin, '');
 

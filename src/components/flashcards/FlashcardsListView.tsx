@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, X, ChevronDown, Check, ArrowUpDown, BookOpen } fr
 import { gameAudio } from './games/gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from './flashcardSanitizer';
 import { FormattedText } from '../FormattedText';
+import { useTheme } from '../../services/themeService';
 
 interface FlashcardsListViewProps {
   cards: Flashcard[];
@@ -24,6 +25,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
   onEditCard,
   onDeleteCard,
 }) => {
+  const { theme } = useTheme();
   const [sortOrder, setSortOrder] = useState<SortOrder>('alpha-asc');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('all');
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -87,12 +89,16 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-2 px-2 sm:px-4 animate-fadeIn text-slate-100">
-      {/* Subheader matching Screenshot 1 */}
+    <div className={`w-full max-w-5xl mx-auto py-2 px-2 sm:px-4 animate-fadeIn ${
+      theme === 'kitty' ? 'text-pink-950' : theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+    }`}>
+      {/* Subheader */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           {/* Tarjetas count title */}
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight tabular-nums mb-3">
+          <h2 className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums mb-3 ${
+            theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+          }`}>
             {cards.length} tarjetas de memoria
           </h2>
 
@@ -100,14 +106,20 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.18] text-xs font-bold text-white transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm ${
+              theme === 'kitty'
+                ? 'bg-white hover:bg-pink-50 border border-pink-300 text-pink-700 hover:text-pink-900 shadow-xs'
+                : theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 shadow-xs'
+                : 'bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.18] text-white'
+            }`}
           >
             <Plus className="w-4 h-4" />
             <span>Agregar</span>
           </button>
         </div>
 
-        {/* Dropdowns on the right matching Screenshot 1 */}
+        {/* Dropdowns on the right */}
         <div className="flex items-center gap-3 self-start sm:self-center">
           {/* Dropdown 1: Alfabético */}
           <div className="relative">
@@ -117,27 +129,45 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                 setShowSortMenu(!showSortMenu);
                 setShowDisplayMenu(false);
               }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#20173d] hover:bg-[#2c2054] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-colors cursor-pointer shadow-sm"
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm ${
+                theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border border-pink-200 text-pink-900 shadow-xs'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-xs'
+                  : 'bg-[#20173d] hover:bg-[#2c2054] border border-white/[0.12] text-slate-200'
+              }`}
             >
-              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+              <ArrowUpDown className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`} />
               <span>
                 {sortOrder === 'alpha-asc' ? 'Alfabético' : sortOrder === 'alpha-desc' ? 'Alfabético (Z-A)' : 'Original'}
               </span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              <ChevronDown className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`} />
             </button>
 
             {showSortMenu && (
-              <div className="absolute right-0 mt-1.5 w-44 rounded-2xl bg-[#1b1236] border border-white/[0.15] shadow-2xl py-1.5 z-40 animate-fadeIn">
+              <div className={`absolute right-0 mt-1.5 w-44 rounded-2xl shadow-2xl py-1.5 z-40 animate-fadeIn border ${
+                theme === 'kitty'
+                  ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/50'
+                  : theme === 'light'
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+                  : 'bg-[#1b1236] border-white/[0.15] text-slate-200'
+              }`}>
                 <button
                   type="button"
                   onClick={() => {
                     setSortOrder('alpha-asc');
                     setShowSortMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/30 flex items-center justify-between cursor-pointer"
+                  className={`w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'text-pink-950 hover:bg-pink-100/60'
+                      : theme === 'light'
+                      ? 'text-slate-800 hover:bg-slate-100'
+                      : 'text-slate-200 hover:bg-purple-600/30'
+                  }`}
                 >
                   <span>Alfabético (A-Z)</span>
-                  {sortOrder === 'alpha-asc' && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  {sortOrder === 'alpha-asc' && <Check className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-400'}`} />}
                 </button>
                 <button
                   type="button"
@@ -145,10 +175,16 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                     setSortOrder('alpha-desc');
                     setShowSortMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/30 flex items-center justify-between cursor-pointer"
+                  className={`w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'text-pink-950 hover:bg-pink-100/60'
+                      : theme === 'light'
+                      ? 'text-slate-800 hover:bg-slate-100'
+                      : 'text-slate-200 hover:bg-purple-600/30'
+                  }`}
                 >
                   <span>Alfabético (Z-A)</span>
-                  {sortOrder === 'alpha-desc' && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  {sortOrder === 'alpha-desc' && <Check className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-400'}`} />}
                 </button>
                 <button
                   type="button"
@@ -156,10 +192,16 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                     setSortOrder('original');
                     setShowSortMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/30 flex items-center justify-between cursor-pointer"
+                  className={`w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'text-pink-950 hover:bg-pink-100/60'
+                      : theme === 'light'
+                      ? 'text-slate-800 hover:bg-slate-100'
+                      : 'text-slate-200 hover:bg-purple-600/30'
+                  }`}
                 >
                   <span>Orden Original</span>
-                  {sortOrder === 'original' && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  {sortOrder === 'original' && <Check className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-400'}`} />}
                 </button>
               </div>
             )}
@@ -173,27 +215,45 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                 setShowDisplayMenu(!showDisplayMenu);
                 setShowSortMenu(false);
               }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#20173d] hover:bg-[#2c2054] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-colors cursor-pointer shadow-sm"
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm ${
+                theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border border-pink-200 text-pink-900 shadow-xs'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-xs'
+                  : 'bg-[#20173d] hover:bg-[#2c2054] border border-white/[0.12] text-slate-200'
+              }`}
             >
-              <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+              <BookOpen className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`} />
               <span>
                 {displayMode === 'all' ? 'Definiciones' : displayMode === 'hide-defs' ? 'Solo Términos' : 'Solo Definiciones'}
               </span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              <ChevronDown className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`} />
             </button>
 
             {showDisplayMenu && (
-              <div className="absolute right-0 mt-1.5 w-48 rounded-2xl bg-[#1b1236] border border-white/[0.15] shadow-2xl py-1.5 z-40 animate-fadeIn">
+              <div className={`absolute right-0 mt-1.5 w-48 rounded-2xl shadow-2xl py-1.5 z-40 animate-fadeIn border ${
+                theme === 'kitty'
+                  ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/50'
+                  : theme === 'light'
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+                  : 'bg-[#1b1236] border-white/[0.15] text-slate-200'
+              }`}>
                 <button
                   type="button"
                   onClick={() => {
                     setDisplayMode('all');
                     setShowDisplayMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/30 flex items-center justify-between cursor-pointer"
+                  className={`w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'text-pink-950 hover:bg-pink-100/60'
+                      : theme === 'light'
+                      ? 'text-slate-800 hover:bg-slate-100'
+                      : 'text-slate-200 hover:bg-purple-600/30'
+                  }`}
                 >
                   <span>Ver Término y Definición</span>
-                  {displayMode === 'all' && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  {displayMode === 'all' && <Check className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-400'}`} />}
                 </button>
                 <button
                   type="button"
@@ -201,10 +261,16 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                     setDisplayMode('hide-defs');
                     setShowDisplayMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/30 flex items-center justify-between cursor-pointer"
+                  className={`w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'text-pink-950 hover:bg-pink-100/60'
+                      : theme === 'light'
+                      ? 'text-slate-800 hover:bg-slate-100'
+                      : 'text-slate-200 hover:bg-purple-600/30'
+                  }`}
                 >
                   <span>Solo Términos</span>
-                  {displayMode === 'hide-defs' && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  {displayMode === 'hide-defs' && <Check className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-400'}`} />}
                 </button>
                 <button
                   type="button"
@@ -212,10 +278,16 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                     setDisplayMode('hide-terms');
                     setShowDisplayMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/30 flex items-center justify-between cursor-pointer"
+                  className={`w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'text-pink-950 hover:bg-pink-100/60'
+                      : theme === 'light'
+                      ? 'text-slate-800 hover:bg-slate-100'
+                      : 'text-slate-200 hover:bg-purple-600/30'
+                  }`}
                 >
                   <span>Solo Definiciones</span>
-                  {displayMode === 'hide-terms' && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  {displayMode === 'hide-terms' && <Check className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-400'}`} />}
                 </button>
               </div>
             )}
@@ -223,7 +295,7 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
         </div>
       </div>
 
-      {/* Cards List matching Screenshot 1 */}
+      {/* Cards List */}
       <div className="space-y-3.5">
         {sortedCards.map(card => {
           const term = getCardTerm(card);
@@ -232,30 +304,59 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
           return (
             <div
               key={card.id}
-              className="p-4 sm:p-5 rounded-2xl bg-[#140e2b]/90 hover:bg-[#1a1238] border border-white/[0.1] hover:border-purple-400/40 transition-transform active:scale-[0.99] duration-150 flex items-center justify-between gap-4 shadow-md group"
+              className={`p-4 sm:p-5 rounded-2xl border transition-transform active:scale-[0.99] duration-150 flex items-center justify-between gap-4 shadow-md group ${
+                theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50/40 border-pink-200 hover:border-pink-300 text-pink-950 shadow-[0_4px_16px_rgba(236,72,153,0.08)]'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50/80 border-slate-200 hover:border-slate-300 text-slate-900 shadow-sm'
+                  : 'bg-[#140e2b]/90 hover:bg-[#1a1238] border-white/[0.1] hover:border-purple-400/40 text-slate-100'
+              }`}
               style={{
-                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+                boxShadow:
+                  theme === 'kitty'
+                    ? '0 4px 16px rgba(236, 72, 153, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                    : theme === 'light'
+                    ? '0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                    : '0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
               }}
             >
               {/* Content left */}
               <div className="flex-1 text-sm sm:text-base leading-relaxed">
                 {displayMode === 'all' && (
                   <div>
-                    <strong className="text-[#fecdd3] font-bold"><FormattedText text={term} inlineOnly /></strong>
-                    <span className="text-slate-400 mx-2 font-normal">|</span>
-                    <span className="text-slate-300 font-normal"><FormattedText text={def} inlineOnly /></span>
+                    <strong className={`font-bold ${
+                      theme === 'kitty' ? 'text-pink-900 font-extrabold' : theme === 'light' ? 'text-slate-950 font-bold' : 'text-[#fecdd3]'
+                    }`}>
+                      <FormattedText text={term} inlineOnly />
+                    </strong>
+                    <span className={`mx-2 font-normal ${
+                      theme === 'kitty' ? 'text-pink-300' : theme === 'light' ? 'text-slate-300' : 'text-slate-400'
+                    }`}>|</span>
+                    <span className={`font-normal ${
+                      theme === 'kitty' ? 'text-pink-950/90 font-medium' : theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                    }`}>
+                      <FormattedText text={def} inlineOnly />
+                    </span>
                   </div>
                 )}
 
                 {displayMode === 'hide-defs' && (
                   <div>
-                    <strong className="text-[#fecdd3] font-bold"><FormattedText text={term} inlineOnly /></strong>
+                    <strong className={`font-bold ${
+                      theme === 'kitty' ? 'text-pink-900 font-extrabold' : theme === 'light' ? 'text-slate-950 font-bold' : 'text-[#fecdd3]'
+                    }`}>
+                      <FormattedText text={term} inlineOnly />
+                    </strong>
                   </div>
                 )}
 
                 {displayMode === 'hide-terms' && (
                   <div>
-                    <span className="text-slate-300 font-normal"><FormattedText text={def} inlineOnly /></span>
+                    <span className={`font-normal ${
+                      theme === 'kitty' ? 'text-pink-950/90 font-medium' : theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                    }`}>
+                      <FormattedText text={def} inlineOnly />
+                    </span>
                   </div>
                 )}
               </div>
@@ -265,7 +366,13 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                 type="button"
                 title="Editar tarjeta"
                 onClick={(e) => openEditModal(card, e)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer flex-shrink-0"
+                className={`p-2 rounded-xl transition-colors cursor-pointer flex-shrink-0 ${
+                  theme === 'kitty'
+                    ? 'text-pink-400 hover:text-pink-700 hover:bg-pink-100/60'
+                    : theme === 'light'
+                    ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.1]'
+                }`}
               >
                 <Pencil className="w-4 h-4" />
               </button>
@@ -277,13 +384,31 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
       {/* Modal: Agregar Tarjeta */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl">
-            <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/[0.08]">
-              <h3 className="text-xl font-bold text-white tracking-tight">Agregar Tarjeta de Memoria</h3>
+          <div className={`w-full max-w-lg max-h-[90dvh] overflow-y-auto p-6 sm:p-8 rounded-3xl border shadow-2xl ${
+            theme === 'kitty'
+              ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/50'
+              : theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+              : 'bg-[#140e2b] border-white/[0.12] text-white'
+          }`}>
+            <div className={`flex items-center justify-between mb-6 pb-3 border-b ${
+              theme === 'kitty' ? 'border-pink-200/70' : theme === 'light' ? 'border-slate-200' : 'border-white/[0.08]'
+            }`}>
+              <h3 className={`text-xl font-bold tracking-tight ${
+                theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-bold' : 'text-white'
+              }`}>
+                Agregar Tarjeta de Memoria
+              </h3>
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors"
+                className={`p-1.5 rounded-xl transition-colors ${
+                  theme === 'kitty'
+                    ? 'text-pink-400 hover:text-pink-700 hover:bg-pink-100/60'
+                    : theme === 'light'
+                    ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.1]'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -291,7 +416,9 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
 
             <form onSubmit={handleSaveAdd} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                  theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                }`}>
                   Término o Concepto
                 </label>
                 <input
@@ -300,12 +427,20 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   value={formTerm}
                   onChange={e => setFormTerm(e.target.value)}
                   placeholder="Ej. Anticuerpo anticardiolipina (aCL)"
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white placeholder-slate-500 outline-none transition-colors"
+                  className={`w-full rounded-xl px-4 py-2.5 text-base md:text-sm outline-none transition-colors border ${
+                    theme === 'kitty'
+                      ? 'bg-pink-50/50 border-pink-200 focus:border-pink-400 text-pink-950 placeholder-pink-400'
+                      : theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 focus:border-indigo-500 text-slate-900 placeholder-slate-400'
+                      : 'bg-[#0d081e] border-white/[0.12] focus:border-purple-400 text-white placeholder-slate-500'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                  theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                }`}>
                   Definición o Explicación
                 </label>
                 <textarea
@@ -314,21 +449,41 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   value={formDef}
                   onChange={e => setFormDef(e.target.value)}
                   placeholder="Ej. Tipo de anticuerpo antifosfolípido dirigido contra la cardiolipina..."
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white placeholder-slate-500 outline-none transition-colors resize-none"
+                  className={`w-full rounded-xl px-4 py-2.5 text-base md:text-sm outline-none transition-colors resize-none border ${
+                    theme === 'kitty'
+                      ? 'bg-pink-50/50 border-pink-200 focus:border-pink-400 text-pink-950 placeholder-pink-400'
+                      : theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 focus:border-indigo-500 text-slate-900 placeholder-slate-400'
+                      : 'bg-[#0d081e] border-white/[0.12] focus:border-purple-400 text-white placeholder-slate-500'
+                  }`}
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.08]">
+              <div className={`flex items-center justify-end gap-3 pt-4 border-t ${
+                theme === 'kitty' ? 'border-pink-200/70' : theme === 'light' ? 'border-slate-200' : 'border-white/[0.08]'
+              }`}>
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-bold text-slate-300 transition-colors cursor-pointer"
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'bg-pink-100/70 hover:bg-pink-200 text-pink-700'
+                      : theme === 'light'
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      : 'bg-white/[0.05] hover:bg-white/[0.1] text-slate-300'
+                  }`}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                  className={`px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all cursor-pointer ${
+                    theme === 'kitty'
+                      ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/30'
+                      : theme === 'light'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                      : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                  }`}
                 >
                   Guardar Tarjeta
                 </button>
@@ -341,13 +496,31 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
       {/* Modal: Editar Tarjeta */}
       {editingCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl">
-            <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/[0.08]">
-              <h3 className="text-xl font-bold text-white tracking-tight">Editar Tarjeta de Memoria</h3>
+          <div className={`w-full max-w-lg max-h-[90dvh] overflow-y-auto p-6 sm:p-8 rounded-3xl border shadow-2xl ${
+            theme === 'kitty'
+              ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/50'
+              : theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+              : 'bg-[#140e2b] border-white/[0.12] text-white'
+          }`}>
+            <div className={`flex items-center justify-between mb-6 pb-3 border-b ${
+              theme === 'kitty' ? 'border-pink-200/70' : theme === 'light' ? 'border-slate-200' : 'border-white/[0.08]'
+            }`}>
+              <h3 className={`text-xl font-bold tracking-tight ${
+                theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-bold' : 'text-white'
+              }`}>
+                Editar Tarjeta de Memoria
+              </h3>
               <button
                 type="button"
                 onClick={() => setEditingCard(null)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors"
+                className={`p-1.5 rounded-xl transition-colors ${
+                  theme === 'kitty'
+                    ? 'text-pink-400 hover:text-pink-700 hover:bg-pink-100/60'
+                    : theme === 'light'
+                    ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.1]'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -355,7 +528,9 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                  theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                }`}>
                   Término o Concepto
                 </label>
                 <input
@@ -363,12 +538,20 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   required
                   value={formTerm}
                   onChange={e => setFormTerm(e.target.value)}
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white outline-none transition-colors"
+                  className={`w-full rounded-xl px-4 py-2.5 text-base md:text-sm outline-none transition-colors border ${
+                    theme === 'kitty'
+                      ? 'bg-pink-50/50 border-pink-200 focus:border-pink-400 text-pink-950'
+                      : theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 focus:border-indigo-500 text-slate-900'
+                      : 'bg-[#0d081e] border-white/[0.12] focus:border-purple-400 text-white'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                  theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                }`}>
                   Definición o Explicación
                 </label>
                 <textarea
@@ -376,15 +559,23 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   required
                   value={formDef}
                   onChange={e => setFormDef(e.target.value)}
-                  className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-purple-400 rounded-xl px-4 py-2.5 text-base md:text-sm text-white outline-none transition-colors resize-none"
+                  className={`w-full rounded-xl px-4 py-2.5 text-base md:text-sm outline-none transition-colors resize-none border ${
+                    theme === 'kitty'
+                      ? 'bg-pink-50/50 border-pink-200 focus:border-pink-400 text-pink-950'
+                      : theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 focus:border-indigo-500 text-slate-900'
+                      : 'bg-[#0d081e] border-white/[0.12] focus:border-purple-400 text-white'
+                  }`}
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-white/[0.08]">
+              <div className={`flex items-center justify-between pt-4 border-t ${
+                theme === 'kitty' ? 'border-pink-200/70' : theme === 'light' ? 'border-slate-200' : 'border-white/[0.08]'
+              }`}>
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-bold transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-500 dark:text-rose-300 text-xs font-bold transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Eliminar</span>
@@ -394,13 +585,25 @@ export const FlashcardsListView: React.FC<FlashcardsListViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setEditingCard(null)}
-                    className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-bold text-slate-300 transition-colors cursor-pointer"
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      theme === 'kitty'
+                        ? 'bg-pink-100/70 hover:bg-pink-200 text-pink-700'
+                        : theme === 'light'
+                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        : 'bg-white/[0.05] hover:bg-white/[0.1] text-slate-300'
+                    }`}
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                    className={`px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all cursor-pointer ${
+                      theme === 'kitty'
+                        ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/30'
+                        : theme === 'light'
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                    }`}
                   >
                     Guardar Cambios
                   </button>

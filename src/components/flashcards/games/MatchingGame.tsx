@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
+import { useTheme } from '../../../services/themeService';
 
 interface MatchingGameProps {
   flashcards: Flashcard[];
@@ -28,6 +29,7 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
   onBack,
   onGameComplete,
 }) => {
+  const { theme } = useTheme();
   const [items, setItems] = useState<MatchCardItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [evaluatingPair, setEvaluatingPair] = useState<{ id1: string; id2: string; isCorrect: boolean } | null>(null);
@@ -153,8 +155,10 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn text-slate-100">
-      {/* Top Header Bar matching Screenshot 2 & Thea */}
+    <div className={`w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn ${
+      theme === 'kitty' ? 'text-pink-950' : theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+    }`}>
+      {/* Top Header Bar */}
       <div className="flex items-center justify-between mb-3 sm:mb-4 pb-2">
         <button
           type="button"
@@ -162,23 +166,43 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm ${
+            theme === 'kitty'
+              ? 'bg-white hover:bg-pink-50 border border-pink-200 text-pink-700'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 border border-slate-200 text-slate-700'
+              : 'bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-slate-200'
+          }`}
         >
-          <ArrowLeft className="w-4 h-4 text-slate-300" />
+          <ArrowLeft className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`} />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-white">
-          <Copy className="w-5 h-5 text-indigo-400" />
+        <div className={`flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight ${
+          theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-bold' : 'text-white'
+        }`}>
+          <Copy className={`w-5 h-5 ${theme === 'kitty' ? 'text-pink-600' : 'text-indigo-400'}`} />
           <span>Coincidencias</span>
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3 text-xs font-semibold tabular-nums">
-          <span className="px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.1] text-slate-300">
-            Fallos: <strong className="text-rose-400 ml-1">{mistakes}</strong>
+          <span className={`px-3 py-1.5 rounded-full border ${
+            theme === 'kitty'
+              ? 'bg-pink-50 border-pink-200 text-pink-700'
+              : theme === 'light'
+              ? 'bg-slate-100 border-slate-200 text-slate-600'
+              : 'bg-white/[0.05] border border-white/[0.1] text-slate-300'
+          }`}>
+            Fallos: <strong className="text-rose-500 ml-1">{mistakes}</strong>
           </span>
-          <span className="px-3.5 py-1.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-indigo-200 font-bold shadow-sm">
-            Puntos: <strong className="text-white ml-1">{currentScore}</strong>
+          <span className={`px-3.5 py-1.5 rounded-full border font-bold shadow-sm ${
+            theme === 'kitty'
+              ? 'bg-pink-500/15 border-pink-300 text-pink-700'
+              : theme === 'light'
+              ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+              : 'bg-indigo-500/15 border border-indigo-400/30 text-indigo-200'
+          }`}>
+            Puntos: <strong className={theme === 'kitty' ? 'text-pink-950 font-black ml-1' : theme === 'light' ? 'text-slate-900 ml-1' : 'text-white ml-1'}>{currentScore}</strong>
           </span>
         </div>
       </div>
@@ -192,21 +216,41 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
           const isWrongPair = isEvaluating && !evaluatingPair?.isCorrect;
           const isTerm = item.type === 'term';
 
-          // Estilo base diferenciado: los conceptos en ROJO VINO prominente, las definiciones en azul oscuro/noche
-          let cardStyle = isTerm
-            ? 'bg-[#220715]/95 hover:bg-[#320a1f] border-[#9f1239]/50 hover:border-[#f43f5e]/80 text-[#ffe4e6] shadow-[0_8px_24px_-4px_rgba(159,18,57,0.3),inset_0_1px_0_rgba(255,180,200,0.18)]'
-            : 'bg-[#130d26]/95 hover:bg-[#1c1438] border-white/[0.1] hover:border-purple-400/50 text-slate-200 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.08)]';
+          let cardStyle = '';
+          if (theme === 'kitty') {
+            cardStyle = isTerm
+              ? 'bg-pink-100 hover:bg-pink-200/80 border-2 border-pink-300 hover:border-pink-400 text-pink-950 shadow-sm'
+              : 'bg-white hover:bg-pink-50/60 border border-pink-200 hover:border-pink-300 text-pink-900 shadow-sm';
+          } else if (theme === 'light') {
+            cardStyle = isTerm
+              ? 'bg-indigo-50 hover:bg-indigo-100 border-2 border-indigo-200 hover:border-indigo-300 text-indigo-950 shadow-sm'
+              : 'bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-800 shadow-sm';
+          } else {
+            cardStyle = isTerm
+              ? 'bg-[#220715]/95 hover:bg-[#320a1f] border-[#9f1239]/50 hover:border-[#f43f5e]/80 text-[#ffe4e6] shadow-[0_8px_24px_-4px_rgba(159,18,57,0.3),inset_0_1px_0_rgba(255,180,200,0.18)]'
+              : 'bg-[#130d26]/95 hover:bg-[#1c1438] border-white/[0.1] hover:border-purple-400/50 text-slate-200 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.08)]';
+          }
 
           if (item.isMatched) {
             cardStyle = 'opacity-0 scale-95 pointer-events-none';
           } else if (isCorrectPair) {
-            cardStyle = 'bg-emerald-600/40 border-emerald-400 text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.3)] scale-[1.02]';
+            cardStyle = 'bg-emerald-500/20 border-2 border-emerald-500 text-emerald-800 dark:text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.3)] scale-[1.02]';
           } else if (isWrongPair) {
-            cardStyle = 'bg-rose-600/40 border-rose-400 text-rose-100 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-shake';
+            cardStyle = 'bg-rose-500/20 border-2 border-rose-500 text-rose-800 dark:text-rose-100 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-shake';
           } else if (isSelected) {
-            cardStyle = isTerm
-              ? 'bg-[#3d0b23] border-[#f43f5e] text-white ring-2 ring-[#f43f5e]/70 shadow-[0_0_25px_rgba(244,63,94,0.45)] scale-[1.02]'
-              : 'bg-[#271545] border-purple-400 text-white ring-2 ring-purple-400/60 shadow-[0_0_25px_rgba(168,85,247,0.4)] scale-[1.02]';
+            if (theme === 'kitty') {
+              cardStyle = isTerm
+                ? 'bg-pink-200 border-2 border-pink-600 text-pink-950 ring-2 ring-pink-400 shadow-lg scale-[1.02]'
+                : 'bg-pink-100 border-2 border-pink-500 text-pink-950 ring-2 ring-pink-300 shadow-lg scale-[1.02]';
+            } else if (theme === 'light') {
+              cardStyle = isTerm
+                ? 'bg-indigo-100 border-2 border-indigo-600 text-indigo-950 ring-2 ring-indigo-400 shadow-lg scale-[1.02]'
+                : 'bg-slate-100 border-2 border-slate-600 text-slate-900 ring-2 ring-slate-300 shadow-lg scale-[1.02]';
+            } else {
+              cardStyle = isTerm
+                ? 'bg-[#3d0b23] border-[#f43f5e] text-white ring-2 ring-[#f43f5e]/70 shadow-[0_0_25px_rgba(244,63,94,0.45)] scale-[1.02]'
+                : 'bg-[#271545] border-purple-400 text-white ring-2 ring-purple-400/60 shadow-[0_0_25px_rgba(168,85,247,0.4)] scale-[1.02]';
+            }
           }
 
           return (
@@ -219,10 +263,10 @@ export const MatchingGame: React.FC<MatchingGameProps> = ({
             >
               <div className={`font-semibold leading-snug w-full flex items-center justify-center ${
                 isTerm
-                  ? 'text-sm sm:text-[15px] text-[#fecdd3] font-black tracking-tight drop-shadow-sm'
+                  ? (theme === 'kitty' ? 'text-sm sm:text-[15px] text-pink-950 font-black' : theme === 'light' ? 'text-sm sm:text-[15px] text-indigo-950 font-black' : 'text-sm sm:text-[15px] text-[#fecdd3] font-black tracking-tight drop-shadow-sm')
                   : (item.text.length > 90
-                      ? 'text-[11.5px] sm:text-xs text-slate-200 font-medium leading-tight'
-                      : 'text-xs sm:text-[13px] text-slate-200 font-medium leading-snug')
+                      ? (theme === 'kitty' ? 'text-[11.5px] sm:text-xs text-pink-900 font-medium' : theme === 'light' ? 'text-[11.5px] sm:text-xs text-slate-700 font-medium' : 'text-[11.5px] sm:text-xs text-slate-200 font-medium leading-tight')
+                      : (theme === 'kitty' ? 'text-xs sm:text-[13px] text-pink-900 font-medium' : theme === 'light' ? 'text-xs sm:text-[13px] text-slate-700 font-medium' : 'text-xs sm:text-[13px] text-slate-200 font-medium leading-snug'))
               }`}>
                 <FormattedText text={item.text} inlineOnly />
               </div>

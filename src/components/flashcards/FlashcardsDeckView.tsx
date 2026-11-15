@@ -9,6 +9,7 @@ import {
 import { gameAudio } from './games/gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm } from './flashcardSanitizer';
 import { FormattedText } from '../FormattedText';
+import { useTheme } from '../../services/themeService';
 
 interface FlashcardsDeckViewProps {
   cards: Flashcard[];
@@ -22,6 +23,7 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
   cards,
   onUpdateMastery,
 }) => {
+  const { theme } = useTheme();
   const [deck, setDeck] = useState<Flashcard[]>(cards);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -108,15 +110,21 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
   const masteredCount = deck.filter(c => c.mastery === 'mastered').length;
 
   return (
-    <div className="w-full max-w-3xl mx-auto py-1 sm:py-2 px-2 sm:px-4 flex-1 flex flex-col items-center justify-center animate-fadeIn text-slate-100">
+    <div className={`w-full max-w-3xl mx-auto py-1 sm:py-2 px-2 sm:px-4 flex-1 flex flex-col items-center justify-center animate-fadeIn ${
+      theme === 'kitty' ? 'text-pink-950' : theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+    }`}>
       {/* Top Stats & Progress Bar */}
-      <div className="w-full max-w-2xl flex items-center justify-between mb-2 text-xs font-semibold tabular-nums text-slate-400">
+      <div className={`w-full max-w-2xl flex items-center justify-between mb-2 text-xs font-semibold tabular-nums ${
+        theme === 'kitty' ? 'text-pink-800' : theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+      }`}>
         <div>
-          Tarjeta <strong className="text-white text-sm">{currentIdx + 1}</strong> de {deck.length}
+          Tarjeta <strong className={`text-sm ${
+            theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-950 font-black' : 'text-white'
+          }`}>{currentIdx + 1}</strong> de {deck.length}
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 text-emerald-400 font-bold">
+          <span className="flex items-center gap-1 text-emerald-500 dark:text-emerald-400 font-bold">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>{masteredCount} dominadas</span>
           </span>
@@ -124,7 +132,13 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             type="button"
             onClick={handleShuffle}
             title="Rebarajar tarjetas"
-            className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white transition-colors cursor-pointer active:scale-95"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer active:scale-95 ${
+              theme === 'kitty'
+                ? 'bg-pink-100/70 hover:bg-pink-200 text-pink-700'
+                : theme === 'light'
+                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                : 'bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white'
+            }`}
           >
             <Shuffle className="w-4 h-4" />
           </button>
@@ -132,9 +146,15 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
       </div>
 
       {/* Progress Line */}
-      <div className="w-full max-w-2xl h-1.5 bg-white/[0.08] rounded-full overflow-hidden mb-3.5">
+      <div className={`w-full max-w-2xl h-1.5 rounded-full overflow-hidden mb-3.5 ${
+        theme === 'kitty' ? 'bg-pink-100' : theme === 'light' ? 'bg-slate-200' : 'bg-white/[0.08]'
+      }`}>
         <div
-          className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-200"
+          className={`h-full transition-all duration-200 ${
+            theme === 'kitty'
+              ? 'bg-gradient-to-r from-pink-400 to-rose-500'
+              : 'bg-gradient-to-r from-purple-500 to-indigo-500'
+          }`}
           style={{ width: `${((currentIdx + 1) / deck.length) * 100}%` }}
         />
       </div>
@@ -145,24 +165,41 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           onClick={handleFlip}
           className={`card-inner ${isFlipped ? 'is-flipped' : ''} cursor-pointer select-none group h-full rounded-3xl relative`}
         >
-          {/* CARA FRONTAL (TÉRMINO O CONCEPTO - ESTILO ORIGINAL LIMPIO SIN ILUMINACIÓN ROJA) */}
+          {/* CARA FRONTAL (TÉRMINO O CONCEPTO) */}
           <div
-            className="card-face rounded-3xl bg-[#140e2b]/95 hover:bg-[#191136] border border-white/[0.12] hover:border-purple-400/40 p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none"
+            className={`card-face rounded-3xl border p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none ${
+              theme === 'kitty'
+                ? 'bg-white hover:bg-pink-50/30 border-2 border-pink-200 hover:border-pink-300 text-pink-950 shadow-[0_12px_40px_rgba(236,72,153,0.12)]'
+                : theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-900 shadow-xl'
+                : 'bg-[#140e2b]/95 hover:bg-[#191136] border-white/[0.12] hover:border-purple-400/40 text-white'
+            }`}
             style={{
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+              boxShadow:
+                theme === 'kitty'
+                  ? '0 12px 40px rgba(236, 72, 153, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                  : theme === 'light'
+                  ? '0 8px 30px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                  : '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
             }}
           >
             {/* Top hint tag */}
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300/80">
+            <div className={`flex items-center justify-between text-xs font-bold uppercase tracking-wider ${
+              theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-300/80'
+            }`}>
               <span>Concepto</span>
-              <span className="text-slate-500 font-normal lowercase text-[11px] group-hover:text-slate-400 transition-colors">
+              <span className={`font-normal lowercase text-[11px] transition-colors ${
+                theme === 'kitty' ? 'text-pink-400 group-hover:text-pink-600' : theme === 'light' ? 'text-slate-400 group-hover:text-slate-600' : 'text-slate-500 group-hover:text-slate-400'
+              }`}>
                 clic o espacio para voltear
               </span>
             </div>
 
             {/* Card Main Term */}
             <div className="my-auto text-center py-3 overflow-y-auto max-h-[28vh]">
-              <div className="text-xl sm:text-2xl md:text-3xl text-white font-extrabold tracking-tight leading-relaxed">
+              <div className={`text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight leading-relaxed ${
+                theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-950 font-black' : 'text-white'
+              }`}>
                 <FormattedText text={currentCard ? getCardTerm(currentCard) : ''} inlineOnly />
               </div>
             </div>
@@ -171,9 +208,13 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             <div className="flex items-center justify-center">
               <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
                 currentCard?.mastery === 'mastered'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
                   : currentCard?.mastery === 'known'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 text-pink-700 border border-pink-200'
+                  : theme === 'light'
+                  ? 'bg-slate-100 text-slate-600 border border-slate-200'
                   : 'bg-slate-700/40 text-slate-400 border border-white/[0.08]'
               }`}>
                 {currentCard?.mastery === 'mastered'
@@ -185,24 +226,41 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             </div>
           </div>
 
-          {/* CARA TRASERA (DEFINICIÓN - SOLO EL CONCEPTO PURO SIN VIÑETAS) */}
+          {/* CARA TRASERA (DEFINICIÓN) */}
           <div
-            className="card-face card-back rounded-3xl bg-[#16102c]/95 hover:bg-[#1b1338] border border-white/[0.12] hover:border-purple-400/40 p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none"
+            className={`card-face card-back rounded-3xl border p-5 sm:p-8 shadow-2xl flex flex-col justify-between select-none ${
+              theme === 'kitty'
+                ? 'bg-white hover:bg-pink-50/30 border-2 border-pink-200 hover:border-pink-300 text-pink-950 shadow-[0_12px_40px_rgba(236,72,153,0.12)]'
+                : theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-900 shadow-xl'
+                : 'bg-[#16102c]/95 hover:bg-[#1b1338] border-white/[0.12] hover:border-purple-400/40 text-white'
+            }`}
             style={{
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+              boxShadow:
+                theme === 'kitty'
+                  ? '0 12px 40px rgba(236, 72, 153, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                  : theme === 'light'
+                  ? '0 8px 30px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95)'
+                  : '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
             }}
           >
             {/* Top hint tag */}
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300/80">
+            <div className={`flex items-center justify-between text-xs font-bold uppercase tracking-wider ${
+              theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-purple-300/80'
+            }`}>
               <span>Definición</span>
-              <span className="text-slate-500 font-normal lowercase text-[11px] group-hover:text-slate-400 transition-colors">
+              <span className={`font-normal lowercase text-[11px] transition-colors ${
+                theme === 'kitty' ? 'text-pink-400 group-hover:text-pink-600' : theme === 'light' ? 'text-slate-400 group-hover:text-slate-600' : 'text-slate-500 group-hover:text-slate-400'
+              }`}>
                 clic o espacio para voltear
               </span>
             </div>
 
-            {/* Card Main Definition (SOLO EL CONCEPTO, CERO VIÑETAS) */}
+            {/* Card Main Definition */}
             <div className="my-auto text-center py-4 overflow-y-auto max-h-[28vh]">
-              <div className="text-sm sm:text-base md:text-lg text-slate-200 font-normal leading-relaxed">
+              <div className={`text-sm sm:text-base md:text-lg font-normal leading-relaxed ${
+                theme === 'kitty' ? 'text-pink-900 font-medium' : theme === 'light' ? 'text-slate-700 font-normal' : 'text-slate-200 font-normal'
+              }`}>
                 <FormattedText text={currentCard ? getCardDef(currentCard) : ''} inlineOnly />
               </div>
             </div>
@@ -211,9 +269,13 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             <div className="flex items-center justify-center">
               <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
                 currentCard?.mastery === 'mastered'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
                   : currentCard?.mastery === 'known'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 text-pink-700 border border-pink-200'
+                  : theme === 'light'
+                  ? 'bg-slate-100 text-slate-600 border border-slate-200'
                   : 'bg-slate-700/40 text-slate-400 border border-white/[0.08]'
               }`}>
                 {currentCard?.mastery === 'mastered'
@@ -234,7 +296,13 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           type="button"
           onClick={handlePrev}
           disabled={currentIdx === 0}
-          className="p-3 rounded-2xl bg-[#1b1338] hover:bg-[#261b4f] disabled:opacity-30 border border-white/[0.1] text-slate-200 hover:text-white transition-all cursor-pointer disabled:cursor-not-allowed shadow-md active:scale-95"
+          className={`p-3 rounded-2xl disabled:opacity-30 border transition-all cursor-pointer disabled:cursor-not-allowed shadow-md active:scale-95 ${
+            theme === 'kitty'
+              ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700 hover:text-pink-900'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900'
+              : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.1] text-slate-200 hover:text-white'
+          }`}
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -246,7 +314,13 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             onClick={() => handleSetMastery('to-learn')}
             className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-transform duration-150 active:scale-[0.97] cursor-pointer shadow-sm ${
               currentCard?.mastery === 'to-learn'
-                ? 'bg-slate-700/60 border-slate-500 text-white'
+                ? theme === 'kitty'
+                  ? 'bg-pink-200/80 border-pink-400 text-pink-900'
+                  : 'bg-slate-700/60 border-slate-500 text-white'
+                : theme === 'kitty'
+                ? 'bg-white/90 hover:bg-pink-50 border-pink-200 text-pink-800'
+                : theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                 : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.08] text-slate-300'
             }`}
           >
@@ -258,7 +332,11 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             onClick={() => handleSetMastery('known')}
             className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-transform duration-150 active:scale-[0.97] cursor-pointer shadow-sm ${
               currentCard?.mastery === 'known'
-                ? 'bg-amber-600/30 border-amber-400 text-amber-200'
+                ? 'bg-amber-500/20 border-amber-400 text-amber-700 dark:text-amber-200'
+                : theme === 'kitty'
+                ? 'bg-white/90 hover:bg-pink-50 border-pink-200 text-pink-800'
+                : theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                 : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.08] text-slate-300'
             }`}
           >
@@ -270,7 +348,11 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
             onClick={() => handleSetMastery('mastered')}
             className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border text-xs font-bold transition-transform duration-150 active:scale-[0.97] cursor-pointer shadow-sm ${
               currentCard?.mastery === 'mastered'
-                ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200'
+                ? 'bg-emerald-500/20 border-emerald-400 text-emerald-700 dark:text-emerald-200'
+                : theme === 'kitty'
+                ? 'bg-white/90 hover:bg-pink-50 border-pink-200 text-pink-800'
+                : theme === 'light'
+                ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                 : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.08] text-slate-300'
             }`}
           >
@@ -283,7 +365,13 @@ export const FlashcardsDeckView: React.FC<FlashcardsDeckViewProps> = ({
           type="button"
           onClick={handleNext}
           disabled={currentIdx === deck.length - 1}
-          className="p-3 rounded-2xl bg-[#1b1338] hover:bg-[#261b4f] disabled:opacity-30 border border-white/[0.1] text-slate-200 hover:text-white transition-all cursor-pointer disabled:cursor-not-allowed shadow-md active:scale-95"
+          className={`p-3 rounded-2xl disabled:opacity-30 border transition-all cursor-pointer disabled:cursor-not-allowed shadow-md active:scale-95 ${
+            theme === 'kitty'
+              ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-700 hover:text-pink-900'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900'
+              : 'bg-[#1b1338] hover:bg-[#261b4f] border-white/[0.1] text-slate-200 hover:text-white'
+          }`}
         >
           <ChevronRight className="w-5 h-5" />
         </button>
