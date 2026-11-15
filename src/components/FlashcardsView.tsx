@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { StudyKit, Flashcard } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
-import { Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
+import { GeminiIcon } from './GeminiIcon';
 import { generateAdditionalAIFlashcards } from '../services/aiService';
 
 // Subcomponents
@@ -459,7 +460,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
               </>
             ) : (
               <>
-                <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                <GeminiIcon className="w-3.5 h-3.5" variant="gradient" />
                 <span>+ 10 con IA</span>
               </>
             )}

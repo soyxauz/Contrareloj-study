@@ -7,12 +7,12 @@ import {
   Loader2,
   RefreshCw,
   Trash2,
-  Sparkles,
   Filter,
   Eye,
   EyeOff,
   CheckCircle2
 } from 'lucide-react';
+import { GeminiIcon } from './GeminiIcon';
 import { ImageZoomModal } from './ImageZoomModal';
 import { getAssetsMap, getAssetById } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
@@ -483,7 +483,7 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                   : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <GeminiIcon className="w-3.5 h-3.5" variant="gradient" />
               <span>Limpiar {decorativeCount} adornos</span>
             </button>
           )}
@@ -519,9 +519,9 @@ export const ImagesGalleryView: React.FC<ImagesGalleryViewProps> = ({ kit, onUpd
                 <button
                   type="button"
                   onClick={handlePurgeDecorativeAssets}
-                  className="font-bold text-amber-400 hover:text-amber-300 cursor-pointer active:scale-95 flex items-center gap-1"
+                  className="font-bold text-amber-400 hover:text-amber-300 cursor-pointer active:scale-95 flex items-center gap-1.5"
                 >
-                  <Sparkles className="w-3 h-3" />
+                  <GeminiIcon className="w-3.5 h-3.5" variant="gradient" />
                   Purgar del Kit
                 </button>
               </>

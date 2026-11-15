@@ -2,7 +2,6 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import type { PodcastFormat, PodcastDuration } from '../../types';
 import {
-  Sparkles,
   Headphones,
   Volume2,
   X,
@@ -10,6 +9,7 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react';
+import { GeminiIcon } from '../GeminiIcon';
 import { PODCAST_FORMAT_OPTIONS, PODCAST_DURATION_OPTIONS } from './podcastConstants';
 import {
   AZURE_EDGE_VOICES,
@@ -83,7 +83,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                 : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-500'
             }`}>
               {voiceModalTab === 'new_episode' ? (
-                <Sparkles className="w-5 h-5" />
+                <GeminiIcon className="w-5 h-5" variant="gradient" />
               ) : (
                 <Headphones className="w-5 h-5" />
               )}
@@ -155,7 +155,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
                   : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-zinc-950'
               }`}
             >
-              <Sparkles className={`w-4 h-4 shrink-0 ${theme === 'dark' ? 'text-amber-400' : 'text-amber-700'}`} />
+              <GeminiIcon className="w-4 h-4 shrink-0" variant="gradient" />
               <div className="text-left hidden sm:block">
                 <div className="font-bold">Nuevo Episodio</div>
                 <div className={`text-[10px] font-normal ${theme === 'dark' ? 'text-amber-400/90' : 'text-amber-800'}`}>Reemplazar podcast</div>
@@ -376,7 +376,7 @@ export const PodcastVoiceModal: React.FC<PodcastVoiceModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1.5">
                 <div className="flex items-center justify-between text-amber-300 font-bold">
                   <span className="flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <GeminiIcon className="w-4 h-4" variant="gradient" />
                     Crear un nuevo episodio y reemplazar el actual
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40">

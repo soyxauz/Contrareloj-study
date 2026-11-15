@@ -1,13 +1,13 @@
 import React from 'react';
 import type { PodcastFormat, PodcastDuration } from '../../types';
 import {
-  Sparkles,
   Clock,
   Headphones,
   Settings2,
   Loader2,
   Check,
 } from 'lucide-react';
+import { GeminiIcon } from '../GeminiIcon';
 import { PODCAST_FORMAT_OPTIONS, PODCAST_DURATION_OPTIONS } from './podcastConstants';
 import { AZURE_EDGE_VOICES } from '../../services/azureEdgeTtsService';
 import { useTheme } from '../../services/themeService';
@@ -241,7 +241,7 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
                   htmlFor="podcast-orientation-input"
                   className={`text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5 ${mutedText}`}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <GeminiIcon className="w-3.5 h-3.5" variant="gradient" />
                   <span>Orientación personalizada (opcional)</span>
                 </label>
 
@@ -371,7 +371,7 @@ export const PodcastSetupView: React.FC<PodcastSetupViewProps> = ({
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4" />
+                      <GeminiIcon className="w-4 h-4" variant="gradient" />
                       <span>Generar Podcast con IA</span>
                     </>
                   )}
