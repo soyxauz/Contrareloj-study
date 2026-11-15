@@ -3690,69 +3690,29 @@ export const googleDriveService = {
       console.warn('[GoogleDriveService] Aviso asignando permiso público de Drive:', permErr);
     }
 
-    // 5. Canal Resiliente: comprimir el kit base para transporte URL instantáneo (0ms, inmune a 404)
-    let skParam = '';
-    let skHash = '';
+    // 5. Registrar kit en el proxy de Vercel para resolución instantánea del enlace corto
     try {
-      const minifiedKit = {
-        id: contentBasedKit.id,
-        title: contentBasedKit.title,
-        description: contentBasedKit.description,
-        category: contentBasedKit.category,
-        icon: contentBasedKit.icon,
-        color: contentBasedKit.color,
-        sourceText: contentBasedKit.sourceText,
-        sourceMaterials: (contentBasedKit.sourceMaterials || []).map(m => ({
-          id: m.id,
-          name: m.name,
-          type: m.type,
-          rawText: m.rawText,
-        })),
-        chunks: (contentBasedKit.chunks || []).map(c => ({
-          id: c.id,
-          chunkIndex: c.chunkIndex,
-          text: c.text,
-          pageOrSlide: c.pageOrSlide,
-        })),
-        flashcards: (contentBasedKit.flashcards || []).map(fc => ({
-          id: fc.id,
-          term: fc.term,
-          definition: fc.definition,
-          mastery: 'to-learn',
-          type: fc.type || 'concept',
-        })),
-      };
-
-      const jsonStr = JSON.stringify({ v: 2, kit: minifiedKit });
-      if (typeof CompressionStream !== 'undefined') {
-        const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate-raw'));
-        const buf = await new Response(stream).arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        const chunkSize = 8192;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-        }
-        const b64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        // El hash (#sk=...) nunca se transmite al servidor HTTP de Vercel/Nginx, evitando límites de cabecera
-        if (b64.length < 48000) {
-          skHash = b64;
-        }
-        // Para compatibilidad con clientes que no leen hash
-        if (b64.length < 3500) {
-          skParam = `&sk=${encodeURIComponent(b64)}`;
-        }
-      }
-    } catch (compErr) {
-      console.warn('[GoogleDriveService] Compresión de URL omitida:', compErr);
+      await fetch('/api/drive/shared', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId,
+          data: {
+            version: 2,
+            kit: contentBasedKit,
+            sharedAt: Date.now(),
+            ownerName: currentState.userName || 'Usuario de ContraReloj+',
+          },
+        }),
+        signal: AbortSignal.timeout(3500),
+      });
+    } catch (regErr) {
+      console.warn('[GoogleDriveService] Aviso registrando kit en caché del proxy:', regErr);
     }
 
-    // 6. Construir la URL absoluta basada en el kit de estudio
+    // 6. Construir el enlace corto nativo limpio: /s/:fileId
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
-    let shareUrl = `${origin}/kit/${kit.id}?shared_drive_id=${fileId}${skParam}`;
-    if (skHash) {
-      shareUrl += `#sk=${encodeURIComponent(skHash)}`;
-    }
+    const shareUrl = `${origin}/s/${fileId}`;
 
     return { shareUrl, fileId };
   },

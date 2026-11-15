@@ -139,15 +139,21 @@ export const App: React.FC = () => {
     return null;
   });
 
-  // Estado para importar Kit compartido desde URL (?shared_drive_id=... o ?sk=... o #sk=...)
+  // Estado para importar Kit compartido desde URL corta (/s/:fileId) o parámetros (?shared_drive_id=... o ?sk=... o #sk=...)
   const [sharedFileId, setSharedFileId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
+    // 1. Extraer de la ruta corta nativa /s/:fileId
+    const sMatch = window.location.pathname.match(/^\/s\/([^/?#]+)/i);
+    if (sMatch && sMatch[1]) {
+      return decodeURIComponent(sMatch[1]);
+    }
+    // 2. Extraer de query params (?shared_drive_id=... o ?d=...)
     const params = new URLSearchParams(window.location.search);
-    let id = params.get('shared_drive_id');
+    let id = params.get('shared_drive_id') || params.get('d');
     if (!id && window.location.hash) {
       const hash = window.location.hash.replace(/^#/, '');
       const hashParams = new URLSearchParams(hash);
-      id = hashParams.get('shared_drive_id') || hashParams.get('id');
+      id = hashParams.get('shared_drive_id') || hashParams.get('d') || hashParams.get('id');
     }
     return id;
   });
@@ -185,14 +191,20 @@ export const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  // Escuchar cambios de hash o popstate para enlaces compartidos dinámicos
+  // Escuchar cambios de hash o popstate para enlaces compartidos dinámicos (/s/:id o params)
   useEffect(() => {
     const handleHashOrPopState = () => {
+      const sMatch = window.location.pathname.match(/^\/s\/([^/?#]+)/i);
       const searchParams = new URLSearchParams(window.location.search);
       const hash = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
       const hashParams = new URLSearchParams(hash);
 
-      const fId = searchParams.get('shared_drive_id') || hashParams.get('shared_drive_id') || hashParams.get('id');
+      const fId = (sMatch && sMatch[1] ? decodeURIComponent(sMatch[1]) : null) ||
+                  searchParams.get('shared_drive_id') ||
+                  searchParams.get('d') ||
+                  hashParams.get('shared_drive_id') ||
+                  hashParams.get('d') ||
+                  hashParams.get('id');
       const sk = searchParams.get('sk') || hashParams.get('sk') || hashParams.get('payload');
 
       if (fId && fId !== sharedFileId) setSharedFileId(fId);
@@ -247,14 +259,19 @@ export const App: React.FC = () => {
         setCurrentKit(imported);
         safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, imported.id);
 
-        // Limpiar los parámetros de la URL y el hash preservando la ruta
+        // Limpiar la URL corta /s/:id y los parámetros reemplazando por /kit/:id
         try {
-          const url = new URL(window.location.href);
-          url.searchParams.delete('shared_drive_id');
-          url.searchParams.delete('sk');
-          url.hash = '';
-          window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
-        } catch {}
+          window.history.replaceState(window.history.state, '', `/kit/${imported.id}`);
+        } catch {
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('shared_drive_id');
+            url.searchParams.delete('d');
+            url.searchParams.delete('sk');
+            url.hash = '';
+            window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+          } catch {}
+        }
 
         setSharedFileId(null);
         setSharedPayload(null);
@@ -271,11 +288,16 @@ export const App: React.FC = () => {
         setTimeout(() => setToastNotification(null), 6000);
 
         try {
-          const url = new URL(window.location.href);
-          url.searchParams.delete('shared_drive_id');
-          url.searchParams.delete('sk');
-          url.hash = '';
-          window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+          if (window.location.pathname.startsWith('/s/')) {
+            window.history.replaceState(window.history.state, '', '/');
+          } else {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('shared_drive_id');
+            url.searchParams.delete('d');
+            url.searchParams.delete('sk');
+            url.hash = '';
+            window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
+          }
         } catch {}
 
         setSharedFileId(null);
@@ -512,7 +534,7 @@ export const App: React.FC = () => {
   const [currentMode, setCurrentMode] = useState<StudyMode>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
-      if (path.startsWith('/kit/')) return 'flashcards';
+      if (path.startsWith('/kit/') || path.startsWith('/s/')) return 'flashcards';
       if (path.startsWith('/smartStudy/')) return 'smart-study';
       if (path.startsWith('/study/')) return 'study-guide';
       if (path.startsWith('/flashcards')) return 'flashcards';

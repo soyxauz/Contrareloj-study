@@ -155,7 +155,7 @@ export const ShareKitModal: React.FC<ShareKitModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-2.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span className="font-medium">
-                ¡Enlace de contenido generado con éxito en Google Drive!
+                ¡Enlace corto generado y respaldado en tu Google Drive!
               </span>
             </div>
 
@@ -187,7 +187,7 @@ export const ShareKitModal: React.FC<ShareKitModalProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-400 text-center leading-normal">
-              Cualquier usuario con cuenta de Google Drive podrá importar este kit con todo su material de estudio base y comenzar su propio progreso.
+              Enlace corto y directo. Quien lo abra importará este kit con todo su material base listo para estudiar con progreso 0% limpio.
             </p>
           </div>
         ) : (

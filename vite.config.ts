@@ -479,6 +479,8 @@ function imageSearchPlugin(): Plugin {
   };
 }
 
+const devDriveCache = new Map<string, any>();
+
 function driveSharedPlugin(env: Record<string, string>): Plugin {
   return {
     name: 'drive-shared',
@@ -494,6 +496,29 @@ function driveSharedPlugin(env: Record<string, string>): Plugin {
           return;
         }
 
+        if (req.method === 'POST') {
+          let bodyStr = '';
+          req.on('data', (chunk: any) => { bodyStr += chunk; });
+          req.on('end', () => {
+            try {
+              const body = JSON.parse(bodyStr || '{}');
+              const fileId = body.fileId || body.id;
+              const data = body.data || body.kit;
+              if (fileId && data) {
+                devDriveCache.set(fileId, data);
+              }
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: true, cached: true }));
+            } catch (err: any) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: err?.message }));
+            }
+          });
+          return;
+        }
+
         try {
           const parsedUrl = new URL(req.url || '', 'http://localhost');
           const fileId = parsedUrl.searchParams.get('fileId') || parsedUrl.searchParams.get('id') || '';
@@ -502,6 +527,13 @@ function driveSharedPlugin(env: Record<string, string>): Plugin {
             res.statusCode = 400;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ success: false, error: 'Parámetro fileId requerido.' }));
+            return;
+          }
+
+          if (devDriveCache.has(fileId)) {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: true, data: devDriveCache.get(fileId) }));
             return;
           }
 
