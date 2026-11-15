@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
+import { LensInspectorPanel } from './LensInspectorPanel';
 
 /**
  * Icono vectorial oficial estilizado de Google Lens
@@ -27,6 +28,37 @@ const GoogleLensIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4
     <circle cx="12" cy="12" r="1.4" fill="#4285F4" />
   </svg>
 );
+
+/**
+ * Recorta una región normalizada (0..1) de una imagen mediante canvas
+ */
+const cropImageRegion = (
+  imgEl: HTMLImageElement,
+  rect: { x: number; y: number; width: number; height: number }
+): string => {
+  try {
+    const canvas = document.createElement('canvas');
+    const natW = imgEl.naturalWidth || imgEl.width || 400;
+    const natH = imgEl.naturalHeight || imgEl.height || 400;
+
+    const sx = Math.max(0, Math.floor(rect.x * natW));
+    const sy = Math.max(0, Math.floor(rect.y * natH));
+    const sw = Math.min(natW - sx, Math.max(10, Math.ceil(rect.width * natW)));
+    const sh = Math.min(natH - sy, Math.max(10, Math.ceil(rect.height * natH)));
+
+    canvas.width = Math.max(sw, 10);
+    canvas.height = Math.max(sh, 10);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.warn('Error al recortar región de imagen:', err);
+    return '';
+  }
+};
 
 /**
  * Copia una imagen local o base64 al portapapeles del sistema como PNG nativo
@@ -119,6 +151,19 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     message: string;
   } | null>(null);
   const [isLensProcessing, setIsLensProcessing] = useState<boolean>(false);
+
+  // Estados para selección interactiva y escaneo Google Lens
+  const [isLensModeActive, setIsLensModeActive] = useState<boolean>(false);
+  const [selectionRect, setSelectionRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [, setIsDraggingLens] = useState<boolean>(false);
+  const [croppedDataUrl, setCroppedDataUrl] = useState<string>('');
+  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
+  const lensStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -224,6 +269,153 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     setPan({ x: 0, y: 0 });
     applyTransform(0, 0, 1, true);
   }, [applyTransform]);
+
+  // Resetear estados de Lens cada vez que cambia la imagen o se abre/cierra el modal
+  useEffect(() => {
+    setIsLensModeActive(false);
+    setSelectionRect(null);
+    setCroppedDataUrl('');
+    setIsInspectorOpen(false);
+  }, [imageUrl, isOpen]);
+
+  // Alternar el modo de selección interactiva Lens
+  const toggleLensMode = useCallback(() => {
+    if (isLensModeActive) {
+      setIsLensModeActive(false);
+      setSelectionRect(null);
+    } else {
+      handleResetZoom();
+      setIsLensModeActive(true);
+      setIsInspectorOpen(false);
+      setSelectionRect(null);
+    }
+  }, [isLensModeActive, handleResetZoom]);
+
+  // Seleccionar la figura entera para análisis
+  const handleSelectFullImage = useCallback(() => {
+    if (!imgRef.current) return;
+    const fullRect = { x: 0, y: 0, width: 1, height: 1 };
+    setSelectionRect(fullRect);
+    const cropUrl = cropImageRegion(imgRef.current, fullRect);
+    if (cropUrl) {
+      setCroppedDataUrl(cropUrl);
+      setIsInspectorOpen(true);
+      setIsLensModeActive(false);
+    }
+  }, []);
+
+  // Evento mouse down para iniciar selección de recorte Lens
+  const handleLensMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const overlay = e.currentTarget;
+    const rect = overlay.getBoundingClientRect();
+    const startX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const startY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+
+    lensStartRef.current = { x: startX, y: startY };
+    setSelectionRect({ x: startX, y: startY, width: 0, height: 0 });
+    setIsDraggingLens(true);
+
+    const onMouseMoveWindow = (ev: MouseEvent) => {
+      const curX = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+      const curY = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height));
+
+      const x = Math.min(lensStartRef.current.x, curX);
+      const y = Math.min(lensStartRef.current.y, curY);
+      const width = Math.abs(curX - lensStartRef.current.x);
+      const height = Math.abs(curY - lensStartRef.current.y);
+
+      setSelectionRect({ x, y, width, height });
+    };
+
+    const onMouseUpWindow = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', onMouseMoveWindow);
+      window.removeEventListener('mouseup', onMouseUpWindow);
+      setIsDraggingLens(false);
+
+      const curX = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+      const curY = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height));
+
+      const x = Math.min(lensStartRef.current.x, curX);
+      const y = Math.min(lensStartRef.current.y, curY);
+      const width = Math.abs(curX - lensStartRef.current.x);
+      const height = Math.abs(curY - lensStartRef.current.y);
+
+      if (width > 0.03 && height > 0.03 && imgRef.current) {
+        const finalRect = { x, y, width, height };
+        setSelectionRect(finalRect);
+        const cropUrl = cropImageRegion(imgRef.current, finalRect);
+        if (cropUrl) {
+          setCroppedDataUrl(cropUrl);
+          setIsInspectorOpen(true);
+          setIsLensModeActive(false);
+        }
+      }
+    };
+
+    window.addEventListener('mousemove', onMouseMoveWindow);
+    window.addEventListener('mouseup', onMouseUpWindow);
+  };
+
+  // Evento touch start para soporte móvil táctil Lens
+  const handleLensTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length !== 1) return;
+    e.stopPropagation();
+    const touch = e.touches[0];
+    const overlay = e.currentTarget;
+    const rect = overlay.getBoundingClientRect();
+    const startX = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+    const startY = Math.max(0, Math.min(1, (touch.clientY - rect.top) / rect.height));
+
+    lensStartRef.current = { x: startX, y: startY };
+    setSelectionRect({ x: startX, y: startY, width: 0, height: 0 });
+    setIsDraggingLens(true);
+
+    const onTouchMoveWindow = (ev: TouchEvent) => {
+      if (ev.touches.length !== 1) return;
+      const t = ev.touches[0];
+      const curX = Math.max(0, Math.min(1, (t.clientX - rect.left) / rect.width));
+      const curY = Math.max(0, Math.min(1, (t.clientY - rect.top) / rect.height));
+
+      const x = Math.min(lensStartRef.current.x, curX);
+      const y = Math.min(lensStartRef.current.y, curY);
+      const width = Math.abs(curX - lensStartRef.current.x);
+      const height = Math.abs(curY - lensStartRef.current.y);
+
+      setSelectionRect({ x, y, width, height });
+    };
+
+    const onTouchEndWindow = (ev: TouchEvent) => {
+      window.removeEventListener('touchmove', onTouchMoveWindow);
+      window.removeEventListener('touchend', onTouchEndWindow);
+      setIsDraggingLens(false);
+
+      if (ev.changedTouches.length !== 1) return;
+      const t = ev.changedTouches[0];
+      const curX = Math.max(0, Math.min(1, (t.clientX - rect.left) / rect.width));
+      const curY = Math.max(0, Math.min(1, (t.clientY - rect.top) / rect.height));
+
+      const x = Math.min(lensStartRef.current.x, curX);
+      const y = Math.min(lensStartRef.current.y, curY);
+      const width = Math.abs(curX - lensStartRef.current.x);
+      const height = Math.abs(curY - lensStartRef.current.y);
+
+      if (width > 0.03 && height > 0.03 && imgRef.current) {
+        const finalRect = { x, y, width, height };
+        setSelectionRect(finalRect);
+        const cropUrl = cropImageRegion(imgRef.current, finalRect);
+        if (cropUrl) {
+          setCroppedDataUrl(cropUrl);
+          setIsInspectorOpen(true);
+          setIsLensModeActive(false);
+        }
+      }
+    };
+
+    window.addEventListener('touchmove', onTouchMoveWindow);
+    window.addEventListener('touchend', onTouchEndWindow);
+  };
 
   // Búsqueda visual en Google Lens (Híbrido inteligente: URL directa o copiado a portapapeles)
   const handleGoogleLens = useCallback(async () => {
@@ -378,7 +570,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
 
   // Arrastre a 120 FPS sin repaints ni layout thrashing
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (zoomRef.current <= 1) return;
+    if (zoomRef.current <= 1 || isLensModeActive) return;
     if (e.button !== 0) return;
     setIsDragging(true);
     isDraggingRef.current = true;
@@ -388,7 +580,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDraggingRef.current || zoomRef.current <= 1) return;
+    if (!isDraggingRef.current || zoomRef.current <= 1 || isLensModeActive) return;
 
     const deltaX = e.clientX - dragStartRef.current.x;
     const deltaY = e.clientY - dragStartRef.current.y;
@@ -452,7 +644,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full max-w-5xl h-[92vh] flex flex-col border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden ${
+        className={`relative w-full ${isInspectorOpen ? 'max-w-7xl' : 'max-w-5xl'} h-[92vh] flex flex-col border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 ease-out ${
           theme === 'dark'
             ? 'bg-[#0e0b16] border-white/10 text-white'
             : theme === 'kitty'
@@ -578,15 +770,24 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               </button>
             </div>
 
-            {/* Buscar con Google Lens */}
+            {/* Escanear / Buscar con Google Lens interactivo */}
             {sanitizedUrl && (
               <button
                 type="button"
-                onClick={handleGoogleLens}
-                disabled={isLensProcessing}
-                title="Buscar con Google Lens (Copia imagen y abre Google Lens para pegar con Ctrl+V)"
-                className={`p-2 rounded-xl border flex items-center gap-1.5 transition-transform duration-150 ease-out active:scale-[0.97] cursor-pointer ${
-                  theme === 'dark'
+                onClick={toggleLensMode}
+                title={
+                  isLensModeActive
+                    ? 'Cancelar modo escáner'
+                    : isInspectorOpen
+                    ? 'Inspector Lens abierto (Clic para nuevo recorte)'
+                    : 'Escanear con Google Lens (Arrastra sobre la imagen para seleccionar un área)'
+                }
+                className={`p-2 rounded-xl border flex items-center gap-1.5 transition-all duration-150 ease-out active:scale-[0.97] cursor-pointer ${
+                  isLensModeActive
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400/50'
+                    : isInspectorOpen
+                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
+                    : theme === 'dark'
                     ? 'bg-white/[0.04] border-white/[0.08] text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20'
                     : theme === 'kitty'
                     ? 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100 shadow-xs'
@@ -594,7 +795,12 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                 }`}
               >
                 <GoogleLensIcon className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline text-xs font-semibold">Google Lens</span>
+                <span className="hidden sm:inline text-xs font-semibold">
+                  {isLensModeActive ? 'Modo Selección' : isInspectorOpen ? 'Lens Activo' : 'Google Lens'}
+                </span>
+                {isLensModeActive && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                )}
               </button>
             )}
 
@@ -679,99 +885,207 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
           </div>
         )}
 
-        {/* Área Central de Visualización y Zoom: Fondo Blanco Puro en todos los temas */}
-        <div
-          ref={containerRef}
-          className="relative flex-1 min-h-0 bg-white overflow-hidden flex items-center justify-center p-4 cursor-default select-none"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        >
-          {/* Botón Imagen Anterior */}
-          {hasPrev && onPrev && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPrev();
-              }}
-              title="Imagen anterior (Flecha izquierda)"
-              className={`absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full border shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${
-                theme === 'dark'
-                  ? 'bg-zinc-900/90 hover:bg-violet-600 border-zinc-700 text-white'
-                  : theme === 'kitty'
-                  ? 'bg-white/95 hover:bg-pink-50 border-pink-200 text-pink-700 shadow-pink-200/50'
-                  : 'bg-white/95 hover:bg-slate-100 border-slate-300 text-zinc-900 shadow-slate-300/60'
-              }`}
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-          )}
+        {/* Cuerpo del Visor: Imagen a la izquierda + Panel Inspector Lens a la derecha */}
+        <div className="relative flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
+          {/* Área Central de Visualización y Zoom: Fondo Blanco Puro en todos los temas */}
+          <div
+            ref={containerRef}
+            className="relative flex-1 min-h-0 min-w-0 bg-white overflow-hidden flex items-center justify-center p-4 cursor-default select-none"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            {/* Banner flotante de ayuda cuando el modo Lens está activo */}
+            {isLensModeActive && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full bg-zinc-950/90 text-white border border-white/20 text-xs font-semibold shadow-2xl flex items-center gap-2 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+                <GoogleLensIcon className="w-3.5 h-3.5" />
+                <span>Arrastra sobre la figura para seleccionar un área</span>
+                <button
+                  type="button"
+                  onClick={handleSelectFullImage}
+                  className="px-2 py-0.5 rounded-md bg-blue-600 hover:bg-blue-500 text-[10px] font-bold text-white transition-colors cursor-pointer"
+                >
+                  Toda la figura
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLensModeActive(false)}
+                  className="p-0.5 rounded-md hover:bg-white/10 text-white/70 hover:text-white cursor-pointer"
+                  title="Cancelar selección"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
-          {/* Botón Imagen Siguiente */}
-          {hasNext && onNext && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNext();
-              }}
-              title="Imagen siguiente (Flecha derecha)"
-              className={`absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full border shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${
-                theme === 'dark'
-                  ? 'bg-zinc-900/90 hover:bg-violet-600 border-zinc-700 text-white'
-                  : theme === 'kitty'
-                  ? 'bg-white/95 hover:bg-pink-50 border-pink-200 text-pink-700 shadow-pink-200/50'
-                  : 'bg-white/95 hover:bg-slate-100 border-slate-300 text-zinc-900 shadow-slate-300/60'
-              }`}
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          )}
-
-          {/* Contenedor Centrado de la Imagen */}
-          <div className="flex items-center justify-center w-full h-full pointer-events-none">
-            {sanitizedUrl ? (
-              <img
-                ref={imgRef}
-                src={sanitizedUrl}
-                alt={caption || title}
-                style={{
-                  transform: 'translate3d(0px, 0px, 0) scale(1)',
-                  transformOrigin: 'center center',
-                  willChange: 'transform',
+            {/* Botón Imagen Anterior */}
+            {hasPrev && onPrev && !isLensModeActive && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPrev();
                 }}
-                className={`max-h-[70vh] sm:max-h-[74vh] max-w-full object-contain rounded-xl pointer-events-auto bg-white p-2 ${
-                  zoomLevel > 1
-                    ? isDragging
-                      ? 'cursor-grabbing'
-                      : 'cursor-grab'
-                    : 'cursor-zoom-in'
+                title="Imagen anterior (Flecha izquierda)"
+                className={`absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full border shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-zinc-900/90 hover:bg-violet-600 border-zinc-700 text-white'
+                    : theme === 'kitty'
+                    ? 'bg-white/95 hover:bg-pink-50 border-pink-200 text-pink-700 shadow-pink-200/50'
+                    : 'bg-white/95 hover:bg-slate-100 border-slate-300 text-zinc-900 shadow-slate-300/60'
                 }`}
-                onClick={handleImageClick}
-                draggable={false}
-              />
-            ) : (
-              <div className="text-center text-slate-500 space-y-2 pointer-events-auto">
-                <ImageIcon className="w-12 h-12 mx-auto opacity-40" />
-                <p className="text-xs">No se pudo cargar la imagen seleccionada.</p>
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+
+            {/* Botón Imagen Siguiente */}
+            {hasNext && onNext && !isLensModeActive && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNext();
+                }}
+                title="Imagen siguiente (Flecha derecha)"
+                className={`absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full border shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-zinc-900/90 hover:bg-violet-600 border-zinc-700 text-white'
+                    : theme === 'kitty'
+                    ? 'bg-white/95 hover:bg-pink-50 border-pink-200 text-pink-700 shadow-pink-200/50'
+                    : 'bg-white/95 hover:bg-slate-100 border-slate-300 text-zinc-900 shadow-slate-300/60'
+                }`}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+
+            {/* Contenedor Centrado de la Imagen */}
+            <div className="flex items-center justify-center w-full h-full pointer-events-none">
+              {sanitizedUrl ? (
+                <div className="relative inline-block pointer-events-auto max-h-[70vh] sm:max-h-[74vh] max-w-full">
+                  <img
+                    ref={imgRef}
+                    src={sanitizedUrl}
+                    alt={caption || title}
+                    style={{
+                      transform: 'translate3d(0px, 0px, 0) scale(1)',
+                      transformOrigin: 'center center',
+                      willChange: 'transform',
+                    }}
+                    className={`max-h-[70vh] sm:max-h-[74vh] max-w-full object-contain rounded-xl bg-white p-2 block ${
+                      isLensModeActive
+                        ? 'cursor-crosshair'
+                        : zoomLevel > 1
+                        ? isDragging
+                          ? 'cursor-grabbing'
+                          : 'cursor-grab'
+                        : 'cursor-zoom-in'
+                    }`}
+                    onClick={!isLensModeActive ? handleImageClick : undefined}
+                    draggable={false}
+                  />
+
+                  {/* Capa Interactiva de Escaneo Google Lens */}
+                  {isLensModeActive && (
+                    <div
+                      className="absolute inset-0 z-20 cursor-crosshair select-none touch-none"
+                      onMouseDown={handleLensMouseDown}
+                      onTouchStart={handleLensTouchStart}
+                    >
+                      {/* Rectángulo de selección estilo Google Circle to Search / Assistant */}
+                      {selectionRect && (
+                        <div
+                          className="absolute border border-white/90 rounded-2xl pointer-events-none transition-all duration-75"
+                          style={{
+                            left: `${selectionRect.x * 100}%`,
+                            top: `${selectionRect.y * 100}%`,
+                            width: `${selectionRect.width * 100}%`,
+                            height: `${selectionRect.height * 100}%`,
+                            boxShadow:
+                              '0 0 0 9999px rgba(0, 0, 0, 0.45), 0 0 25px rgba(66, 133, 244, 0.6), 0 0 15px rgba(234, 67, 53, 0.5)',
+                          }}
+                        >
+                          {/* 4 Esquinas en colores oficiales Google */}
+                          <div className="absolute -top-1 -left-1 w-5 h-5 border-t-[3.5px] border-l-[3.5px] border-[#EA4335] rounded-tl-xl drop-shadow-[0_0_8px_rgba(234,67,53,0.8)]" />
+                          <div className="absolute -top-1 -right-1 w-5 h-5 border-t-[3.5px] border-r-[3.5px] border-[#4285F4] rounded-tr-xl drop-shadow-[0_0_8px_rgba(66,133,244,0.8)]" />
+                          <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-[3.5px] border-r-[3.5px] border-[#FBBC05] rounded-br-xl drop-shadow-[0_0_8px_rgba(251,188,5,0.8)]" />
+                          <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-[3.5px] border-l-[3.5px] border-[#34A853] rounded-bl-xl drop-shadow-[0_0_8px_rgba(52,168,83,0.8)]" />
+
+                          {/* Pill de estado */}
+                          <div className="absolute -bottom-9 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 bg-zinc-950/90 text-white border border-white/20 rounded-full shadow-2xl text-[11px] font-semibold whitespace-nowrap backdrop-blur-md">
+                            <GoogleLensIcon className="w-3.5 h-3.5" />
+                            <span>Área seleccionada</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Highlight estático del recorte cuando el inspector está abierto y no estamos trazando otro */}
+                  {!isLensModeActive && isInspectorOpen && selectionRect && (
+                    <div
+                      className="absolute border border-white/90 rounded-2xl pointer-events-none"
+                      style={{
+                        left: `${selectionRect.x * 100}%`,
+                        top: `${selectionRect.y * 100}%`,
+                        width: `${selectionRect.width * 100}%`,
+                        height: `${selectionRect.height * 100}%`,
+                        boxShadow:
+                          '0 0 0 9999px rgba(0, 0, 0, 0.35), 0 0 25px rgba(66, 133, 244, 0.5), 0 0 15px rgba(234, 67, 53, 0.4)',
+                      }}
+                    >
+                      <div className="absolute -top-1 -left-1 w-5 h-5 border-t-[3.5px] border-l-[3.5px] border-[#EA4335] rounded-tl-xl drop-shadow-[0_0_8px_rgba(234,67,53,0.8)]" />
+                      <div className="absolute -top-1 -right-1 w-5 h-5 border-t-[3.5px] border-r-[3.5px] border-[#4285F4] rounded-tr-xl drop-shadow-[0_0_8px_rgba(66,133,244,0.8)]" />
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-[3.5px] border-r-[3.5px] border-[#FBBC05] rounded-br-xl drop-shadow-[0_0_8px_rgba(251,188,5,0.8)]" />
+                      <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-[3.5px] border-l-[3.5px] border-[#34A853] rounded-bl-xl drop-shadow-[0_0_8px_rgba(52,168,83,0.8)]" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center text-slate-500 space-y-2 pointer-events-auto">
+                  <ImageIcon className="w-12 h-12 mx-auto opacity-40" />
+                  <p className="text-xs">No se pudo cargar la imagen seleccionada.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Indicador de ayuda al usuario */}
+            {!isLensModeActive && (
+              <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3.5 py-1 rounded-full border text-[11px] font-medium shadow-md ${
+                theme === 'dark'
+                  ? 'bg-slate-900/85 border-slate-700 text-white'
+                  : theme === 'kitty'
+                  ? 'bg-white/90 border-pink-200 text-pink-900 shadow-pink-200/40'
+                  : 'bg-white/95 border-slate-300 text-slate-800 shadow-slate-200/50'
+              }`}>
+                {zoomLevel > 1
+                  ? 'Rueda para zoom focalizado'
+                  : 'Gira la rueda del ratón o haz clic para ampliar'}
               </div>
             )}
           </div>
 
-          {/* Indicador de ayuda al usuario */}
-          <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none z-10 px-3.5 py-1 rounded-full border text-[11px] font-medium shadow-md ${
-            theme === 'dark'
-              ? 'bg-slate-900/85 border-slate-700 text-white'
-              : theme === 'kitty'
-              ? 'bg-white/90 border-pink-200 text-pink-900 shadow-pink-200/40'
-              : 'bg-white/95 border-slate-300 text-slate-800 shadow-slate-200/50'
-          }`}>
-            {zoomLevel > 1
-              ? 'Rueda para zoom focalizado'
-              : 'Gira la rueda del ratón o haz clic para ampliar'}
-          </div>
+          {/* Panel Lateral Derecho: Inspector Google Lens con IA */}
+          {isInspectorOpen && croppedDataUrl && (
+            <LensInspectorPanel
+              isOpen={isInspectorOpen}
+              onClose={() => {
+                setIsInspectorOpen(false);
+                setSelectionRect(null);
+              }}
+              onNewCrop={() => {
+                setSelectionRect(null);
+                handleResetZoom();
+                setIsLensModeActive(true);
+              }}
+              onSelectFullImage={handleSelectFullImage}
+              onOpenExternalLens={handleGoogleLens}
+              croppedDataUrl={croppedDataUrl}
+              context={{ title, subtitle, caption }}
+            />
+          )}
         </div>
 
         {/* Pie del Visor con Descripción / Caption */}
