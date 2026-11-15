@@ -26,11 +26,12 @@ export const HierarchicalLinkPill: React.FC<HierarchicalLinkPillProps> = ({
   const { theme } = useTheme();
   const [copied, setCopied] = useState(false);
 
-  const { theaDisplayUrl, absoluteUrl } = buildTheaHierarchicalUrl(mode, kitId, subtopic);
+  const { contrarelojDisplayUrl, absoluteUrl } = buildTheaHierarchicalUrl(mode, kitId, subtopic);
+  const displayUrl = contrarelojDisplayUrl;
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const textToCopy = preferFullUrlOnCopy ? absoluteUrl : theaDisplayUrl;
+    const textToCopy = preferFullUrlOnCopy ? absoluteUrl : displayUrl;
     navigator.clipboard.writeText(textToCopy).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -45,7 +46,7 @@ export const HierarchicalLinkPill: React.FC<HierarchicalLinkPillProps> = ({
     <button
       type="button"
       onClick={handleCopy}
-      title={`Clic para copiar enlace jerárquico de acceso:\n${theaDisplayUrl}`}
+      title={`Clic para copiar enlace jerárquico de acceso:\n${displayUrl}`}
       aria-label="Copiar enlace jerárquico de acceso"
       className={`group relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono select-none cursor-pointer backdrop-blur-md transition-[background-color,border-color,transform] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95 ${
         theme === 'light'
@@ -76,7 +77,7 @@ export const HierarchicalLinkPill: React.FC<HierarchicalLinkPillProps> = ({
       />
 
       <span className="truncate max-w-[210px] sm:max-w-[320px] font-medium tracking-tight">
-        {theaDisplayUrl}
+        {displayUrl}
       </span>
 
       {copied ? (

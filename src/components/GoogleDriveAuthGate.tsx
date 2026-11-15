@@ -15,6 +15,7 @@ import type { StudyKit, User as AppUser } from '../types';
 interface GoogleDriveAuthGateProps {
   onAuthSuccess: (user: AppUser, kits: StudyKit[] | null) => void;
   pendingSharedFileId?: string | null;
+  pendingSharedPayload?: string | null;
 }
 
 /**
@@ -25,6 +26,7 @@ interface GoogleDriveAuthGateProps {
 export const GoogleDriveAuthGate: React.FC<GoogleDriveAuthGateProps> = ({
   onAuthSuccess,
   pendingSharedFileId,
+  pendingSharedPayload,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export const GoogleDriveAuthGate: React.FC<GoogleDriveAuthGateProps> = ({
         </p>
 
         {/* Banner de Kit Compartido Detectado si proviene de un enlace público */}
-        {pendingSharedFileId && (
+        {(pendingSharedFileId || pendingSharedPayload) && (
           <div className="mb-6 p-4 rounded-2xl bg-gradient-to-br from-indigo-950/70 via-sky-950/50 to-purple-950/60 border border-sky-400/30 text-left shadow-[0_8px_24px_rgba(56,189,248,0.12)] animate-fadeIn">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-xl bg-sky-500/20 border border-sky-400/30 text-sky-300 shrink-0">

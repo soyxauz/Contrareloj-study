@@ -15,18 +15,43 @@ export interface FormattedTextProps {
 }
 
 /**
- * Balancea llaves { } faltantes en expresiones matemáticas incompletas.
+ * Balancea llaves { } faltantes o sobrantes en expresiones matemáticas incompletas o corruptas.
+ * Elimina llaves de cierre '}' huérfanas al inicio o final y añade las llaves de cierre que falten.
  */
 const balanceCurlyBraces = (str: string): string => {
+  if (!str) return '';
   let openCount = 0;
+  let clean = '';
+
+  // Primera pasada: omitir llaves de cierre '}' huérfanas cuando openCount === 0
   for (let i = 0; i < str.length; i++) {
-    if (str[i] === '{' && (i === 0 || str[i - 1] !== '\\')) {
-      openCount++;
-    } else if (str[i] === '}' && (i === 0 || str[i - 1] !== '\\')) {
-      if (openCount > 0) openCount--;
+    const char = str[i];
+    const prevChar = i > 0 ? str[i - 1] : '';
+    const isEscaped = prevChar === '\\';
+
+    if (char === '}' && !isEscaped && openCount === 0) {
+      continue; // Omitir cierre huérfano sin apertura previa
     }
+    if (char === '{' && !isEscaped) {
+      openCount++;
+    } else if (char === '}' && !isEscaped) {
+      openCount--;
+    }
+    clean += char;
   }
-  return str + '}'.repeat(openCount);
+
+  // Segunda pasada: limpiar llaves de cierre excedentes al final
+  while (openCount < 0 && clean.endsWith('}')) {
+    clean = clean.slice(0, -1);
+    openCount++;
+  }
+
+  // Añadir llaves de cierre faltantes
+  if (openCount > 0) {
+    clean += '}'.repeat(openCount);
+  }
+
+  return clean;
 };
 
 /**
@@ -68,8 +93,9 @@ const repairMathString = (raw: string): string => {
     for (let i = segments.length - 1; i >= 0; i--) {
       const seg = segments[i];
       try {
-        katex.renderToString(balanceCurlyBraces(seg), { throwOnError: true, strict: false });
-        bestSegment = seg;
+        const balanced = balanceCurlyBraces(seg);
+        katex.renderToString(balanced, { throwOnError: true, strict: false });
+        bestSegment = balanced;
         break;
       } catch {}
     }
@@ -84,8 +110,9 @@ const repairMathString = (raw: string): string => {
   // Eliminar delimitadores $ sueltos sin escapar dentro de la fórmula
   str = str.replace(/(?<!\\)\$/g, '');
 
-  // Limpiar comandos cortados o sin completar al final de la expresión
+  // Limpiar comandos cortados o sin completar al final de la expresión (ej: \xrightarrow{\text{H o \text{)
   str = str.replace(/\\(?:xrightarrow|rightarrow|to|text|textbf|mathbf)\s*\{[^}]*$/g, '');
+  str = str.replace(/\\(?:xrightarrow|rightarrow|to|text|textbf|mathbf)\s*$/g, '');
 
   // Balancear llaves
   str = balanceCurlyBraces(str);

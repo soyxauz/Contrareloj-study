@@ -1,13 +1,13 @@
 /**
  * Utilidades para construir, sincronizar y compartir enlaces jerárquicos
- * con la arquitectura oficial de Thea (Astra AI):
- * - thea.study/study/{kitId}?st={subtopicToken}
- * - thea.study/smartStudy/{kitId}?st={subtopicToken}
+ * para ContraReloj+:
+ * - contrareloj.study/study/{kitId}?st={subtopicToken}
+ * - contrareloj.study/smartStudy/{kitId}?st={subtopicToken}
  */
 
 /**
  * Genera un token hash consistente y determinista de 8 caracteres hexadecimales
- * para representar el subtema jerárquico activo (idéntico al formato ?st=12f00d098 de Thea).
+ * para representar el subtema jerárquico activo.
  */
 export function generateSubtopicToken(subtopic: string): string {
   if (!subtopic) return '';
@@ -21,12 +21,13 @@ export function generateSubtopicToken(subtopic: string): string {
 
 export interface HierarchicalLinkInfo {
   theaDisplayUrl: string;
+  contrarelojDisplayUrl: string;
   absoluteUrl: string;
   subtopicToken: string;
 }
 
 /**
- * Construye tanto la URL canónica de visualización estilo Thea (thea.study/...)
+ * Construye tanto la URL canónica de visualización estilo ContraReloj (contrareloj.study/...)
  * como la URL absoluta del entorno local o desplegado lista para compartir y copiar al portapapeles.
  */
 export function buildTheaHierarchicalUrl(
@@ -38,12 +39,13 @@ export function buildTheaHierarchicalUrl(
   const query = token ? `?st=${token}` : '';
   const path = `/${mode}/${kitId}${query}`;
 
-  const theaDisplayUrl = `contrareloj.study${path}`;
+  const contrarelojDisplayUrl = `contrareloj.study${path}`;
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
   const absoluteUrl = `${origin}${path}`;
 
   return {
-    theaDisplayUrl,
+    theaDisplayUrl: contrarelojDisplayUrl,
+    contrarelojDisplayUrl,
     absoluteUrl,
     subtopicToken: token,
   };

@@ -479,12 +479,102 @@ function imageSearchPlugin(): Plugin {
   };
 }
 
+function driveSharedPlugin(env: Record<string, string>): Plugin {
+  return {
+    name: 'drive-shared',
+    configureServer(server) {
+      server.middlewares.use('/api/drive/shared', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 200;
+          res.end();
+          return;
+        }
+
+        try {
+          const parsedUrl = new URL(req.url || '', 'http://localhost');
+          const fileId = parsedUrl.searchParams.get('fileId') || parsedUrl.searchParams.get('id') || '';
+
+          if (!fileId) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: false, error: 'Parámetro fileId requerido.' }));
+            return;
+          }
+
+          const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+
+          // 1. drive.usercontent.google.com
+          try {
+            const url1 = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+            const r1 = await fetch(url1, { headers: { 'User-Agent': userAgent }, redirect: 'follow' });
+            if (r1.ok) {
+              const t1 = await r1.text();
+              if (t1.trim().startsWith('{') && (t1.includes('"kit"') || t1.includes('"flashcards"') || t1.includes('"title"'))) {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, data: JSON.parse(t1) }));
+                return;
+              }
+            }
+          } catch {}
+
+          // 2. drive.google.com/uc
+          try {
+            const url2 = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+            const r2 = await fetch(url2, { headers: { 'User-Agent': userAgent }, redirect: 'follow' });
+            if (r2.ok) {
+              const t2 = await r2.text();
+              if (t2.trim().startsWith('{') && (t2.includes('"kit"') || t2.includes('"flashcards"') || t2.includes('"title"'))) {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, data: JSON.parse(t2) }));
+                return;
+              }
+            }
+          } catch {}
+
+          // 3. API Key si existe
+          const apiKey = env.GOOGLE_API_KEY || env.VITE_GOOGLE_API_KEY || env.GEMINI_API_KEY;
+          if (apiKey) {
+            try {
+              const url3 = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${apiKey}`;
+              const r3 = await fetch(url3, { headers: { 'User-Agent': userAgent } });
+              if (r3.ok) {
+                const t3 = await r3.text();
+                if (t3.trim().startsWith('{')) {
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, data: JSON.parse(t3) }));
+                  return;
+                }
+              }
+            } catch {}
+          }
+
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: 'No se pudo leer el archivo compartido de Google Drive.' }));
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: msg }));
+        }
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     base: '/',
-    plugins: [react(), aiProxyPlugin(), edgeTtsPlugin(), imageSearchPlugin(), googleAuthPlugin(env)],
+    plugins: [react(), aiProxyPlugin(), edgeTtsPlugin(), imageSearchPlugin(), googleAuthPlugin(env), driveSharedPlugin(env)],
     build: {
       rollupOptions: {
         output: {

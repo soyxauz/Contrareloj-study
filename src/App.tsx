@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { StudyKit, StudyMode, DeveloperSettings, User } from './types';
-import { BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { BookOpen, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { GoogleDriveAuthGate } from './components/GoogleDriveAuthGate';
 import { ShareKitModal } from './components/ShareKitModal';
 import { authService } from './services/authService';
@@ -139,11 +139,16 @@ export const App: React.FC = () => {
     return null;
   });
 
-  // Estado para importar Kit compartido desde URL (?shared_drive_id=...)
+  // Estado para importar Kit compartido desde URL (?shared_drive_id=... o ?sk=...)
   const [sharedFileId, setSharedFileId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     return params.get('shared_drive_id');
+  });
+  const [sharedPayload, setSharedPayload] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('sk');
   });
   const [isImportingSharedKit, setIsImportingSharedKit] = useState(false);
   const [toastNotification, setToastNotification] = useState<string | null>(null);
@@ -167,9 +172,9 @@ export const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  // Importación reactiva de kit de estudio compartido desde Google Drive
+  // Importación reactiva de kit de estudio compartido desde Google Drive o payload directo
   useEffect(() => {
-    if (!isDriveLinked || !sharedFileId || isImportingSharedKit) return;
+    if (!isDriveLinked || (!sharedFileId && !sharedPayload) || isImportingSharedKit) return;
     let targetUserId = currentUser?.id || authService.getCurrentUser()?.id;
     if (!targetUserId && typeof localStorage !== 'undefined') {
       const gProf = localStorage.getItem('thea_gdrive_profile');
@@ -187,18 +192,20 @@ export const App: React.FC = () => {
 
     (async () => {
       try {
-        const imported = await googleDriveService.importSharedKitFromDrive(sharedFileId, targetUserId);
+        const imported = await googleDriveService.importSharedKitFromDrive(sharedFileId || '', targetUserId, sharedPayload);
         if (!isMounted) return;
 
         setKits(prev => [imported, ...prev.filter(k => k.id !== imported.id)]);
         setCurrentKit(imported);
         safeLocalStorageSetItem(STORAGE_CURRENT_KIT_KEY, imported.id);
 
-        // Limpiar el parámetro shared_drive_id de la URL preservando la ruta y otros parámetros
+        // Limpiar los parámetros de la URL preservando la ruta y otros parámetros
         const url = new URL(window.location.href);
         url.searchParams.delete('shared_drive_id');
+        url.searchParams.delete('sk');
         window.history.replaceState(window.history.state, '', url.pathname + (url.search ? url.search : ''));
         setSharedFileId(null);
+        setSharedPayload(null);
 
         setToastNotification(`¡Kit "${imported.title}" importado con su contenido base listo para estudiar!`);
         setTimeout(() => setToastNotification(null), 5000);
@@ -210,13 +217,14 @@ export const App: React.FC = () => {
         setToastNotification(`Error al importar kit: ${err?.message || 'Archivo no encontrado'}`);
         setTimeout(() => setToastNotification(null), 6000);
         setSharedFileId(null);
+        setSharedPayload(null);
       } finally {
         if (isMounted) setIsImportingSharedKit(false);
       }
     })();
 
     return () => { isMounted = false; };
-  }, [isDriveLinked, sharedFileId, currentUser?.id]);
+  }, [isDriveLinked, sharedFileId, sharedPayload, currentUser?.id]);
 
   // Motor de scroll inercial suave ultraligero (0 dependencias, 0% CPU en reposo)
   useEffect(() => {
@@ -1216,6 +1224,7 @@ export const App: React.FC = () => {
     return (
       <GoogleDriveAuthGate
         pendingSharedFileId={sharedFileId}
+        pendingSharedPayload={sharedPayload}
         onAuthSuccess={handleAuthGateSuccess}
       />
     );
@@ -1291,7 +1300,20 @@ export const App: React.FC = () => {
           </React.Suspense>
         )}
 
-        {currentKit ? (
+        {isImportingSharedKit ? (
+          <div className="max-w-md mx-auto px-6 py-28 text-center animate-fadeIn select-none">
+            <div className="relative w-16 h-16 mx-auto mb-5 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-2xl bg-sky-500/20 blur-xl animate-pulse" />
+              <div className="relative w-16 h-16 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center shadow-inner">
+                <RefreshCw className="w-8 h-8 text-sky-400 animate-spin" />
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Importando Kit Compartido...</h3>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Preparando el contenido base y configurando tu espacio de estudio con progreso 0% limpio.
+            </p>
+          </div>
+        ) : currentKit ? (
           <React.Suspense fallback={<ViewLoadingFallback />}>
             {currentMode === 'smart-study' && (
               <SmartStudyView

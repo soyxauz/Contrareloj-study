@@ -3612,6 +3612,10 @@ export const googleDriveService = {
    * Comparte exclusivamente el contenido base en el cual está basado el kit (documentos, apuntes,
    * fragmentos, imágenes y flashcards), excluyendo la guía de estudio pre-redactada y las preguntas
    * previas de Smart Study.
+   *
+   * Además incorpora doble canal resiliente: comprime el contenido base e inserta el parámetro &sk=
+   * en la URL para garantizar importación instantánea (0ms) inmune a errores 404 o restricciones
+   * corporativas/universitarias de Google Workspace.
    */
   async shareKitPublicly(
     kit: StudyKit,
@@ -3664,9 +3668,9 @@ export const googleDriveService = {
       ownerName: currentState.userName || 'Usuario de ContraReloj+',
     });
 
-    // 4. Asignar permiso público en Drive (role: reader, type: anyone)
+    // 4. Asignar permiso público en Drive (role: reader, type: anyone) con supportsAllDrives
     try {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+      const permRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -3675,38 +3679,121 @@ export const googleDriveService = {
         body: JSON.stringify({
           role: 'reader',
           type: 'anyone',
+          allowFileDiscovery: false,
         }),
       });
+      if (!permRes.ok) {
+        console.warn('[GoogleDriveService] Aviso de permiso de Drive:', await permRes.text());
+      }
     } catch (permErr) {
       console.warn('[GoogleDriveService] Aviso asignando permiso público de Drive:', permErr);
     }
 
-    // 5. Construir la URL absoluta basada en el kit de estudio
+    // 5. Canal Resiliente: comprimir el kit base para transporte URL de alta fiabilidad
+    let skParam = '';
+    try {
+      const jsonStr = JSON.stringify({ v: 2, kit: contentBasedKit });
+      if (typeof CompressionStream !== 'undefined') {
+        const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+        const buf = await new Response(stream).arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        const b64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        // Si el tamaño comprimido cabe holgadamente en el límite de URLs de navegadores (<3500 caracteres)
+        if (b64.length < 3500) {
+          skParam = `&sk=${encodeURIComponent(b64)}`;
+        }
+      }
+    } catch (compErr) {
+      console.warn('[GoogleDriveService] Compresión de URL omitida:', compErr);
+    }
+
+    // 6. Construir la URL absoluta basada en el kit de estudio
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
-    const shareUrl = `${origin}/kit/${kit.id}?shared_drive_id=${fileId}`;
+    const shareUrl = `${origin}/kit/${kit.id}?shared_drive_id=${fileId}${skParam}`;
 
     return { shareUrl, fileId };
   },
 
   /**
-   * Descarga un kit de estudio compartido desde Google Drive usando el token del usuario actual,
-   * inicializa su progreso a 0% limpio (Nivel 1, 0 aciertos) y lo guarda en su biblioteca local.
+   * Descarga o descomprime un kit de estudio compartido desde Google Drive o el payload de enlace seguro.
+   * Inicializa su progreso a 0% limpio (Nivel 1, 0 aciertos) y lo guarda en su biblioteca local.
+   * Soporta 3 capas de resiliencia:
+   * 1. Descompresión instantánea del parámetro URL 'sk' (0ms, inmune a 404).
+   * 2. Proxy de descarga segura sin CORS (/api/drive/shared?fileId=...).
+   * 3. Descarga directa con el token del usuario receptor.
    */
-  async importSharedKitFromDrive(fileId: string, currentUserId: string): Promise<StudyKit> {
-    let token = this.getValidAccessToken();
-    if (!token && this.isLinked()) {
-      token = await this.attemptSilentTokenRefresh();
-    }
-    if (!token) {
-      token = await this.requestGoogleAccess();
-    }
-    if (!token) {
-      throw new Error('Inicia sesión con Google Drive para poder importar el kit compartido.');
+  async importSharedKitFromDrive(fileId: string, currentUserId: string, compressedPayload?: string | null): Promise<StudyKit> {
+    let rawKit: StudyKit | null = null;
+
+    // Capa 1: Si viene payload comprimido en la URL, descomprimir inmediatamente
+    if (compressedPayload && compressedPayload.trim()) {
+      try {
+        let base64 = decodeURIComponent(compressedPayload.trim()).replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4 !== 0) {
+          base64 += '=';
+        }
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        if (typeof DecompressionStream !== 'undefined') {
+          const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+          const text = await new Response(stream).text();
+          const parsed = JSON.parse(text);
+          if (parsed?.kit && parsed.kit.title) {
+            rawKit = parsed.kit;
+          } else if (parsed?.title) {
+            rawKit = parsed;
+          }
+        }
+      } catch (decompErr) {
+        console.warn('[GoogleDriveService] Intento de descompresión URL falló, continuando con descarga remota:', decompErr);
+      }
     }
 
-    // 1. Descargar el archivo desde Google Drive
-    const rawData = await this.readJsonFromDrive<any>(token, fileId);
-    const rawKit: StudyKit = rawData?.kit || rawData;
+    // Capa 2: Si no vino payload comprimido o falló, consultar proxy de servidor sin restricciones de CORS (/api/drive/shared)
+    if (!rawKit && fileId) {
+      try {
+        const proxyRes = await fetch(`/api/drive/shared?fileId=${encodeURIComponent(fileId)}`);
+        if (proxyRes.ok) {
+          const proxyJson = await proxyRes.json();
+          if (proxyJson?.success && proxyJson?.data) {
+            const data = proxyJson.data;
+            rawKit = data.kit || data;
+          }
+        }
+      } catch (proxyErr) {
+        console.warn('[GoogleDriveService] Proxy /api/drive/shared falló, probando con token Drive:', proxyErr);
+      }
+    }
+
+    // Capa 3: Fallback con el token del usuario actual
+    if (!rawKit && fileId) {
+      let token = this.getValidAccessToken();
+      if (!token && this.isLinked()) {
+        token = await this.attemptSilentTokenRefresh();
+      }
+      if (!token) {
+        token = await this.requestGoogleAccess();
+      }
+      if (!token) {
+        throw new Error('Inicia sesión con Google Drive para poder importar el kit compartido.');
+      }
+
+      try {
+        const rawData = await this.readJsonFromDrive<any>(token, fileId);
+        rawKit = rawData?.kit || rawData;
+      } catch (readErr: any) {
+        console.warn('[GoogleDriveService] Descarga directa de Drive falló:', readErr);
+        throw new Error(`Error al leer archivo de Drive (${readErr?.message || '404'})`);
+      }
+    }
 
     if (!rawKit || !rawKit.id || !rawKit.title) {
       throw new Error('El archivo de Google Drive no contiene un kit de estudio válido.');
