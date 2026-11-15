@@ -4134,26 +4134,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 />
                 <span className="font-bold">Nivel {level}:</span>
                 <span
-                  className={`font-bold ${
+                  className={`font-bold tabular-nums ${
                     theme === 'light'
-                      ? 'text-rose-700'
+                      ? 'text-zinc-950'
                       : theme === 'kitty'
-                      ? 'text-pink-700'
-                      : 'text-rose-300'
+                      ? 'text-pink-950'
+                      : 'text-white'
                   }`}
                 >
-                  {currentLevelCorrect}/{levelTarget}
-                </span>
-                <span
-                  className={`text-[11px] ${
-                    theme === 'light'
-                      ? 'text-slate-500'
-                      : theme === 'kitty'
-                      ? 'text-pink-600/80'
-                      : 'text-slate-400'
-                  }`}
-                >
-                  ({Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100))}%)
+                  {Math.min(100, Math.round((currentLevelCorrect / levelTarget) * 100))}%
                 </span>
               </div>
 

@@ -1035,11 +1035,10 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
                         <Brain className="w-3.5 h-3.5 shrink-0" style={{ color: mTheme.hex }} />
                         <span>
-                          {kStats.levelCorrectCount > 0 || kStats.level > 1
-                            ? `Nivel ${kStats.level}: ${kStats.levelCorrectCount}/${kStats.levelTarget} (${smartStudyPct}%)`
-                            : (kStats.questionsAnswered > 0
-                                ? `Nivel 1: 0/${kStats.levelTarget} (0%)`
-                                : `Nivel 1: 0%`)}
+                          Nivel {kStats.level || 1}:{' '}
+                          <span className={`font-bold tabular-nums ${theme === 'dark' ? 'text-white' : theme === 'kitty' ? 'text-pink-950' : 'text-zinc-950'}`}>
+                            {smartStudyPct}%
+                          </span>
                         </span>
                       </span>
                       <span className="flex items-center gap-1.5">
