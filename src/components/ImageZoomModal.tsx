@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
-import { LensInspectorPanel } from './LensInspectorPanel';
 
 /**
  * Icono vectorial oficial estilizado de Google Lens
@@ -28,87 +27,6 @@ const GoogleLensIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4
     <circle cx="12" cy="12" r="1.4" fill="#4285F4" />
   </svg>
 );
-
-/**
- * Recorta una región normalizada (0..1) de una imagen mediante canvas
- */
-const cropImageRegion = (
-  imgEl: HTMLImageElement,
-  rect: { x: number; y: number; width: number; height: number }
-): string => {
-  try {
-    const canvas = document.createElement('canvas');
-    const natW = imgEl.naturalWidth || imgEl.width || 400;
-    const natH = imgEl.naturalHeight || imgEl.height || 400;
-
-    const sx = Math.max(0, Math.floor(rect.x * natW));
-    const sy = Math.max(0, Math.floor(rect.y * natH));
-    const sw = Math.min(natW - sx, Math.max(10, Math.ceil(rect.width * natW)));
-    const sh = Math.min(natH - sy, Math.max(10, Math.ceil(rect.height * natH)));
-
-    canvas.width = Math.max(sw, 10);
-    canvas.height = Math.max(sh, 10);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return '';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/png');
-  } catch (err) {
-    console.warn('Error al recortar región de imagen:', err);
-    return '';
-  }
-};
-
-/**
- * Copia una imagen local o base64 al portapapeles del sistema como PNG nativo
- */
-const copyImageToClipboard = async (src: string): Promise<boolean> => {
-  if (typeof window === 'undefined' || !navigator.clipboard || !window.ClipboardItem) {
-    return false;
-  }
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width || 300;
-        canvas.height = img.naturalHeight || img.height || 300;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(false);
-          return;
-        }
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob(async (blob) => {
-          if (!blob) {
-            resolve(false);
-            return;
-          }
-          try {
-            await navigator.clipboard.write([
-              new ClipboardItem({
-                'image/png': blob,
-              }),
-            ]);
-            resolve(true);
-          } catch (err) {
-            console.warn('Fallo al escribir en el portapapeles:', err);
-            resolve(false);
-          }
-        }, 'image/png');
-      } catch (err) {
-        console.warn('Fallo en procesamiento de canvas:', err);
-        resolve(false);
-      }
-    };
-    img.onerror = () => resolve(false);
-    img.src = src;
-  });
-};
 
 export interface ImageZoomModalProps {
   isOpen: boolean;
@@ -150,9 +68,8 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     type: 'success' | 'info' | 'error';
     message: string;
   } | null>(null);
-  const [isLensProcessing, setIsLensProcessing] = useState<boolean>(false);
 
-  // Estados para selección interactiva y escaneo Google Lens
+  // Estados para selección interactiva y escaneo Google Lens nativo
   const [isLensModeActive, setIsLensModeActive] = useState<boolean>(false);
   const [selectionRect, setSelectionRect] = useState<{
     x: number;
@@ -161,8 +78,6 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     height: number;
   } | null>(null);
   const [, setIsDraggingLens] = useState<boolean>(false);
-  const [croppedDataUrl, setCroppedDataUrl] = useState<string>('');
-  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
   const lensStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -274,11 +189,73 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
   useEffect(() => {
     setIsLensModeActive(false);
     setSelectionRect(null);
-    setCroppedDataUrl('');
-    setIsInspectorOpen(false);
   }, [imageUrl, isOpen]);
 
-  // Alternar el modo de selección interactiva Lens
+  // Ejecuta la búsqueda nativa en Google Lens mediante carga directa multipart/form-data
+  const triggerNativeGoogleLens = useCallback((rect?: { x: number; y: number; width: number; height: number } | null) => {
+    if (!imgRef.current) return;
+    const targetRect = rect && rect.width > 0.02 && rect.height > 0.02
+      ? rect
+      : { x: 0, y: 0, width: 1, height: 1 };
+
+    const canvas = document.createElement('canvas');
+    const natW = imgRef.current.naturalWidth || imgRef.current.width || 400;
+    const natH = imgRef.current.naturalHeight || imgRef.current.height || 400;
+
+    const sx = Math.max(0, Math.floor(targetRect.x * natW));
+    const sy = Math.max(0, Math.floor(targetRect.y * natH));
+    const sw = Math.min(natW - sx, Math.max(10, Math.ceil(targetRect.width * natW)));
+    const sh = Math.min(natH - sy, Math.max(10, Math.ceil(targetRect.height * natH)));
+
+    canvas.width = Math.max(sw, 10);
+    canvas.height = Math.max(sh, 10);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(imgRef.current, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+    setLensNotification({
+      type: 'info',
+      message: 'Abriendo Google Lens nativo con el área seleccionada...',
+    });
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      try {
+        const file = new File([blob], 'recorte-figura.png', { type: 'image/png' });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://lens.google.com/upload';
+        form.enctype = 'multipart/form-data';
+        form.target = '_blank';
+
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.name = 'encoded_image';
+        input.files = dt.files;
+        form.appendChild(input);
+
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(() => {
+          if (form.parentNode) {
+            form.parentNode.removeChild(form);
+          }
+          setLensNotification(null);
+        }, 1500);
+      } catch (err) {
+        console.warn('Fallo en formulario Lens, abriendo ventana alternativa:', err);
+        window.open('https://lens.google.com/', '_blank');
+        setLensNotification(null);
+      }
+    }, 'image/png');
+  }, []);
+
+  // Alternar el modo de selección interactiva Lens con recuadro inicial pre-centrado y ajustable
   const toggleLensMode = useCallback(() => {
     if (isLensModeActive) {
       setIsLensModeActive(false);
@@ -286,25 +263,227 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     } else {
       handleResetZoom();
       setIsLensModeActive(true);
-      setIsInspectorOpen(false);
-      setSelectionRect(null);
+      // Inicializar recuadro centrado para que el usuario pueda redimensionar de inmediato
+      setSelectionRect({ x: 0.15, y: 0.15, width: 0.7, height: 0.7 });
     }
   }, [isLensModeActive, handleResetZoom]);
 
   // Seleccionar la figura entera para análisis
   const handleSelectFullImage = useCallback(() => {
-    if (!imgRef.current) return;
     const fullRect = { x: 0, y: 0, width: 1, height: 1 };
     setSelectionRect(fullRect);
-    const cropUrl = cropImageRegion(imgRef.current, fullRect);
-    if (cropUrl) {
-      setCroppedDataUrl(cropUrl);
-      setIsInspectorOpen(true);
-      setIsLensModeActive(false);
-    }
-  }, []);
+    triggerNativeGoogleLens(fullRect);
+  }, [triggerNativeGoogleLens]);
 
-  // Evento mouse down para iniciar selección de recorte Lens
+  // Manejador para redimensionar o mover el recuadro de selección sin mover la imagen
+  const handleResizeHandleMouseDown = (
+    e: React.MouseEvent<HTMLDivElement>,
+    handleType: 'nw' | 'ne' | 'se' | 'sw' | 'n' | 's' | 'e' | 'w' | 'move'
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selectionRect || !imgRef.current) return;
+
+    const overlay = imgRef.current.parentElement;
+    if (!overlay) return;
+    const rect = overlay.getBoundingClientRect();
+
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const initialRect = { ...selectionRect };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const deltaX = (ev.clientX - startClientX) / rect.width;
+      const deltaY = (ev.clientY - startClientY) / rect.height;
+
+      let { x, y, width, height } = initialRect;
+
+      switch (handleType) {
+        case 'move': {
+          x = Math.max(0, Math.min(1 - width, initialRect.x + deltaX));
+          y = Math.max(0, Math.min(1 - height, initialRect.y + deltaY));
+          break;
+        }
+        case 'se': {
+          width = Math.max(0.04, Math.min(1 - x, initialRect.width + deltaX));
+          height = Math.max(0.04, Math.min(1 - y, initialRect.height + deltaY));
+          break;
+        }
+        case 'nw': {
+          const maxDeltaX = initialRect.width - 0.04;
+          const maxDeltaY = initialRect.height - 0.04;
+          const clampedDeltaX = Math.min(maxDeltaX, Math.max(-initialRect.x, deltaX));
+          const clampedDeltaY = Math.min(maxDeltaY, Math.max(-initialRect.y, deltaY));
+          x = initialRect.x + clampedDeltaX;
+          y = initialRect.y + clampedDeltaY;
+          width = initialRect.width - clampedDeltaX;
+          height = initialRect.height - clampedDeltaY;
+          break;
+        }
+        case 'ne': {
+          const maxDeltaY = initialRect.height - 0.04;
+          const clampedDeltaY = Math.min(maxDeltaY, Math.max(-initialRect.y, deltaY));
+          y = initialRect.y + clampedDeltaY;
+          height = initialRect.height - clampedDeltaY;
+          width = Math.max(0.04, Math.min(1 - x, initialRect.width + deltaX));
+          break;
+        }
+        case 'sw': {
+          const maxDeltaX = initialRect.width - 0.04;
+          const clampedDeltaX = Math.min(maxDeltaX, Math.max(-initialRect.x, deltaX));
+          x = initialRect.x + clampedDeltaX;
+          width = initialRect.width - clampedDeltaX;
+          height = Math.max(0.04, Math.min(1 - y, initialRect.height + deltaY));
+          break;
+        }
+        case 'n': {
+          const maxDeltaY = initialRect.height - 0.04;
+          const clampedDeltaY = Math.min(maxDeltaY, Math.max(-initialRect.y, deltaY));
+          y = initialRect.y + clampedDeltaY;
+          height = initialRect.height - clampedDeltaY;
+          break;
+        }
+        case 's': {
+          height = Math.max(0.04, Math.min(1 - y, initialRect.height + deltaY));
+          break;
+        }
+        case 'w': {
+          const maxDeltaX = initialRect.width - 0.04;
+          const clampedDeltaX = Math.min(maxDeltaX, Math.max(-initialRect.x, deltaX));
+          x = initialRect.x + clampedDeltaX;
+          width = initialRect.width - clampedDeltaX;
+          break;
+        }
+        case 'e': {
+          width = Math.max(0.04, Math.min(1 - x, initialRect.width + deltaX));
+          break;
+        }
+      }
+
+      setSelectionRect({ x, y, width, height });
+    };
+
+    const onMouseUp = (ev: MouseEvent) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      window.removeEventListener('mousemove', onMouseMove, true);
+      window.removeEventListener('mouseup', onMouseUp, true);
+    };
+
+    window.addEventListener('mousemove', onMouseMove, true);
+    window.addEventListener('mouseup', onMouseUp, true);
+  };
+
+  // Manejador táctil para redimensionar o mover en pantallas táctiles
+  const handleResizeHandleTouchStart = (
+    e: React.TouchEvent<HTMLDivElement>,
+    handleType: 'nw' | 'ne' | 'se' | 'sw' | 'n' | 's' | 'e' | 'w' | 'move'
+  ) => {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selectionRect || !imgRef.current) return;
+
+    const overlay = imgRef.current.parentElement;
+    if (!overlay) return;
+    const rect = overlay.getBoundingClientRect();
+
+    const touch = e.touches[0];
+    const startClientX = touch.clientX;
+    const startClientY = touch.clientY;
+    const initialRect = { ...selectionRect };
+
+    const onTouchMove = (ev: TouchEvent) => {
+      if (ev.touches.length !== 1) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const t = ev.touches[0];
+      const deltaX = (t.clientX - startClientX) / rect.width;
+      const deltaY = (t.clientY - startClientY) / rect.height;
+
+      let { x, y, width, height } = initialRect;
+
+      switch (handleType) {
+        case 'move': {
+          x = Math.max(0, Math.min(1 - width, initialRect.x + deltaX));
+          y = Math.max(0, Math.min(1 - height, initialRect.y + deltaY));
+          break;
+        }
+        case 'se': {
+          width = Math.max(0.04, Math.min(1 - x, initialRect.width + deltaX));
+          height = Math.max(0.04, Math.min(1 - y, initialRect.height + deltaY));
+          break;
+        }
+        case 'nw': {
+          const maxDeltaX = initialRect.width - 0.04;
+          const maxDeltaY = initialRect.height - 0.04;
+          const clampedDeltaX = Math.min(maxDeltaX, Math.max(-initialRect.x, deltaX));
+          const clampedDeltaY = Math.min(maxDeltaY, Math.max(-initialRect.y, deltaY));
+          x = initialRect.x + clampedDeltaX;
+          y = initialRect.y + clampedDeltaY;
+          width = initialRect.width - clampedDeltaX;
+          height = initialRect.height - clampedDeltaY;
+          break;
+        }
+        case 'ne': {
+          const maxDeltaY = initialRect.height - 0.04;
+          const clampedDeltaY = Math.min(maxDeltaY, Math.max(-initialRect.y, deltaY));
+          y = initialRect.y + clampedDeltaY;
+          height = initialRect.height - clampedDeltaY;
+          width = Math.max(0.04, Math.min(1 - x, initialRect.width + deltaX));
+          break;
+        }
+        case 'sw': {
+          const maxDeltaX = initialRect.width - 0.04;
+          const clampedDeltaX = Math.min(maxDeltaX, Math.max(-initialRect.x, deltaX));
+          x = initialRect.x + clampedDeltaX;
+          width = initialRect.width - clampedDeltaX;
+          height = Math.max(0.04, Math.min(1 - y, initialRect.height + deltaY));
+          break;
+        }
+        case 'n': {
+          const maxDeltaY = initialRect.height - 0.04;
+          const clampedDeltaY = Math.min(maxDeltaY, Math.max(-initialRect.y, deltaY));
+          y = initialRect.y + clampedDeltaY;
+          height = initialRect.height - clampedDeltaY;
+          break;
+        }
+        case 's': {
+          height = Math.max(0.04, Math.min(1 - y, initialRect.height + deltaY));
+          break;
+        }
+        case 'w': {
+          const maxDeltaX = initialRect.width - 0.04;
+          const clampedDeltaX = Math.min(maxDeltaX, Math.max(-initialRect.x, deltaX));
+          x = initialRect.x + clampedDeltaX;
+          width = initialRect.width - clampedDeltaX;
+          break;
+        }
+        case 'e': {
+          width = Math.max(0.04, Math.min(1 - x, initialRect.width + deltaX));
+          break;
+        }
+      }
+
+      setSelectionRect({ x, y, width, height });
+    };
+
+    const onTouchEnd = (ev: TouchEvent) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      window.removeEventListener('touchmove', onTouchMove, true);
+      window.removeEventListener('touchend', onTouchEnd, true);
+    };
+
+    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    window.addEventListener('touchend', onTouchEnd, { capture: true, passive: false });
+  };
+
+  // Evento mouse down sobre el lienzo de Lens para trazar un nuevo recuadro
   const handleLensMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -342,15 +521,8 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
       const width = Math.abs(curX - lensStartRef.current.x);
       const height = Math.abs(curY - lensStartRef.current.y);
 
-      if (width > 0.03 && height > 0.03 && imgRef.current) {
-        const finalRect = { x, y, width, height };
-        setSelectionRect(finalRect);
-        const cropUrl = cropImageRegion(imgRef.current, finalRect);
-        if (cropUrl) {
-          setCroppedDataUrl(cropUrl);
-          setIsInspectorOpen(true);
-          setIsLensModeActive(false);
-        }
+      if (width > 0.03 && height > 0.03) {
+        setSelectionRect({ x, y, width, height });
       }
     };
 
@@ -358,7 +530,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     window.addEventListener('mouseup', onMouseUpWindow);
   };
 
-  // Evento touch start para soporte móvil táctil Lens
+  // Evento touch start sobre el lienzo de Lens
   const handleLensTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length !== 1) return;
     e.stopPropagation();
@@ -401,75 +573,14 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
       const width = Math.abs(curX - lensStartRef.current.x);
       const height = Math.abs(curY - lensStartRef.current.y);
 
-      if (width > 0.03 && height > 0.03 && imgRef.current) {
-        const finalRect = { x, y, width, height };
-        setSelectionRect(finalRect);
-        const cropUrl = cropImageRegion(imgRef.current, finalRect);
-        if (cropUrl) {
-          setCroppedDataUrl(cropUrl);
-          setIsInspectorOpen(true);
-          setIsLensModeActive(false);
-        }
+      if (width > 0.03 && height > 0.03) {
+        setSelectionRect({ x, y, width, height });
       }
     };
 
     window.addEventListener('touchmove', onTouchMoveWindow);
     window.addEventListener('touchend', onTouchEndWindow);
   };
-
-  // Búsqueda visual en Google Lens (Híbrido inteligente: URL directa o copiado a portapapeles)
-  const handleGoogleLens = useCallback(async () => {
-    if (!sanitizedUrl || isLensProcessing) return;
-
-    const isHttpUrl = sanitizedUrl.startsWith('http://') || sanitizedUrl.startsWith('https://');
-
-    if (isHttpUrl) {
-      const lensUrl = `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(sanitizedUrl)}`;
-      window.open(lensUrl, '_blank', 'noopener,noreferrer');
-      setLensNotification({
-        type: 'info',
-        message: 'Abriendo Google Lens con la imagen del servidor...',
-      });
-      setTimeout(() => {
-        setLensNotification(null);
-      }, 4000);
-      return;
-    }
-
-    // Para imágenes locales (base64 o blob URLs extraídas de PDF / diapositivas)
-    setIsLensProcessing(true);
-    setLensNotification({
-      type: 'info',
-      message: 'Copiando figura y abriendo Google Lens...',
-    });
-
-    try {
-      const copied = await copyImageToClipboard(sanitizedUrl);
-      window.open('https://lens.google.com/', '_blank', 'noopener,noreferrer');
-      if (copied) {
-        setLensNotification({
-          type: 'success',
-          message: '¡Figura copiada al portapapeles! Presiona Ctrl+V en la pestaña de Google Lens que se abrió.',
-        });
-      } else {
-        setLensNotification({
-          type: 'info',
-          message: 'Abriendo Google Lens. Puedes pegar o arrastrar la imagen descargada.',
-        });
-      }
-    } catch {
-      window.open('https://lens.google.com/', '_blank', 'noopener,noreferrer');
-      setLensNotification({
-        type: 'info',
-        message: 'Abriendo Google Lens para búsqueda visual.',
-      });
-    } finally {
-      setIsLensProcessing(false);
-      setTimeout(() => {
-        setLensNotification(null);
-      }, 6500);
-    }
-  }, [sanitizedUrl, isLensProcessing]);
 
   // Control mediante teclado
   useEffect(() => {
@@ -644,7 +755,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full ${isInspectorOpen ? 'max-w-7xl' : 'max-w-5xl'} h-[92vh] flex flex-col border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 ease-out ${
+        className={`relative w-full max-w-5xl h-[92vh] flex flex-col border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 ease-out ${
           theme === 'dark'
             ? 'bg-[#0e0b16] border-white/10 text-white'
             : theme === 'kitty'
@@ -770,23 +881,19 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               </button>
             </div>
 
-            {/* Escanear / Buscar con Google Lens interactivo */}
+            {/* Escanear / Buscar con Google Lens nativo */}
             {sanitizedUrl && (
               <button
                 type="button"
                 onClick={toggleLensMode}
                 title={
                   isLensModeActive
-                    ? 'Cancelar modo escáner'
-                    : isInspectorOpen
-                    ? 'Inspector Lens abierto (Clic para nuevo recorte)'
-                    : 'Escanear con Google Lens (Arrastra sobre la imagen para seleccionar un área)'
+                    ? 'Desactivar modo selección Lens'
+                    : 'Seleccionar área para buscar en Google Lens'
                 }
                 className={`p-2 rounded-xl border flex items-center gap-1.5 transition-all duration-150 ease-out active:scale-[0.97] cursor-pointer ${
                   isLensModeActive
                     ? 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400/50'
-                    : isInspectorOpen
-                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
                     : theme === 'dark'
                     ? 'bg-white/[0.04] border-white/[0.08] text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20'
                     : theme === 'kitty'
@@ -796,7 +903,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               >
                 <GoogleLensIcon className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline text-xs font-semibold">
-                  {isLensModeActive ? 'Modo Selección' : isInspectorOpen ? 'Lens Activo' : 'Google Lens'}
+                  {isLensModeActive ? 'Modo Selección' : 'Google Lens'}
                 </span>
                 {isLensModeActive && (
                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -997,7 +1104,7 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                       {/* Rectángulo de selección estilo Google Circle to Search / Assistant */}
                       {selectionRect && (
                         <div
-                          className="absolute border border-white/90 rounded-2xl pointer-events-none transition-all duration-75"
+                          className="absolute border border-white/90 rounded-2xl transition-all duration-75"
                           style={{
                             left: `${selectionRect.x * 100}%`,
                             top: `${selectionRect.y * 100}%`,
@@ -1007,39 +1114,112 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
                               '0 0 0 9999px rgba(0, 0, 0, 0.45), 0 0 25px rgba(66, 133, 244, 0.6), 0 0 15px rgba(234, 67, 53, 0.5)',
                           }}
                         >
-                          {/* 4 Esquinas en colores oficiales Google */}
-                          <div className="absolute -top-1 -left-1 w-5 h-5 border-t-[3.5px] border-l-[3.5px] border-[#EA4335] rounded-tl-xl drop-shadow-[0_0_8px_rgba(234,67,53,0.8)]" />
-                          <div className="absolute -top-1 -right-1 w-5 h-5 border-t-[3.5px] border-r-[3.5px] border-[#4285F4] rounded-tr-xl drop-shadow-[0_0_8px_rgba(66,133,244,0.8)]" />
-                          <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-[3.5px] border-r-[3.5px] border-[#FBBC05] rounded-br-xl drop-shadow-[0_0_8px_rgba(251,188,5,0.8)]" />
-                          <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-[3.5px] border-l-[3.5px] border-[#34A853] rounded-bl-xl drop-shadow-[0_0_8px_rgba(52,168,83,0.8)]" />
+                          {/* Área interior para mover el recuadro sin mover la imagen */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'move')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'move')}
+                            className="absolute inset-2 cursor-move pointer-events-auto z-20"
+                            title="Arrastra para mover la selección"
+                          />
 
-                          {/* Pill de estado */}
-                          <div className="absolute -bottom-9 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 bg-zinc-950/90 text-white border border-white/20 rounded-full shadow-2xl text-[11px] font-semibold whitespace-nowrap backdrop-blur-md">
-                            <GoogleLensIcon className="w-3.5 h-3.5" />
-                            <span>Área seleccionada</span>
+                          {/* 4 Esquinas en colores oficiales Google (Handles diagonales) */}
+                          {/* Superior Izquierda - Rojo */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'nw')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'nw')}
+                            className="absolute -top-2.5 -left-2.5 w-6 h-6 border-t-[4px] border-l-[4px] border-[#EA4335] rounded-tl-xl drop-shadow-[0_0_10px_rgba(234,67,53,0.9)] cursor-nwse-resize z-30 pointer-events-auto"
+                            title="Redimensionar esquina superior izquierda"
+                          />
+                          {/* Superior Derecha - Azul */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'ne')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'ne')}
+                            className="absolute -top-2.5 -right-2.5 w-6 h-6 border-t-[4px] border-r-[4px] border-[#4285F4] rounded-tr-xl drop-shadow-[0_0_10px_rgba(66,133,244,0.9)] cursor-nesw-resize z-30 pointer-events-auto"
+                            title="Redimensionar esquina superior derecha"
+                          />
+                          {/* Inferior Derecha - Amarillo */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'se')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'se')}
+                            className="absolute -bottom-2.5 -right-2.5 w-6 h-6 border-b-[4px] border-r-[4px] border-[#FBBC05] rounded-br-xl drop-shadow-[0_0_10px_rgba(251,188,5,0.9)] cursor-nwse-resize z-30 pointer-events-auto"
+                            title="Redimensionar esquina inferior derecha"
+                          />
+                          {/* Inferior Izquierda - Verde */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'sw')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'sw')}
+                            className="absolute -bottom-2.5 -left-2.5 w-6 h-6 border-b-[4px] border-l-[4px] border-[#34A853] rounded-bl-xl drop-shadow-[0_0_10px_rgba(52,168,83,0.9)] cursor-nesw-resize z-30 pointer-events-auto"
+                            title="Redimensionar esquina inferior izquierda"
+                          />
+
+                          {/* 4 Puntos de ajuste en los bordes (Handles cardinales) */}
+                          {/* Borde Superior */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'n')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'n')}
+                            className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-8 h-3 bg-white/95 border border-black/30 rounded-full cursor-ns-resize z-30 pointer-events-auto shadow-md hover:scale-110 active:scale-95 transition-transform"
+                            title="Ajustar altura superior"
+                          />
+                          {/* Borde Inferior */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 's')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 's')}
+                            className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-8 h-3 bg-white/95 border border-black/30 rounded-full cursor-ns-resize z-30 pointer-events-auto shadow-md hover:scale-110 active:scale-95 transition-transform"
+                            title="Ajustar altura inferior"
+                          />
+                          {/* Borde Izquierdo */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'w')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'w')}
+                            className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-3 h-8 bg-white/95 border border-black/30 rounded-full cursor-ew-resize z-30 pointer-events-auto shadow-md hover:scale-110 active:scale-95 transition-transform"
+                            title="Ajustar ancho izquierdo"
+                          />
+                          {/* Borde Derecho */}
+                          <div
+                            onMouseDown={(e) => handleResizeHandleMouseDown(e, 'e')}
+                            onTouchStart={(e) => handleResizeHandleTouchStart(e, 'e')}
+                            className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-8 bg-white/95 border border-black/30 rounded-full cursor-ew-resize z-30 pointer-events-auto shadow-md hover:scale-110 active:scale-95 transition-transform"
+                            title="Ajustar ancho derecho"
+                          />
+
+                          {/* Barra de Acción Directa Flotante de Google Lens */}
+                          <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 flex items-center gap-2 p-1.5 bg-zinc-950/95 text-white border border-white/20 rounded-2xl shadow-2xl z-40 backdrop-blur-xl pointer-events-auto whitespace-nowrap animate-in fade-in zoom-in-95 duration-150">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                triggerNativeGoogleLens(selectionRect);
+                              }}
+                              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                            >
+                              <GoogleLensIcon className="w-3.5 h-3.5" />
+                              <span>Buscar en Google Lens</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectFullImage();
+                              }}
+                              className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-zinc-200 rounded-xl text-xs font-semibold active:scale-95 transition-all cursor-pointer"
+                            >
+                              Toda la figura
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsLensModeActive(false);
+                                setSelectionRect(null);
+                              }}
+                              className="p-1.5 hover:bg-white/10 text-white/70 hover:text-white rounded-xl active:scale-95 transition-all cursor-pointer"
+                              title="Cancelar selección"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       )}
-                    </div>
-                  )}
-
-                  {/* Highlight estático del recorte cuando el inspector está abierto y no estamos trazando otro */}
-                  {!isLensModeActive && isInspectorOpen && selectionRect && (
-                    <div
-                      className="absolute border border-white/90 rounded-2xl pointer-events-none"
-                      style={{
-                        left: `${selectionRect.x * 100}%`,
-                        top: `${selectionRect.y * 100}%`,
-                        width: `${selectionRect.width * 100}%`,
-                        height: `${selectionRect.height * 100}%`,
-                        boxShadow:
-                          '0 0 0 9999px rgba(0, 0, 0, 0.35), 0 0 25px rgba(66, 133, 244, 0.5), 0 0 15px rgba(234, 67, 53, 0.4)',
-                      }}
-                    >
-                      <div className="absolute -top-1 -left-1 w-5 h-5 border-t-[3.5px] border-l-[3.5px] border-[#EA4335] rounded-tl-xl drop-shadow-[0_0_8px_rgba(234,67,53,0.8)]" />
-                      <div className="absolute -top-1 -right-1 w-5 h-5 border-t-[3.5px] border-r-[3.5px] border-[#4285F4] rounded-tr-xl drop-shadow-[0_0_8px_rgba(66,133,244,0.8)]" />
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-[3.5px] border-r-[3.5px] border-[#FBBC05] rounded-br-xl drop-shadow-[0_0_8px_rgba(251,188,5,0.8)]" />
-                      <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-[3.5px] border-l-[3.5px] border-[#34A853] rounded-bl-xl drop-shadow-[0_0_8px_rgba(52,168,83,0.8)]" />
                     </div>
                   )}
                 </div>
@@ -1066,26 +1246,6 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* Panel Lateral Derecho: Inspector Google Lens con IA */}
-          {isInspectorOpen && croppedDataUrl && (
-            <LensInspectorPanel
-              isOpen={isInspectorOpen}
-              onClose={() => {
-                setIsInspectorOpen(false);
-                setSelectionRect(null);
-              }}
-              onNewCrop={() => {
-                setSelectionRect(null);
-                handleResetZoom();
-                setIsLensModeActive(true);
-              }}
-              onSelectFullImage={handleSelectFullImage}
-              onOpenExternalLens={handleGoogleLens}
-              croppedDataUrl={croppedDataUrl}
-              context={{ title, subtitle, caption }}
-            />
-          )}
         </div>
 
         {/* Pie del Visor con Descripción / Caption */}
