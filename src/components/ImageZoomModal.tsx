@@ -14,6 +14,70 @@ import {
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
 
+/**
+ * Icono vectorial oficial estilizado de Google Lens
+ */
+const GoogleLensIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+    <path d="M4 8V6a2 2 0 0 1 2-2h2" stroke="#EA4335" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v2" stroke="#4285F4" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M20 16v2a2 2 0 0 1-2 2h-2" stroke="#34A853" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M8 20H6a2 2 0 0 1-2-2v-2" stroke="#FBBC05" strokeWidth="2.2" strokeLinecap="round" />
+    <circle cx="12" cy="12" r="3.2" stroke="#4285F4" strokeWidth="2" />
+    <circle cx="12" cy="12" r="1.4" fill="#4285F4" />
+  </svg>
+);
+
+/**
+ * Copia una imagen local o base64 al portapapeles del sistema como PNG nativo
+ */
+const copyImageToClipboard = async (src: string): Promise<boolean> => {
+  if (typeof window === 'undefined' || !navigator.clipboard || !window.ClipboardItem) {
+    return false;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width || 300;
+        canvas.height = img.naturalHeight || img.height || 300;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(false);
+          return;
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            resolve(false);
+            return;
+          }
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                'image/png': blob,
+              }),
+            ]);
+            resolve(true);
+          } catch (err) {
+            console.warn('Fallo al escribir en el portapapeles:', err);
+            resolve(false);
+          }
+        }, 'image/png');
+      } catch (err) {
+        console.warn('Fallo en procesamiento de canvas:', err);
+        resolve(false);
+      }
+    };
+    img.onerror = () => resolve(false);
+    img.src = src;
+  });
+};
+
 export interface ImageZoomModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,6 +114,11 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
   const [, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [sanitizedUrl, setSanitizedUrl] = useState<string>(imageUrl);
+  const [lensNotification, setLensNotification] = useState<{
+    type: 'success' | 'info' | 'error';
+    message: string;
+  } | null>(null);
+  const [isLensProcessing, setIsLensProcessing] = useState<boolean>(false);
 
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -155,6 +224,60 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
     setPan({ x: 0, y: 0 });
     applyTransform(0, 0, 1, true);
   }, [applyTransform]);
+
+  // Búsqueda visual en Google Lens (Híbrido inteligente: URL directa o copiado a portapapeles)
+  const handleGoogleLens = useCallback(async () => {
+    if (!sanitizedUrl || isLensProcessing) return;
+
+    const isHttpUrl = sanitizedUrl.startsWith('http://') || sanitizedUrl.startsWith('https://');
+
+    if (isHttpUrl) {
+      const lensUrl = `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(sanitizedUrl)}`;
+      window.open(lensUrl, '_blank', 'noopener,noreferrer');
+      setLensNotification({
+        type: 'info',
+        message: 'Abriendo Google Lens con la imagen del servidor...',
+      });
+      setTimeout(() => {
+        setLensNotification(null);
+      }, 4000);
+      return;
+    }
+
+    // Para imágenes locales (base64 o blob URLs extraídas de PDF / diapositivas)
+    setIsLensProcessing(true);
+    setLensNotification({
+      type: 'info',
+      message: 'Copiando figura y abriendo Google Lens...',
+    });
+
+    try {
+      const copied = await copyImageToClipboard(sanitizedUrl);
+      window.open('https://lens.google.com/', '_blank', 'noopener,noreferrer');
+      if (copied) {
+        setLensNotification({
+          type: 'success',
+          message: '¡Figura copiada al portapapeles! Presiona Ctrl+V en la pestaña de Google Lens que se abrió.',
+        });
+      } else {
+        setLensNotification({
+          type: 'info',
+          message: 'Abriendo Google Lens. Puedes pegar o arrastrar la imagen descargada.',
+        });
+      }
+    } catch {
+      window.open('https://lens.google.com/', '_blank', 'noopener,noreferrer');
+      setLensNotification({
+        type: 'info',
+        message: 'Abriendo Google Lens para búsqueda visual.',
+      });
+    } finally {
+      setIsLensProcessing(false);
+      setTimeout(() => {
+        setLensNotification(null);
+      }, 6500);
+    }
+  }, [sanitizedUrl, isLensProcessing]);
 
   // Control mediante teclado
   useEffect(() => {
@@ -455,6 +578,26 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
               </button>
             </div>
 
+            {/* Buscar con Google Lens */}
+            {sanitizedUrl && (
+              <button
+                type="button"
+                onClick={handleGoogleLens}
+                disabled={isLensProcessing}
+                title="Buscar con Google Lens (Copia imagen y abre Google Lens para pegar con Ctrl+V)"
+                className={`p-2 rounded-xl border flex items-center gap-1.5 transition-transform duration-150 ease-out active:scale-[0.97] cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-white/[0.04] border-white/[0.08] text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20'
+                    : theme === 'kitty'
+                    ? 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-700 hover:text-zinc-950 hover:bg-slate-100 shadow-xs'
+                }`}
+              >
+                <GoogleLensIcon className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline text-xs font-semibold">Google Lens</span>
+              </button>
+            )}
+
             {/* Descargar Imagen */}
             {sanitizedUrl && (
               <a
@@ -511,6 +654,30 @@ export const ImageZoomModal: React.FC<ImageZoomModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Notificación de Google Lens */}
+        {lensNotification && (
+          <div
+            className={`absolute top-16 left-1/2 -translate-x-1/2 z-40 max-w-[92%] sm:max-w-md px-4 py-2.5 rounded-xl border shadow-2xl flex items-center gap-2.5 text-xs font-medium transition-transform duration-160 ease-out backdrop-blur-md animate-in fade-in zoom-in-95 ${
+              theme === 'dark'
+                ? 'bg-zinc-950/95 border-white/20 text-white shadow-black/80'
+                : theme === 'kitty'
+                ? 'bg-pink-950/95 border-pink-400/50 text-white shadow-pink-950/40'
+                : 'bg-zinc-900/95 border-zinc-700 text-white shadow-zinc-900/50'
+            }`}
+          >
+            <GoogleLensIcon className="w-4 h-4 shrink-0" />
+            <span className="flex-1 leading-snug">{lensNotification.message}</span>
+            <button
+              type="button"
+              onClick={() => setLensNotification(null)}
+              className="p-1 rounded-md hover:bg-white/10 active:scale-95 transition-transform text-white/70 hover:text-white cursor-pointer"
+              title="Cerrar aviso"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Área Central de Visualización y Zoom: Fondo Blanco Puro en todos los temas */}
         <div
