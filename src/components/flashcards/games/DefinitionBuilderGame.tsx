@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
+import { useTheme } from '../../../services/themeService';
 
 interface DefinitionBuilderGameProps {
   flashcards: Flashcard[];
@@ -237,6 +238,7 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
   onBack,
   onGameComplete,
 }) => {
+  const { theme } = useTheme();
   const [currentRound, setCurrentRound] = useState(0); // 0 to TOTAL_ROUNDS - 1
   const [score, setScore] = useState(0);
   const [multiplier, setMultiplier] = useState(1);
@@ -521,8 +523,10 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn text-slate-100">
-      {/* Top Header Bar matching Screenshot 6 */}
+    <div className={`w-full max-w-4xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn ${
+      theme === 'kitty' ? 'text-pink-950' : theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+    }`}>
+      {/* Top Header Bar */}
       <div className="flex items-center justify-between mb-3 sm:mb-4 pb-2">
         <button
           type="button"
@@ -530,14 +534,22 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm ${
+            theme === 'kitty'
+              ? 'bg-white hover:bg-pink-50 border border-pink-200 text-pink-900 shadow-xs'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-xs'
+              : 'bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-slate-200'
+          }`}
         >
-          <ArrowLeft className="w-4 h-4 text-slate-300" />
+          <ArrowLeft className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-300'}`} />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-white">
-          <CheckSquare className="w-5 h-5 text-indigo-400" />
+        <div className={`flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight ${
+          theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+        }`}>
+          <CheckSquare className={`w-5 h-5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`} />
           <span>Constructor de Definiciones</span>
         </div>
 
@@ -545,39 +557,67 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
       </div>
 
       {/* Main Card Frame */}
-      <div className="rounded-2xl bg-[#140e2b]/95 border border-white/[0.12] p-4 sm:p-6 shadow-2xl relative">
+      <div className={`rounded-2xl border p-4 sm:p-6 shadow-2xl relative ${
+        theme === 'kitty'
+          ? 'bg-white border-pink-200 text-pink-950 shadow-[0_8px_30px_rgba(236,72,153,0.1)]'
+          : theme === 'light'
+          ? 'bg-white border-slate-200 text-slate-900 shadow-md'
+          : 'bg-[#140e2b]/95 border-white/[0.12] text-white'
+      }`}>
         {/* Top bar inside container: Puntuación & Round Indicator */}
-        <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-white/[0.08] tabular-nums">
-          <div className="flex items-center gap-2 font-extrabold text-base sm:text-lg text-emerald-400">
+        <div className={`flex items-center justify-between mb-4 pb-2.5 border-b tabular-nums ${
+          theme === 'kitty' ? 'border-pink-200/70' : theme === 'light' ? 'border-slate-200' : 'border-white/[0.08]'
+        }`}>
+          <div className={`flex items-center gap-2 font-extrabold text-base sm:text-lg ${
+            theme === 'kitty' ? 'text-emerald-700' : theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+          }`}>
             <span>Puntuación:</span>
             <span>{score}</span>
-            <span className="text-emerald-300 font-bold ml-0.5">({`×${multiplier}`})</span>
+            <span className={`font-bold ml-0.5 ${
+              theme === 'kitty' ? 'text-emerald-600' : theme === 'light' ? 'text-emerald-600' : 'text-emerald-300'
+            }`}>({`×${multiplier}`})</span>
           </div>
 
-          <div className="text-slate-400 font-semibold text-sm">
-            <strong className="text-white">{currentRound + 1}</strong>/{TOTAL_ROUNDS}
+          <div className={`font-semibold text-sm ${
+            theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+          }`}>
+            <strong className={theme === 'kitty' ? 'text-pink-950 font-bold' : theme === 'light' ? 'text-slate-900 font-bold' : 'text-white'}>{currentRound + 1}</strong>/{TOTAL_ROUNDS}
           </div>
         </div>
 
-        {/* Target Term in centered bold Rojo Vino */}
+        {/* Target Term in centered bold */}
         <div className="text-center mb-4 sm:mb-5">
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-[#fecdd3] tracking-tight drop-shadow-sm">
+          <h2 className={`text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight ${
+            theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-950 font-black' : 'text-[#fecdd3] drop-shadow-sm'
+          }`}>
             {currentCard ? <FormattedText text={getCardTerm(currentCard)} inlineOnly /> : 'Cargando...'}
           </h2>
         </div>
 
         {/* Definition Sentence with Blanks */}
-        <div className={`p-4 sm:p-6 rounded-2xl bg-[#0e0920]/90 border transition-all duration-200 shadow-inner mb-5 sm:mb-6 leading-relaxed text-sm sm:text-base flex flex-wrap items-center gap-x-2 gap-y-2.5 ${
+        <div className={`p-4 sm:p-6 rounded-2xl border transition-all duration-200 shadow-inner mb-5 sm:mb-6 leading-relaxed text-sm sm:text-base flex flex-wrap items-center gap-x-2 gap-y-2.5 ${
           feedback === 'correct'
-            ? 'border-emerald-500/50 shadow-emerald-500/10'
+            ? theme === 'kitty'
+              ? 'bg-emerald-50/80 border-emerald-300'
+              : theme === 'light'
+              ? 'bg-emerald-50 border-emerald-300'
+              : 'bg-[#0e0920]/90 border-emerald-500/50 shadow-emerald-500/10'
             : feedback === 'wrong'
-            ? 'border-rose-500/50 shadow-rose-500/10 animate-shake'
-            : 'border-white/[0.1]'
+            ? theme === 'kitty'
+              ? 'bg-rose-50/80 border-rose-300 animate-shake'
+              : theme === 'light'
+              ? 'bg-rose-50 border-rose-300 animate-shake'
+              : 'bg-[#0e0920]/90 border-rose-500/50 shadow-rose-500/10 animate-shake'
+            : theme === 'kitty'
+            ? 'bg-pink-50/60 border-pink-200'
+            : theme === 'light'
+            ? 'bg-slate-50 border-slate-200'
+            : 'bg-[#0e0920]/90 border-white/[0.1]'
         }`}>
           {tokens.map((token, idx) => {
             if (!token.isBlank) {
               return (
-                <span key={idx} className="text-slate-200 font-normal">
+                <span key={idx} className={theme === 'kitty' ? 'text-pink-950 font-medium' : theme === 'light' ? 'text-slate-800' : 'text-slate-200 font-normal'}>
                   {token.word}
                 </span>
               );
@@ -594,12 +634,24 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
                 className={`inline-flex items-center justify-center min-w-[85px] h-9 px-3.5 rounded-xl border font-semibold text-sm transition-all duration-150 cursor-pointer ${
                   isFilled
                     ? feedback === 'correct'
-                      ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200'
+                      ? 'bg-emerald-600/30 border-emerald-400 text-emerald-900 dark:text-emerald-200'
                       : feedback === 'wrong'
-                      ? 'bg-rose-600/30 border-rose-400 text-rose-200'
+                      ? 'bg-rose-600/30 border-rose-400 text-rose-900 dark:text-rose-200'
+                      : theme === 'kitty'
+                      ? 'bg-pink-200 border-pink-400 text-pink-950 font-bold hover:bg-pink-300/80 shadow-xs'
+                      : theme === 'light'
+                      ? 'bg-indigo-100 border-indigo-300 text-indigo-950 font-bold hover:bg-indigo-200 shadow-xs'
                       : 'bg-[#3b1d60] border-purple-400/60 text-purple-100 hover:bg-[#4a2478]'
                     : isActive
-                    ? 'bg-[#291745] border-purple-400 text-purple-300 ring-2 ring-purple-400/40'
+                    ? theme === 'kitty'
+                      ? 'bg-white border-2 border-pink-500 text-pink-500 ring-2 ring-pink-300'
+                      : theme === 'light'
+                      ? 'bg-white border-2 border-indigo-500 text-indigo-500 ring-2 ring-indigo-200'
+                      : 'bg-[#291745] border-purple-400 text-purple-300 ring-2 ring-purple-400/40'
+                    : theme === 'kitty'
+                    ? 'bg-white/80 border-dashed border-pink-300 text-pink-400 hover:border-pink-400'
+                    : theme === 'light'
+                    ? 'bg-white/80 border-dashed border-slate-300 text-slate-400 hover:border-slate-400'
                     : 'bg-[#201338] border-dashed border-purple-500/40 text-purple-400/60 hover:border-purple-400'
                 }`}
               >
@@ -609,7 +661,7 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
           })}
         </div>
 
-        {/* Word Chips Bank matching Screenshot 6 */}
+        {/* Word Chips Bank */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 max-w-3xl mx-auto">
           {wordBank.map(chip => (
             <button
@@ -619,7 +671,11 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
               onClick={() => handleBankChipClick(chip)}
               className={`px-4 py-2 rounded-full border text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer active-press ${
                 chip.isUsed
-                  ? 'opacity-25 bg-white/[0.02] border-white/[0.05] text-slate-500 cursor-not-allowed pointer-events-none'
+                  ? 'opacity-25 pointer-events-none scale-95'
+                  : theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-100/70 border-pink-200 hover:border-pink-300 text-pink-900 shadow-xs'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-100 border-slate-200 hover:border-slate-300 text-slate-800 shadow-xs'
                   : 'bg-[#1e153b] hover:bg-[#2b1e54] border-white/[0.12] text-slate-200 hover:text-white hover:border-purple-400/50 shadow-sm'
               }`}
             >
@@ -630,7 +686,7 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
 
         {/* Wrong Feedback Hint */}
         {feedback === 'wrong' && (
-          <div className="mt-6 text-center text-xs sm:text-sm text-rose-300 font-medium animate-fadeIn">
+          <div className="mt-6 text-center text-xs sm:text-sm text-rose-500 dark:text-rose-300 font-medium animate-fadeIn">
             Algunos espacios no son correctos. Haz clic en una palabra colocada para regresarla al banco y probar otra.
           </div>
         )}
@@ -639,24 +695,52 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
       {/* Game Over / Victory Modal */}
       {gameOver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl text-center flex flex-col items-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center mb-4 text-emerald-400">
+          <div className={`w-full max-w-md p-6 sm:p-8 rounded-3xl border shadow-2xl text-center flex flex-col items-center ${
+            theme === 'kitty'
+              ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/50'
+              : theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+              : 'bg-[#140e2b] border-white/[0.12] text-white'
+          }`}>
+            <div className={`w-16 h-16 rounded-full border flex items-center justify-center mb-4 ${
+              theme === 'kitty'
+                ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-400'
+            }`}>
               <Trophy className="w-8 h-8" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">¡Definiciones Completadas!</h3>
-            <p className="text-sm text-slate-300 mb-6">
+            <h3 className={`text-2xl font-bold mb-2 tracking-tight ${
+              theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+            }`}>¡Definiciones Completadas!</h3>
+            <p className={`text-sm mb-6 ${
+              theme === 'kitty' ? 'text-pink-800/80' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+            }`}>
               Completaste exitosamente las 6 rondas de reconstrucción léxica.
             </p>
 
-            <div className="w-full py-4 px-6 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-6 flex justify-around tabular-nums">
+            <div className={`w-full py-4 px-6 rounded-2xl border mb-6 flex justify-around tabular-nums ${
+              theme === 'kitty'
+                ? 'bg-pink-50/70 border-pink-200'
+                : theme === 'light'
+                ? 'bg-slate-50 border-slate-200'
+                : 'bg-white/[0.04] border-white/[0.08]'
+            }`}>
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Puntuación Final</span>
-                <span className="text-2xl font-extrabold text-emerald-400">{score}</span>
+                <span className={`text-[11px] uppercase tracking-wider block mb-0.5 ${
+                  theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Puntuación Final</span>
+                <span className={`text-2xl font-extrabold ${
+                  theme === 'kitty' ? 'text-emerald-700' : 'text-emerald-400'
+                }`}>{score}</span>
               </div>
-              <div className="w-px bg-white/10" />
+              <div className={`w-px ${theme === 'kitty' ? 'bg-pink-200' : theme === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Términos Dominados</span>
-                <span className="text-2xl font-extrabold text-purple-300">{masteredTerms.length}</span>
+                <span className={`text-[11px] uppercase tracking-wider block mb-0.5 ${
+                  theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Términos Dominados</span>
+                <span className={`text-2xl font-extrabold ${
+                  theme === 'kitty' ? 'text-pink-700' : 'text-purple-300'
+                }`}>{masteredTerms.length}</span>
               </div>
             </div>
 
@@ -664,7 +748,11 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
               <button
                 type="button"
                 onClick={handleRestart}
-                className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-lg shadow-indigo-600/30"
+                className={`flex-1 py-3 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-lg ${
+                  theme === 'kitty'
+                    ? 'bg-pink-500 hover:bg-pink-600 shadow-pink-500/30'
+                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
+                }`}
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Jugar de nuevo</span>
@@ -675,7 +763,13 @@ export const DefinitionBuilderGame: React.FC<DefinitionBuilderGameProps> = ({
                   gameAudio.playTap();
                   onBack();
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-200 font-bold text-sm transition-transform active:scale-[0.98] duration-150 cursor-pointer"
+                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-transform active:scale-[0.98] duration-150 cursor-pointer border ${
+                  theme === 'kitty'
+                    ? 'bg-pink-100 hover:bg-pink-200 border-pink-200 text-pink-900'
+                    : theme === 'light'
+                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
+                    : 'bg-white/[0.06] hover:bg-white/[0.12] border-white/[0.1] text-slate-200'
+                }`}
               >
                 Regresar
               </button>

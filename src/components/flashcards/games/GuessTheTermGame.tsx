@@ -15,6 +15,7 @@ import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
+import { useTheme } from '../../../services/themeService';
 
 interface GuessTheTermGameProps {
   flashcards: Flashcard[];
@@ -38,6 +39,7 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
   onBack,
   onGameComplete,
 }) => {
+  const { theme } = useTheme();
   const [targetCard, setTargetCard] = useState<Flashcard | null>(null);
   const [showDefinitions, setShowDefinitions] = useState(false);
   const [eliminatedIds, setEliminatedIds] = useState<Set<string>>(new Set());
@@ -242,8 +244,10 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn text-slate-100">
-      {/* Top Header Bar matching Screenshot 4 */}
+    <div className={`w-full max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex-1 flex flex-col justify-center animate-fadeIn ${
+      theme === 'kitty' ? 'text-pink-950' : theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+    }`}>
+      {/* Top Header Bar */}
       <div className="flex items-center justify-between mb-3 sm:mb-4 pb-2">
         <button
           type="button"
@@ -251,14 +255,22 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm ${
+            theme === 'kitty'
+              ? 'bg-white hover:bg-pink-50 border border-pink-200 text-pink-900 shadow-xs'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-xs'
+              : 'bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-slate-200'
+          }`}
         >
-          <ArrowLeft className="w-4 h-4 text-slate-300" />
+          <ArrowLeft className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-300'}`} />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-white">
-          <MessageSquare className="w-5 h-5 text-indigo-400" />
+        <div className={`flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight ${
+          theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+        }`}>
+          <MessageSquare className={`w-5 h-5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`} />
           <span>Adivina el Término</span>
         </div>
 
@@ -269,12 +281,20 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* Left Column: AI Chat & Action Buttons */}
         <div className="lg:col-span-4 flex flex-col gap-3">
-          <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+          <p className={`text-xs sm:text-sm font-medium leading-relaxed ${
+            theme === 'kitty' ? 'text-pink-800' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+          }`}>
             Haz preguntas de sí o no en el chat para deducir el término secreto.
           </p>
 
           {/* Chat Box Container */}
-          <div className="rounded-2xl bg-[#140e2b]/95 border border-white/[0.12] p-3 sm:p-4 flex flex-col h-[330px] sm:h-[350px] shadow-2xl relative">
+          <div className={`rounded-2xl border p-3 sm:p-4 flex flex-col h-[330px] sm:h-[350px] shadow-2xl relative ${
+            theme === 'kitty'
+              ? 'bg-white border-pink-200 text-pink-950 shadow-[0_8px_30px_rgba(236,72,153,0.1)]'
+              : theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-md'
+              : 'bg-[#140e2b]/95 border-white/[0.12] text-white'
+          }`}>
             {/* Scrollable messages history */}
             <div ref={chatScrollRef} className="flex-1 overflow-y-auto space-y-3 pr-1.5 custom-scrollbar">
               {chatMessages.map(msg => (
@@ -284,7 +304,13 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
                 >
                   <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm leading-relaxed ${
                     msg.sender === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-none shadow-sm'
+                      ? theme === 'kitty'
+                        ? 'bg-pink-500 text-white rounded-br-none shadow-sm'
+                        : 'bg-indigo-600 text-white rounded-br-none shadow-sm'
+                      : theme === 'kitty'
+                      ? 'bg-pink-50 border border-pink-200 text-pink-950 rounded-bl-none shadow-xs'
+                      : theme === 'light'
+                      ? 'bg-slate-100 border border-slate-200 text-slate-800 rounded-bl-none shadow-xs'
                       : 'bg-[#221644] border border-white/[0.08] text-purple-100 rounded-bl-none shadow-sm'
                   }`}>
                     {msg.text}
@@ -294,8 +320,14 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
 
               {isAiThinking && (
                 <div className="flex justify-start">
-                  <div className="bg-[#221644] border border-white/[0.08] text-purple-200 rounded-2xl rounded-bl-none px-3.5 py-2 text-xs flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                  <div className={`rounded-2xl rounded-bl-none px-3.5 py-2 text-xs flex items-center gap-2 border ${
+                    theme === 'kitty'
+                      ? 'bg-pink-50 border-pink-200 text-pink-700'
+                      : theme === 'light'
+                      ? 'bg-slate-100 border-slate-200 text-slate-700'
+                      : 'bg-[#221644] border-white/[0.08] text-purple-200'
+                  }`}>
+                    <Loader2 className={`w-3.5 h-3.5 animate-spin ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-indigo-500' : 'text-purple-400'}`} />
                     <span>Analizando características...</span>
                   </div>
                 </div>
@@ -303,8 +335,10 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
             </div>
 
             {/* Questions Counter */}
-            <div className="text-[11px] font-semibold text-slate-400 py-2 border-t border-white/[0.08] tabular-nums">
-              Has utilizado <strong className="text-white">{questionsUsed}</strong> de {MAX_QUESTIONS} preguntas
+            <div className={`text-[11px] font-semibold py-2 border-t tabular-nums ${
+              theme === 'kitty' ? 'border-pink-200/70 text-pink-700' : theme === 'light' ? 'border-slate-200 text-slate-500' : 'border-white/[0.08] text-slate-400'
+            }`}>
+              Has utilizado <strong className={theme === 'kitty' ? 'text-pink-950 font-bold' : theme === 'light' ? 'text-slate-900 font-bold' : 'text-white'}>{questionsUsed}</strong> de {MAX_QUESTIONS} preguntas
             </div>
 
             {/* Text Input Row */}
@@ -315,12 +349,20 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
                 onChange={e => setInputQuestion(e.target.value)}
                 placeholder="¿Está relacionado con...?"
                 disabled={isAiThinking || questionsUsed >= MAX_QUESTIONS || gameOver}
-                className="w-full bg-[#0d081e] border border-white/[0.12] focus:border-indigo-400 rounded-2xl pl-3.5 pr-11 py-2.5 text-base md:text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors"
+                className={`w-full rounded-2xl pl-3.5 pr-11 py-2.5 text-base md:text-sm outline-none transition-colors border ${
+                  theme === 'kitty'
+                    ? 'bg-pink-50/50 border-pink-200 focus:border-pink-400 text-pink-950 placeholder-pink-400/70'
+                    : theme === 'light'
+                    ? 'bg-slate-50 border-slate-200 focus:border-indigo-400 text-slate-900 placeholder-slate-400'
+                    : 'bg-[#0d081e] border-white/[0.12] focus:border-indigo-400 text-slate-100 placeholder-slate-500'
+                }`}
               />
               <button
                 type="submit"
                 disabled={!inputQuestion.trim() || isAiThinking || questionsUsed >= MAX_QUESTIONS || gameOver}
-                className="absolute right-1.5 p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white transition-all cursor-pointer"
+                className={`absolute right-1.5 p-2 rounded-xl disabled:opacity-30 text-white transition-all cursor-pointer ${
+                  theme === 'kitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-indigo-600 hover:bg-indigo-500'
+                }`}
               >
                 <Send className="w-3.5 h-3.5" />
               </button>
@@ -333,7 +375,13 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
               type="button"
               onClick={handleSurrender}
               disabled={gameOver}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.1] text-slate-300 text-xs sm:text-sm font-semibold transition-transform active:scale-[0.98] duration-150 cursor-pointer text-center"
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-transform active:scale-[0.98] duration-150 cursor-pointer text-center border ${
+                theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border-pink-200 text-pink-900'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800'
+                  : 'bg-[#2a243d]/70 hover:bg-[#383152] border-white/[0.1] text-slate-300'
+              }`}
             >
               Rendirse
             </button>
@@ -344,7 +392,13 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
               disabled={gameOver}
               className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] duration-150 cursor-pointer text-center shadow-md ${
                 isSelectingAnswer
-                  ? 'bg-purple-500 text-white ring-2 ring-purple-300 animate-pulse'
+                  ? theme === 'kitty'
+                    ? 'bg-pink-500 text-white ring-2 ring-pink-300 animate-pulse'
+                    : 'bg-purple-500 text-white ring-2 ring-purple-300 animate-pulse'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 hover:bg-pink-200 text-pink-900'
+                  : theme === 'light'
+                  ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-950'
                   : 'bg-[#d8b4fe] hover:bg-[#c084fc] text-[#1e1338]'
               }`}
             >
@@ -353,15 +407,19 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Candidate Cards Board (8 cols) matching Screenshot 4 */}
+        {/* Right Column: Candidate Cards Board (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-4">
           {/* Top Bar: Términos Title & Definiciones Toggle */}
           <div className="flex items-center justify-between pb-1">
-            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+            <h3 className={`text-base sm:text-lg font-bold tracking-tight ${
+              theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+            }`}>
               Términos
             </h3>
 
-            <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-300">
+            <div className={`flex items-center gap-2.5 text-xs font-semibold ${
+              theme === 'kitty' ? 'text-pink-700' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+            }`}>
               <span>Definiciones</span>
               <button
                 type="button"
@@ -370,7 +428,9 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
                   setShowDefinitions(!showDefinitions);
                 }}
                 className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer p-0.5 ${
-                  showDefinitions ? 'bg-indigo-600' : 'bg-slate-700'
+                  showDefinitions
+                    ? theme === 'kitty' ? 'bg-pink-500' : 'bg-indigo-600'
+                    : theme === 'kitty' ? 'bg-pink-200' : theme === 'light' ? 'bg-slate-300' : 'bg-slate-700'
                 }`}
               >
                 <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
@@ -387,33 +447,64 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
               const cardTerm = getCardTerm(card);
               const cardDef = getCardDef(card);
 
+              let cardBg = '';
+              if (isEliminated) {
+                cardBg = 'opacity-35 line-through pointer-events-none ' + (theme === 'dark' ? 'bg-[#120c24]/50 border-white/[0.04] text-slate-500' : 'bg-slate-100 border-slate-200 text-slate-400');
+              } else if (isSelectingAnswer) {
+                cardBg = theme === 'kitty'
+                  ? 'bg-pink-100 border-2 border-pink-500 text-pink-950 shadow-md ring-2 ring-pink-300 hover:scale-[1.02]'
+                  : 'bg-[#3b0b21] border-rose-400 hover:scale-[1.02] text-white shadow-rose-500/20 ring-1 ring-rose-400';
+              } else if (showDefinitions) {
+                cardBg = theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50 border border-pink-200 text-pink-950 shadow-xs'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-xs'
+                  : 'bg-[#181033]/90 hover:bg-[#23174a] border-white/[0.09] text-slate-100 hover:border-purple-400/50';
+              } else {
+                cardBg = theme === 'kitty'
+                  ? 'bg-white hover:bg-pink-50/70 border-2 border-pink-200 text-pink-950 shadow-xs'
+                  : theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 shadow-xs'
+                  : 'bg-[#200714]/90 hover:bg-[#2e091d] border-[#9f1239]/50 hover:border-[#f43f5e]/70 text-[#fecdd3]';
+              }
+
               return (
                 <div
                   key={card.id}
                   onClick={() => handleSelectCard(card)}
-                  className={`p-4 sm:p-5 rounded-2xl border min-h-[110px] flex flex-col justify-between relative transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 active:scale-[0.985] cursor-pointer shadow-md ${
-                    isEliminated
-                      ? 'bg-[#120c24]/50 border-white/[0.04] opacity-35 text-slate-500 line-through'
-                      : isSelectingAnswer
-                      ? 'bg-[#3b0b21] border-rose-400 hover:scale-[1.02] text-white shadow-rose-500/20 ring-1 ring-rose-400'
-                      : showDefinitions
-                      ? 'bg-[#181033]/90 hover:bg-[#23174a] border-white/[0.09] text-slate-100 hover:border-purple-400/50'
-                      : 'bg-[#200714]/90 hover:bg-[#2e091d] border-[#9f1239]/50 hover:border-[#f43f5e]/70 text-[#fecdd3]'
-                  }`}
+                  className={`p-4 sm:p-5 rounded-2xl border min-h-[110px] flex flex-col justify-between relative transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 active:scale-[0.985] cursor-pointer shadow-md ${cardBg}`}
                 >
                   {/* Eye Toggle Elimination Button in Top Right */}
                   <button
                     type="button"
                     title={isEliminated ? 'Reactivar opción' : 'Descartar opción'}
                     onClick={(e) => toggleCardElimination(card.id, e)}
-                    className="absolute top-2.5 right-2.5 p-1 rounded-full text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer"
+                    className={`absolute top-2.5 right-2.5 p-1 rounded-full transition-colors cursor-pointer ${
+                      theme === 'kitty'
+                        ? 'text-pink-400 hover:text-pink-700 hover:bg-pink-100'
+                        : theme === 'light'
+                        ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.1]'
+                    }`}
                   >
-                    {isEliminated ? <EyeOff className="w-4 h-4 text-rose-400" /> : <Eye className="w-4 h-4" />}
+                    {isEliminated ? <EyeOff className="w-4 h-4 text-rose-500" /> : <Eye className="w-4 h-4" />}
                   </button>
 
                   {/* Card Content: Term or Definition */}
                   <div className="pr-6 mt-1 flex items-center justify-center flex-1 text-center w-full">
-                    <div className={`font-semibold leading-snug w-full ${showDefinitions ? 'text-xs text-slate-200 font-normal max-h-[140px] overflow-y-auto custom-scrollbar' : 'text-sm sm:text-base text-[#fecdd3] font-bold'}`}>
+                    <div className={`font-semibold leading-snug w-full ${
+                      showDefinitions
+                        ? theme === 'kitty'
+                          ? 'text-xs text-pink-900 font-medium max-h-[140px] overflow-y-auto custom-scrollbar'
+                          : theme === 'light'
+                          ? 'text-xs text-slate-700 font-medium max-h-[140px] overflow-y-auto custom-scrollbar'
+                          : 'text-xs text-slate-200 font-normal max-h-[140px] overflow-y-auto custom-scrollbar'
+                        : theme === 'kitty'
+                        ? 'text-sm sm:text-base text-pink-950 font-black'
+                        : theme === 'light'
+                        ? 'text-sm sm:text-base text-slate-900 font-black'
+                        : 'text-sm sm:text-base text-[#fecdd3] font-bold'
+                    }`}>
                       <FormattedText text={showDefinitions ? maskTermInDefinition(cardTerm, cardDef) : cardTerm} inlineOnly />
                     </div>
                   </div>
@@ -427,43 +518,75 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
       {/* Game Over / Victory Modal */}
       {gameOver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl text-center flex flex-col items-center">
+          <div className={`w-full max-w-md p-6 sm:p-8 rounded-3xl border shadow-2xl text-center flex flex-col items-center ${
+            theme === 'kitty'
+              ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/50'
+              : theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+              : 'bg-[#140e2b] border-white/[0.12] text-white'
+          }`}>
             {gameWon ? (
               <>
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center mb-4 text-emerald-400">
+                <div className={`w-16 h-16 rounded-full border flex items-center justify-center mb-4 ${
+                  theme === 'kitty'
+                    ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                    : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-400'
+                }`}>
                   <Trophy className="w-8 h-8" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">¡Adivinaste el Término!</h3>
-                <p className="text-sm text-slate-300 mb-6">
-                  Descifraste que el término secreto era <strong className="text-purple-300 font-bold">{targetCard ? getCardTerm(targetCard) : ''}</strong> en {questionsUsed} preguntas.
+                <h3 className={`text-2xl font-bold mb-2 tracking-tight ${
+                  theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+                }`}>¡Adivinaste el Término!</h3>
+                <p className={`text-sm mb-6 ${
+                  theme === 'kitty' ? 'text-pink-800/80' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                }`}>
+                  Descifraste que el término secreto era <strong className={theme === 'kitty' ? 'text-pink-900 font-bold' : 'text-purple-300 font-bold'}>{targetCard ? getCardTerm(targetCard) : ''}</strong> en {questionsUsed} preguntas.
                 </p>
               </>
             ) : (
               <>
-                <div className="w-16 h-16 rounded-full bg-rose-500/20 border border-rose-400/40 flex items-center justify-center mb-4 text-rose-400">
+                <div className={`w-16 h-16 rounded-full border flex items-center justify-center mb-4 ${
+                  theme === 'kitty'
+                    ? 'bg-rose-100 border-rose-300 text-rose-600'
+                    : 'bg-rose-500/20 border-rose-400/40 text-rose-400'
+                }`}>
                   <AlertCircle className="w-8 h-8" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">
+                <h3 className={`text-2xl font-bold mb-2 tracking-tight ${
+                  theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+                }`}>
                   {surrendered ? 'Te Has Rendido' : 'Ronda Terminada'}
                 </h3>
-                <p className="text-sm text-slate-300 mb-6">
+                <p className={`text-sm mb-6 ${
+                  theme === 'kitty' ? 'text-pink-800/80' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                }`}>
                   {surrendered
                     ? 'Has decidido rendirte en esta ronda. El término secreto era:'
                     : 'Se acabaron las oportunidades. El término secreto era:'}{' '}
-                  <strong className="text-purple-300 font-bold">{targetCard ? getCardTerm(targetCard) : ''}</strong>.
+                  <strong className={theme === 'kitty' ? 'text-pink-900 font-bold' : 'text-purple-300 font-bold'}>{targetCard ? getCardTerm(targetCard) : ''}</strong>.
                 </p>
               </>
             )}
 
-            <div className="w-full py-4 px-6 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-6 flex justify-around tabular-nums">
+            <div className={`w-full py-4 px-6 rounded-2xl border mb-6 flex justify-around tabular-nums ${
+              theme === 'kitty'
+                ? 'bg-pink-50/70 border-pink-200'
+                : theme === 'light'
+                ? 'bg-slate-50 border-slate-200'
+                : 'bg-white/[0.04] border-white/[0.08]'
+            }`}>
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Puntuación</span>
-                <span className="text-2xl font-extrabold text-emerald-400">{gameWon ? score : 0}</span>
+                <span className={`text-[11px] uppercase tracking-wider block mb-0.5 ${
+                  theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Puntuación</span>
+                <span className={`text-2xl font-extrabold ${theme === 'kitty' ? 'text-emerald-700' : 'text-emerald-400'}`}>{gameWon ? score : 0}</span>
               </div>
-              <div className="w-px bg-white/10" />
+              <div className={`w-px ${theme === 'kitty' ? 'bg-pink-200' : theme === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Preguntas Usadas</span>
-                <span className="text-2xl font-extrabold text-purple-300">{questionsUsed}/{MAX_QUESTIONS}</span>
+                <span className={`text-[11px] uppercase tracking-wider block mb-0.5 ${
+                  theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Preguntas Usadas</span>
+                <span className={`text-2xl font-extrabold ${theme === 'kitty' ? 'text-pink-700' : 'text-purple-300'}`}>{questionsUsed}/{MAX_QUESTIONS}</span>
               </div>
             </div>
 
@@ -471,7 +594,11 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
               <button
                 type="button"
                 onClick={startNewGame}
-                className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-lg shadow-indigo-600/30"
+                className={`flex-1 py-3 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-lg ${
+                  theme === 'kitty'
+                    ? 'bg-pink-500 hover:bg-pink-600 shadow-pink-500/30'
+                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
+                }`}
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Jugar de nuevo</span>
@@ -482,7 +609,13 @@ export const GuessTheTermGame: React.FC<GuessTheTermGameProps> = ({
                   gameAudio.playTap();
                   onBack();
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-200 font-bold text-sm transition-transform active:scale-[0.98] duration-150 cursor-pointer"
+                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-transform active:scale-[0.98] duration-150 cursor-pointer border ${
+                  theme === 'kitty'
+                    ? 'bg-pink-100 hover:bg-pink-200 border-pink-200 text-pink-900'
+                    : theme === 'light'
+                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
+                    : 'bg-white/[0.06] hover:bg-white/[0.12] border-white/[0.1] text-slate-200'
+                }`}
               >
                 Regresar
               </button>

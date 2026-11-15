@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { gameAudio } from './gameAudio';
 import { cleanConceptDefinition, cleanConceptTerm, maskTermInDefinition } from '../flashcardSanitizer';
 import { FormattedText } from '../../FormattedText';
+import { useTheme } from '../../../services/themeService';
 
 interface TermBuilderGameProps {
   flashcards: Flashcard[];
@@ -49,6 +50,7 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
   onBack,
   onGameComplete,
 }) => {
+  const { theme } = useTheme();
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
   const [hintsRemaining, setHintsRemaining] = useState(3);
@@ -282,8 +284,10 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
   const assembledDisplay = assembledTokens.map(t => t.text).join('');
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-3 sm:py-6 animate-fadeIn text-slate-100">
-      {/* Top Header Bar matching Screenshot 5 */}
+    <div className={`w-full max-w-4xl mx-auto px-4 py-3 sm:py-6 animate-fadeIn ${
+      theme === 'kitty' ? 'text-pink-950' : theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+    }`}>
+      {/* Top Header Bar */}
       <div className="flex items-center justify-between mb-8 pb-3">
         <button
           type="button"
@@ -291,29 +295,51 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
             gameAudio.playTap();
             onBack();
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-xs font-semibold text-slate-200 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm"
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-sm ${
+            theme === 'kitty'
+              ? 'bg-white hover:bg-pink-50 border border-pink-200 text-pink-900 shadow-xs'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-xs'
+              : 'bg-[#2a243d]/70 hover:bg-[#383152] border border-white/[0.12] text-slate-200'
+          }`}
         >
-          <ArrowLeft className="w-4 h-4 text-slate-300" />
+          <ArrowLeft className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-300'}`} />
           <span>Regresar a juegos</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-white">
-          <Grid className="w-5 h-5 text-indigo-400" />
+        <div className={`flex items-center gap-2.5 text-lg font-bold tracking-tight ${
+          theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+        }`}>
+          <Grid className={`w-5 h-5 ${theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`} />
           <span>Constructor de Términos</span>
         </div>
 
         <div className="w-24" /> {/* Spacer */}
       </div>
 
-      {/* Stats Bar Container matching Screenshot 5 */}
-      <div className="rounded-2xl bg-[#140e2b]/95 border border-white/[0.12] px-6 py-4 flex items-center justify-between mb-8 shadow-xl tabular-nums">
+      {/* Stats Bar Container */}
+      <div className={`rounded-2xl border px-6 py-4 flex items-center justify-between mb-8 shadow-xl tabular-nums ${
+        theme === 'kitty'
+          ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/40'
+          : theme === 'light'
+          ? 'bg-white border-slate-200 text-slate-900 shadow-md'
+          : 'bg-[#140e2b]/95 border-white/[0.12] text-white'
+      }`}>
         {/* Score */}
-        <div className="text-xl sm:text-2xl font-black text-white">
+        <div className={`text-xl sm:text-2xl font-black ${theme === 'kitty' ? 'text-pink-950' : 'text-white'}`}>
           {score}
         </div>
 
         {/* Timer */}
-        <div className={`text-xl sm:text-2xl font-black ${timeLeft <= 10 ? 'text-rose-400 animate-pulse' : 'text-slate-100'}`}>
+        <div className={`text-xl sm:text-2xl font-black ${
+          timeLeft <= 10
+            ? 'text-rose-500 animate-pulse'
+            : theme === 'kitty'
+            ? 'text-pink-800'
+            : theme === 'light'
+            ? 'text-slate-800'
+            : 'text-slate-100'
+        }`}>
           {timeLeft}s
         </div>
 
@@ -322,7 +348,13 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
           type="button"
           onClick={handleUseHint}
           disabled={hintsRemaining <= 0 || gameOver}
-          className="px-4 py-1.5 rounded-full bg-[#3b2766] hover:bg-[#4b3382] disabled:opacity-40 border border-purple-400/30 text-purple-200 text-xs sm:text-sm font-bold transition-all duration-150 cursor-pointer shadow-sm active-press"
+          className={`px-4 py-1.5 rounded-full disabled:opacity-40 border text-xs sm:text-sm font-bold transition-all duration-150 cursor-pointer shadow-sm active-press ${
+            theme === 'kitty'
+              ? 'bg-pink-100 hover:bg-pink-200/80 border-pink-300 text-pink-900 shadow-xs'
+              : theme === 'light'
+              ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-900 shadow-xs'
+              : 'bg-[#3b2766] hover:bg-[#4b3382] border border-purple-400/30 text-purple-200'
+          }`}
         >
           Usar pista ({hintsRemaining})
         </button>
@@ -330,22 +362,34 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
 
       {/* Target Definition Prompt */}
       <div className="text-center mb-5 max-w-2xl mx-auto">
-        <div className="text-base sm:text-lg text-slate-100 font-normal leading-relaxed">
+        <div className={`text-base sm:text-lg font-normal leading-relaxed ${
+          theme === 'kitty' ? 'text-pink-950 font-medium' : theme === 'light' ? 'text-slate-800' : 'text-slate-100'
+        }`}>
           <FormattedText text={currentCard ? maskTermInDefinition(getCardTerm(currentCard), getCardDef(currentCard)) : 'Cargando definición...'} inlineOnly />
         </div>
-        <p className="text-xs sm:text-sm text-slate-400 italic mt-2.5">
+        <p className={`text-xs sm:text-sm italic mt-2.5 ${
+          theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+        }`}>
           Haz clic en las sílabas para escribir el término correspondiente
         </p>
       </div>
 
       {/* Word Builder Bar showing assembled syllables with cursor */}
       <div className="flex items-center justify-center gap-3 mb-8">
-        <div className={`min-w-[280px] sm:min-w-[420px] max-w-xl h-14 px-6 rounded-2xl bg-[#0f0a24] border flex items-center justify-between shadow-inner transition-all duration-200 ${
-          shakeBuilder ? 'border-rose-500 animate-shake' : 'border-purple-400/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+        <div className={`min-w-[280px] sm:min-w-[420px] max-w-xl h-14 px-6 rounded-2xl border flex items-center justify-between shadow-inner transition-all duration-200 ${
+          shakeBuilder
+            ? 'border-rose-500 animate-shake'
+            : theme === 'kitty'
+            ? 'bg-pink-50/70 border-pink-300 shadow-[0_0_15px_rgba(236,72,153,0.15)]'
+            : theme === 'light'
+            ? 'bg-slate-50 border-slate-300 shadow-sm'
+            : 'bg-[#0f0a24] border-purple-400/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
         }`}>
-          <div className="flex items-center gap-1 font-mono text-lg sm:text-xl font-bold tracking-wider text-purple-200 overflow-x-auto py-1">
-            {assembledDisplay || <span className="text-purple-400/40 font-normal text-sm">Construye el término aquí...</span>}
-            <span className="inline-block w-2.5 h-6 bg-purple-400 animate-pulse ml-0.5 rounded-sm" />
+          <div className={`flex items-center gap-1 font-mono text-lg sm:text-xl font-bold tracking-wider overflow-x-auto py-1 ${
+            theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-bold' : 'text-purple-200'
+          }`}>
+            {assembledDisplay || <span className={`font-normal text-sm ${theme === 'kitty' ? 'text-pink-400' : theme === 'light' ? 'text-slate-400' : 'text-purple-400/40'}`}>Construye el término aquí...</span>}
+            <span className={`inline-block w-2.5 h-6 animate-pulse ml-0.5 rounded-sm ${theme === 'kitty' ? 'bg-pink-500' : theme === 'light' ? 'bg-indigo-600' : 'bg-purple-400'}`} />
           </div>
 
           {assembledTokens.length > 0 && (
@@ -354,7 +398,13 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
                 type="button"
                 onClick={handleRemoveLast}
                 title="Borrar última sílaba"
-                className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  theme === 'kitty'
+                    ? 'bg-pink-200/60 hover:bg-pink-200 text-pink-700'
+                    : theme === 'light'
+                    ? 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                    : 'bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white'
+                }`}
               >
                 <Delete className="w-4 h-4" />
               </button>
@@ -362,7 +412,7 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
                 type="button"
                 onClick={handleClearAll}
                 title="Limpiar todo"
-                className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 transition-colors cursor-pointer"
+                className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-rose-500/20 text-rose-500 hover:bg-rose-500/30 transition-colors cursor-pointer"
               >
                 Limpiar
               </button>
@@ -371,10 +421,25 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
         </div>
       </div>
 
-      {/* 4x4 Grid of 16 Syllable Tiles matching Screenshot 5 */}
+      {/* 4x4 Grid of 16 Syllable Tiles */}
       <div className="grid grid-cols-4 gap-3 sm:gap-4 max-w-md mx-auto mb-8">
         {tiles.map((tile) => {
           const isHighlighted = highlightedTileId === tile.id;
+
+          let tileClass = '';
+          if (tile.isUsed) {
+            tileClass = 'opacity-20 pointer-events-none cursor-not-allowed';
+          } else if (isHighlighted) {
+            tileClass = theme === 'kitty'
+              ? 'bg-pink-200 border-pink-500 text-pink-950 ring-4 ring-pink-300 shadow-lg animate-pulse'
+              : 'bg-purple-600/40 border-purple-300 text-white ring-4 ring-purple-400/60 shadow-[0_0_20px_rgba(168,85,247,0.5)] animate-pulse';
+          } else if (theme === 'kitty') {
+            tileClass = 'bg-white hover:bg-pink-50 border-pink-200 hover:border-pink-300 text-pink-950 shadow-xs';
+          } else if (theme === 'light') {
+            tileClass = 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 text-slate-800 shadow-xs';
+          } else {
+            tileClass = 'bg-[#180f33]/90 hover:bg-[#26174d] border-white/[0.12] text-slate-100 hover:text-white hover:border-purple-400/60';
+          }
 
           return (
             <button
@@ -382,13 +447,7 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
               type="button"
               disabled={tile.isUsed || gameOver}
               onClick={() => handleTileClick(tile)}
-              className={`h-16 sm:h-20 rounded-2xl border font-bold text-sm sm:text-base tracking-wider flex items-center justify-center transition-all duration-150 cursor-pointer active-press shadow-md ${
-                tile.isUsed
-                  ? 'opacity-20 bg-white/[0.02] border-white/[0.04] text-slate-600 cursor-not-allowed pointer-events-none'
-                  : isHighlighted
-                  ? 'bg-purple-600/40 border-purple-300 text-white ring-4 ring-purple-400/60 shadow-[0_0_20px_rgba(168,85,247,0.5)] animate-pulse'
-                  : 'bg-[#180f33]/90 hover:bg-[#26174d] border-white/[0.12] text-slate-100 hover:text-white hover:border-purple-400/60'
-              }`}
+              className={`h-16 sm:h-20 rounded-2xl border font-bold text-sm sm:text-base tracking-wider flex items-center justify-center transition-all duration-150 cursor-pointer active-press shadow-md ${tileClass}`}
             >
               <span>{tile.text}</span>
             </button>
@@ -399,24 +458,48 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
       {/* Game Over Modal */}
       {gameOver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#140e2b] border border-white/[0.12] shadow-2xl text-center flex flex-col items-center">
-            <div className="w-16 h-16 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center mb-4 text-indigo-400">
+          <div className={`w-full max-w-md p-6 sm:p-8 rounded-3xl border shadow-2xl text-center flex flex-col items-center ${
+            theme === 'kitty'
+              ? 'bg-white border-pink-200 text-pink-950 shadow-pink-200/50'
+              : theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+              : 'bg-[#140e2b] border-white/[0.12] text-white'
+          }`}>
+            <div className={`w-16 h-16 rounded-full border flex items-center justify-center mb-4 ${
+              theme === 'kitty'
+                ? 'bg-indigo-100 border-indigo-300 text-indigo-600'
+                : 'bg-indigo-500/20 border-indigo-400/40 text-indigo-400'
+            }`}>
               <Trophy className="w-8 h-8" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">¡Tiempo Agotado!</h3>
-            <p className="text-sm text-slate-300 mb-6">
+            <h3 className={`text-2xl font-bold mb-2 tracking-tight ${
+              theme === 'kitty' ? 'text-pink-950 font-black' : theme === 'light' ? 'text-slate-900 font-black' : 'text-white'
+            }`}>¡Tiempo Agotado!</h3>
+            <p className={`text-sm mb-6 ${
+              theme === 'kitty' ? 'text-pink-800/80' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+            }`}>
               Has puesto a prueba tu velocidad de descomposición léxica.
             </p>
 
-            <div className="w-full py-4 px-6 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-6 flex justify-around tabular-nums">
+            <div className={`w-full py-4 px-6 rounded-2xl border mb-6 flex justify-around tabular-nums ${
+              theme === 'kitty'
+                ? 'bg-pink-50/70 border-pink-200'
+                : theme === 'light'
+                ? 'bg-slate-50 border-slate-200'
+                : 'bg-white/[0.04] border-white/[0.08]'
+            }`}>
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Puntuación</span>
-                <span className="text-2xl font-extrabold text-white">{score}</span>
+                <span className={`text-[11px] uppercase tracking-wider block mb-0.5 ${
+                  theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Puntuación</span>
+                <span className={`text-2xl font-extrabold ${theme === 'kitty' ? 'text-pink-950' : 'text-white'}`}>{score}</span>
               </div>
-              <div className="w-px bg-white/10" />
+              <div className={`w-px ${theme === 'kitty' ? 'bg-pink-200' : theme === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-0.5">Términos Hechos</span>
-                <span className="text-2xl font-extrabold text-indigo-300">{termsCompleted.length}</span>
+                <span className={`text-[11px] uppercase tracking-wider block mb-0.5 ${
+                  theme === 'kitty' ? 'text-pink-600' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Términos Hechos</span>
+                <span className={`text-2xl font-extrabold ${theme === 'kitty' ? 'text-pink-700' : 'text-indigo-300'}`}>{termsCompleted.length}</span>
               </div>
             </div>
 
@@ -424,7 +507,11 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
               <button
                 type="button"
                 onClick={handleRestart}
-                className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-lg shadow-indigo-600/30"
+                className={`flex-1 py-3 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] duration-150 cursor-pointer shadow-lg ${
+                  theme === 'kitty'
+                    ? 'bg-pink-500 hover:bg-pink-600 shadow-pink-500/30'
+                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
+                }`}
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Jugar de nuevo</span>
@@ -435,7 +522,13 @@ export const TermBuilderGame: React.FC<TermBuilderGameProps> = ({
                   gameAudio.playTap();
                   onBack();
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-200 font-bold text-sm transition-transform active:scale-[0.98] duration-150 cursor-pointer"
+                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-transform active:scale-[0.98] duration-150 cursor-pointer border ${
+                  theme === 'kitty'
+                    ? 'bg-pink-100 hover:bg-pink-200 border-pink-200 text-pink-900'
+                    : theme === 'light'
+                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
+                    : 'bg-white/[0.06] hover:bg-white/[0.12] border-white/[0.1] text-slate-200'
+                }`}
               >
                 Regresar
               </button>

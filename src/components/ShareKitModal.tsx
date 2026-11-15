@@ -27,6 +27,7 @@ export const ShareKitModal: React.FC<ShareKitModalProps> = ({
   kit,
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progressStatus, setProgressStatus] = useState<string>('');
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export const ShareKitModal: React.FC<ShareKitModalProps> = ({
     setGeneratedUrl(null);
     setCopied(false);
     setErrorMessage(null);
+    setProgressStatus('');
   }, [isOpen, kit?.id]);
 
   useEffect(() => {
@@ -51,8 +53,11 @@ export const ShareKitModal: React.FC<ShareKitModalProps> = ({
   const handleGenerateAndShare = async () => {
     setIsGenerating(true);
     setErrorMessage(null);
+    setProgressStatus('Preparando material...');
     try {
-      const { shareUrl } = await googleDriveService.shareKitPublicly(kit);
+      const { shareUrl } = await googleDriveService.shareKitPublicly(kit, undefined, undefined, (status) => {
+        setProgressStatus(status);
+      });
       setGeneratedUrl(shareUrl);
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(shareUrl);
@@ -64,6 +69,7 @@ export const ShareKitModal: React.FC<ShareKitModalProps> = ({
       setErrorMessage(err?.message || 'No se pudo generar el enlace compartido en Google Drive.');
     } finally {
       setIsGenerating(false);
+      setProgressStatus('');
     }
   };
 
@@ -195,16 +201,16 @@ export const ShareKitModal: React.FC<ShareKitModalProps> = ({
             type="button"
             onClick={handleGenerateAndShare}
             disabled={isGenerating}
-            className="active-press w-full py-3.5 px-5 rounded-2xl bg-white hover:bg-slate-100 text-zinc-950 font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(255,255,255,0.18),inset_0_1px_0_rgba(255,255,255,1)] flex items-center justify-center gap-2.5 cursor-pointer transition-[transform,background-color] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.985] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="active-press w-full py-3.5 px-5 rounded-2xl bg-white hover:bg-slate-100 text-zinc-950 font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(255,255,255,0.18),inset_0_1px_0_rgba(255,255,255,1)] flex items-center justify-center gap-2.5 cursor-pointer transition-[transform,background-color] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.985] disabled:opacity-75 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin text-zinc-950" />
-                <span>Generando enlace de contenido en Google Drive...</span>
+                <RefreshCw className="w-4 h-4 animate-spin text-zinc-950 shrink-0" />
+                <span className="truncate">{progressStatus || 'Optimizando material y generando enlace...'}</span>
               </>
             ) : (
               <>
-                <Cloud className="w-4 h-4 text-sky-600" />
+                <Cloud className="w-4 h-4 text-sky-600 shrink-0" />
                 <span>Crear Enlace Público en Google Drive</span>
               </>
             )}

@@ -37,6 +37,7 @@ import {
 } from './materiaService';
 import { getStoredTheme, setStoredTheme } from './themeService';
 import { generateKitQuestions } from '../engine/contentProcessor';
+import { compressAssetsForSharing } from '../utils/imageCompressor';
 
 export type DriveSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'unlinked' | 'needs_client_id' | 'needs_reauth';
 
@@ -3622,8 +3623,10 @@ export const googleDriveService = {
   async shareKitPublicly(
     kit: StudyKit,
     _mode?: string,
-    _subtopic?: string
+    _subtopic?: string,
+    onProgress?: (statusText: string) => void
   ): Promise<{ shareUrl: string; fileId: string }> {
+    onProgress?.('Verificando acceso a Google Drive...');
     let token = this.getValidAccessToken();
     if (!token && this.isLinked()) {
       token = await this.attemptSilentTokenRefresh();
@@ -3636,15 +3639,29 @@ export const googleDriveService = {
     }
 
     // 1. Obtener o crear carpeta raíz ContraReloj_CloudData y subcarpeta 'shared_kits'
+    onProgress?.('Conectando carpetas en Google Drive...');
     const rootFolderId = await this.getOrCreateFolder(token, DRIVE_ROOT_FOLDER);
     const sharedFolderId = await this.getOrCreateFolder(token, 'shared_kits', rootFolderId);
 
     // 2. Preparar el payload del kit basado exclusivamente en su contenido original con imágenes hidratadas
+    onProgress?.('Preparando material y documentos...');
     let hydratedKit = kit;
     try {
       hydratedKit = await hydrateKitAssets(kit);
     } catch (e) {
       console.warn('[GoogleDriveService] Aviso hidratando activos para compartir:', e);
+    }
+
+    let sharedAssets = hydratedKit.assets || kit.assets || [];
+    if (sharedAssets.length > 0) {
+      onProgress?.(`Optimizando ${sharedAssets.length} imágenes para enlace rápido...`);
+      try {
+        sharedAssets = await compressAssetsForSharing(sharedAssets, (done, total) => {
+          onProgress?.(`Optimizando imágenes para compartir (${done}/${total})...`);
+        });
+      } catch (compErr) {
+        console.warn('[GoogleDriveService] Aviso optimizando imágenes para compartir:', compErr);
+      }
     }
 
     const contentBasedKit: StudyKit = {
@@ -3657,7 +3674,7 @@ export const googleDriveService = {
       sourceText: kit.sourceText,
       sourceMaterials: kit.sourceMaterials,
       chunks: kit.chunks,
-      assets: hydratedKit.assets || kit.assets || [],
+      assets: sharedAssets,
       flashcards: kit.flashcards,
       podcast: null,
       updatedAt: kit.updatedAt || Date.now(),
@@ -3668,6 +3685,7 @@ export const googleDriveService = {
     const fileName = `contrareloj_shared_kit_${kit.id}.json`;
 
     // 3. Subir o actualizar el kit compartido
+    onProgress?.('Subiendo kit optimizado a Google Drive...');
     const fileId = await this.uploadOrUpdateJson(token, sharedFolderId, fileName, {
       version: 2,
       kit: contentBasedKit,
@@ -3676,6 +3694,7 @@ export const googleDriveService = {
     });
 
     // 4. Asignar permiso público en Drive (role: reader, type: anyone) con supportsAllDrives
+    onProgress?.('Generando permisos públicos en Google Drive...');
     try {
       const permRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`, {
         method: 'POST',
@@ -3697,6 +3716,7 @@ export const googleDriveService = {
     }
 
     // 5. Registrar kit en el proxy de Vercel para resolución instantánea del enlace corto
+    onProgress?.('Sincronizando enlace corto rápido...');
     try {
       await fetch('/api/drive/shared', {
         method: 'POST',
@@ -3710,7 +3730,7 @@ export const googleDriveService = {
             ownerName: currentState.userName || 'Usuario de ContraReloj+',
           },
         }),
-        signal: AbortSignal.timeout(3500),
+        signal: AbortSignal.timeout(4000),
       });
     } catch (regErr) {
       console.warn('[GoogleDriveService] Aviso registrando kit en caché del proxy:', regErr);
