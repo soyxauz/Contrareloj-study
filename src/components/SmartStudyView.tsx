@@ -45,6 +45,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { findBestChunkAndExcerpt, extractSpecificPassage, resolveRealPageNumber } from '../engine/ragExcerptExtractor';
+import { chunkDocument } from '../engine/chunker';
 import { generateKitQuestions } from '../engine/contentProcessor';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
@@ -645,16 +646,21 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const handleOpenRAGModal = (targetQ: Question, preferredAnswerText?: string) => {
     const rawAnswerText = preferredAnswerText || (targetQ.options && targetQ.correctIndex !== undefined ? targetQ.options[targetQ.correctIndex] : '') || '';
     
-    // Buscar el chunk y pasaje más exacto en kit.chunks
+    // Obtener fragmentos disponibles o regenerar a partir de sourceText si el kit no tenía chunks indexados
+    const effectiveChunks = (kit.chunks && kit.chunks.length > 0)
+      ? kit.chunks
+      : (kit.sourceText ? chunkDocument(kit.sourceText) : []);
+
+    // Buscar el chunk y pasaje con mayor especificidad semántica anclado en la respuesta correcta
     const { bestChunk, passage } = findBestChunkAndExcerpt({
-      chunks: kit.chunks || [],
+      chunks: effectiveChunks,
       question: targetQ.question,
       correctAnswer: rawAnswerText,
       concept: targetQ.topic,
       preferredChunkId: targetQ.sourceChunkId,
     });
 
-    const candidateChunk = bestChunk || kit.chunks?.find(c => c.id === targetQ.sourceChunkId);
+    const candidateChunk = bestChunk || effectiveChunks.find(c => c.id === targetQ.sourceChunkId);
     const fullText = candidateChunk?.text || targetQ.sourceChunkText || targetQ.explanation || '';
 
     let finalExcerpt = passage.excerpt;

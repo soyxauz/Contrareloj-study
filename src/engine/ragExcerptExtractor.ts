@@ -79,12 +79,50 @@ export function splitDocumentIntoSentences(text: string): string[] {
 }
 
 /**
- * Extrae tokens sustantivos sin acentos ni stopwords
+ * Repara textos de PDF con saltos de línea con guión (de-hyphenation) y artefactos de OCR
+ */
+export function cleanDocumentText(text: string): string {
+  if (!text) return '';
+  return text
+    // Reparar palabras cortadas por salto de línea con guión (ej. farmaco- lógico -> farmacológico, hemo- globina -> hemoglobina)
+    .replace(/(\b[a-zA-ZáéíóúñÁÉÍÓÚÑ]{2,})-\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ]{2,}\b)/g, (_m, p1, p2) => p1 + p2)
+    // Normalizar ligaduras y errores OCR comunes
+    .replace(/q11elas/gi, 'que las')
+    .replace(/autoin1nune/gi, 'autoinmune')
+    .replace(/cuau\s*[·.]\s*o/gi, 'cuatro')
+    .replace(/f[aá]rn,acos/gi, 'fármacos');
+}
+
+/**
+ * Normaliza términos médicos para equiparar variantes fonéticas y sinónimos clínicos
+ * (ej. glucosilada <-> glicosilada <-> glicocilada <-> glicada, HbA1c <-> A1C, glucemia <-> glicemia <-> glucosa)
+ */
+export function normalizeMedicalTerm(token: string): string {
+  if (!token) return '';
+  const clean = token.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/^gl[ui]c[oas][sc]ila\w*$/.test(clean) || /^gl[ui]cad\w*$/.test(clean)) {
+    return 'norm_glucosilad';
+  }
+  if (/^(hb)?[-_]?a1c$/i.test(clean)) {
+    return 'norm_hba1c';
+  }
+  if (/^gl[ui]c[eo]m\w*$/.test(clean) || /^glucos\w*$/.test(clean)) {
+    return 'norm_glucosa';
+  }
+  if (/^estatin\w*$/.test(clean)) {
+    return 'norm_estatina';
+  }
+  return clean;
+}
+
+/**
+ * Extrae tokens sustantivos sin acentos ni stopwords, con normalización médica y de-hyphenation
  */
 export function extractMeaningfulTokens(text: string): Set<string> {
   if (!text) return new Set();
 
-  const normalized = text
+  const cleaned = cleanDocumentText(text);
+  const normalized = cleaned
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Quitar tildes
@@ -95,7 +133,16 @@ export function extractMeaningfulTokens(text: string): Set<string> {
     .map(w => w.trim())
     .filter(w => w.length >= 3 && !SPANISH_STOPWORDS.has(w));
 
-  return new Set(words);
+  const result = new Set<string>();
+  for (const w of words) {
+    result.add(w);
+    const medNorm = normalizeMedicalTerm(w);
+    if (medNorm && medNorm !== w) {
+      result.add(medNorm);
+    }
+  }
+
+  return result;
 }
 
 export interface SpecificPassageResult {
@@ -123,61 +170,75 @@ function scoreSentence(
   if (sentenceTokens.size === 0) return 0;
 
   let score = 0;
+  let answerMatches = 0;
 
-  // 1. Coincidencia con tokens de la respuesta correcta (prioridad máxima: peso 3.0)
+  // 1. Coincidencia con tokens de la respuesta correcta (prioridad máxima absoluta)
   for (const t of answerTokens) {
     if (sentenceTokens.has(t)) {
-      score += t.length >= 6 ? 4.0 : 3.0; // Bonus a términos médicos/técnicos largos
+      score += t.startsWith('norm_') ? 25.0 : 18.0; // Ponderación dominante para términos de respuesta
+      answerMatches++;
     }
   }
 
-  // 2. Coincidencia con el concepto evaluado (peso 2.0)
-  for (const t of conceptTokens) {
-    if (sentenceTokens.has(t)) {
-      score += t.length >= 6 ? 3.0 : 2.0;
-    }
-  }
+  // 2. Bonus de frase literal continua de la respuesta
+  if (cleanAnswerText && cleanAnswerText.length >= 6) {
+    const normSentence = cleanDocumentText(sentence).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normAnswer = cleanDocumentText(cleanAnswerText).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // 3. Coincidencia con la pregunta (peso 1.5)
-  for (const t of queryTokens) {
-    if (sentenceTokens.has(t)) {
-      score += t.length >= 6 ? 2.5 : 1.5;
-    }
-  }
-
-  // 4. Bonus de frase literal continua si contiene fragmentos de 3 o más palabras de la respuesta
-  if (cleanAnswerText && cleanAnswerText.length >= 8) {
-    const normSentence = sentence.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const normAnswer = cleanAnswerText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    if (normSentence.includes(normAnswer.slice(0, 30))) {
-      score += 20.0; // Bonificación decisiva si contiene el cuerpo de la respuesta correcta
+    if (normSentence.includes(normAnswer.slice(0, 25))) {
+      score += 35.0; // Coincidencia textual directa con el enunciado de la respuesta
+      answerMatches++;
     } else {
-      // Subcadenas de 3 palabras contiguas
-      const ansWords = normAnswer.split(/\s+/).filter(w => w.length >= 3);
-      for (let i = 0; i < ansWords.length - 2; i++) {
-        const trigram = `${ansWords[i]} ${ansWords[i+1]} ${ansWords[i+2]}`;
-        if (normSentence.includes(trigram)) {
-          score += 6.0;
+      const ansWords = normAnswer.split(/\s+/).filter(w => w.length >= 3 && !SPANISH_STOPWORDS.has(w));
+      for (let i = 0; i < ansWords.length - 1; i++) {
+        const bigram = `${ansWords[i]} ${ansWords[i+1]}`;
+        if (normSentence.includes(bigram)) {
+          score += 12.0;
+          answerMatches++;
         }
       }
     }
   }
 
-  // 5. Bonus de frase literal de la pregunta (si contiene trigramas clave del enunciado)
-  if (cleanQuestionText && cleanQuestionText.length >= 10) {
-    const normSentence = sentence.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const normQuery = cleanQuestionText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const qWords = normQuery.split(/\s+/).filter(w => w.length >= 3 && !SPANISH_STOPWORDS.has(w));
-    for (let i = 0; i < qWords.length - 1; i++) {
-      const bigram = `${qWords[i]} ${qWords[i+1]}`;
-      if (normSentence.includes(bigram)) {
-        score += 3.5;
+  // 3. Coincidencia con el concepto evaluado
+  for (const t of conceptTokens) {
+    if (sentenceTokens.has(t)) {
+      score += t.startsWith('norm_') ? 4.0 : 2.5;
+    }
+  }
+
+  // 4. Coincidencia con la pregunta (filtrando boilerplate genérico)
+  const GENERIC_BOILERPLATE = /^(american|diabetes|association|ada|asociacion|mellitus|capitulo|segun|cual|siguientes|paciente|diagnostico)$/i;
+  for (const t of queryTokens) {
+    if (sentenceTokens.has(t)) {
+      if (GENERIC_BOILERPLATE.test(t)) {
+        score += 0.5; // Muy bajo para no distorsionar con introducciones generales
+      } else {
+        score += t.length >= 6 ? 4.0 : 2.5; // Alto para términos específicos (ej. 2009, criterio, meses)
       }
     }
   }
 
-  // Normalización suave para evitar sesgo extremo por longitud desmedida
+  // 5. Bonus de frase literal de la pregunta (solo trigramas específicos)
+  if (cleanQuestionText && cleanQuestionText.length >= 10) {
+    const normSentence = cleanDocumentText(sentence).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normQuery = cleanDocumentText(cleanQuestionText).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const qWords = normQuery.split(/\s+/).filter(w => w.length >= 3 && !SPANISH_STOPWORDS.has(w) && !GENERIC_BOILERPLATE.test(w));
+    for (let i = 0; i < qWords.length - 1; i++) {
+      const bigram = `${qWords[i]} ${qWords[i+1]}`;
+      if (normSentence.includes(bigram)) {
+        score += 4.0;
+      }
+    }
+  }
+
+  // 6. PENALIZACIÓN CRÍTICA: Si la pregunta tiene una respuesta objetivo, pero esta oración
+  // NO contiene NINGÚN token de la respuesta, su puntuación se restringe severamente para que
+  // párrafos introductorios generales jamás puedan vencer a la evidencia real de la respuesta.
+  if (answerTokens.size > 0 && answerMatches === 0) {
+    score = Math.min(5.0, score * 0.25);
+  }
+
   const lengthDampener = Math.min(1.2, Math.max(0.7, 40 / Math.max(1, sentenceTokens.size)));
   return score * lengthDampener;
 }
@@ -271,7 +332,8 @@ export function extractSpecificPassage(params: {
 }
 
 /**
- * Escanea la totalidad de fragmentos del kit para hallar aquel con mayor anclaje textual directo
+ * Escanea la totalidad de fragmentos del kit para hallar aquel con mayor anclaje textual directo,
+ * priorizando de forma absoluta los fragmentos que contienen la respuesta correcta.
  */
 export function findBestChunkAndExcerpt(params: {
   chunks: DocumentChunk[];
@@ -292,48 +354,60 @@ export function findBestChunkAndExcerpt(params: {
     return { bestChunk: null, passage: emptyResult };
   }
 
-  // 1. Evaluar chunk preferido si existe
-  let preferredChunk = preferredChunkId ? chunks.find(c => c.id === preferredChunkId) : null;
-  let preferredPassage: SpecificPassageResult | null = null;
+  const answerTokens = extractMeaningfulTokens(correctAnswer);
 
-  if (preferredChunk) {
-    preferredPassage = extractSpecificPassage({
-      fullText: preferredChunk.text,
-      question,
-      correctAnswer,
-      concept,
-    });
-  }
-
-  // 2. Escanear todos los fragmentos exhaustivamente para garantizar que NUNCA se elija
-  // un chunk erróneo solo porque el preferido tuvo una coincidencia débil o marginal
-  let topChunk: DocumentChunk = preferredChunk || chunks[0];
-  let topPassage: SpecificPassageResult = preferredPassage || extractSpecificPassage({
-    fullText: topChunk.text,
-    question,
-    correctAnswer,
-    concept,
-  });
-
-  for (const chunk of chunks) {
-    if (preferredChunk && chunk.id === preferredChunk.id) continue;
-
-    const candidatePassage = extractSpecificPassage({
+  const evaluateChunk = (chunk: DocumentChunk) => {
+    const passage = extractSpecificPassage({
       fullText: chunk.text,
       question,
       correctAnswer,
       concept,
     });
 
-    if (candidatePassage.score > topPassage.score) {
-      topPassage = candidatePassage;
-      topChunk = chunk;
-      // Solo terminar anticipadamente si encontramos una coincidencia casi perfecta
-      if (topPassage.score >= 35.0) break;
+    // Bonus decisivo si el fragmento contiene los términos de la respuesta correcta
+    let chunkBonus = 0;
+    if (answerTokens.size > 0) {
+      const chunkTokens = extractMeaningfulTokens(chunk.text);
+      let matchCount = 0;
+      for (const t of answerTokens) {
+        if (chunkTokens.has(t)) matchCount++;
+      }
+      if (matchCount > 0) {
+        chunkBonus = 45.0 * (matchCount / answerTokens.size);
+      }
+    }
+
+    return {
+      chunk,
+      passage,
+      effectiveScore: passage.score + chunkBonus,
+    };
+  };
+
+  let bestEvaluation: { chunk: DocumentChunk; passage: SpecificPassageResult; effectiveScore: number } | null = null;
+
+  for (const chunk of chunks) {
+    const evalResult = evaluateChunk(chunk);
+    if (!bestEvaluation || evalResult.effectiveScore > bestEvaluation.effectiveScore) {
+      bestEvaluation = evalResult;
     }
   }
 
-  return { bestChunk: topChunk, passage: topPassage };
+  // Si había un preferredChunk y su score es equivalente o superior al mejor, mantenerlo por afinidad de origen
+  if (preferredChunkId && bestEvaluation) {
+    const preferredChunk = chunks.find(c => c.id === preferredChunkId);
+    if (preferredChunk && preferredChunk.id !== bestEvaluation.chunk.id) {
+      const prefEval = evaluateChunk(preferredChunk);
+      if (prefEval.effectiveScore >= bestEvaluation.effectiveScore * 0.95 && prefEval.effectiveScore >= 20.0) {
+        bestEvaluation = prefEval;
+      }
+    }
+  }
+
+  return {
+    bestChunk: bestEvaluation ? bestEvaluation.chunk : chunks[0],
+    passage: bestEvaluation ? bestEvaluation.passage : extractSpecificPassage({ fullText: chunks[0].text, question, correctAnswer, concept })
+  };
 }
 
 /**
