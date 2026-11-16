@@ -178,9 +178,9 @@ export const PracticeTestView: React.FC<PracticeTestViewProps> = ({ kit }) => {
   const currentQ = activeTestQuestions[currentIdx];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-2.5 sm:px-6 py-4 sm:py-8">
       {/* Encabezado del Simulador */}
-      <div className="flex items-center justify-between mb-6 pb-6 border-b border-thea-border">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 sm:mb-6 pb-5 sm:pb-6 border-b border-thea-border">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600 text-white">
