@@ -147,9 +147,11 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
       .then(res => {
         if (!isMounted) return;
         if (res && res.imageUrl) {
+          // Mostrar imagen de inmediato sin esperar el procesamiento de canvas
+          setImageResult(res);
           cleanImageBlackBackground(res.imageUrl).then(cleaned => {
-            if (!isMounted) return;
-            setImageResult({ ...res, imageUrl: cleaned });
+            if (!isMounted || cleaned === res.imageUrl) return;
+            setImageResult(prev => prev ? { ...prev, imageUrl: cleaned } : null);
           });
         } else {
           // Si no hubo imagen web estrictamente pertinente, verificar activo del documento
