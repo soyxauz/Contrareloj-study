@@ -102,12 +102,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="sticky top-0 z-50 bg-thea-surface/95 border-b border-thea-border/60 shadow-sm backdrop-blur-md thea-glass-chrome">
+    <header className="sticky top-0 z-50 w-full max-w-full overflow-hidden bg-thea-surface/95 border-b border-thea-border/60 shadow-sm backdrop-blur-md thea-glass-chrome">
       {/* Top Brand & Status Bar */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-1.5 sm:gap-4 min-w-0">
         {/* Left Side: Logo & Minimal Wordmark + 3-Button Theme Switcher */}
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 cursor-pointer shrink-0" onClick={() => onSelectMode('home')}>
             {theme === 'kitty' ? (
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 tracking-tight shadow-sm transition-transform active:scale-95 bg-gradient-to-br from-pink-500 to-rose-400 p-0.5 shadow-pink-500/30 overflow-hidden">
                 <img
@@ -126,13 +126,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 C
               </div>
             )}
-            <div className="flex items-center whitespace-nowrap">
+            <div className="flex items-center whitespace-nowrap min-w-0">
               <span className={`text-sm sm:text-base font-semibold tracking-tight ${
                 theme === 'dark' ? 'text-white' : 'text-zinc-950'
               }`}>
                 {theme === 'kitty' ? 'Kitty' : 'ContraReloj'}
               </span>
-              <span className={`ml-1 text-xs font-normal ${
+              <span className={`hidden sm:inline ml-1 text-xs font-normal ${
                 theme === 'kitty' ? 'text-pink-600 font-medium' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
               }`}>Study</span>
             </div>
@@ -352,7 +352,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Navigation Tabs — only visible in study modes */}
       {showModeTabs && (
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-2 sm:py-2.5 scrollbar-none border-t border-thea-border/40 text-xs sm:text-sm font-medium touch-pan-x">
+        <div className="w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-2 sm:py-2.5 scrollbar-none border-t border-thea-border/40 text-xs sm:text-sm font-medium touch-pan-x min-w-0">
           {modes.map(mode => {
             const active = currentMode === mode.id;
             return (

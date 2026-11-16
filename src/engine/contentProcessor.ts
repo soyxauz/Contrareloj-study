@@ -1055,14 +1055,11 @@ export async function processContentAsync(
     });
 
     if (bestChunk) {
-      if (!q.sourceChunkId) {
-        q.sourceChunkId = bestChunk.id;
-        q.sourceChunkText = bestChunk.text;
-        q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
-      } else if (!q.sourcePageOrSlide || q.sourcePageOrSlide === bestChunk.pageOrSlide) {
-        q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
-      }
-      q.sourceExcerpt = q.sourceExcerpt || passage.excerpt;
+      // Si se identificó un chunk de mayor precisión textual o la pregunta no tenía texto de origen válido, vincular el mejor chunk
+      q.sourceChunkId = bestChunk.id;
+      q.sourceChunkText = bestChunk.text;
+      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
+      q.sourceExcerpt = passage.excerpt;
 
       if (!q.sourceAsset && assets.length > 0) {
         const targetChunk = chunks.find(c => c.id === q.sourceChunkId) || bestChunk;

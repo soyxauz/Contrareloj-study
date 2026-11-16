@@ -451,10 +451,10 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+    <div className="w-full max-w-4xl mx-auto px-2.5 sm:px-6 py-4 sm:py-8 min-w-0 overflow-x-hidden">
       {/* Header & Tools */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 sm:mb-6 pb-5 sm:pb-6 border-b border-thea-border">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 sm:mb-6 pb-5 sm:pb-6 border-b border-thea-border w-full max-w-full min-w-0">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             {currentKitState.studyGuideDepth === 'ultra' ? (
               <>
@@ -493,7 +493,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
         </div>
 
         {/* Buttons */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 max-w-full min-w-0 scrollbar-none touch-pan-x">
           {activeTab === 'guide' && (
             <>
               {/* Botón Compartir Kit */}
@@ -605,7 +605,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       )}
 
       {/* ── Subtabs: Guía Teórica vs Galería Visual ────────────────────────── */}
-      <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 p-1 sm:p-1.5 rounded-2xl border shadow-sm ${
+      <div className={`w-full max-w-full min-w-0 flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 p-1 sm:p-1.5 rounded-2xl border shadow-sm ${
         theme === 'light'
           ? 'bg-slate-100/80 border-slate-200'
           : theme === 'kitty'
@@ -821,8 +821,8 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-8 md:p-10 border ${
+            <div className="space-y-4 w-full max-w-full min-w-0">
+              <div className={`w-full max-w-full overflow-hidden break-words rounded-2xl sm:rounded-3xl p-4 sm:p-8 md:p-10 border ${
                 theme === 'dark'
                   ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
                   : 'thea-glass-card text-zinc-950'

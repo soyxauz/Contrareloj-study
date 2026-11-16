@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import type { StudyKit, Question, StudyMode, DocumentAsset, ShortAnswerEvaluation, SmartStudyTypeFilters } from '../types';
+import type { StudyKit, Question, StudyMode, DocumentAsset, DocumentChunk, ShortAnswerEvaluation, SmartStudyTypeFilters } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
 import { getAssetById, safeLocalStorageSetItem } from '../services/storageService';
@@ -646,26 +646,95 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const handleOpenRAGModal = (targetQ: Question, preferredAnswerText?: string) => {
     const rawAnswerText = preferredAnswerText || (targetQ.options && targetQ.correctIndex !== undefined ? targetQ.options[targetQ.correctIndex] : '') || '';
     
-    // Obtener fragmentos disponibles o regenerar a partir de sourceText si el kit no tenía chunks indexados
-    const effectiveChunks = (kit.chunks && kit.chunks.length > 0)
-      ? kit.chunks
-      : (kit.sourceText ? chunkDocument(kit.sourceText) : []);
+    // Obtener fragmentos disponibles de todas las fuentes disponibles del kit (incluyendo sourceMaterials, sourceText, otras preguntas y guía de estudio)
+    const chunkPool: DocumentChunk[] = [];
+    const seenTexts = new Set<string>();
+
+    const addChunkSafely = (chunk: DocumentChunk) => {
+      if (!chunk || !chunk.text || chunk.text.trim().length < 20) return;
+      const normalizedPrefix = chunk.text.trim().slice(0, 100);
+      if (seenTexts.has(normalizedPrefix)) return;
+      seenTexts.add(normalizedPrefix);
+      chunkPool.push(chunk);
+    };
+
+    if (kit.chunks && kit.chunks.length > 0) {
+      kit.chunks.forEach(addChunkSafely);
+    }
+    if (kit.sourceMaterials && Array.isArray(kit.sourceMaterials)) {
+      for (const sm of kit.sourceMaterials) {
+        if (sm && sm.rawText && sm.rawText.length > 50) {
+          try {
+            chunkDocument(sm.rawText).forEach(addChunkSafely);
+          } catch {}
+        }
+      }
+    }
+    if (kit.sourceText && kit.sourceText.length > 50) {
+      try {
+        chunkDocument(kit.sourceText).forEach(addChunkSafely);
+      } catch {}
+    }
+    if (kit.questions && kit.questions.length > 0) {
+      kit.questions.forEach((q, idx) => {
+        if (q.sourceChunkText) {
+          addChunkSafely({
+            id: q.sourceChunkId || `q-chunk-${idx}`,
+            chunkIndex: idx,
+            pageOrSlide: q.sourcePageOrSlide,
+            text: q.sourceChunkText,
+            tokenCount: Math.ceil(q.sourceChunkText.length / 4),
+          });
+        }
+      });
+    }
+    if (kit.studyGuideMarkdown && kit.studyGuideMarkdown.length > 100) {
+      try {
+        chunkDocument(kit.studyGuideMarkdown).forEach(addChunkSafely);
+      } catch {}
+    }
+    if (targetQ.sourceChunkText) {
+      addChunkSafely({
+        id: targetQ.sourceChunkId || 'target-q-chunk',
+        chunkIndex: 0,
+        pageOrSlide: targetQ.sourcePageOrSlide,
+        text: targetQ.sourceChunkText,
+        tokenCount: Math.ceil(targetQ.sourceChunkText.length / 4),
+      });
+    }
 
     // Buscar el chunk y pasaje con mayor especificidad semántica anclado en la respuesta correcta
     const { bestChunk, passage } = findBestChunkAndExcerpt({
-      chunks: effectiveChunks,
+      chunks: chunkPool,
       question: targetQ.question,
       correctAnswer: rawAnswerText,
       concept: targetQ.topic,
       preferredChunkId: targetQ.sourceChunkId,
     });
 
-    const candidateChunk = bestChunk || effectiveChunks.find(c => c.id === targetQ.sourceChunkId);
-    const fullText = candidateChunk?.text || targetQ.sourceChunkText || targetQ.explanation || '';
+    const candidateChunk = bestChunk || chunkPool.find(c => c.id === targetQ.sourceChunkId);
+    let fullText = candidateChunk?.text || targetQ.sourceChunkText || targetQ.explanation || '';
 
     let finalExcerpt = passage.excerpt;
     let finalHighlighted = passage.highlightedExcerpt;
     let quality = passage.matchQuality;
+
+    // Si el texto del fragmento no contenía la respuesta pero la explicación de la pregunta sí la detalla textualmente,
+    // utilizar la explicación como pasaje contextual complementario
+    if (quality === 'low' && targetQ.explanation && targetQ.explanation.length > 20) {
+      const expPassage = extractSpecificPassage({
+        fullText: targetQ.explanation,
+        question: targetQ.question,
+        correctAnswer: rawAnswerText,
+        concept: targetQ.topic,
+      });
+      if (expPassage.score > passage.score) {
+        finalExcerpt = expPassage.excerpt;
+        finalHighlighted = expPassage.highlightedExcerpt;
+        fullText = targetQ.explanation;
+        quality = expPassage.matchQuality;
+      }
+    }
 
     // Si el pasaje no tiene resaltado en negrita o se dispone de un sourceExcerpt más específico, asegurar que la zona clave esté destacada
     if (!finalHighlighted || !finalHighlighted.includes('**')) {
@@ -686,7 +755,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       fullText,
       finalExcerpt,
       candidateChunk?.pageOrSlide || targetQ.sourcePageOrSlide,
-      kit.chunks
+      chunkPool
     );
 
     setModalChunk({

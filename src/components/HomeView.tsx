@@ -424,20 +424,20 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
     <div className="max-w-6xl mx-auto px-2.5 sm:px-5 lg:px-6 py-3 sm:py-6">
 
       {/* ── Header de Espacio de Estudio (Estilo Linear / Raycast Studio) ── */}
-      <section className="mb-5 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+      <section className="mb-5 sm:mb-6 w-full max-w-full min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5 w-full max-w-full min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white truncate">
               Tus Study Kits
             </h1>
           </div>
 
           {/* Barra de Acciones Globales Unificada */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 max-w-full min-w-0 scrollbar-none touch-pan-x">
             <button
               type="button"
               onClick={() => onNavigate('create', 'topic')}
-              className={`active-press px-3.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer ${
+              className={`active-press px-3.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0 ${
                 theme === 'dark'
                   ? 'bg-white text-zinc-950 hover:bg-zinc-200'
                   : theme === 'kitty'
@@ -452,7 +452,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               type="button"
               onClick={() => setShowMateriaManagerModal(true)}
-              className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors cursor-pointer font-medium ${
+              className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors cursor-pointer font-medium shrink-0 ${
                 theme === 'dark'
                   ? 'text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/15'
                   : 'thea-glass-pill thea-glass-pill-hover text-slate-700 hover:text-zinc-950'
@@ -474,7 +474,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                     setIsSelectionMode(true);
                   }
                 }}
-                className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium transition-colors cursor-pointer ${
+                className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium transition-colors cursor-pointer shrink-0 ${
                   isSelectionMode
                     ? theme === 'dark'
                       ? 'bg-white/[0.12] border-white/25 text-white'
@@ -495,7 +495,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             <button
               type="button"
               onClick={() => onNavigate('analytics')}
-              className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors cursor-pointer font-medium ${
+              className={`active-press text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors cursor-pointer font-medium shrink-0 ${
                 theme === 'dark'
                   ? 'text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/15'
                   : 'thea-glass-pill thea-glass-pill-hover text-slate-700 hover:text-zinc-950'
@@ -508,10 +508,10 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
         </div>
 
         {/* ── Micro-Tarjetas de Telemetría Studio (Estilo Apple / Linear Studio) ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-6 w-full max-w-full min-w-0">
           {/* Card 1: Racha */}
           <div
-            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+            className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors min-w-0 overflow-hidden ${
               theme === 'dark'
                 ? 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
                 : 'thea-glass-card text-zinc-950'
@@ -559,7 +559,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 2: Preguntas */}
           <div
-            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+            className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors min-w-0 overflow-hidden ${
               theme === 'dark'
                 ? 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
                 : 'thea-glass-card text-zinc-950'
@@ -607,7 +607,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 3: Flashcards */}
           <div
-            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+            className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors min-w-0 overflow-hidden ${
               theme === 'dark'
                 ? 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
                 : 'thea-glass-card text-zinc-950'
@@ -655,7 +655,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
 
           {/* Card 4: Study Kits */}
           <div
-            className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors ${
+            className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col justify-between cursor-default select-none border transition-colors min-w-0 overflow-hidden ${
               theme === 'dark'
                 ? 'bg-white/[0.02] border-white/[0.07] shadow-sm shadow-black/20 text-white'
                 : 'thea-glass-card text-zinc-950'
@@ -869,7 +869,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       : `${mTheme.hex}30`,
                     animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
-                  className={`animate-stagger-item study-kit-card glass-specular group relative text-left p-4 sm:p-6 md:p-7 rounded-2xl sm:rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[190px] sm:min-h-[220px] transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] ${
+                  className={`animate-stagger-item study-kit-card glass-specular group relative text-left p-3.5 sm:p-6 md:p-7 rounded-2xl sm:rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[145px] sm:min-h-[185px] transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] ${
                     isSelectionMode && isKitSelected
                       ? 'ring-2 ring-white/50 border-white shadow-2xl'
                       : isActive

@@ -95,7 +95,8 @@ export function cleanDocumentText(text: string): string {
 
 /**
  * Normaliza términos médicos para equiparar variantes fonéticas y sinónimos clínicos
- * (ej. glucosilada <-> glicosilada <-> glicocilada <-> glicada, HbA1c <-> A1C, glucemia <-> glicemia <-> glucosa)
+ * (ej. glucosilada <-> glicosilada <-> glicocilada <-> glicada, HbA1c <-> A1C, glucemia <-> glicemia <-> glucosa,
+ * oatp1b1, estatinas, miopatía, hipotiroidismo, péptido C, etc.)
  */
 export function normalizeMedicalTerm(token: string): string {
   if (!token) return '';
@@ -106,11 +107,32 @@ export function normalizeMedicalTerm(token: string): string {
   if (/^(hb)?[-_]?a1c$/i.test(clean)) {
     return 'norm_hba1c';
   }
+  if (/^hemoglobin\w*$/.test(clean)) {
+    return 'norm_hemoglobina';
+  }
   if (/^gl[ui]c[eo]m\w*$/.test(clean) || /^glucos\w*$/.test(clean)) {
     return 'norm_glucosa';
   }
   if (/^estatin\w*$/.test(clean)) {
     return 'norm_estatina';
+  }
+  if (/^oatp\w*$/.test(clean)) {
+    return 'norm_oatp1b1';
+  }
+  if (/^hmg[-_]?coa\w*$/.test(clean)) {
+    return 'norm_hmgcoa';
+  }
+  if (/^cyp\w*$/.test(clean)) {
+    return 'norm_cyp';
+  }
+  if (/^miopat\w*$/.test(clean)) {
+    return 'norm_miopatia';
+  }
+  if (/^hipotiroid\w*$/.test(clean)) {
+    return 'norm_hipotiroidismo';
+  }
+  if (/^peptid\w*$/.test(clean)) {
+    return 'norm_peptido';
   }
   return clean;
 }
@@ -394,12 +416,17 @@ export function findBestChunkAndExcerpt(params: {
   }
 
   // Si había un preferredChunk y su score es equivalente o superior al mejor, mantenerlo por afinidad de origen
+  // ÚNICAMENTE si el preferredChunk también contiene evidencia o tokens de la respuesta
   if (preferredChunkId && bestEvaluation) {
     const preferredChunk = chunks.find(c => c.id === preferredChunkId);
     if (preferredChunk && preferredChunk.id !== bestEvaluation.chunk.id) {
-      const prefEval = evaluateChunk(preferredChunk);
-      if (prefEval.effectiveScore >= bestEvaluation.effectiveScore * 0.95 && prefEval.effectiveScore >= 20.0) {
-        bestEvaluation = prefEval;
+      const prefTokens = extractMeaningfulTokens(preferredChunk.text);
+      const prefHasAnswer = answerTokens.size === 0 || [...answerTokens].some(t => prefTokens.has(t));
+      if (prefHasAnswer) {
+        const prefEval = evaluateChunk(preferredChunk);
+        if (prefEval.effectiveScore >= bestEvaluation.effectiveScore * 0.95 && prefEval.effectiveScore >= 20.0) {
+          bestEvaluation = prefEval;
+        }
       }
     }
   }
@@ -467,7 +494,9 @@ export function resolveRealPageNumber(
     const cleanExcerpt = excerpt.replace(/\*\*/g, '').trim();
     const matchPos = findNormalizedSubstringIndex(fullText, cleanExcerpt);
     if (matchPos !== -1) {
-      const textBefore = fullText.slice(0, matchPos + 100);
+      // Tomar estrictamente el texto que precede al extracto (hasta matchPos + 5 por si la etiqueta abre el extracto)
+      // evitando terminantemente capturar la etiqueta de la página siguiente
+      const textBefore = fullText.slice(0, Math.max(1, matchPos + 5));
       const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
       if (matches.length > 0) {
         const lastMatch = matches[matches.length - 1];
@@ -496,7 +525,7 @@ export function resolveRealPageNumber(
       } else {
         const matchPos = excerpt ? findNormalizedSubstringIndex(fullText, excerpt.replace(/\*\*/g, '')) : -1;
         if (matchPos !== -1) {
-          const textBefore = fullText.slice(0, matchPos + 80);
+          const textBefore = fullText.slice(0, Math.max(1, matchPos + 5));
           const matchesBefore = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
           if (matchesBefore.length > 0) {
             const page = parseInt(matchesBefore[matchesBefore.length - 1][1] || matchesBefore[matchesBefore.length - 1][2] || matchesBefore[matchesBefore.length - 1][3], 10);
@@ -515,7 +544,7 @@ export function resolveRealPageNumber(
     for (const chk of allChunks) {
       if (chk.text && findNormalizedSubstringIndex(chk.text, cleanExcerpt) !== -1) {
         const chkPos = findNormalizedSubstringIndex(chk.text, cleanExcerpt);
-        const textBefore = chk.text.slice(0, chkPos + 100);
+        const textBefore = chk.text.slice(0, Math.max(1, chkPos + 5));
         const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
         if (matches.length > 0) {
           const lastMatch = matches[matches.length - 1];

@@ -1341,7 +1341,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen min-h-[100dvh] bg-thea-bg flex flex-col selection:bg-violet-600 selection:text-white ${
+    <div className={`w-full max-w-full overflow-x-hidden min-w-0 min-h-screen min-h-[100dvh] bg-thea-bg flex flex-col selection:bg-violet-600 selection:text-white ${
       theme === 'dark' ? 'text-slate-100' : 'text-zinc-950'
     } ${
       isScreenFittingMode ? 'md:h-screen md:max-h-screen md:overflow-hidden' : ''
@@ -1381,7 +1381,7 @@ export const App: React.FC = () => {
       )}
 
       {/* Main Mode View - always scrollable whenever content exceeds screen height */}
-      <main className={`flex-1 min-h-0 flex flex-col ${isScreenFittingMode ? 'overflow-y-auto p-0 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-4' : 'overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-12'}`}>
+      <main className={`w-full max-w-full overflow-x-hidden min-w-0 flex-1 min-h-0 flex flex-col ${isScreenFittingMode ? 'overflow-y-auto p-0 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-4' : 'overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-12'}`}>
         <ViewErrorBoundary onReset={() => setCurrentMode('home')}>
         {currentMode === 'home' && (
           <HomeView
