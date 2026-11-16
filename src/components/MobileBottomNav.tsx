@@ -51,9 +51,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       aria-label="Navegación Móvil Principal"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-thea-surface/98 border-t border-thea-border px-2 py-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.15)] backdrop-blur-md thea-glass-chrome safe-area-pb"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-thea-surface/98 border-t border-thea-border px-2 py-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.15)] backdrop-blur-md thea-glass-chrome safe-area-pb w-full max-w-full"
     >
-      <div className="flex items-center justify-around max-w-md mx-auto">
+      <div className="flex items-center justify-around w-full max-w-md mx-auto">
         {/* 1. Inicio */}
         <button
           type="button"

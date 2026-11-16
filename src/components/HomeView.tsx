@@ -896,8 +896,8 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   </div>
 
                   {/* Top Area: Título y Menú de tres puntos */}
-                  <div className="flex items-start justify-between gap-3 relative z-10">
-                    <div className="flex items-start gap-2.5 max-w-[85%]">
+                  <div className="flex items-start justify-between gap-2.5 relative z-10 w-full max-w-full min-w-0">
+                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
                       {isSelectionMode && (
                         <div
                           onClick={(e) => {
@@ -915,10 +915,10 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                           <Check className="w-3.5 h-3.5 stroke-[3]" />
                         </div>
                       )}
-                      <div>
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap min-w-0">
                           <span
-                            className="text-[11px] font-bold tracking-wider uppercase"
+                            className="text-[11px] font-bold tracking-wider uppercase truncate"
                             style={{ color: mTheme.hex }}
                           >
                             {kit.category || 'General'}
@@ -930,7 +930,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                             </span>
                           )}
                         </div>
-                        <h3 className={`font-bold text-base sm:text-lg leading-snug line-clamp-2 tracking-tight transition-colors ${
+                        <h3 className={`font-bold text-base sm:text-lg leading-snug line-clamp-2 tracking-tight transition-colors break-words ${
                           theme === 'dark' ? 'text-white' : 'text-zinc-950'
                         }`}>
                           {kit.title}
@@ -1048,9 +1048,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   </div>
 
                   {/* Bottom Area: Estadísticas + Micro-barra de progreso con respiración amplia */}
-                  <div className="mt-5 sm:mt-7 relative z-10 space-y-2.5 sm:space-y-3">
+                  <div className="mt-5 sm:mt-7 relative z-10 space-y-2.5 sm:space-y-3 w-full max-w-full min-w-0">
                     {/* Estadísticas del kit */}
-                    <div className={`flex items-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs font-semibold flex-wrap tabular-nums ${
+                    <div className={`flex items-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs font-semibold flex-wrap tabular-nums w-full max-w-full min-w-0 ${
                       theme === 'dark' ? 'text-white/90' : 'text-slate-800'
                     }`}>
                       <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
