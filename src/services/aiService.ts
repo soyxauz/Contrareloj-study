@@ -3137,10 +3137,29 @@ export function shuffleOptionsWithEqualProbability(
   return { options: shuffled, correctIndex: targetSlot };
 }
 
+/**
+ * Detecta y elimina cualquier lista residual de opciones (ej. A) ..., B) ..., C) ..., D) ...)
+ * que haya sido concatenada al final del enunciado de la pregunta por el modelo o la fuente,
+ * garantizando que el tallo de la pregunta no contenga duplicación con las opciones interactivas.
+ */
+export function stripEmbeddedOptionsFromStem(stem: string): string {
+  if (!stem) return '';
+  const optStartPattern = /(?:(?:\r?\n)+|(?<=[?.!])\s+)(?:\*\*)?(?:\([Aa1]\)|\[[Aa1]\]|[Aa1][\).:\-])(?:\*\*)?\s+/;
+  const optMatch = stem.search(optStartPattern);
+  if (optMatch !== -1) {
+    const candidateTail = stem.slice(optMatch);
+    const hasSecondOption = /(?:(?:\r?\n)+|\s+)(?:\*\*)?(?:\([Bb2]\)|\[[Bb2]\]|[Bb2][\).:\-])(?:\*\*)?\s+/.test(candidateTail);
+    if (hasSecondOption) {
+      return stem.slice(0, optMatch).trim();
+    }
+  }
+  return stem.trim();
+}
+
 /** Normaliza contexto y pregunta preservando íntegramente cualquier caso clínico o supuesto fáctico */
 function combineCaseContextAndQuestion(contexto: string, pregunta: string, _isCase?: boolean): string {
-  const cleanQ = (pregunta || '').trim();
-  const cleanCtx = (contexto || '').trim();
+  const cleanQ = stripEmbeddedOptionsFromStem((pregunta || '').trim());
+  const cleanCtx = stripEmbeddedOptionsFromStem((contexto || '').trim());
   if (!cleanCtx) return cleanQ;
   if (!cleanQ) return cleanCtx;
   if (cleanQ.toLowerCase().includes(cleanCtx.toLowerCase().slice(0, 25))) {
@@ -3156,11 +3175,12 @@ function combineCaseContextAndQuestion(contexto: string, pregunta: string, _isCa
 /**
  * Normaliza y preserva el enunciado completo de la pregunta pedagógica.
  * Mantiene intacto cualquier caso clínico, supuesto de hecho o contexto descriptivo preliminar
- * junto con la pregunta interrogativa, sin recortes arbitrarios ni truncamiento de palabras.
+ * junto con la pregunta interrogativa, sin recortes arbitrarios ni truncamiento de palabras,
+ * y elimina cualquier bloque residual de opciones incrustadas.
  */
 export function enforceQuestionLengthLimit(questionText: string, _isCaseExplicit?: boolean): string {
   if (!questionText) return '';
-  const clean = questionText.trim();
+  let clean = stripEmbeddedOptionsFromStem(questionText.trim());
   if (!clean) return '';
 
   // Asegurar que si la pregunta contiene un enunciado interrogativo final, cierre adecuadamente
@@ -3434,6 +3454,10 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
     }
   ]
 }
+
+REGLA ESTRICTA DE ENUNCIADOS LIMPIOS (SIN OPCIONES EN EL TALLO):
+- Queda TERMINANTEMENTE PROHIBIDO incluir las opciones A), B), C), D) o 1), 2), 3), 4) dentro del campo "pregunta" o "contexto_o_enunciado".
+- El campo "pregunta" debe contener única y exclusivamente el escenario o caso clínico y la interrogante directa. Las alternativas van exclusivamente en el objeto o arreglo de opciones.
 
 REGLA ESTRICTA DE CALIDAD DE OPCIONES (PROHIBIDO PLACEHOLDERS):
 - Queda TERMINANTEMENTE PROHIBIDO generar opciones como 'Opción A', 'Opción B', 'Opción C', 'Opción D', 'Opción 1', 'Literal A', 'Alternativa 1' o una sola letra.

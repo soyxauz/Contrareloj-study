@@ -76,7 +76,7 @@ import {
   type QuestionSignature,
 } from '../engine/topicInterleaving';
 import { FormattedText } from './FormattedText';
-import { QuestionPrompt } from './QuestionPrompt';
+import { QuestionPrompt, stripEmbeddedOptionsFromStem } from './QuestionPrompt';
 import {
   MultipleChoiceRenderer,
   MultiSelectRenderer,
@@ -2754,7 +2754,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const historyItem: StudyHistoryItem = {
       id: `hist-${nowEpoch}-${Math.random().toString(36).slice(2, 6)}`,
       questionId: currentQ.id,
-      questionText: currentQ.question,
+      questionText: stripEmbeddedOptionsFromStem(currentQ.question),
       topic: currentQ.topic || 'Conceptos Clave',
       difficulty: currentQ.difficulty || 'easy',
       type: qType,

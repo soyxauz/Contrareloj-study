@@ -11,6 +11,29 @@ export interface QuestionPromptProps {
 }
 
 /**
+ * Detecta y elimina cualquier lista residual de opciones (ej. A) ..., B) ..., C) ..., D) ...)
+ * que haya sido concatenada al final del enunciado de la pregunta, evitando la duplicación
+ * visual cuando las opciones interactivas ya se muestran en sus tarjetas o botones dedicados.
+ */
+export function stripEmbeddedOptionsFromStem(stem: string): string {
+  if (!stem) return '';
+  // Patrón para el inicio de un bloque de opciones (A, a, 1, etc.)
+  // Permite saltos de línea o fin de signo de puntuación con espacio
+  // y soporte para negritas tipo **A)** o **[A]**
+  const optStartPattern = /(?:(?:\r?\n)+|(?<=[?.!])\s+)(?:\*\*)?(?:\([Aa1]\)|\[[Aa1]\]|[Aa1][\).:\-])(?:\*\*)?\s+/;
+  const optMatch = stem.search(optStartPattern);
+  if (optMatch !== -1) {
+    const candidateTail = stem.slice(optMatch);
+    // Verificar que el bloque realmente contenga al menos una segunda opción subsecuente (B, b, 2)
+    const hasSecondOption = /(?:(?:\r?\n)+|\s+)(?:\*\*)?(?:\([Bb2]\)|\[[Bb2]\]|[Bb2][\).:\-])(?:\*\*)?\s+/.test(candidateTail);
+    if (hasSecondOption) {
+      return stem.slice(0, optMatch).trim();
+    }
+  }
+  return stem.trim();
+}
+
+/**
  * Aplica formato Markdown de énfasis a la parte nuclear o clave del enunciado,
  * garantizando que la parte importante sea negrita (font-extrabold / text-white)
  * y la contextual sea legible pero no negrita ni delgada (font-medium / text-slate-200).
@@ -29,8 +52,10 @@ function wrapMultilineBold(fragment: string): string {
 
 function getEmphasizedQuestionMarkdown(text: string, topic?: string): string {
   if (!text) return '';
+  // 0. Eliminar opciones residuales incrustadas en el tallo para que no se dupliquen con los botones de respuesta
+  const cleanStem = stripEmbeddedOptionsFromStem(text);
   // Sanitizar marcadores de plantilla residuales ({0}, {1}) para que nunca se muestren como código crudo
-  const sanitized = text.replace(/\{(\d+)\}/g, (_m, num) => `[Espacio ${Number(num) + 1}]`);
+  const sanitized = cleanStem.replace(/\{(\d+)\}/g, (_m, num) => `[Espacio ${Number(num) + 1}]`);
   const trimmed = sanitized.trim();
 
   // 1. Si el texto ya tiene negritas explícitas en Markdown (**...** o __...__), balancearlas por línea si cruzan saltos de línea
