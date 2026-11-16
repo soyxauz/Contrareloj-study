@@ -31,8 +31,8 @@ assert.strictEqual(isTopicInRecent(t1, ['sulfonilureas', 'sglt2']), false);
 assert.strictEqual(isTopicInRecent(t1, ['sulfonilureas', 'sensibilizadores a la insulina']), true);
 console.log('✓ Topic normalization and matching tests passed.');
 
-// 2. Socratic Spacing for Normal Kits (>= 15 questions)
-console.log('\n--- 2. Testing Socratic Spacing for Normal Kits ---');
+// 2. Socratic Spacing for Standard Kits (>= 8 questions, 8-10 questions gap)
+console.log('\n--- 2. Testing Socratic Spacing for Standard Kits (8-10 questions) ---');
 const initialProfile = createInitialSocraticProfile('kit-123', []);
 const failedQ1 = {
   id: 'q-fail-1',
@@ -48,29 +48,44 @@ const result1 = updateSocraticProfileOnAnswer(
   false,
   'Inhibe la ATP sintasa',
   2, // currentIndex = 2
-  25 // poolSize = 25 (normal kit)
+  25 // poolSize = 25 (standard kit)
 );
 
 assert(result1.interventionScheduled, 'Intervention should be scheduled');
 const sched1 = result1.interventionScheduled.scheduledAtQuestionIndex;
 console.log(`Failed at index 2, scheduled at index: ${sched1} (Gap: ${sched1 - 2})`);
-assert(sched1 >= 2 + 6 && sched1 <= 2 + 8, `Expected gap between 6 and 8, got ${sched1 - 2}`);
-console.log('✓ Normal kit spacing (6-8 questions) verified.');
+assert(sched1 >= 2 + 8 && sched1 <= 2 + 10, `Expected gap between 8 and 10, got ${sched1 - 2}`);
+console.log('✓ Standard kit spacing (8-10 questions) verified.');
 
-// 3. Socratic Spacing for Small Kits (< 15 questions)
-console.log('\n--- 3. Testing Socratic Spacing for Small Kits ---');
+// 3. Socratic Spacing for 10-Question Kits (Also 8-10 questions)
+console.log('\n--- 3. Testing Socratic Spacing for 10-Question Kit ---');
+const result10 = updateSocraticProfileOnAnswer(
+  initialProfile,
+  failedQ1,
+  false,
+  'Error answer',
+  2, // currentIndex = 2
+  10 // poolSize = 10 (now >= 8, gets 8-10)
+);
+const sched10 = result10.interventionScheduled.scheduledAtQuestionIndex;
+console.log(`Failed at index 2 (10-question kit), scheduled at index: ${sched10} (Gap: ${sched10 - 2})`);
+assert(sched10 >= 2 + 8 && sched10 <= 2 + 10, `Expected gap between 8 and 10, got ${sched10 - 2}`);
+console.log('✓ 10-question kit spacing (8-10 questions) verified.');
+
+// 3b. Socratic Spacing for Very Small Kits (< 8 questions)
+console.log('\n--- 3b. Testing Socratic Spacing for Very Small Kits (< 8 questions) ---');
 const resultSmall = updateSocraticProfileOnAnswer(
   initialProfile,
   failedQ1,
   false,
   'Error answer',
   2, // currentIndex = 2
-  10 // poolSize = 10 (small kit)
+  5 // poolSize = 5 (very small kit)
 );
 const schedSmall = resultSmall.interventionScheduled.scheduledAtQuestionIndex;
-console.log(`Failed at index 2 (small kit), scheduled at index: ${schedSmall} (Gap: ${schedSmall - 2})`);
+console.log(`Failed at index 2 (5-question kit), scheduled at index: ${schedSmall} (Gap: ${schedSmall - 2})`);
 assert(schedSmall >= 2 + 4 && schedSmall <= 2 + 5, `Expected gap between 4 and 5, got ${schedSmall - 2}`);
-console.log('✓ Small kit spacing (4-5 questions) verified.');
+console.log('✓ Very small kit spacing (4-5 questions) verified.');
 
 // 4. Multiple Consecutive Errors with Amortiguador (No Socratic Blasts)
 console.log('\n--- 4. Testing Multi-Error Buffer / Escalonamiento con Amortiguador ---');

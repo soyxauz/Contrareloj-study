@@ -227,11 +227,11 @@ export function updateSocraticProfileOnAnswer(
     newStatus = 'weakness';
 
     // A1: Programar reaparición intercalada con espaciado dinámico inteligente
-    // Kits pequeños (< 15 preguntas): 4 a 5 preguntas de separación
-    // Kits normales (>= 15 preguntas): 6 a 8 preguntas de separación
-    const isSmallKit = poolSize !== undefined && poolSize > 0 && poolSize < 15;
-    const baseSpacing = isSmallKit ? 4 : 6;
-    const jitter = isSmallKit ? (Math.random() < 0.5 ? 0 : 1) : Math.floor(Math.random() * 3); // 0, 1 o 2 -> 6, 7 u 8
+    // Kits muy pequeños (< 8 preguntas): 4 a 5 preguntas de separación
+    // Kits estándar (>= 8 preguntas): 8 a 10 preguntas de separación (curva pedagógica socrática solicitada)
+    const isVerySmallKit = poolSize !== undefined && poolSize > 0 && poolSize < 8;
+    const baseSpacing = isVerySmallKit ? Math.max(4, poolSize - 1) : 8;
+    const jitter = isVerySmallKit ? (Math.random() < 0.5 ? 0 : 1) : Math.floor(Math.random() * 3); // 0, 1 o 2 -> 8, 9 u 10
     const targetSpacing = baseSpacing + jitter;
 
     // A3: Escalonamiento con amortiguador (buffer):

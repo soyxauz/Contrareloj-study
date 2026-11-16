@@ -2915,7 +2915,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         // Si la respondió correctamente, eliminarla de revisiones programadas
         scheduledErrorReviewsRef.current = scheduledErrorReviewsRef.current.filter(r => r.question.id !== currentQ.id);
       } else {
-        // Programar reaparición tras 4 a 5 preguntas intermedias de otros temas (Curva Ebbinghaus / Thea original).
+        // Programar reaparición tras 8 a 10 preguntas intermedias de otros temas (Curva Ebbinghaus / Thea original).
         // REGLA PEDAGÓGICA (Espaciado de Errores):
         // Si hay muchas preguntas erróneas acumuladas, NUNCA deben reaparecer de forma consecutiva.
         // Se escalonan garantizando al menos 2 a 3 preguntas normales de separación entre cada una.
@@ -2923,9 +2923,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         const highestScheduledTarget = hasExisting
           ? scheduledErrorReviewsRef.current.reduce((max, r) => Math.max(max, r.targetIndex), 0)
           : 0;
+        const errorSpacing = 8 + Math.floor(Math.random() * 3); // 8, 9 u 10 preguntas de separación
         const reviewTargetIndex = hasExisting
-          ? Math.max(currentIndex + 4, highestScheduledTarget + 3)
-          : Math.max(currentIndex + 4, lastErrorReviewTriggerIndexRef.current + 3);
+          ? Math.max(currentIndex + errorSpacing, highestScheduledTarget + 3)
+          : Math.max(currentIndex + errorSpacing, lastErrorReviewTriggerIndexRef.current + 3);
 
         if (!scheduledErrorReviewsRef.current.some(r => r.question.id === currentQ.id)) {
           scheduledErrorReviewsRef.current.push({
