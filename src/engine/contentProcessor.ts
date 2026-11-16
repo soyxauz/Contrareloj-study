@@ -7,7 +7,7 @@ import {
 import { detectDocumentLanguage } from '../services/languageService';
 import { chunkDocument } from './chunker';
 import { LocalVectorStore } from './vectorStore';
-import { findBestChunkAndExcerpt } from './ragExcerptExtractor';
+import { findBestChunkAndExcerpt, resolveRealPageNumber } from './ragExcerptExtractor';
 import { analyzeCanvasContent, IMAGE_FILTER_CONFIG } from '../utils/imageClassifier';
 import JSZip from 'jszip';
 
@@ -923,7 +923,7 @@ export function processContent(
       q.sourceChunkId = bestChunk.id;
       q.sourceChunkText = bestChunk.text;
       q.sourceExcerpt = q.sourceExcerpt || passage.excerpt;
-      q.sourcePageOrSlide = bestChunk.pageOrSlide;
+      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
       if (bestChunk.assetIds && bestChunk.assetIds.length > 0) {
         const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
         if (needsVisual) {
@@ -1058,7 +1058,9 @@ export async function processContentAsync(
       if (!q.sourceChunkId) {
         q.sourceChunkId = bestChunk.id;
         q.sourceChunkText = bestChunk.text;
-        q.sourcePageOrSlide = bestChunk.pageOrSlide;
+        q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
+      } else if (!q.sourcePageOrSlide || q.sourcePageOrSlide === bestChunk.pageOrSlide) {
+        q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
       }
       q.sourceExcerpt = q.sourceExcerpt || passage.excerpt;
 

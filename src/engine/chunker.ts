@@ -45,9 +45,7 @@ export function chunkDocument(
     // Detectar si indica diapositiva o página
     const slideMatch = block.match(/Diapositiva\s+(\d+)/i) || block.match(/\[Página\s+(\d+)\]/i) || block.match(/Página\s+(\d+)/i);
     const isNewSlideOrPage = Boolean(slideMatch);
-    if (slideMatch) {
-      currentPageOrSlide = parseInt(slideMatch[1], 10);
-    }
+    const nextSlideOrPage = slideMatch ? parseInt(slideMatch[1], 10) : undefined;
 
     const blockWords = block.split(/\s+/).filter(Boolean);
 
@@ -56,7 +54,7 @@ export function chunkDocument(
       (currentWords.length + blockWords.length > effectiveTargetWords && currentWords.length >= effectiveMinWords);
 
     if (shouldFlush) {
-      // Crear chunk actual
+      // Crear chunk actual conservando la página real de las palabras acumuladas (currentPageOrSlide)
       const chunkText = currentWords.join(' ');
       const chunkId = `chk-${chunkIndex}-${uid()}`;
 
@@ -84,11 +82,19 @@ export function chunkDocument(
 
       chunkIndex++;
 
+      // Tras empaquetar el chunk de la página previa, avanzamos al número de página del nuevo bloque
+      if (nextSlideOrPage !== undefined) {
+        currentPageOrSlide = nextSlideOrPage;
+      }
+
       // Overlap: conservar el último 10% de palabras para mantener continuidad
       const overlapWordsCount = Math.floor(currentWords.length * Math.min(overlapRatio, 0.10));
       const overlap = currentWords.slice(-overlapWordsCount);
       currentWords = [...overlap, ...blockWords];
     } else {
+      if (nextSlideOrPage !== undefined && currentWords.length === 0) {
+        currentPageOrSlide = nextSlideOrPage;
+      }
       currentWords.push(...blockWords);
     }
   }

@@ -315,3 +315,38 @@ export function findBestChunkAndExcerpt(params: {
 
   return { bestChunk: topChunk, passage: topPassage };
 }
+
+/**
+ * Deduce con máxima precisión la página o diapositiva real a partir del texto y el extracto,
+ * corrigiendo cualquier desfase de índice o metadatos desactualizados en kits existentes.
+ */
+export function resolveRealPageNumber(
+  fullText?: string,
+  excerpt?: string,
+  fallbackPage?: number
+): number | undefined {
+  // 1. Si tenemos el extracto y el texto completo, buscar la etiqueta de página más cercana anterior al extracto
+  if (excerpt && fullText && fullText.includes(excerpt)) {
+    const idx = fullText.indexOf(excerpt);
+    const textBefore = fullText.slice(0, idx + excerpt.length);
+    const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+    if (matches.length > 0) {
+      const lastMatch = matches[matches.length - 1];
+      const page = parseInt(lastMatch[1] || lastMatch[2] || lastMatch[3], 10);
+      if (!isNaN(page) && page > 0) return page;
+    }
+  }
+
+  // 2. Si el extracto o el texto del fragmento contiene una etiqueta explícita de página
+  const candidateTexts = [excerpt, fullText].filter(Boolean) as string[];
+  for (const t of candidateTexts) {
+    const matches = [...t.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+    if (matches.length > 0) {
+      const match = matches[0];
+      const page = parseInt(match[1] || match[2] || match[3], 10);
+      if (!isNaN(page) && page > 0) return page;
+    }
+  }
+
+  return fallbackPage;
+}

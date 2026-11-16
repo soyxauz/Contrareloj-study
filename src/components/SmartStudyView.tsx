@@ -45,7 +45,7 @@ import {
   Share2,
   RefreshCw,
 } from 'lucide-react';
-import { findBestChunkAndExcerpt, extractSpecificPassage } from '../engine/ragExcerptExtractor';
+import { findBestChunkAndExcerpt, extractSpecificPassage, resolveRealPageNumber } from '../engine/ragExcerptExtractor';
 import { generateKitQuestions } from '../engine/contentProcessor';
 import { ImageZoomModal } from './ImageZoomModal';
 import { TheaExplanationView } from './TheaExplanationView';
@@ -689,7 +689,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       questionText: targetQ.question,
       correctAnswerText: rawAnswerText,
       topic: targetQ.topic,
-      pageOrSlide: candidateChunk?.pageOrSlide || targetQ.sourcePageOrSlide,
+      pageOrSlide: resolveRealPageNumber(fullText, finalExcerpt, candidateChunk?.pageOrSlide || targetQ.sourcePageOrSlide),
       asset: targetQ.sourceAsset || (candidateChunk?.assetIds?.length ? kit.assets?.find(a => candidateChunk.assetIds!.includes(a.id)) : undefined),
       matchQuality: quality,
     });
@@ -4446,8 +4446,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 </span>
                 <div className="flex items-center gap-2">
                   {currentQ.sourcePageOrSlide && (
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-thea-bg border border-thea-border text-slate-300">
-                      Diapositiva / Pág. {currentQ.sourcePageOrSlide}
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-thea-bg border border-thea-border text-slate-300 tabular-nums">
+                      Diapositiva / Pág. {resolveRealPageNumber(currentQ.sourceChunkText, currentQ.sourceExcerpt, currentQ.sourcePageOrSlide) || currentQ.sourcePageOrSlide}
                     </span>
                   )}
                   <button

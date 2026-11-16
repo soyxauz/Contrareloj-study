@@ -4,7 +4,7 @@ import { safeLocalStorageSetItem } from './storageService';
 import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
 import { filterCompliantQuestions, isQuestionCompliantWithStandard } from '../utils/questionValidator';
 import { extractCleanTokens } from '../engine/topicInterleaving';
-import { findBestChunkAndExcerpt } from '../engine/ragExcerptExtractor';
+import { findBestChunkAndExcerpt, resolveRealPageNumber } from '../engine/ragExcerptExtractor';
 import {
   computePodcastLengthPlan,
   buildPodcastActPrompts,
@@ -3715,7 +3715,7 @@ Genera el JSON completo respetando la estructura exigida:`;
         if (bestChunk) {
           sourceChunkId = bestChunk.id;
           sourceChunkText = bestChunk.text;
-          sourcePageOrSlide = bestChunk.pageOrSlide;
+          sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
           if (!sourceExcerpt || passage.score >= 5.0) {
             sourceExcerpt = passage.excerpt;
           }
@@ -6096,7 +6096,7 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       if (bestChunk) {
         sourceChunkId = bestChunk.id;
         sourceChunkText = bestChunk.text;
-        sourcePageOrSlide = bestChunk.pageOrSlide;
+        sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
         if (!sourceExcerpt || passage.score >= 5.0) {
           sourceExcerpt = passage.excerpt;
         }
