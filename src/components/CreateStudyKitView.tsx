@@ -608,7 +608,7 @@ export const CreateStudyKitView: React.FC<CreateStudyKitViewProps> = ({
 
       <div className={!isAIActive ? 'grayscale opacity-40 pointer-events-none select-none transition-all duration-300' : 'transition-all duration-300'}>
         {/* Tab Selector */}
-      <div className="flex sm:grid sm:grid-cols-5 gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
+      <div className="w-full max-w-full min-w-0 flex sm:grid sm:grid-cols-5 gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
         {TABS.map(tab => (
           <button
             key={tab.id}

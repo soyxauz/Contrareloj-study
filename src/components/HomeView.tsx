@@ -421,7 +421,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
   }, [availableMateriasList, kits, userId, materiaVersion]);
 
   return (
-    <div className="max-w-6xl mx-auto px-2.5 sm:px-5 lg:px-6 py-3 sm:py-6">
+    <div className="w-full max-w-6xl mx-auto px-2.5 sm:px-5 lg:px-6 py-3 sm:py-6 min-w-0 overflow-x-hidden">
 
       {/* ── Header de Espacio de Estudio (Estilo Linear / Raycast Studio) ── */}
       <section className="mb-5 sm:mb-6 w-full max-w-full min-w-0">
@@ -704,10 +704,10 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
       </section>
 
       {/* ── Tus Study Kits ───────────────────────── */}
-      <section className="mb-6">
+      <section className="mb-6 w-full max-w-full min-w-0">
         {/* ── Barra de Filtro de Materias ── */}
         {availableMateriasList.length > 0 && (
-          <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1.5 scrollbar-none">
+          <div className="w-full max-w-full min-w-0 flex items-center gap-2 mb-5 overflow-x-auto pb-1.5 scrollbar-none touch-pan-x">
             <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0 mr-1 font-medium">
               <Filter className="w-3.5 h-3.5 text-slate-400" />
               Materia:
@@ -830,7 +830,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
+          <div className="w-full max-w-full min-w-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
             {/* Tarjetas de kits con fondo tintado distintivo y espaciado amplio Studio Space */}
             {filteredKits.map((kit, index) => {
               const isActive = currentKit?.id === kit.id;

@@ -253,7 +253,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block">
                 Seleccionar Libro / Study Kit:
               </span>
-              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+              <div className="w-full max-w-full min-w-0 flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none touch-pan-x">
                 {kits.map(k => {
                   const isSelected = k.id === selectedKitId;
                   const kStats = getBookRealStats(k, userId);
@@ -737,7 +737,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </div>
 
               {/* Filtros de Estado del Banco */}
-              <div className="flex items-center gap-2 mb-6 pb-2 overflow-x-auto text-xs">
+              <div className="w-full max-w-full min-w-0 flex items-center gap-2 mb-6 pb-2 overflow-x-auto text-xs scrollbar-none touch-pan-x">
                 <button
                   type="button"
                   onClick={() => setQuestionBankFilter('all')}
