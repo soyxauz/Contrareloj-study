@@ -3710,13 +3710,14 @@ Genera el JSON completo respetando la estructura exigida:`;
           correctAnswer: correctAnswerString,
           concept: String(p.concepto_evaluado || topicFallback).trim(),
           preferredChunkId: p.chunk_id_origen,
+          exactCitation: sourceExcerpt,
         });
 
         if (bestChunk) {
           sourceChunkId = bestChunk.id;
           sourceChunkText = bestChunk.text;
-          sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
-          if (!sourceExcerpt || passage.score >= 5.0) {
+          sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || sourceExcerpt, bestChunk.pageOrSlide);
+          if (!sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
             sourceExcerpt = passage.excerpt;
           }
         }
@@ -6091,13 +6092,14 @@ Genera las ${count} preguntas en formato JSON estricto:`;
         correctAnswer: correctAnswerString,
         concept: String(p.concepto_evaluado || defaultTopic).trim(),
         preferredChunkId: p.chunk_id_origen,
+        exactCitation: sourceExcerpt,
       });
 
       if (bestChunk) {
         sourceChunkId = bestChunk.id;
         sourceChunkText = bestChunk.text;
-        sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
-        if (!sourceExcerpt || passage.score >= 5.0) {
+        sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || sourceExcerpt, bestChunk.pageOrSlide);
+        if (!sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
           sourceExcerpt = passage.excerpt;
         }
       }

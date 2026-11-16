@@ -186,7 +186,8 @@ function scoreSentence(
   answerTokens: Set<string>,
   conceptTokens: Set<string>,
   cleanAnswerText: string,
-  cleanQuestionText: string = ''
+  cleanQuestionText: string = '',
+  exactCitation: string = ''
 ): number {
   const sentenceTokens = extractMeaningfulTokens(sentence);
   if (sentenceTokens.size === 0) return 0;
@@ -194,28 +195,51 @@ function scoreSentence(
   let score = 0;
   let answerMatches = 0;
 
-  // 1. Coincidencia con tokens de la respuesta correcta (prioridad máxima absoluta)
+  // 0. Coincidencia con la cita textual exacta del modelo o pregunta (prioridad absoluta suprema)
+  if (exactCitation && exactCitation.length >= 8) {
+    const normSentence = cleanDocumentText(sentence).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normCitation = cleanDocumentText(exactCitation).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normSentence.includes(normCitation.slice(0, 30)) || normCitation.includes(normSentence.slice(0, 30))) {
+      score += 200.0;
+      answerMatches += 2;
+    } else {
+      const citTokens = extractMeaningfulTokens(exactCitation);
+      let citMatches = 0;
+      for (const t of citTokens) {
+        if (sentenceTokens.has(t)) citMatches++;
+      }
+      if (citMatches > 0 && citTokens.size > 0) {
+        const ratio = citMatches / citTokens.size;
+        if (ratio >= 0.35) {
+          score += 140.0 * ratio;
+          answerMatches++;
+        }
+      }
+    }
+  }
+
+  // 1. Coincidencia con tokens de la respuesta correcta (prioridad dominante)
   for (const t of answerTokens) {
     if (sentenceTokens.has(t)) {
-      score += t.startsWith('norm_') ? 25.0 : 18.0; // Ponderación dominante para términos de respuesta
+      score += t.startsWith('norm_') ? 35.0 : 25.0; // Ponderación dominante para términos de respuesta
       answerMatches++;
     }
   }
 
   // 2. Bonus de frase literal continua de la respuesta
-  if (cleanAnswerText && cleanAnswerText.length >= 6) {
+  if (cleanAnswerText && cleanAnswerText.length >= 5) {
     const normSentence = cleanDocumentText(sentence).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const normAnswer = cleanDocumentText(cleanAnswerText).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
     if (normSentence.includes(normAnswer.slice(0, 25))) {
-      score += 35.0; // Coincidencia textual directa con el enunciado de la respuesta
+      score += 50.0; // Coincidencia textual directa con el enunciado de la respuesta
       answerMatches++;
     } else {
       const ansWords = normAnswer.split(/\s+/).filter(w => w.length >= 3 && !SPANISH_STOPWORDS.has(w));
       for (let i = 0; i < ansWords.length - 1; i++) {
         const bigram = `${ansWords[i]} ${ansWords[i+1]}`;
         if (normSentence.includes(bigram)) {
-          score += 12.0;
+          score += 18.0;
           answerMatches++;
         }
       }
@@ -234,7 +258,7 @@ function scoreSentence(
   for (const t of queryTokens) {
     if (sentenceTokens.has(t)) {
       if (GENERIC_BOILERPLATE.test(t)) {
-        score += 0.5; // Muy bajo para no distorsionar con introducciones generales
+        score += 0.2; // Muy bajo para no distorsionar con introducciones generales
       } else {
         score += t.length >= 6 ? 4.0 : 2.5; // Alto para términos específicos (ej. 2009, criterio, meses)
       }
@@ -254,11 +278,11 @@ function scoreSentence(
     }
   }
 
-  // 6. PENALIZACIÓN CRÍTICA: Si la pregunta tiene una respuesta objetivo, pero esta oración
-  // NO contiene NINGÚN token de la respuesta, su puntuación se restringe severamente para que
+  // 6. PENALIZACIÓN CRÍTICA: Si la pregunta tiene una respuesta objetivo o cita esperada, pero esta oración
+  // NO contiene NINGÚN token de la respuesta ni de la cita, su puntuación se restringe severamente para que
   // párrafos introductorios generales jamás puedan vencer a la evidencia real de la respuesta.
-  if (answerTokens.size > 0 && answerMatches === 0) {
-    score = Math.min(5.0, score * 0.25);
+  if ((answerTokens.size > 0 || (exactCitation && exactCitation.length >= 8)) && answerMatches === 0) {
+    score = Math.min(0.5, score * 0.05);
   }
 
   const lengthDampener = Math.min(1.2, Math.max(0.7, 40 / Math.max(1, sentenceTokens.size)));
@@ -275,8 +299,9 @@ export function extractSpecificPassage(params: {
   correctAnswer?: string;
   concept?: string;
   explanation?: string;
+  exactCitation?: string;
 }): SpecificPassageResult {
-  const { fullText, question, correctAnswer = '', concept = '' } = params;
+  const { fullText, question, correctAnswer = '', concept = '', exactCitation = '' } = params;
 
   const sentences = splitDocumentIntoSentences(fullText);
   if (sentences.length === 0) {
@@ -297,7 +322,7 @@ export function extractSpecificPassage(params: {
   const conceptTokens = extractMeaningfulTokens(concept);
 
   const scores = sentences.map(s =>
-    scoreSentence(s, queryTokens, answerTokens, conceptTokens, correctAnswer, question)
+    scoreSentence(s, queryTokens, answerTokens, conceptTokens, correctAnswer, question, exactCitation)
   );
 
   let bestIdx = 0;
@@ -326,7 +351,7 @@ export function extractSpecificPassage(params: {
 
   // Determinar calidad del emparejamiento
   const matchQuality: 'high' | 'medium' | 'low' =
-    maxScore >= 8 ? 'high' : maxScore >= 3.5 ? 'medium' : 'low';
+    maxScore >= 8 ? 'high' : maxScore >= 3.0 ? 'medium' : 'low';
 
   // Resaltado de la zona clave en negrita (**oración**):
   // La oración con mayor puntuación (bestIdx) es la zona exacta que responde y fundamenta la pregunta.
@@ -355,7 +380,7 @@ export function extractSpecificPassage(params: {
 
 /**
  * Escanea la totalidad de fragmentos del kit para hallar aquel con mayor anclaje textual directo,
- * priorizando de forma absoluta los fragmentos que contienen la respuesta correcta.
+ * priorizando de forma absoluta los fragmentos que contienen la respuesta correcta o la cita de la IA.
  */
 export function findBestChunkAndExcerpt(params: {
   chunks: DocumentChunk[];
@@ -363,8 +388,9 @@ export function findBestChunkAndExcerpt(params: {
   correctAnswer?: string;
   concept?: string;
   preferredChunkId?: string;
+  exactCitation?: string;
 }): { bestChunk: DocumentChunk | null; passage: SpecificPassageResult } {
-  const { chunks, question, correctAnswer = '', concept = '', preferredChunkId } = params;
+  const { chunks, question, correctAnswer = '', concept = '', preferredChunkId, exactCitation = '' } = params;
 
   if (!chunks || chunks.length === 0) {
     const emptyResult = extractSpecificPassage({
@@ -372,11 +398,13 @@ export function findBestChunkAndExcerpt(params: {
       question,
       correctAnswer,
       concept,
+      exactCitation,
     });
     return { bestChunk: null, passage: emptyResult };
   }
 
   const answerTokens = extractMeaningfulTokens(correctAnswer);
+  const citationTokens = exactCitation ? extractMeaningfulTokens(exactCitation) : new Set<string>();
 
   const evaluateChunk = (chunk: DocumentChunk) => {
     const passage = extractSpecificPassage({
@@ -384,10 +412,30 @@ export function findBestChunkAndExcerpt(params: {
       question,
       correctAnswer,
       concept,
+      exactCitation,
     });
 
-    // Bonus decisivo si el fragmento contiene los términos de la respuesta correcta
     let chunkBonus = 0;
+
+    // 1. Bonus determinante si el fragmento contiene la cita textual exacta
+    if (exactCitation && exactCitation.trim().length >= 10) {
+      const normChunk = cleanDocumentText(chunk.text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const normCit = cleanDocumentText(exactCitation).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (normChunk.includes(normCit.slice(0, 25)) || normCit.includes(normChunk.slice(0, 25))) {
+        chunkBonus += 500.0;
+      } else if (citationTokens.size > 0) {
+        const chunkTokens = extractMeaningfulTokens(chunk.text);
+        let citMatch = 0;
+        for (const t of citationTokens) {
+          if (chunkTokens.has(t)) citMatch++;
+        }
+        if (citMatch >= 2) {
+          chunkBonus += 250.0 * (citMatch / citationTokens.size);
+        }
+      }
+    }
+
+    // 2. Bonus decisivo si el fragmento contiene los términos de la respuesta correcta
     if (answerTokens.size > 0) {
       const chunkTokens = extractMeaningfulTokens(chunk.text);
       let matchCount = 0;
@@ -395,14 +443,20 @@ export function findBestChunkAndExcerpt(params: {
         if (chunkTokens.has(t)) matchCount++;
       }
       if (matchCount > 0) {
-        chunkBonus = 45.0 * (matchCount / answerTokens.size);
+        chunkBonus += 150.0 * (matchCount / answerTokens.size);
       }
+    }
+
+    // 3. Penalización si el chunk no contiene la respuesta ni la cita textual
+    let effectiveScore = passage.score + chunkBonus;
+    if ((answerTokens.size > 0 || (exactCitation && exactCitation.length >= 10)) && chunkBonus === 0) {
+      effectiveScore = Math.min(2.5, effectiveScore * 0.1);
     }
 
     return {
       chunk,
       passage,
-      effectiveScore: passage.score + chunkBonus,
+      effectiveScore,
     };
   };
 
@@ -416,12 +470,13 @@ export function findBestChunkAndExcerpt(params: {
   }
 
   // Si había un preferredChunk y su score es equivalente o superior al mejor, mantenerlo por afinidad de origen
-  // ÚNICAMENTE si el preferredChunk también contiene evidencia o tokens de la respuesta
+  // ÚNICAMENTE si el preferredChunk también contiene evidencia o tokens de la respuesta o la cita exacta
   if (preferredChunkId && bestEvaluation) {
     const preferredChunk = chunks.find(c => c.id === preferredChunkId);
     if (preferredChunk && preferredChunk.id !== bestEvaluation.chunk.id) {
       const prefTokens = extractMeaningfulTokens(preferredChunk.text);
-      const prefHasAnswer = answerTokens.size === 0 || [...answerTokens].some(t => prefTokens.has(t));
+      const prefHasAnswer = (answerTokens.size > 0 && [...answerTokens].some(t => prefTokens.has(t))) ||
+                            (citationTokens.size > 0 && [...citationTokens].some(t => prefTokens.has(t)));
       if (prefHasAnswer) {
         const prefEval = evaluateChunk(preferredChunk);
         if (prefEval.effectiveScore >= bestEvaluation.effectiveScore * 0.95 && prefEval.effectiveScore >= 20.0) {
@@ -433,7 +488,7 @@ export function findBestChunkAndExcerpt(params: {
 
   return {
     bestChunk: bestEvaluation ? bestEvaluation.chunk : chunks[0],
-    passage: bestEvaluation ? bestEvaluation.passage : extractSpecificPassage({ fullText: chunks[0].text, question, correctAnswer, concept })
+    passage: bestEvaluation ? bestEvaluation.passage : extractSpecificPassage({ fullText: chunks[0].text, question, correctAnswer, concept, exactCitation })
   };
 }
 
@@ -479,6 +534,18 @@ export function findNormalizedSubstringIndex(haystack: string, needle: string): 
   return -1;
 }
 
+const PAGE_TAG_REGEX = /(?:\[Página\s+(\d+)\]|\[Diapositiva\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+)|P[aá]g\.?\s*(\d+)|Slide\s+(\d+)|Page\s+(\d+)|\b(?:pág|pag|diap|slide|page)\.?\s*(\d+)\b)/gi;
+
+function extractPageNumberFromMatch(match: RegExpMatchArray | RegExpExecArray): number | null {
+  for (let i = 1; i < match.length; i++) {
+    if (match[i]) {
+      const num = parseInt(match[i], 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+  return null;
+}
+
 /**
  * Deduce con máxima precisión la página o diapositiva real a partir del texto y el extracto,
  * corrigiendo cualquier desfase de índice o metadatos desactualizados en kits existentes.
@@ -497,43 +564,43 @@ export function resolveRealPageNumber(
       // Tomar estrictamente el texto que precede al extracto (hasta matchPos + 5 por si la etiqueta abre el extracto)
       // evitando terminantemente capturar la etiqueta de la página siguiente
       const textBefore = fullText.slice(0, Math.max(1, matchPos + 5));
-      const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+      const matches = [...textBefore.matchAll(PAGE_TAG_REGEX)];
       if (matches.length > 0) {
         const lastMatch = matches[matches.length - 1];
-        const page = parseInt(lastMatch[1] || lastMatch[2] || lastMatch[3], 10);
-        if (!isNaN(page) && page > 0) return page;
+        const page = extractPageNumberFromMatch(lastMatch);
+        if (page && page > 0) return page;
       }
     }
   }
 
   // 2. Si el extracto contiene explícitamente una etiqueta de página
   if (excerpt) {
-    const matches = [...excerpt.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+    const matches = [...excerpt.matchAll(PAGE_TAG_REGEX)];
     if (matches.length > 0) {
-      const page = parseInt(matches[0][1] || matches[0][2] || matches[0][3], 10);
-      if (!isNaN(page) && page > 0) return page;
+      const page = extractPageNumberFromMatch(matches[0]);
+      if (page && page > 0) return page;
     }
   }
 
   // 3. Si fullText contiene etiquetas explícitas de página
   if (fullText) {
-    const matches = [...fullText.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+    const matches = [...fullText.matchAll(PAGE_TAG_REGEX)];
     if (matches.length > 0) {
       if (matches.length === 1) {
-        const page = parseInt(matches[0][1] || matches[0][2] || matches[0][3], 10);
-        if (!isNaN(page) && page > 0) return page;
+        const page = extractPageNumberFromMatch(matches[0]);
+        if (page && page > 0) return page;
       } else {
         const matchPos = excerpt ? findNormalizedSubstringIndex(fullText, excerpt.replace(/\*\*/g, '')) : -1;
         if (matchPos !== -1) {
           const textBefore = fullText.slice(0, Math.max(1, matchPos + 5));
-          const matchesBefore = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+          const matchesBefore = [...textBefore.matchAll(PAGE_TAG_REGEX)];
           if (matchesBefore.length > 0) {
-            const page = parseInt(matchesBefore[matchesBefore.length - 1][1] || matchesBefore[matchesBefore.length - 1][2] || matchesBefore[matchesBefore.length - 1][3], 10);
-            if (!isNaN(page) && page > 0) return page;
+            const page = extractPageNumberFromMatch(matchesBefore[matchesBefore.length - 1]);
+            if (page && page > 0) return page;
           }
         }
-        const page = parseInt(matches[0][1] || matches[0][2] || matches[0][3], 10);
-        if (!isNaN(page) && page > 0) return page;
+        const page = extractPageNumberFromMatch(matches[0]);
+        if (page && page > 0) return page;
       }
     }
   }
@@ -545,11 +612,11 @@ export function resolveRealPageNumber(
       if (chk.text && findNormalizedSubstringIndex(chk.text, cleanExcerpt) !== -1) {
         const chkPos = findNormalizedSubstringIndex(chk.text, cleanExcerpt);
         const textBefore = chk.text.slice(0, Math.max(1, chkPos + 5));
-        const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+        const matches = [...textBefore.matchAll(PAGE_TAG_REGEX)];
         if (matches.length > 0) {
           const lastMatch = matches[matches.length - 1];
-          const page = parseInt(lastMatch[1] || lastMatch[2] || lastMatch[3], 10);
-          if (!isNaN(page) && page > 0) return page;
+          const page = extractPageNumberFromMatch(lastMatch);
+          if (page && page > 0) return page;
         }
         if (typeof chk.pageOrSlide === 'number' && chk.pageOrSlide > 0) {
           return chk.pageOrSlide;

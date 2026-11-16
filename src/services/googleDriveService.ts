@@ -5,7 +5,7 @@ import {
   getAllStoredAssetKeys,
   getAssetById,
   saveAssetsToIndexedDB,
-  stripHeavyAssetsForLocalStorage,
+  prepareKitsForDriveUpload,
   saveSessionItem,
   getSessionItem,
   removeSessionItem,
@@ -2703,7 +2703,7 @@ export const googleDriveService = {
       }
 
       const localUsers = authService.getRawStoredUsers();
-      const lightweightKits = stripHeavyAssetsForLocalStorage(driveMergedKits);
+      const lightweightKits = prepareKitsForDriveUpload(driveMergedKits);
       const { sessions: userSessions, revealedQuestions: userRevealed, flashcards: userFlashcards } =
         await readUnifiedProgressAsync(userId);
 
@@ -2913,7 +2913,7 @@ export const googleDriveService = {
         await authService.saveUserKitsAsync(userId, driveMergedKits);
       }
 
-      const lightweightKits = stripHeavyAssetsForLocalStorage(driveMergedKits);
+      const lightweightKits = prepareKitsForDriveUpload(driveMergedKits);
       const localUsers = authService.getRawStoredUsers();
       const { sessions: userSessions, revealedQuestions: userRevealed, flashcards: userFlashcards } =
         await readUnifiedProgressAsync(userId);

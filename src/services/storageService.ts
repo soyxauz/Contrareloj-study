@@ -582,6 +582,31 @@ export function stripHeavyAssetsForLocalStorage(kits: StudyKit[]): StudyKit[] {
 }
 
 /**
+ * Prepara los kits para sincronización con Google Drive manteniendo íntegros los chunks,
+ * el sourceText y los materiales de origen (RAG total), excluyendo únicamente los dataUrl
+ * pesados de las imágenes (que se almacenan y descargan desde la carpeta de Drive thea_assets).
+ */
+export function prepareKitsForDriveUpload(kits: StudyKit[]): StudyKit[] {
+  return kits.map(kit => ({
+    ...kit,
+    // Conservar chunks y sourceText para que RAG funcione fielmente en todos los dispositivos
+    chunks: kit.chunks,
+    sourceText: kit.sourceText,
+    sourceMaterials: kit.sourceMaterials?.map(m => ({
+      ...m,
+      rawText: m.rawText,
+    })),
+    assets: kit.assets?.map(a => stripLargeAssetDataUrl(a)),
+    questions: kit.questions?.map(q => (
+      q.sourceAsset ? { ...q, sourceAsset: stripLargeAssetDataUrl(q.sourceAsset) } : q
+    )),
+    flashcards: kit.flashcards?.map(f => (
+      f.sourceAsset ? { ...f, sourceAsset: stripLargeAssetDataUrl(f.sourceAsset) } : f
+    )),
+  }));
+}
+
+/**
  * Construye el respaldo de kits para LocalStorage dentro del presupuesto de cuota (~350KB)
  * preservando completo el podcast del kit activo y los kits más recientes, y delegando
  * únicamente los kits más antiguos a IndexedDB cuando la biblioteca supera el umbral.

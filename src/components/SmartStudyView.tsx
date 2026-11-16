@@ -44,7 +44,7 @@ import {
   Share2,
   RefreshCw,
 } from 'lucide-react';
-import { findBestChunkAndExcerpt, extractSpecificPassage, resolveRealPageNumber } from '../engine/ragExcerptExtractor';
+import { findBestChunkAndExcerpt, extractSpecificPassage, resolveRealPageNumber, extractMeaningfulTokens } from '../engine/ragExcerptExtractor';
 import { chunkDocument } from '../engine/chunker';
 import { generateKitQuestions } from '../engine/contentProcessor';
 import { ImageZoomModal } from './ImageZoomModal';
@@ -703,13 +703,14 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       });
     }
 
-    // Buscar el chunk y pasaje con mayor especificidad semántica anclado en la respuesta correcta
+    // Buscar el chunk y pasaje con mayor especificidad semántica anclado en la respuesta correcta y la cita de la IA
     const { bestChunk, passage } = findBestChunkAndExcerpt({
       chunks: chunkPool,
       question: targetQ.question,
       correctAnswer: rawAnswerText,
       concept: targetQ.topic,
       preferredChunkId: targetQ.sourceChunkId,
+      exactCitation: targetQ.sourceExcerpt,
     });
 
     const candidateChunk = bestChunk || chunkPool.find(c => c.id === targetQ.sourceChunkId);
@@ -719,6 +720,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     let finalHighlighted = passage.highlightedExcerpt;
     let quality = passage.matchQuality;
 
+    // Si la cita guardada en la pregunta es más específica o contiene la respuesta correcta directamente
+    if (targetQ.sourceExcerpt && targetQ.sourceExcerpt.length >= 15) {
+      const citTokens = extractMeaningfulTokens(targetQ.sourceExcerpt);
+      const ansTokens = extractMeaningfulTokens(rawAnswerText);
+      const hasAnswerInCitation = [...ansTokens].some(t => citTokens.has(t));
+      if (hasAnswerInCitation || quality === 'low') {
+        finalExcerpt = targetQ.sourceExcerpt;
+        finalHighlighted = `**${targetQ.sourceExcerpt.trim()}**`;
+        quality = 'high';
+      }
+    }
+
     // Si el texto del fragmento no contenía la respuesta pero la explicación de la pregunta sí la detalla textualmente,
     // utilizar la explicación como pasaje contextual complementario
     if (quality === 'low' && targetQ.explanation && targetQ.explanation.length > 20) {
@@ -727,6 +740,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         question: targetQ.question,
         correctAnswer: rawAnswerText,
         concept: targetQ.topic,
+        exactCitation: targetQ.sourceExcerpt,
       });
       if (expPassage.score > passage.score) {
         finalExcerpt = expPassage.excerpt;
@@ -744,6 +758,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         question: targetQ.question,
         correctAnswer: rawAnswerText,
         concept: targetQ.topic,
+        exactCitation: targetQ.sourceExcerpt,
       });
       finalExcerpt = extracted.excerpt || textToExtract;
       finalHighlighted = extracted.highlightedExcerpt || (textToExtract ? `**${textToExtract.trim()}**` : '');
@@ -753,8 +768,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Resolver la página exacta del documento de forma infalible
     const resolvedPage = resolveRealPageNumber(
       fullText,
-      finalExcerpt,
-      candidateChunk?.pageOrSlide || targetQ.sourcePageOrSlide,
+      finalExcerpt || targetQ.sourceExcerpt,
+      targetQ.sourcePageOrSlide || candidateChunk?.pageOrSlide,
       chunkPool
     );
 

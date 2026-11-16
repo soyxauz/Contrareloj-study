@@ -917,13 +917,14 @@ export function processContent(
       correctAnswer: correctAnswerString,
       concept: q.topic,
       preferredChunkId: q.sourceChunkId,
+      exactCitation: q.sourceExcerpt,
     });
 
     if (bestChunk) {
       q.sourceChunkId = bestChunk.id;
       q.sourceChunkText = bestChunk.text;
       q.sourceExcerpt = q.sourceExcerpt || passage.excerpt;
-      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
+      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || q.sourceExcerpt, bestChunk.pageOrSlide);
       if (bestChunk.assetIds && bestChunk.assetIds.length > 0) {
         const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
         if (needsVisual) {
@@ -1052,14 +1053,17 @@ export async function processContentAsync(
       correctAnswer: correctAnswerString,
       concept: q.topic,
       preferredChunkId: q.sourceChunkId,
+      exactCitation: q.sourceExcerpt,
     });
 
     if (bestChunk) {
       // Si se identificó un chunk de mayor precisión textual o la pregunta no tenía texto de origen válido, vincular el mejor chunk
       q.sourceChunkId = bestChunk.id;
       q.sourceChunkText = bestChunk.text;
-      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt, bestChunk.pageOrSlide);
-      q.sourceExcerpt = passage.excerpt;
+      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || q.sourceExcerpt, bestChunk.pageOrSlide);
+      if (!q.sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
+        q.sourceExcerpt = passage.excerpt;
+      }
 
       if (!q.sourceAsset && assets.length > 0) {
         const targetChunk = chunks.find(c => c.id === q.sourceChunkId) || bestChunk;
