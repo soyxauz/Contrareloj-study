@@ -18,7 +18,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5 w-full max-w-full min-w-0">
       {['Verdadero', 'Falso'].map((label, idx) => {
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
@@ -73,7 +73,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`animate-stagger-item active-press w-full py-4 sm:py-5 px-4 rounded-2xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex flex-col items-center justify-center gap-2 cursor-pointer ${cardClasses}`}
+            className={`animate-stagger-item active-press w-full py-4 sm:py-5 px-3 sm:px-4 rounded-2xl min-w-0 overflow-hidden transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex flex-col items-center justify-center gap-2 cursor-pointer ${cardClasses}`}
           >
             <div className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all shadow-sm ${iconBgClasses}`}>
               {isVerdadero ? (

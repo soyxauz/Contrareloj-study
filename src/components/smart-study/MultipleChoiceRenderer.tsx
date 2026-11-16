@@ -21,7 +21,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5 w-full max-w-full min-w-0">
       {safeOptions.map((option, idx) => {
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;
@@ -80,7 +80,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
               e.stopPropagation();
               onSelectOption(idx);
             }}
-            className={`animate-stagger-item active-press w-full text-left p-3 sm:p-3.5 rounded-xl transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center gap-3 group cursor-pointer ${cardClasses}`}
+            className={`animate-stagger-item active-press w-full text-left p-3 sm:p-3.5 rounded-xl min-w-0 overflow-hidden transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center gap-3 group cursor-pointer ${cardClasses}`}
           >
             <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 tabular-nums transition-[transform,background-color,border-color] duration-150 shadow-sm ${badgeClasses}`}>
               {isAnswered && isCorrect ? (
@@ -91,7 +91,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
                 <span>{idx + 1}</span>
               )}
             </div>
-            <span className={`font-medium text-[13px] sm:text-sm leading-snug flex-1 transition-colors break-words ${textClasses}`}>
+            <span className={`font-medium text-[13px] sm:text-sm leading-snug flex-1 min-w-0 transition-colors break-words ${textClasses}`}>
               <FormattedText text={option} inlineOnly={true} />
             </span>
           </button>

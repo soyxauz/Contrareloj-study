@@ -101,7 +101,7 @@ const LevelIndicator: React.FC<{ currentLevel: number; onResetClick?: () => void
       type="button"
       onClick={onResetClick}
       title={`Nivel ${currentLevel}: ${currentLevel === 1 ? 'Fundamentos' : currentLevel === 2 ? 'Aplicación' : 'Dominio'} (clic para reiniciar progreso)`}
-      className={`active-press flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors cursor-pointer select-none text-xs tabular-nums ${
+      className={`active-press flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-colors cursor-pointer select-none text-xs tabular-nums shrink-0 ${
         theme === 'light'
           ? 'bg-rose-50/90 border border-rose-200/90 hover:bg-rose-100/90 text-rose-950 shadow-xs'
           : theme === 'kitty'
@@ -110,17 +110,17 @@ const LevelIndicator: React.FC<{ currentLevel: number; onResetClick?: () => void
       }`}
     >
       <span
-        className={`text-[11px] font-semibold uppercase tracking-wider ${
+        className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider ${
           theme === 'light' ? 'text-rose-700' : theme === 'kitty' ? 'text-pink-700' : 'text-slate-400'
         }`}
       >
         Nivel {currentLevel}
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 sm:gap-1">
         {[1, 2, 3].map(lvl => (
           <span
             key={lvl}
-            className={`w-3.5 h-1.5 rounded-full transition-colors ${
+            className={`w-2.5 sm:w-3.5 h-1.5 rounded-full transition-colors ${
               currentLevel >= lvl
                 ? theme === 'kitty'
                   ? 'bg-pink-500 shadow-sm shadow-pink-500/40'
@@ -4023,7 +4023,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-2.5 sm:px-6 py-2 sm:py-3.5">
+    <div className="w-full max-w-4xl mx-auto px-2.5 sm:px-6 py-2 sm:py-3.5 min-w-0 overflow-x-hidden">
       {activeTab === 'history' ? (
         <div className="space-y-6 animate-fadeIn">
           {/* Header de Historial con botón de retorno a la práctica */}
@@ -4346,14 +4346,14 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         </div>
       ) : (
         /* ── MODO PRÁCTICA ACTIVA (DISTRIBUCIÓN PREMIUM SEGÚN CAPTURA) ───────── */
-        <div className="animate-fadeIn">
+        <div className="w-full max-w-full min-w-0 animate-fadeIn">
           {/* ── TOP BAR: PROGRESS PILL + LEVEL INDICATOR + SETTINGS (APPLE / LINEAR STUDIO) ─── */}
-          <div className="flex items-center justify-between gap-1.5 sm:gap-4 flex-nowrap">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-4 w-full max-w-full min-w-0">
             {/* Left: Progress Badge + Sleek Bar */}
             <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-3">
               {/* Pill sincronizada con HomeView: Nivel X: N/25 (Y%) */}
               <div
-                className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shrink-0 tabular-nums select-none ${
+                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold backdrop-blur-md shrink-0 tabular-nums select-none ${
                   theme === 'light'
                     ? 'bg-rose-50/95 border border-rose-200/90 text-rose-950 shadow-xs'
                     : theme === 'kitty'
@@ -4394,7 +4394,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
               {/* Pista de Barra de Progreso Elegante y Fluida (Sin colisión ni texto cortado) */}
               <div
-                className={`flex-1 min-w-[32px] sm:min-w-[60px] h-2 sm:h-2.5 rounded-full relative overflow-hidden ${
+                className={`flex-1 min-w-[24px] sm:min-w-[60px] h-2 sm:h-2.5 rounded-full relative overflow-hidden ${
                   theme === 'light'
                     ? 'bg-slate-200/80 border border-slate-300/50 shadow-inner'
                     : theme === 'kitty'
@@ -4416,7 +4416,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
 
             {/* Right: Share + LevelIndicator + Settings Gear */}
-            <div className="flex items-center gap-1 sm:gap-2.5 shrink-0 flex-nowrap">
+            <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
 
               {onShareKit && (
                 <button
@@ -4607,7 +4607,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           {/* Píldora de Subtema Granular (Diseño Apple / Emil Kowalski / Linear con soporte multitema y sin punto parpadeante) */}
           {currentSubtopic && (
             <div
-              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md mb-2 sm:mb-2.5 select-none animate-fadeIn ${
+              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md mb-2 sm:mb-2.5 select-none animate-fadeIn max-w-full min-w-0 overflow-hidden ${
                 theme === 'light'
                   ? 'bg-rose-50/90 border border-rose-200/90 text-rose-950 shadow-xs'
                   : theme === 'kitty'
@@ -4624,7 +4624,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               }}
             >
               <span
-                className={`uppercase tracking-wider text-[10px] font-bold ${
+                className={`uppercase tracking-wider text-[10px] font-bold shrink-0 ${
                   theme === 'light'
                     ? 'text-rose-700'
                     : theme === 'kitty'
@@ -4635,18 +4635,18 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 Subtema
               </span>
               <span
-                className={
+                className={`shrink-0 ${
                   theme === 'light'
                     ? 'text-rose-300'
                     : theme === 'kitty'
                     ? 'text-pink-300'
                     : 'text-slate-600'
-                }
+                }`}
               >
                 •
               </span>
               <span
-                className={`font-medium ${
+                className={`font-medium truncate max-w-[200px] xs:max-w-[280px] sm:max-w-none ${
                   theme === 'light'
                     ? 'text-rose-950 font-semibold'
                     : theme === 'kitty'
@@ -4670,7 +4670,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 : (currentQ.question || '')
             }
             topic={currentQ.topic}
-            className="text-base sm:text-lg font-bold tracking-tight mb-3 sm:mb-4 leading-snug"
+            className="text-base sm:text-lg font-bold tracking-tight mb-3 sm:mb-4 leading-snug w-full max-w-full min-w-0 break-words"
           />
 
           {/* ── QUESTION TYPE RENDERERS ────────────────────────────────────── */}
@@ -4894,7 +4894,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         })()}
 
         {/* ── BOTÓN PRINCIPAL DE AVANCE / SALTAR PREGUNTA (ESTILO APPLE / LINEAR STUDIO) ── */}
-        <div className="flex justify-center mb-3 sm:mb-4">
+        <div className="flex justify-center mb-3 sm:mb-4 w-full max-w-full min-w-0">
           <button
             type="button"
             onClick={handleNext}
@@ -4904,7 +4904,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 ? 'Avanzar a la siguiente pregunta'
                 : 'Saltar esta pregunta y ver la justificación sin penalizar tu progreso'
             }
-            className={`active-press w-full sm:w-auto justify-center px-8 sm:px-10 py-2.5 sm:py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
+            className={`active-press w-full sm:w-auto justify-center px-8 sm:px-10 py-2.5 sm:py-3 rounded-2xl font-bold text-sm sm:text-base shadow-lg transition-all duration-150 flex items-center gap-2.5 cursor-pointer max-w-full min-w-0 ${
               isAdvancing ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''
             } ${
               isAnswered
@@ -4952,7 +4952,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         </div>
 
         {/* ── ACTION ROW: HISTORIAL + FEEDBACK ────── */}
-        <div className="flex items-center justify-between gap-2.5 pt-1 mb-3 sm:mb-4">
+        <div className="flex items-center justify-between gap-2.5 pt-1 mb-3 sm:mb-4 w-full max-w-full min-w-0">
           <button
             type="button"
             onClick={() => setActiveTab('history')}
@@ -5024,10 +5024,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         {isAnswered && (
           <div
             ref={explanationRef}
-            className="mt-6 pt-5 border-t border-white/[0.08] animate-fadeIn"
+            className="mt-6 pt-5 border-t border-white/[0.08] animate-fadeIn w-full max-w-full min-w-0 overflow-hidden"
           >
             {/* Barra de utilidades secundaria sutil (escuchar audio / ver fuente RAG) */}
-            <div className="flex items-center justify-end gap-2 mb-3">
+            <div className="flex items-center justify-between sm:justify-end gap-2 mb-3 w-full max-w-full min-w-0">
               <button
                 onClick={() => handleOpenRAGModal(currentQ, safeOptions[safeCorrectIndex])}
                 className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1.5 transition-colors cursor-pointer active:scale-[0.98]"

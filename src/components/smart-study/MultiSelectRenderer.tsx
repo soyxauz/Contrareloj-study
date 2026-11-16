@@ -23,11 +23,11 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="space-y-2.5 mb-3 sm:mb-4">
+    <div className="space-y-2.5 mb-3 sm:mb-4 w-full max-w-full min-w-0">
       <p className={`text-xs sm:text-[13px] font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
         Selecciona una o más respuestas válidas y presiona &quot;Comprobar Selección&quot;:
       </p>
-      <div className="space-y-2 sm:space-y-2.5">
+      <div className="space-y-2 sm:space-y-2.5 w-full max-w-full min-w-0">
         {safeOptions.map((option, idx) => {
           const isSelected = selectedMultiIndices.includes(idx);
           const isCorrect = safeCorrectIndices.includes(idx);
@@ -74,7 +74,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
               disabled={isAnswered}
               style={{ animationDelay: `${idx * 30}ms` }}
               onClick={() => onToggleIndex(idx)}
-              className={`animate-stagger-item active-press w-full text-left p-2.5 sm:p-3 rounded-xl border transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center justify-between cursor-pointer ${optionStyles}`}
+              className={`animate-stagger-item active-press w-full text-left p-2.5 sm:p-3 rounded-xl border min-w-0 overflow-hidden transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out flex items-center justify-between cursor-pointer ${optionStyles}`}
             >
               <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
                 <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
@@ -84,7 +84,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
                 }`}>
                   {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
-                <span className="text-[13px] sm:text-sm font-medium leading-snug flex-1 break-words">
+                <span className="text-[13px] sm:text-sm font-medium leading-snug flex-1 min-w-0 break-words">
                   <FormattedText text={option} inlineOnly={true} />
                 </span>
               </div>

@@ -37,8 +37,8 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="space-y-3 mb-3 sm:mb-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="space-y-3 mb-3 sm:mb-4 w-full max-w-full min-w-0">
+      <div className="flex items-center justify-between flex-wrap gap-2 w-full max-w-full min-w-0">
         <p className={`text-xs font-medium ${
           theme === 'kitty' ? 'text-pink-900' : theme === 'light' ? 'text-slate-600' : 'text-slate-300'
         }`}>
@@ -57,9 +57,9 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-full min-w-0">
         {/* Left Column: Terms */}
-        <div className="space-y-2">
+        <div className="space-y-2 w-full max-w-full min-w-0">
           <div className="flex items-center justify-between px-1">
             <span className={`text-xs font-bold uppercase tracking-wider block ${
               theme === 'kitty' ? 'text-pink-700 font-black' : theme === 'light' ? 'text-indigo-700 font-black' : 'text-violet-300'
@@ -180,7 +180,7 @@ export const MatchingRenderer: React.FC<MatchingRendererProps> = ({
         </div>
 
         {/* Right Column: Definitions */}
-        <div className="space-y-3">
+        <div className="space-y-3 w-full max-w-full min-w-0">
           <div className="flex items-center justify-between px-1">
             <span className={`text-xs font-bold uppercase tracking-wider block ${
               theme === 'kitty' ? 'text-pink-700 font-black' : theme === 'light' ? 'text-purple-700 font-black' : 'text-purple-300'

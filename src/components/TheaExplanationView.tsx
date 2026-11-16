@@ -203,26 +203,26 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
   const hasValidImage = Boolean(imageResult && imageResult.imageUrl);
 
   return (
-    <div className={`explanation-wrapper w-full flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-10 mt-6 pt-4 text-left animate-fadeIn ${
+    <div className={`explanation-wrapper w-full max-w-full min-w-0 overflow-hidden flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-10 mt-6 pt-4 text-left animate-fadeIn ${
       hasValidImage ? '' : 'max-w-4xl'
     }`}>
       {/* ── COLUMNA IZQUIERDA: BÚSQUEDA INTERACTIVA Y EXACTAMENTE 3 VIÑETAS ── */}
-      <div className={`explanation-body flex-1 min-w-0 ${hasValidImage ? 'max-w-2xl' : 'w-full'}`}>
-        <div className="top-level-explanation space-y-3.5">
+      <div className={`explanation-body flex-1 min-w-0 w-full max-w-full overflow-hidden ${hasValidImage ? 'max-w-2xl' : 'w-full'}`}>
+        <div className="top-level-explanation space-y-3.5 w-full max-w-full min-w-0">
           {/* Barra de Búsqueda Interactiva Externa (Google / Wikipedia) */}
-          <div className={`flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs border ${
+          <div className={`flex flex-col xs:flex-row xs:items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs border w-full max-w-full min-w-0 ${
             theme === 'dark'
               ? 'bg-white/[0.03] border-white/[0.08] text-slate-300'
               : theme === 'kitty'
               ? 'bg-pink-50/70 border-pink-200 text-pink-900'
               : 'bg-slate-50 border-slate-200 text-slate-800'
           }`}>
-            <div className="flex items-center gap-2 min-w-0 flex-1 truncate">
+            <div className="flex items-center gap-2 min-w-0 w-full xs:w-auto truncate">
               <Search className={`w-3.5 h-3.5 shrink-0 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-500' : 'text-slate-400'}`} />
               <span className={`text-[10px] uppercase tracking-wider font-mono shrink-0 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500 font-bold'}`}>Búsqueda:</span>
-              <span className={`font-semibold truncate ${theme === 'dark' ? 'text-white' : 'text-zinc-950 font-bold'}`}>&quot;{searchTerm}&quot;</span>
+              <span className={`font-semibold truncate max-w-[180px] xs:max-w-[240px] sm:max-w-none ${theme === 'dark' ? 'text-white' : 'text-zinc-950 font-bold'}`}>&quot;{searchTerm}&quot;</span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 w-full xs:w-auto justify-end">
               <a
                 href={question?.googleOverview?.searchUrl || `https://www.google.com/search?q=${encodeURIComponent(searchTerm)}`}
                 target="_blank"
@@ -262,13 +262,13 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
             </div>
           </div>
 
-          <ul className="space-y-4 text-[15px] sm:text-base leading-relaxed list-none m-0 p-0">
+          <ul className="space-y-4 text-[15px] sm:text-base leading-relaxed list-none m-0 p-0 w-full max-w-full min-w-0">
             {bullets.map((bullet, idx) => (
-              <li key={idx} className="flex items-start gap-3">
+              <li key={idx} className="flex items-start gap-3 w-full max-w-full min-w-0">
                 <span className={`text-base leading-none mt-1 select-none shrink-0 ${
                   theme === 'kitty' ? 'text-pink-600 font-bold' : theme === 'light' ? 'text-rose-600 font-bold' : 'text-indigo-400'
                 }`}>•</span>
-                <span className={`flex-1 font-normal leading-relaxed text-[15px] sm:text-base ${
+                <span className={`flex-1 min-w-0 w-full overflow-hidden break-words font-normal leading-relaxed text-[15px] sm:text-base ${
                   theme === 'dark' ? 'text-slate-200' : 'text-zinc-900'
                 }`}>
                   {bullet}

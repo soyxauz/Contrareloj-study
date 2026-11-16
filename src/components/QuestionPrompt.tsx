@@ -168,7 +168,7 @@ export const QuestionPrompt: React.FC<QuestionPromptProps> = ({
   return (
     <Component
       data-question-prompt
-      className={`question-prompt font-medium ${baseTextColor} tracking-normal select-text leading-snug [&_strong]:font-extrabold [&_strong]:tracking-normal [&_b]:font-extrabold ${strongColorClass} ${className}`}
+      className={`question-prompt font-medium ${baseTextColor} tracking-normal select-text leading-snug break-words max-w-full overflow-hidden [&_strong]:font-extrabold [&_strong]:tracking-normal [&_b]:font-extrabold ${strongColorClass} ${className}`}
     >
       <FormattedText text={formattedMarkdown} inlineOnly={inlineOnly} />
     </Component>
