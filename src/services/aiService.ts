@@ -4,6 +4,7 @@ import { safeLocalStorageSetItem } from './storageService';
 import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
 import { filterCompliantQuestions, isQuestionCompliantWithStandard } from '../utils/questionValidator';
 import { extractCleanTokens } from '../engine/topicInterleaving';
+import { findBestChunkAndExcerpt } from '../engine/ragExcerptExtractor';
 import {
   computePodcastLengthPlan,
   buildPodcastActPrompts,
@@ -3440,6 +3441,7 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
       "oracion_plantilla": "El proceso de {0} se lleva a cabo en {1}.",
       "huecos_correctos": ["término 1", "término 2"],
       "banco_palabras": ["término 1", "término 2", "distractor 1", "distractor 2"],
+      "cita_textual_exacta": "Oración o pasaje textual exacto y específico del documento (copiado verbatim) que fundamenta y responde directamente esta pregunta.",
       "retroalimentacion": {
         "busqueda_google": {
           "consulta": "Búsqueda textual exacta y natural en Google/Wikipedia para verificar la respuesta (ej: mecanismo de accion de la furosemida en el asa de henle)",
@@ -3454,6 +3456,9 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura:
     }
   ]
 }
+
+REGLA ESTRICTA DE CITAS RAG TEXTUALES Y ESPECÍFICAS:
+- En cada pregunta, el campo "cita_textual_exacta" DEBE contener la oración o pasaje textual literal del fragmento del documento donde se explica concretamente la respuesta y el concepto evaluado. Queda TERMINANTEMENTE PROHIBIDO poner frases genéricas o inventadas.
 
 REGLA ESTRICTA DE ENUNCIADOS LIMPIOS (SIN OPCIONES EN EL TALLO):
 - Queda TERMINANTEMENTE PROHIBIDO incluir las opciones A), B), C), D) o 1), 2), 3), 4) dentro del campo "pregunta" o "contexto_o_enunciado".
@@ -3689,21 +3694,31 @@ Genera el JSON completo respetando la estructura exigida:`;
 
       const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query);
 
-      // RAG Traceability linkage
+      // RAG Traceability linkage de alta especificidad
       let sourceChunkId = p.chunk_id_origen || undefined;
       let sourceChunkText: string | undefined = undefined;
+      let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
+        ? p.cita_textual_exacta.trim()
+        : undefined;
       let sourcePageOrSlide: number | undefined = undefined;
 
       if (chunks && chunks.length > 0) {
-        let matchedChunk = chunks.find(c => c.id === p.chunk_id_origen);
-        if (!matchedChunk) {
-          const textToSearch = (p.pregunta || '') + ' ' + (p.retroalimentacion?.referencia_al_texto || '');
-          matchedChunk = chunks.find(c => textToSearch.toLowerCase().includes(c.text.slice(0, 30).toLowerCase())) || chunks[idx % chunks.length];
-        }
-        if (matchedChunk) {
-          sourceChunkId = matchedChunk.id;
-          sourceChunkText = matchedChunk.text;
-          sourcePageOrSlide = matchedChunk.pageOrSlide;
+        const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
+        const { bestChunk, passage } = findBestChunkAndExcerpt({
+          chunks,
+          question: fullQuestion,
+          correctAnswer: correctAnswerString,
+          concept: String(p.concepto_evaluado || topicFallback).trim(),
+          preferredChunkId: p.chunk_id_origen,
+        });
+
+        if (bestChunk) {
+          sourceChunkId = bestChunk.id;
+          sourceChunkText = bestChunk.text;
+          sourcePageOrSlide = bestChunk.pageOrSlide;
+          if (!sourceExcerpt || passage.score >= 5.0) {
+            sourceExcerpt = passage.excerpt;
+          }
         }
       }
 
@@ -3736,6 +3751,7 @@ Genera el JSON completo respetando la estructura exigida:`;
         googleOverview,
         sourceChunkId,
         sourceChunkText,
+        sourceExcerpt,
         sourcePageOrSlide,
       };
     });
@@ -6062,17 +6078,28 @@ Genera las ${count} preguntas en formato JSON estricto:`;
 
     let sourceChunkId = p.chunk_id_origen || undefined;
     let sourceChunkText: string | undefined = undefined;
+    let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
+      ? p.cita_textual_exacta.trim()
+      : undefined;
     let sourcePageOrSlide: number | undefined = undefined;
 
     if (chunks && chunks.length > 0) {
-      let matchedChunk = chunks.find(c => c.id === p.chunk_id_origen);
-      if (!matchedChunk) {
-        matchedChunk = relevantChunks[idx % relevantChunks.length] || chunks[0];
-      }
-      if (matchedChunk) {
-        sourceChunkId = matchedChunk.id;
-        sourceChunkText = matchedChunk.text;
-        sourcePageOrSlide = matchedChunk.pageOrSlide;
+      const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
+      const { bestChunk, passage } = findBestChunkAndExcerpt({
+        chunks,
+        question: fullQuestion,
+        correctAnswer: correctAnswerString,
+        concept: String(p.concepto_evaluado || defaultTopic).trim(),
+        preferredChunkId: p.chunk_id_origen,
+      });
+
+      if (bestChunk) {
+        sourceChunkId = bestChunk.id;
+        sourceChunkText = bestChunk.text;
+        sourcePageOrSlide = bestChunk.pageOrSlide;
+        if (!sourceExcerpt || passage.score >= 5.0) {
+          sourceExcerpt = passage.excerpt;
+        }
       }
     }
 
@@ -6104,6 +6131,7 @@ Genera las ${count} preguntas en formato JSON estricto:`;
       googleOverview,
       sourceChunkId,
       sourceChunkText,
+      sourceExcerpt,
       sourcePageOrSlide,
     };
   });

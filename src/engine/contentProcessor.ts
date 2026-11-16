@@ -7,6 +7,7 @@ import {
 import { detectDocumentLanguage } from '../services/languageService';
 import { chunkDocument } from './chunker';
 import { LocalVectorStore } from './vectorStore';
+import { findBestChunkAndExcerpt } from './ragExcerptExtractor';
 import { analyzeCanvasContent, IMAGE_FILTER_CONFIG } from '../utils/imageClassifier';
 import JSZip from 'jszip';
 
@@ -902,18 +903,26 @@ export function processContent(
 
   // Generar chunks semánticos con enlace de proximidad a activos
   const chunks = chunkDocument(cleanText, assets);
-  const vectorStore = new LocalVectorStore(chunks);
 
   const questionCount = 20;
   const rawQuestions = generateQuestions(cleanText, questionCount, category);
   const questions = [...rawQuestions].sort(() => Math.random() - 0.5);
 
-  // Vincular cada pregunta a su fragmento de origen (RAG) y activo multimodal
+  // Vincular cada pregunta a su fragmento de origen (RAG) de alta especificidad y activo multimodal
   for (const q of questions) {
-    const bestChunk = vectorStore.findBestChunk(q.topic + ' ' + q.question);
+    const correctAnswerString = (q.options && q.correctIndex !== undefined ? q.options[q.correctIndex] : '') || '';
+    const { bestChunk, passage } = findBestChunkAndExcerpt({
+      chunks,
+      question: q.question,
+      correctAnswer: correctAnswerString,
+      concept: q.topic,
+      preferredChunkId: q.sourceChunkId,
+    });
+
     if (bestChunk) {
       q.sourceChunkId = bestChunk.id;
       q.sourceChunkText = bestChunk.text;
+      q.sourceExcerpt = q.sourceExcerpt || passage.excerpt;
       q.sourcePageOrSlide = bestChunk.pageOrSlide;
       if (bestChunk.assetIds && bestChunk.assetIds.length > 0) {
         const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
@@ -1033,30 +1042,34 @@ export async function processContentAsync(
     );
   }
 
-  // Vincular RAG y activos multimodales a las preguntas de IA
+  // Vincular RAG de alta especificidad y activos multimodales a las preguntas de IA
   for (let idx = 0; idx < aiQuestions.length; idx++) {
     const q = aiQuestions[idx];
-    if (!q.sourceChunkId) {
-      const best = vectorStore.findBestChunk(q.topic + ' ' + q.question);
-      if (best) {
-        q.sourceChunkId = best.id;
-        q.sourceChunkText = best.text;
-        q.sourcePageOrSlide = best.pageOrSlide;
-        if (best.assetIds && best.assetIds.length > 0) {
+    const correctAnswerString = (q.options && q.correctIndex !== undefined ? q.options[q.correctIndex] : '') || '';
+    const { bestChunk, passage } = findBestChunkAndExcerpt({
+      chunks,
+      question: q.question,
+      correctAnswer: correctAnswerString,
+      concept: q.topic,
+      preferredChunkId: q.sourceChunkId,
+    });
+
+    if (bestChunk) {
+      if (!q.sourceChunkId) {
+        q.sourceChunkId = bestChunk.id;
+        q.sourceChunkText = bestChunk.text;
+        q.sourcePageOrSlide = bestChunk.pageOrSlide;
+      }
+      q.sourceExcerpt = q.sourceExcerpt || passage.excerpt;
+
+      if (!q.sourceAsset && assets.length > 0) {
+        const targetChunk = chunks.find(c => c.id === q.sourceChunkId) || bestChunk;
+        if (targetChunk.assetIds && targetChunk.assetIds.length > 0) {
           const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
           if (needsVisual) {
-            const matchingAsset = assets.find(a => best.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
+            const matchingAsset = assets.find(a => targetChunk.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
             if (matchingAsset) q.sourceAsset = matchingAsset;
           }
-        }
-      }
-    } else if (!q.sourceAsset && assets.length > 0) {
-      const chunk = chunks.find(c => c.id === q.sourceChunkId);
-      if (chunk && chunk.assetIds && chunk.assetIds.length > 0) {
-        const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
-        if (needsVisual) {
-          const matchingAsset = assets.find(a => chunk.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
-          if (matchingAsset) q.sourceAsset = matchingAsset;
         }
       }
     }

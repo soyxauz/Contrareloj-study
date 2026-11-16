@@ -90,6 +90,7 @@ export interface Question {
   // RAG Evidence & Multimodal Traceability
   sourceChunkId?: string;
   sourceChunkText?: string;
+  sourceExcerpt?: string;
   sourcePageOrSlide?: number;
   sourceAsset?: DocumentAsset;
 
