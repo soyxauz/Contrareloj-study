@@ -217,7 +217,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
               ? 'bg-pink-50/70 border-pink-200 text-pink-900'
               : 'bg-slate-50 border-slate-200 text-slate-800'
           }`}>
-            <div className="flex items-center gap-2 truncate max-w-xs sm:max-w-md">
+            <div className="flex items-center gap-2 min-w-0 flex-1 truncate">
               <Search className={`w-3.5 h-3.5 shrink-0 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-500' : 'text-slate-400'}`} />
               <span className={`text-[10px] uppercase tracking-wider font-mono shrink-0 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500 font-bold'}`}>Búsqueda:</span>
               <span className={`font-semibold truncate ${theme === 'dark' ? 'text-white' : 'text-zinc-950 font-bold'}`}>&quot;{searchTerm}&quot;</span>

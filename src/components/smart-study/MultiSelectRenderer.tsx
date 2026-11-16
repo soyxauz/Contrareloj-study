@@ -84,7 +84,7 @@ export const MultiSelectRenderer: React.FC<MultiSelectRendererProps> = ({
                 }`}>
                   {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
-                <span className="text-[13px] sm:text-sm font-medium leading-snug flex-1">
+                <span className="text-[13px] sm:text-sm font-medium leading-snug flex-1 break-words">
                   <FormattedText text={option} inlineOnly={true} />
                 </span>
               </div>

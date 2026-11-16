@@ -451,49 +451,49 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
       {/* Header & Tools */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-thea-border">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 sm:mb-6 pb-5 sm:pb-6 border-b border-thea-border">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             {currentKitState.studyGuideDepth === 'ultra' ? (
               <>
-                <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600 text-white shadow-xs">
+                <span className="text-[11px] sm:text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-violet-600 text-white shadow-xs">
                   GUÍA ULTRA-EXHAUSTIVA (3X)
                 </span>
-                <span className="text-xs text-zinc-400 font-medium">Sin límite de caracteres • Auto-generada</span>
+                <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">Sin límite de caracteres • Auto-generada</span>
               </>
             ) : currentKitState.studyGuideDepth === 'complete' ? (
               <>
-                <span className="text-xs uppercase font-bold text-zinc-300">
+                <span className="text-[11px] sm:text-xs uppercase font-bold text-zinc-300">
                   GUÍA COMPLETA (2X)
                 </span>
-                <span className="text-xs text-zinc-400 font-medium">Doble profundidad • Auto-generada</span>
+                <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">Doble profundidad • Auto-generada</span>
               </>
             ) : currentKitState.studyGuideDepth === 'essential' ? (
               <>
-                <span className="text-xs uppercase font-bold text-zinc-300">
+                <span className="text-[11px] sm:text-xs uppercase font-bold text-zinc-300">
                   GUÍA ESENCIAL (1X)
                 </span>
-                <span className="text-xs text-zinc-400 font-medium">Síntesis rápida • Auto-generada</span>
+                <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">Síntesis rápida • Auto-generada</span>
               </>
             ) : (
               <>
-                <span className="text-xs uppercase font-bold text-zinc-300">
+                <span className="text-[11px] sm:text-xs uppercase font-bold text-zinc-300">
                   GUÍA ADAPTATIVA
                 </span>
-                <span className="text-xs text-zinc-400 font-medium">Auto-generada y editable</span>
+                <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">Auto-generada y editable</span>
               </>
             )}
           </div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2 tracking-tight">
-            <FileText className="w-6 h-6 text-zinc-400" />
-            <span>Guía de Estudio Inteligente</span>
+          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 tracking-tight">
+            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-zinc-400 shrink-0" />
+            <span className="truncate">Guía de Estudio Inteligente</span>
           </h1>
         </div>
 
         {/* Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           {activeTab === 'guide' && (
             <>
               {/* Botón Compartir Kit */}
@@ -501,11 +501,12 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 <button
                   type="button"
                   onClick={() => onShareKit(currentKitState)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-sky-400 hover:text-sky-300 transition-all cursor-pointer shadow-xs active:scale-[0.985]"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-sky-400 hover:text-sky-300 transition-all cursor-pointer shadow-xs active:scale-[0.985]"
                   title="Compartir contenido base de este kit con enlace público de Google Drive"
                 >
                   <Share2 className="w-3.5 h-3.5" />
-                  <span>Compartir Kit</span>
+                  <span className="hidden sm:inline">Compartir Kit</span>
+                  <span className="sm:hidden">Compartir</span>
                 </button>
               )}
 
@@ -516,19 +517,20 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                   setShowDepthModal(true);
                 }}
                 disabled={isGenerating}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-[0.985]"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-[0.985]"
                 title="Rehacer la guía de estudio con diferente nivel de extensión (1x, 2x o 3x)"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Rehacer con diferente extensión</span>
+                <span className="hidden sm:inline">Rehacer con diferente extensión</span>
+                <span className="sm:hidden">Extensión</span>
               </button>
 
               {/* Smart Edit */}
               <button
                 onClick={() => setShowSmartEditModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-md transition-all cursor-pointer active:scale-[0.985]"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-md transition-all cursor-pointer active:scale-[0.985]"
               >
-                <Wand2 className="w-4 h-4" />
+                <Wand2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Smart Edit</span>
               </button>
 
@@ -536,7 +538,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               <button
                 onClick={handleReadAloud}
                 disabled={isAudioLoading}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-[background-color,border-color,color,transform] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer active:scale-[0.97] ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold border transition-[background-color,border-color,color,transform] duration-160 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer active:scale-[0.97] ${
                   isSpeaking
                     ? 'bg-sky-500/20 text-sky-200 border-sky-400/40 shadow-xs'
                     : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-zinc-300 hover:text-white shadow-xs'
@@ -550,12 +552,13 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                 ) : (
                   <Volume2 className="w-3.5 h-3.5 text-sky-400" />
                 )}
-                <span>{isAudioLoading ? 'Cargando audio...' : isSpeaking ? 'Detener' : 'Leer en voz alta'}</span>
+                <span className="hidden sm:inline">{isAudioLoading ? 'Cargando audio...' : isSpeaking ? 'Detener' : 'Leer en voz alta'}</span>
+                <span className="sm:hidden">{isSpeaking ? 'Detener' : 'Audio'}</span>
               </button>
 
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition-[background-color,border-color,color,transform] duration-150 cursor-pointer active:scale-[0.97]"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition-[background-color,border-color,color,transform] duration-150 cursor-pointer active:scale-[0.97]"
               >
                 {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                 <span>{isCopied ? 'Copiado' : 'Copiar'}</span>
@@ -602,7 +605,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       )}
 
       {/* ── Subtabs: Guía Teórica vs Galería Visual ────────────────────────── */}
-      <div className={`flex items-center gap-2 mb-8 p-1.5 rounded-2xl border shadow-sm ${
+      <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 p-1 sm:p-1.5 rounded-2xl border shadow-sm ${
         theme === 'light'
           ? 'bg-slate-100/80 border-slate-200'
           : theme === 'kitty'
@@ -611,7 +614,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
       }`}>
         <button
           onClick={() => setActiveTab('guide')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.985] ${
+          className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-[0.985] ${
             activeTab === 'guide'
               ? theme === 'light'
                 ? 'bg-white text-zinc-950 border border-slate-200 shadow-xs'
@@ -625,13 +628,13 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
           }`}
         >
-          <BookOpen className="w-4 h-4" />
-          <span>Guía Teórica de Estudio</span>
+          <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">Guía Teórica</span>
         </button>
 
         <button
           onClick={() => setActiveTab('gallery')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.985] relative ${
+          className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-[0.985] relative ${
             activeTab === 'gallery'
               ? theme === 'light'
                 ? 'bg-white text-zinc-950 border border-slate-200 shadow-xs'
@@ -645,8 +648,8 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
           }`}
         >
-          <ImageIcon className="w-4 h-4 text-zinc-400" />
-          <span>Galería de Figuras y Esquemas</span>
+          <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 shrink-0" />
+          <span className="truncate">Galería Visual</span>
           {currentKitState.assets && currentKitState.assets.length > 0 && (
             <span
               className={`text-[11px] px-2 py-0.5 rounded-full font-bold tabular-nums ${
@@ -819,7 +822,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
             </div>
           ) : (
             <div className="space-y-4">
-              <div className={`rounded-3xl p-6 sm:p-10 border ${
+              <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-8 md:p-10 border ${
                 theme === 'dark'
                   ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]'
                   : 'thea-glass-card text-zinc-950'
@@ -841,7 +844,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
               )}
 
               {/* Banner inferior para Rehacer con diferente extensión */}
-              <div className={`p-6 sm:p-8 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-5 ${
+              <div className={`p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-5 ${
                 theme === 'dark'
                   ? 'bg-[#0e0b16]/95 border-white/[0.08] shadow-xl'
                   : 'thea-glass-card text-zinc-950'
@@ -865,7 +868,7 @@ export const StudyGuideView: React.FC<StudyGuideViewProps> = ({ kit, onUpdateKit
                     setShowDepthModal(true);
                   }}
                   disabled={isGenerating}
-                  className={`shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer active:scale-[0.985] ${
+                  className={`w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer active:scale-[0.985] ${
                     theme === 'dark'
                       ? 'bg-white hover:bg-zinc-200 text-zinc-950'
                       : theme === 'kitty'

@@ -3954,7 +3954,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-2 sm:py-3.5">
+    <div className="max-w-4xl mx-auto px-2.5 sm:px-6 py-2 sm:py-3.5">
       {activeTab === 'history' ? (
         <div className="space-y-6 animate-fadeIn">
           {/* Header de Historial con botón de retorno a la práctica */}
@@ -4279,12 +4279,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         /* ── MODO PRÁCTICA ACTIVA (DISTRIBUCIÓN PREMIUM SEGÚN CAPTURA) ───────── */
         <div className="animate-fadeIn">
           {/* ── TOP BAR: PROGRESS PILL + LEVEL INDICATOR + SETTINGS (APPLE / LINEAR STUDIO) ─── */}
-          <div className="flex items-center justify-between gap-2.5 sm:gap-4 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-4 flex-nowrap">
             {/* Left: Progress Badge + Sleek Bar */}
-            <div className="flex-1 min-w-[200px] flex items-center gap-2.5 sm:gap-3">
+            <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-3">
               {/* Pill sincronizada con HomeView: Nivel X: N/25 (Y%) */}
               <div
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shrink-0 tabular-nums select-none ${
+                className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shrink-0 tabular-nums select-none ${
                   theme === 'light'
                     ? 'bg-rose-50/95 border border-rose-200/90 text-rose-950 shadow-xs'
                     : theme === 'kitty'
@@ -4309,7 +4309,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                       : 'text-rose-400'
                   }`}
                 />
-                <span className="font-bold">Nivel {level}:</span>
+                <span className="font-bold whitespace-nowrap">Niv. {level}:</span>
                 <span
                   className={`font-bold tabular-nums ${
                     theme === 'light'
@@ -4325,7 +4325,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
               {/* Pista de Barra de Progreso Elegante y Fluida (Sin colisión ni texto cortado) */}
               <div
-                className={`flex-1 h-2 sm:h-2.5 rounded-full relative overflow-hidden ${
+                className={`flex-1 min-w-[32px] sm:min-w-[60px] h-2 sm:h-2.5 rounded-full relative overflow-hidden ${
                   theme === 'light'
                     ? 'bg-slate-200/80 border border-slate-300/50 shadow-inner'
                     : theme === 'kitty'
@@ -4347,7 +4347,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
 
             {/* Right: Share + LevelIndicator + Settings Gear */}
-            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-1 sm:gap-2.5 shrink-0 flex-nowrap">
 
               {onShareKit && (
                 <button
@@ -5031,7 +5031,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           if (e.target === e.currentTarget) setShowSourceModal(false);
         }}
       >
-        <div className={`rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative overflow-hidden max-h-[90vh] flex flex-col border ${
+        <div className={`rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-8 shadow-2xl relative overflow-hidden max-h-[88vh] flex flex-col border ${
           theme === 'dark'
             ? 'bg-thea-surface border-violet-500/40 text-white'
             : theme === 'kitty'

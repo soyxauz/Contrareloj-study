@@ -91,7 +91,7 @@ export const MultipleChoiceRenderer: React.FC<MultipleChoiceRendererProps> = ({
                 <span>{idx + 1}</span>
               )}
             </div>
-            <span className={`font-medium text-[13px] sm:text-sm leading-snug flex-1 transition-colors ${textClasses}`}>
+            <span className={`font-medium text-[13px] sm:text-sm leading-snug flex-1 transition-colors break-words ${textClasses}`}>
               <FormattedText text={option} inlineOnly={true} />
             </span>
           </button>

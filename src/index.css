@@ -99,7 +99,38 @@
   }
 }
 
-/* ── Emil Kowalski Polish Utilities (120 FPS Composite-Only) ── */
+/* ── Emil Kowalski & Apple Design Polish Utilities (120 FPS Composite-Only) ── */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Safe Area Inset Support para notch y barras de gestos en móviles (iOS / Android) */
+.safe-area-pb {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+.safe-area-pt {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+}
+.safe-area-mb {
+  margin-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Prevenir auto-zoom intrusivo en iOS Safari al enfocar inputs en pantallas móviles */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }

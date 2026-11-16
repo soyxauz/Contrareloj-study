@@ -1381,7 +1381,7 @@ export const App: React.FC = () => {
       )}
 
       {/* Main Mode View - always scrollable whenever content exceeds screen height */}
-      <main className={`flex-1 min-h-0 flex flex-col ${isScreenFittingMode ? 'overflow-y-auto p-0 pb-24 md:pb-4' : 'overflow-y-auto pb-28 md:pb-12'}`}>
+      <main className={`flex-1 min-h-0 flex flex-col ${isScreenFittingMode ? 'overflow-y-auto p-0 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-4' : 'overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-12'}`}>
         <ViewErrorBoundary onReset={() => setCurrentMode('home')}>
         {currentMode === 'home' && (
           <HomeView

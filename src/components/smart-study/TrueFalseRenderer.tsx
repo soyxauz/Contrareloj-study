@@ -18,7 +18,7 @@ export const TrueFalseRenderer: React.FC<TrueFalseRendererProps> = ({
   const { theme } = useTheme();
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 sm:mb-5">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
       {['Verdadero', 'Falso'].map((label, idx) => {
         const isSelected = selectedOption === idx;
         const isCorrect = idx === safeCorrectIndex;

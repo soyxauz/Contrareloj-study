@@ -421,11 +421,11 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
   }, [availableMateriasList, kits, userId, materiaVersion]);
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6">
+    <div className="max-w-6xl mx-auto px-2.5 sm:px-5 lg:px-6 py-3 sm:py-6">
 
       {/* ── Header de Espacio de Estudio (Estilo Linear / Raycast Studio) ── */}
-      <section className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      <section className="mb-5 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5">
           <div className="flex items-center gap-3">
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
               Tus Study Kits
@@ -433,7 +433,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
           </div>
 
           {/* Barra de Acciones Globales Unificada */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => onNavigate('create', 'topic')}
@@ -830,7 +830,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
             {/* Tarjetas de kits con fondo tintado distintivo y espaciado amplio Studio Space */}
             {filteredKits.map((kit, index) => {
               const isActive = currentKit?.id === kit.id;
@@ -869,7 +869,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                       : `${mTheme.hex}30`,
                     animationDelay: `${Math.min(index * 25, 200)}ms`,
                   }}
-                  className={`animate-stagger-item study-kit-card glass-specular group relative text-left p-6 sm:p-7 rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[220px] transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] ${
+                  className={`animate-stagger-item study-kit-card glass-specular group relative text-left p-4 sm:p-6 md:p-7 rounded-2xl sm:rounded-[26px] border cursor-pointer overflow-hidden flex flex-col justify-between min-h-[190px] sm:min-h-[220px] transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] ${
                     isSelectionMode && isKitSelected
                       ? 'ring-2 ring-white/50 border-white shadow-2xl'
                       : isActive
@@ -1048,9 +1048,9 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
                   </div>
 
                   {/* Bottom Area: Estadísticas + Micro-barra de progreso con respiración amplia */}
-                  <div className="mt-7 relative z-10 space-y-3">
+                  <div className="mt-5 sm:mt-7 relative z-10 space-y-2.5 sm:space-y-3">
                     {/* Estadísticas del kit */}
-                    <div className={`flex items-center gap-4 text-xs font-semibold flex-wrap tabular-nums ${
+                    <div className={`flex items-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs font-semibold flex-wrap tabular-nums ${
                       theme === 'dark' ? 'text-white/90' : 'text-slate-800'
                     }`}>
                       <span className="flex items-center gap-1.5" title={`Smart Study - ${kStats.levelName}`}>
@@ -1092,7 +1092,7 @@ const KIT_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: stri
             {/* Create New Kit Card con feedback táctil elástico y respiración amplia */}
             <button
               onClick={() => onNavigate('create')}
-              className={`group flex flex-col items-center justify-center p-7 rounded-[26px] border border-dashed transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] min-h-[220px] cursor-pointer ${
+              className={`group flex flex-col items-center justify-center p-5 sm:p-7 rounded-2xl sm:rounded-[26px] border border-dashed transition-transform duration-160 ease-out hover:scale-[1.015] hover:-translate-y-1 active:scale-[0.985] min-h-[190px] sm:min-h-[220px] cursor-pointer ${
                 theme === 'dark'
                   ? 'border-white/15 hover:border-white/35 bg-white/[0.02] hover:bg-white/[0.05] glass-specular'
                   : theme === 'kitty'

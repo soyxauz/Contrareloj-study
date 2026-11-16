@@ -202,25 +202,25 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 animate-fadeIn">
+    <div className="max-w-6xl mx-auto px-2.5 sm:px-6 py-4 sm:py-6 animate-fadeIn">
       {/* ── Encabezado Principal y Selector de Modo ─────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-white/[0.06]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 sm:mb-6 pb-5 sm:pb-6 border-b border-white/[0.06]">
         <div>
-          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
+          <span className="text-[11px] sm:text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
             MÉTRICAS VERIFICADAS
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-2.5 tracking-tight">
-            <BarChart3 className="w-7 h-7 text-zinc-400" />
-            <span>Estadísticas de Mis Libros</span>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white flex items-center gap-2 sm:gap-2.5 tracking-tight">
+            <BarChart3 className="w-6 h-6 sm:w-7 sm:h-7 text-zinc-400 shrink-0" />
+            <span className="truncate">Estadísticas de Mis Libros</span>
           </h1>
         </div>
 
         {/* Selector de Vista: Detalle por Libro vs Resumen Global */}
-        <div className="flex items-center p-1 rounded-xl bg-white/[0.025] border border-white/[0.08] shrink-0 self-start md:self-auto shadow-sm">
+        <div className="w-full sm:w-auto flex items-center p-1 rounded-xl bg-white/[0.025] border border-white/[0.08] shrink-0 shadow-sm">
           <button
             type="button"
             onClick={() => setViewMode('book')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95 ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95 ${
               viewMode === 'book'
                 ? 'bg-white/10 text-white border border-white/10 shadow-sm'
                 : 'text-zinc-400 hover:text-white'
@@ -232,7 +232,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <button
             type="button"
             onClick={() => setViewMode('global')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95 ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95 ${
               viewMode === 'global'
                 ? 'bg-white/10 text-white border border-white/10 shadow-sm'
                 : 'text-zinc-400 hover:text-white'
@@ -1022,26 +1022,28 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   </div>
 
                   {/* Estadísticas de avance */}
-                  <div className="flex items-center gap-4 sm:gap-6 shrink-0 justify-between md:justify-end">
-                    <div className="text-left md:text-right">
-                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Respondidas</span>
-                      <span className="text-xs sm:text-sm font-extrabold text-white">
-                        {b.questionsAnswered} / {b.totalQuestions}
-                      </span>
-                    </div>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-6 shrink-0 justify-between md:justify-end w-full md:w-auto pt-2.5 sm:pt-0 border-t border-white/[0.06] sm:border-t-0">
+                    <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:gap-6 flex-1 sm:flex-initial tabular-nums">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">Resp.</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-white">
+                          {b.questionsAnswered}/{b.totalQuestions}
+                        </span>
+                      </div>
 
-                    <div className="text-left md:text-right">
-                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Precisión</span>
-                      <span className="text-xs sm:text-sm font-extrabold text-amber-400">
-                        {b.questionsAnswered > 0 ? `${b.accuracy}%` : '—'}
-                      </span>
-                    </div>
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">Precisión</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-amber-400">
+                          {b.questionsAnswered > 0 ? `${b.accuracy}%` : '—'}
+                        </span>
+                      </div>
 
-                    <div className="text-left md:text-right">
-                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Nivel</span>
-                      <span className="text-xs sm:text-sm font-extrabold text-violet-300">
-                        Nivel {b.level}
-                      </span>
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">Nivel</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-violet-300">
+                          Niv. {b.level}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Botón para ver detalle del libro */}
@@ -1053,7 +1055,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                         if (targetKit && onSelectKit) onSelectKit(targetKit);
                         setViewMode('book');
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/40 text-violet-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                      className="w-full sm:w-auto px-3.5 py-2 sm:py-1.5 rounded-xl bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/40 text-violet-300 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shrink-0 active:scale-95"
                     >
                       <span>Ver Métricas</span>
                       <ChevronRight className="w-3.5 h-3.5" />
