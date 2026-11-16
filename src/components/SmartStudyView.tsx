@@ -37,7 +37,6 @@ import {
   FileCheck2,
   Home,
   ChevronDown,
-  ChevronUp,
   ZoomIn,
   CheckCheck,
   Brain,
@@ -628,7 +627,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   // ── RAG Evidence Modal State ───────────────────────────────────────────
   const [showSourceModal, setShowSourceModal] = useState(false);
-  const [showFullContext, setShowFullContext] = useState(false);
   const [modalChunk, setModalChunk] = useState<{
     id?: string;
     text?: string;
@@ -693,7 +691,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       asset: targetQ.sourceAsset || (candidateChunk?.assetIds?.length ? kit.assets?.find(a => candidateChunk.assetIds!.includes(a.id)) : undefined),
       matchQuality: quality,
     });
-    setShowFullContext(false);
     setShowSourceModal(true);
   };
 
@@ -5153,47 +5150,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               }`}>
                 <FormattedText text={modalChunk.highlightedExcerpt || modalChunk.excerpt || modalChunk.text || 'Contenido del fragmento analizado en el material original.'} />
               </div>
-            </div>
-
-            {/* 2. Tarjeta Inferior: Contexto Documental Completo (Acordeón desplegable) */}
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setShowFullContext(!showFullContext)}
-                className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-xs font-semibold transition-transform duration-150 active:scale-[0.985] cursor-pointer ${
-                  theme === 'dark'
-                    ? 'bg-thea-surfaceLight/80 border-thea-border/80 text-slate-300 hover:text-white hover:bg-thea-surfaceLight'
-                    : theme === 'kitty'
-                    ? 'bg-pink-50/60 border-pink-200 text-zinc-900 hover:bg-pink-100/60'
-                    : 'bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-200/70'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <FileText className={`w-4 h-4 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-600' : 'text-violet-400'}`} />
-                  <span>Contexto Completo del Fragmento</span>
-                  {modalChunk.pageOrSlide && (
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold border opacity-80 tabular-nums">
-                      Pág. {modalChunk.pageOrSlide}
-                    </span>
-                  )}
-                </span>
-                <span className="flex items-center gap-1.5 text-[11px] opacity-75">
-                  <span>{showFullContext ? 'Ocultar contexto' : 'Ver párrafo completo'}</span>
-                  {showFullContext ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </span>
-              </button>
-
-              {showFullContext && (
-                <div className={`p-4 rounded-2xl border text-xs sm:text-sm leading-relaxed animate-fadeIn max-h-56 overflow-y-auto ${
-                  theme === 'dark'
-                    ? 'bg-thea-bg/60 border-thea-border/80 text-slate-300'
-                    : theme === 'kitty'
-                    ? 'bg-pink-50/30 border-pink-200 text-zinc-900'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}>
-                  <FormattedText text={modalChunk.text || 'Sin texto adicional en el fragmento.'} />
-                </div>
-              )}
             </div>
 
             {/* Multimodal Asset if available */}
