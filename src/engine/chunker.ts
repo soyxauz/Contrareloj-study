@@ -49,8 +49,9 @@ export function chunkDocument(
 
     const blockWords = block.split(/\s+/).filter(Boolean);
 
-    // Si encontramos una nueva diapositiva/página y ya tenemos palabras acumuladas, o si superamos el tamaño objetivo
-    const shouldFlush = (isNewSlideOrPage && currentWords.length >= effectiveMinWords) ||
+    // Si encontramos una nueva diapositiva/página y ya tenemos palabras acumuladas del bloque previo,
+    // empaquetar inmediatamente el chunk de la página anterior para que ningún texto quede con página desfasada
+    const shouldFlush = (isNewSlideOrPage && currentWords.length > 0) ||
       (currentWords.length + blockWords.length > effectiveTargetWords && currentWords.length >= effectiveMinWords);
 
     if (shouldFlush) {
@@ -87,12 +88,17 @@ export function chunkDocument(
         currentPageOrSlide = nextSlideOrPage;
       }
 
-      // Overlap: conservar el último 10% de palabras para mantener continuidad
-      const overlapWordsCount = Math.floor(currentWords.length * Math.min(overlapRatio, 0.10));
-      const overlap = currentWords.slice(-overlapWordsCount);
-      currentWords = [...overlap, ...blockWords];
+      // Si el flush fue por cambio de página/diapositiva, no arrastrar overlap para evitar mezclar páginas
+      if (isNewSlideOrPage) {
+        currentWords = [...blockWords];
+      } else {
+        // Overlap dentro de la misma página para mantener continuidad temática
+        const overlapWordsCount = Math.floor(currentWords.length * Math.min(overlapRatio, 0.10));
+        const overlap = currentWords.slice(-overlapWordsCount);
+        currentWords = [...overlap, ...blockWords];
+      }
     } else {
-      if (nextSlideOrPage !== undefined && currentWords.length === 0) {
+      if (nextSlideOrPage !== undefined) {
         currentPageOrSlide = nextSlideOrPage;
       }
       currentWords.push(...blockWords);

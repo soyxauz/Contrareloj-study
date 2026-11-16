@@ -116,7 +116,8 @@ function scoreSentence(
   queryTokens: Set<string>,
   answerTokens: Set<string>,
   conceptTokens: Set<string>,
-  cleanAnswerText: string
+  cleanAnswerText: string,
+  cleanQuestionText: string = ''
 ): number {
   const sentenceTokens = extractMeaningfulTokens(sentence);
   if (sentenceTokens.size === 0) return 0;
@@ -125,34 +126,53 @@ function scoreSentence(
 
   // 1. Coincidencia con tokens de la respuesta correcta (prioridad máxima: peso 3.0)
   for (const t of answerTokens) {
-    if (sentenceTokens.has(t)) score += 3.0;
+    if (sentenceTokens.has(t)) {
+      score += t.length >= 6 ? 4.0 : 3.0; // Bonus a términos médicos/técnicos largos
+    }
   }
 
   // 2. Coincidencia con el concepto evaluado (peso 2.0)
   for (const t of conceptTokens) {
-    if (sentenceTokens.has(t)) score += 2.0;
+    if (sentenceTokens.has(t)) {
+      score += t.length >= 6 ? 3.0 : 2.0;
+    }
   }
 
-  // 3. Coincidencia con la pregunta (peso 1.2)
+  // 3. Coincidencia con la pregunta (peso 1.5)
   for (const t of queryTokens) {
-    if (sentenceTokens.has(t)) score += 1.2;
+    if (sentenceTokens.has(t)) {
+      score += t.length >= 6 ? 2.5 : 1.5;
+    }
   }
 
   // 4. Bonus de frase literal continua si contiene fragmentos de 3 o más palabras de la respuesta
-  if (cleanAnswerText && cleanAnswerText.length >= 10) {
+  if (cleanAnswerText && cleanAnswerText.length >= 8) {
     const normSentence = sentence.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const normAnswer = cleanAnswerText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    if (normSentence.includes(normAnswer.slice(0, 35))) {
-      score += 15.0; // Enorme bonificación si contiene el inicio o cuerpo de la respuesta correcta
+    if (normSentence.includes(normAnswer.slice(0, 30))) {
+      score += 20.0; // Bonificación decisiva si contiene el cuerpo de la respuesta correcta
     } else {
       // Subcadenas de 3 palabras contiguas
       const ansWords = normAnswer.split(/\s+/).filter(w => w.length >= 3);
       for (let i = 0; i < ansWords.length - 2; i++) {
         const trigram = `${ansWords[i]} ${ansWords[i+1]} ${ansWords[i+2]}`;
         if (normSentence.includes(trigram)) {
-          score += 4.5;
+          score += 6.0;
         }
+      }
+    }
+  }
+
+  // 5. Bonus de frase literal de la pregunta (si contiene trigramas clave del enunciado)
+  if (cleanQuestionText && cleanQuestionText.length >= 10) {
+    const normSentence = sentence.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normQuery = cleanQuestionText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const qWords = normQuery.split(/\s+/).filter(w => w.length >= 3 && !SPANISH_STOPWORDS.has(w));
+    for (let i = 0; i < qWords.length - 1; i++) {
+      const bigram = `${qWords[i]} ${qWords[i+1]}`;
+      if (normSentence.includes(bigram)) {
+        score += 3.5;
       }
     }
   }
@@ -164,6 +184,7 @@ function scoreSentence(
 
 /**
  * Extrae la cita o pasaje textual exacto (1 a 3 oraciones contiguas) más representativo
+ * resaltando en negrita la zona nuclear exacta que fundamenta la pregunta.
  */
 export function extractSpecificPassage(params: {
   fullText: string;
@@ -179,7 +200,7 @@ export function extractSpecificPassage(params: {
     const fallback = fullText.slice(0, 300).trim();
     return {
       excerpt: fallback,
-      highlightedExcerpt: fallback,
+      highlightedExcerpt: fallback ? `**${fallback}**` : '',
       score: 0,
       matchQuality: 'low',
       sentenceIndices: [],
@@ -193,7 +214,7 @@ export function extractSpecificPassage(params: {
   const conceptTokens = extractMeaningfulTokens(concept);
 
   const scores = sentences.map(s =>
-    scoreSentence(s, queryTokens, answerTokens, conceptTokens, correctAnswer)
+    scoreSentence(s, queryTokens, answerTokens, conceptTokens, correctAnswer, question)
   );
 
   let bestIdx = 0;
@@ -224,18 +245,19 @@ export function extractSpecificPassage(params: {
   const matchQuality: 'high' | 'medium' | 'low' =
     maxScore >= 8 ? 'high' : maxScore >= 3.5 ? 'medium' : 'low';
 
-  // Generar versión con resaltado de términos clave
-  const termsToHighlight = Array.from(new Set([...answerTokens, ...conceptTokens]))
-    .filter(t => t.length >= 4)
-    .slice(0, 8);
-
-  let highlightedExcerpt = rawExcerpt;
-  if (termsToHighlight.length > 0) {
-    // Escapar términos para regex y resaltar con negritas
-    const escaped = termsToHighlight.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    const highlightRegex = new RegExp(`\\b(${escaped})\\b`, 'gi');
-    highlightedExcerpt = rawExcerpt.replace(highlightRegex, '**$1**');
+  // Resaltado de la zona clave en negrita (**oración**):
+  // La oración con mayor puntuación (bestIdx) es la zona exacta que responde y fundamenta la pregunta.
+  // Se formatea en negrita (**...**) mientras las oraciones adyacentes sirven de contexto natural no resaltado.
+  const highlightedParts: string[] = [];
+  for (const idx of selectedIndices) {
+    const cleanSentence = sentences[idx].replace(/\*\*/g, '').trim();
+    if (idx === bestIdx || (scores[idx] >= 8.0 && scores[idx] >= maxScore * 0.8)) {
+      highlightedParts.push(`**${cleanSentence}**`);
+    } else {
+      highlightedParts.push(cleanSentence);
+    }
   }
+  const highlightedExcerpt = highlightedParts.join(' ');
 
   return {
     excerpt: rawExcerpt,
@@ -281,13 +303,10 @@ export function findBestChunkAndExcerpt(params: {
       correctAnswer,
       concept,
     });
-    // Si el chunk preferido tiene calidad alta (score >= 8), usarlo directamente
-    if (preferredPassage.score >= 8) {
-      return { bestChunk: preferredChunk, passage: preferredPassage };
-    }
   }
 
-  // 2. Escanear el resto de chunks para encontrar si hay una coincidencia superior
+  // 2. Escanear todos los fragmentos exhaustivamente para garantizar que NUNCA se elija
+  // un chunk erróneo solo porque el preferido tuvo una coincidencia débil o marginal
   let topChunk: DocumentChunk = preferredChunk || chunks[0];
   let topPassage: SpecificPassageResult = preferredPassage || extractSpecificPassage({
     fullText: topChunk.text,
@@ -309,11 +328,54 @@ export function findBestChunkAndExcerpt(params: {
     if (candidatePassage.score > topPassage.score) {
       topPassage = candidatePassage;
       topChunk = chunk;
-      if (topPassage.score >= 12) break; // Coincidencia óptima encontrada
+      // Solo terminar anticipadamente si encontramos una coincidencia casi perfecta
+      if (topPassage.score >= 35.0) break;
     }
   }
 
   return { bestChunk: topChunk, passage: topPassage };
+}
+
+/**
+ * Normaliza y busca la posición aproximada de un extracto dentro de un texto más amplio
+ */
+export function findNormalizedSubstringIndex(haystack: string, needle: string): number {
+  if (!haystack || !needle) return -1;
+  const directIdx = haystack.indexOf(needle);
+  if (directIdx !== -1) return directIdx;
+
+  // Normalizar secuencias de espacios en blanco
+  const cleanNeedle = needle.replace(/\*\*/g, '').trim();
+  const normHaystack = haystack.toLowerCase().replace(/\s+/g, ' ');
+  const normNeedle = cleanNeedle.toLowerCase().replace(/\s+/g, ' ').trim();
+  const normIdx = normHaystack.indexOf(normNeedle);
+  if (normIdx !== -1) {
+    const ratio = haystack.length / Math.max(1, normHaystack.length);
+    return Math.floor(normIdx * ratio);
+  }
+
+  // Probar con los primeros 35 caracteres limpios
+  const prefix = normNeedle.slice(0, 35).trim();
+  if (prefix.length >= 12) {
+    const prefixIdx = normHaystack.indexOf(prefix);
+    if (prefixIdx !== -1) {
+      const ratio = haystack.length / Math.max(1, normHaystack.length);
+      return Math.floor(prefixIdx * ratio);
+    }
+  }
+
+  // Probar con las primeras palabras significativas de más de 4 letras
+  const words = normNeedle.split(/\s+/).filter(w => w.length >= 4).slice(0, 3);
+  if (words.length >= 2) {
+    const phrase = words.join(' ');
+    const phraseIdx = normHaystack.indexOf(phrase);
+    if (phraseIdx !== -1) {
+      const ratio = haystack.length / Math.max(1, normHaystack.length);
+      return Math.floor(phraseIdx * ratio);
+    }
+  }
+
+  return -1;
 }
 
 /**
@@ -323,30 +385,81 @@ export function findBestChunkAndExcerpt(params: {
 export function resolveRealPageNumber(
   fullText?: string,
   excerpt?: string,
-  fallbackPage?: number
-): number | undefined {
-  // 1. Si tenemos el extracto y el texto completo, buscar la etiqueta de página más cercana anterior al extracto
-  if (excerpt && fullText && fullText.includes(excerpt)) {
-    const idx = fullText.indexOf(excerpt);
-    const textBefore = fullText.slice(0, idx + excerpt.length);
-    const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+  fallbackPage?: number,
+  allChunks?: DocumentChunk[]
+): number {
+  // 1. Si tenemos el extracto y el texto completo, buscar la posición del extracto y la etiqueta anterior más cercana
+  if (excerpt && fullText) {
+    const cleanExcerpt = excerpt.replace(/\*\*/g, '').trim();
+    const matchPos = findNormalizedSubstringIndex(fullText, cleanExcerpt);
+    if (matchPos !== -1) {
+      const textBefore = fullText.slice(0, matchPos + 100);
+      const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+      if (matches.length > 0) {
+        const lastMatch = matches[matches.length - 1];
+        const page = parseInt(lastMatch[1] || lastMatch[2] || lastMatch[3], 10);
+        if (!isNaN(page) && page > 0) return page;
+      }
+    }
+  }
+
+  // 2. Si el extracto contiene explícitamente una etiqueta de página
+  if (excerpt) {
+    const matches = [...excerpt.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
     if (matches.length > 0) {
-      const lastMatch = matches[matches.length - 1];
-      const page = parseInt(lastMatch[1] || lastMatch[2] || lastMatch[3], 10);
+      const page = parseInt(matches[0][1] || matches[0][2] || matches[0][3], 10);
       if (!isNaN(page) && page > 0) return page;
     }
   }
 
-  // 2. Si el extracto o el texto del fragmento contiene una etiqueta explícita de página
-  const candidateTexts = [excerpt, fullText].filter(Boolean) as string[];
-  for (const t of candidateTexts) {
-    const matches = [...t.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+  // 3. Si fullText contiene etiquetas explícitas de página
+  if (fullText) {
+    const matches = [...fullText.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
     if (matches.length > 0) {
-      const match = matches[0];
-      const page = parseInt(match[1] || match[2] || match[3], 10);
-      if (!isNaN(page) && page > 0) return page;
+      if (matches.length === 1) {
+        const page = parseInt(matches[0][1] || matches[0][2] || matches[0][3], 10);
+        if (!isNaN(page) && page > 0) return page;
+      } else {
+        const matchPos = excerpt ? findNormalizedSubstringIndex(fullText, excerpt.replace(/\*\*/g, '')) : -1;
+        if (matchPos !== -1) {
+          const textBefore = fullText.slice(0, matchPos + 80);
+          const matchesBefore = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+          if (matchesBefore.length > 0) {
+            const page = parseInt(matchesBefore[matchesBefore.length - 1][1] || matchesBefore[matchesBefore.length - 1][2] || matchesBefore[matchesBefore.length - 1][3], 10);
+            if (!isNaN(page) && page > 0) return page;
+          }
+        }
+        const page = parseInt(matches[0][1] || matches[0][2] || matches[0][3], 10);
+        if (!isNaN(page) && page > 0) return page;
+      }
     }
   }
 
-  return fallbackPage;
+  // 4. Si allChunks está disponible, escanear si algún chunk contiene el extracto y tiene pageOrSlide
+  if (allChunks && allChunks.length > 0 && excerpt) {
+    const cleanExcerpt = excerpt.replace(/\*\*/g, '').trim();
+    for (const chk of allChunks) {
+      if (chk.text && findNormalizedSubstringIndex(chk.text, cleanExcerpt) !== -1) {
+        const chkPos = findNormalizedSubstringIndex(chk.text, cleanExcerpt);
+        const textBefore = chk.text.slice(0, chkPos + 100);
+        const matches = [...textBefore.matchAll(/(?:\[Página\s+(\d+)\]|Diapositiva\s+(\d+)|Página\s+(\d+))/gi)];
+        if (matches.length > 0) {
+          const lastMatch = matches[matches.length - 1];
+          const page = parseInt(lastMatch[1] || lastMatch[2] || lastMatch[3], 10);
+          if (!isNaN(page) && page > 0) return page;
+        }
+        if (typeof chk.pageOrSlide === 'number' && chk.pageOrSlide > 0) {
+          return chk.pageOrSlide;
+        }
+      }
+    }
+  }
+
+  // 5. Fallback a fallbackPage provisto
+  if (typeof fallbackPage === 'number' && fallbackPage > 0) {
+    return fallbackPage;
+  }
+
+  // 6. Garantía absoluta: devolver 1 para que nunca sea undefined
+  return 1;
 }

@@ -657,37 +657,41 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const candidateChunk = bestChunk || kit.chunks?.find(c => c.id === targetQ.sourceChunkId);
     const fullText = candidateChunk?.text || targetQ.sourceChunkText || targetQ.explanation || '';
 
-    let finalExcerpt = targetQ.sourceExcerpt;
-    let finalHighlighted = targetQ.sourceExcerpt;
+    let finalExcerpt = passage.excerpt;
+    let finalHighlighted = passage.highlightedExcerpt;
     let quality = passage.matchQuality;
 
-    if (!finalExcerpt || passage.score >= 5.0) {
-      if (passage && passage.excerpt) {
-        finalExcerpt = passage.excerpt;
-        finalHighlighted = passage.highlightedExcerpt;
-        quality = passage.matchQuality;
-      } else {
-        const local = extractSpecificPassage({
-          fullText,
-          question: targetQ.question,
-          correctAnswer: rawAnswerText,
-          concept: targetQ.topic,
-        });
-        finalExcerpt = local.excerpt;
-        finalHighlighted = local.highlightedExcerpt;
-        quality = local.matchQuality;
-      }
+    // Si el pasaje no tiene resaltado en negrita o se dispone de un sourceExcerpt más específico, asegurar que la zona clave esté destacada
+    if (!finalHighlighted || !finalHighlighted.includes('**')) {
+      const textToExtract = finalExcerpt || targetQ.sourceExcerpt || fullText;
+      const extracted = extractSpecificPassage({
+        fullText: textToExtract,
+        question: targetQ.question,
+        correctAnswer: rawAnswerText,
+        concept: targetQ.topic,
+      });
+      finalExcerpt = extracted.excerpt || textToExtract;
+      finalHighlighted = extracted.highlightedExcerpt || (textToExtract ? `**${textToExtract.trim()}**` : '');
+      quality = extracted.matchQuality;
     }
+
+    // Resolver la página exacta del documento de forma infalible
+    const resolvedPage = resolveRealPageNumber(
+      fullText,
+      finalExcerpt,
+      candidateChunk?.pageOrSlide || targetQ.sourcePageOrSlide,
+      kit.chunks
+    );
 
     setModalChunk({
       id: candidateChunk?.id || targetQ.sourceChunkId,
       text: fullText,
       excerpt: finalExcerpt || fullText.slice(0, 300),
-      highlightedExcerpt: finalHighlighted || finalExcerpt || fullText.slice(0, 300),
+      highlightedExcerpt: finalHighlighted || (finalExcerpt ? `**${finalExcerpt}**` : fullText.slice(0, 300)),
       questionText: targetQ.question,
       correctAnswerText: rawAnswerText,
       topic: targetQ.topic,
-      pageOrSlide: resolveRealPageNumber(fullText, finalExcerpt, candidateChunk?.pageOrSlide || targetQ.sourcePageOrSlide),
+      pageOrSlide: resolvedPage || 1,
       asset: targetQ.sourceAsset || (candidateChunk?.assetIds?.length ? kit.assets?.find(a => candidateChunk.assetIds!.includes(a.id)) : undefined),
       matchQuality: quality,
     });
@@ -5085,17 +5089,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               }`}>
                 Fragmento: <strong>#{modalChunk.id || '1'}</strong>
               </span>
-              {modalChunk.pageOrSlide && (
-                <span className={`px-3 py-1 rounded-lg border font-medium tabular-nums ${
-                  theme === 'dark'
-                    ? 'bg-violet-950/60 border-violet-500/40 text-violet-300'
-                    : theme === 'kitty'
-                    ? 'bg-pink-100 border-pink-200 text-pink-800'
-                    : 'bg-rose-50 border-rose-200 text-rose-800'
-                }`}>
-                  Ubicación: <strong>Página o Diapositiva {modalChunk.pageOrSlide}</strong>
-                </span>
-              )}
+              <span className={`px-3 py-1 rounded-lg border font-medium tabular-nums ${
+                theme === 'dark'
+                  ? 'bg-violet-950/60 border-violet-500/40 text-violet-300'
+                  : theme === 'kitty'
+                  ? 'bg-pink-100 border-pink-200 text-pink-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}>
+                Ubicación: <strong>Página o Diapositiva {modalChunk.pageOrSlide || 1}</strong>
+              </span>
               {modalChunk.topic && (
                 <span className={`px-3 py-1 rounded-lg border font-medium truncate max-w-xs ${
                   theme === 'dark'
@@ -5117,7 +5119,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               </span>
             </div>
 
-            {/* 1. Tarjeta Superior: Cita Textual Específica del Documento */}
+            {/* 1. Tarjeta Superior: Cita Textual Específica del Documento con Zona Resaltada en Negrita */}
             <div className={`rounded-2xl p-5 border relative shadow-lg ${
               theme === 'dark'
                 ? 'bg-thea-bg/90 border-violet-500/50 text-slate-100 shadow-[0_4px_20px_-4px_rgba(139,92,246,0.15)] ring-1 ring-violet-500/20'
@@ -5142,12 +5144,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   Pasaje Exacto
                 </span>
               </div>
-              <div className={`text-[15px] sm:text-[16px] leading-relaxed pl-4 py-2 rounded-r-xl border-l-4 font-normal ${
+              <div className={`text-[15px] sm:text-[16px] leading-relaxed pl-4 py-2.5 rounded-r-xl border-l-4 font-normal ${
                 theme === 'dark'
-                  ? 'border-violet-500 text-slate-100 bg-violet-950/20 [&_strong]:text-white [&_strong]:font-bold [&_b]:text-white'
+                  ? 'border-violet-500 text-slate-100 bg-violet-950/20 [&_strong]:text-white [&_strong]:font-extrabold [&_strong]:bg-violet-500/30 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-md [&_strong]:ring-1 [&_strong]:ring-violet-400/50 [&_b]:text-white [&_b]:font-extrabold'
                   : theme === 'kitty'
-                  ? 'border-pink-500 text-zinc-950 bg-pink-100/60 [&_strong]:text-[#be185d] [&_strong]:font-bold'
-                  : 'border-rose-500 text-zinc-950 bg-white/70 [&_strong]:text-rose-950 [&_strong]:font-bold'
+                  ? 'border-pink-500 text-zinc-950 bg-pink-100/60 [&_strong]:text-[#9d174d] [&_strong]:font-extrabold [&_strong]:bg-pink-200/90 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-md [&_strong]:ring-1 [&_strong]:ring-pink-400/50'
+                  : 'border-rose-500 text-zinc-950 bg-white/80 [&_strong]:text-rose-950 [&_strong]:font-extrabold [&_strong]:bg-rose-100 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-md [&_strong]:ring-1 [&_strong]:ring-rose-300'
               }`}>
                 <FormattedText text={modalChunk.highlightedExcerpt || modalChunk.excerpt || modalChunk.text || 'Contenido del fragmento analizado en el material original.'} />
               </div>
