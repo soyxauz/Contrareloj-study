@@ -4,6 +4,7 @@ import { searchIllustrationForQuestion, type WebImageResult } from '../services/
 import { ZoomIn, ExternalLink, Search } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
+import { isGenericBoilerplateBullet } from '../services/aiService';
 
 export function cleanExplanationBullet(text: string): string {
   if (!text || typeof text !== 'string') return '';
@@ -15,7 +16,7 @@ export function cleanExplanationBullet(text: string): string {
     .replace(/\*{2,}/g, '')
     .trim();
   if (!cleaned) return '';
-  if (isDocReference && cleaned.length < 80) {
+  if (isDocReference && cleaned.length < 80 && !/principio fundamental|mecanismo causal/i.test(cleaned)) {
     return `Fundamento y marco conceptual correspondiente a ${cleaned.charAt(0).toLowerCase() + cleaned.slice(1)}.`;
   }
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
@@ -36,68 +37,114 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
   const [imageResult, setImageResult] = useState<WebImageResult | null>(null);
   const [isImgLoaded, setIsImgLoaded] = useState(false);
 
-  // 1. Extraer o formular exactamente 3 viñetas pedagógicas limpias
+  // 1. Extraer o formular exactamente 3 viñetas pedagógicas limpias y 100% específicas (cero boilerplate)
   const bullets = React.useMemo(() => {
-    let rawBullets: string[] = [];
     const safeExplanation = question?.explanation || '';
+    const correctOption =
+      question?.options && question.correctIndex !== undefined
+        ? question.options[question.correctIndex]
+        : question?.idealAnswer || '';
 
-    if (question?.googleOverview?.bullets && question.googleOverview.bullets.length >= 2) {
-      rawBullets = question.googleOverview.bullets.slice(0, 3);
-    } else if (safeExplanation) {
+    // Filtrar viñetas existentes rechazando cualquier texto genérico o placeholder
+    let validBullets = (question?.googleOverview?.bullets || [])
+      .map(cleanExplanationBullet)
+      .filter(b => b.length >= 12 && !isGenericBoilerplateBullet(b));
+
+    // Si faltan viñetas, intentar extraer oraciones válidas de safeExplanation
+    if (validBullets.length < 3 && safeExplanation) {
       const matched = safeExplanation.match(/(?:> •|•|\*|-|\d+\.)\s*([^\n]+)/g);
-      if (matched && matched.length >= 2) {
-        rawBullets = matched.slice(0, 3).map(b => b.replace(/^(?:> •|•|\*|-|\d+\.)\s*/, '').trim());
+      if (matched) {
+        const cleanedFromSafe = matched
+          .map(b => cleanExplanationBullet(b.replace(/^(?:> •|•|\*|-|\d+\.)\s*/, '')))
+          .filter(b => b.length >= 15 && !isGenericBoilerplateBullet(b));
+        for (const c of cleanedFromSafe) {
+          if (validBullets.length >= 3) break;
+          if (!validBullets.includes(c)) validBullets.push(c);
+        }
       }
     }
 
-    if (rawBullets.length < 3) {
-      // Extraer párrafos limpios del desglose
+    if (validBullets.length < 3 && safeExplanation) {
       const parts = safeExplanation
         .split('\n\n')
-        .map(p => p.replace(/[#*`>]/g, '').trim())
-        .filter(p => p.length > 25 && !p.toLowerCase().includes('búsqueda en google'));
-
-      const correctOption =
-        question?.options && question.correctIndex !== undefined
-          ? question.options[question.correctIndex]
-          : question?.idealAnswer || '';
-
-      if (parts.length >= 3) {
-        rawBullets = parts.slice(0, 3);
-      } else if (parts.length === 2) {
-        rawBullets = [
-          correctOption ? `Respuesta verificada: ${correctOption}` : parts[0],
-          parts[0],
-          parts[1],
-        ];
-      } else if (parts.length === 1) {
-        rawBullets = [
-          correctOption ? `Respuesta verificada: ${correctOption}` : 'Fundamento conceptual directo comprobado.',
-          parts[0],
-          'Principio causal y bibliográfico corroborado en la literatura científica.',
-        ];
-      } else {
-        rawBullets = [
-          correctOption ? `Respuesta directa: ${correctOption}` : 'Principio fundamental verificado.',
-          'Fundamento causal y explicativo respaldado en la bibliografía.',
-          'Distinción clave frente a los distractores y errores frecuentes.',
-        ];
+        .map(p => cleanExplanationBullet(p.replace(/[#*`>]/g, '')))
+        .filter(p => p.length > 25 && !p.toLowerCase().includes('búsqueda en google') && !isGenericBoilerplateBullet(p));
+      for (const p of parts) {
+        if (validBullets.length >= 3) break;
+        if (!validBullets.includes(p)) validBullets.push(p);
       }
     }
 
-    return rawBullets
-      .map(cleanExplanationBullet)
-      .filter(b => b.length > 5)
-      .slice(0, 3);
+    // Si aún faltan viñetas, sintetizar con base en los datos concretos de la pregunta (cero placeholders)
+    const topic = question?.topic && question.topic.trim().length > 2 && question.topic.toLowerCase() !== 'general'
+      ? question.topic.trim()
+      : 'este tema';
+    const cleanQ = (question?.question || '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/^eval[uú]a la veracidad[^:]*:\s*/i, '')
+      .replace(/^[¿?¡!]/g, '')
+      .trim();
+    const cleanAns = correctOption ? correctOption.replace(/^[a-d]\)\s*/i, '').trim() : '';
+
+    // Viñeta 1: Conclusión directa y afirmación clave
+    if (validBullets.length < 1) {
+      if (question?.type === 'true-false') {
+        const isTrue = cleanAns.toLowerCase().includes('verdad') || question.correctIndex === 0;
+        if (isTrue) {
+          validBullets.push(`Verdadero: Se corrobora fielmente que ${cleanQ || topic}.`);
+        } else {
+          validBullets.push(`Falso: La premisa planteada discrepa de lo establecido en el marco conceptual de ${topic}.`);
+        }
+      } else if (cleanAns) {
+        validBullets.push(`Respuesta exacta: "${cleanAns}", correspondiente al criterio analítico evaluado en ${topic}.`);
+      } else {
+        validBullets.push(`Fundamento directo verificado en relación con el principio de ${topic}.`);
+      }
+    }
+
+    // Viñeta 2: Mecanismo causal o fundamentación textual
+    if (validBullets.length < 2) {
+      if (question?.sourceExcerpt && question.sourceExcerpt.trim().length >= 15) {
+        const tr = question.sourceExcerpt.trim();
+        const exc = tr.length > 140 ? tr.slice(0, 135) + '…' : tr;
+        validBullets.push(`Fundamento textual: «${exc}».`);
+      } else {
+        validBullets.push(`Mecanismo y vía explicativa: Los procesos y criterios fundamentados en ${topic} sustentan con rigor esta conclusión.`);
+      }
+    }
+
+    // Viñeta 3: Diferenciación conceptual frente a errores
+    if (validBullets.length < 3) {
+      const distractors = question?.options && question.correctIndex !== undefined
+        ? question.options.filter((_, idx) => idx !== question.correctIndex).slice(0, 2)
+        : [];
+      if (distractors.length > 0) {
+        const distStr = distractors.map(d => d.replace(/^[a-d]\)\s*/i, '').trim()).filter(Boolean).join(' o ');
+        validBullets.push(`Diferenciación conceptual: Se descartan las alternativas erróneas (${distStr}) por no satisfacer las características específicas de ${topic}.`);
+      } else {
+        validBullets.push(`Diferenciación conceptual: En el análisis de ${topic}, es fundamental distinguir esta entidad de conceptos o estructuras afines.`);
+      }
+    }
+
+    return validBullets.slice(0, 3);
   }, [question]);
 
   // 2. Término de búsqueda para la consulta e ilustración web (priorizando el término específico de imagen)
   const searchTerm = React.useMemo(() => {
     if (question?.googleOverview?.imageSearchTerm && question.googleOverview.imageSearchTerm.trim().length > 2) {
-      return question.googleOverview.imageSearchTerm.trim();
+      const raw = question.googleOverview.imageSearchTerm.trim();
+      if (!raw.includes('[') && !raw.includes(']') && !raw.toLowerCase().includes('palabras clave')) {
+        return raw;
+      }
     }
     if (question?.googleOverview?.query && question.googleOverview.query.trim().length > 2) {
-      return question.googleOverview.query.trim();
+      const cleanQ = question.googleOverview.query
+        .replace(/¿c[oó]mo funciona\s+/i, '')
+        .replace(/[¿?¡!]/g, '')
+        .trim();
+      if (cleanQ.length > 2 && !cleanQ.includes('[') && !cleanQ.includes(']')) {
+        return cleanQ;
+      }
     }
     if (question?.topic && question.topic.trim().length > 2 && question.topic.toLowerCase() !== 'general') {
       return question.topic.trim();
@@ -154,29 +201,15 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
             setImageResult(prev => prev ? { ...prev, imageUrl: cleaned } : null);
           });
         } else {
-          // Si no hubo imagen web estrictamente pertinente, verificar activo del documento
-          const docAsset = kitAssets.find(a => a.dataUrl);
-          if (docAsset && docAsset.dataUrl) {
-            cleanImageBlackBackground(docAsset.dataUrl).then(cleaned => {
-              if (!isMounted) return;
-              setImageResult({
-                imageUrl: cleaned,
-                sourceUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`,
-                caption: docAsset.caption || searchTerm,
-                title: docAsset.caption || searchTerm,
-                sourceName: 'Material del Kit',
-              });
-            });
-          } else {
-            // Política estricta: No inventar imagen; dejar en blanco para que el texto tome el ancho completo
-            setImageResult({
-              imageUrl: '',
-              sourceUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`,
-              caption: searchTerm,
-              title: searchTerm,
-              sourceName: 'Google Imágenes',
-            });
-          }
+          // POLÍTICA ESTRICTA: Cero basura. Si no hay imagen web pertinente ni figura del kit vinculada,
+          // no inventar imagen para que el texto tome el ancho completo limpiamente.
+          setImageResult({
+            imageUrl: '',
+            sourceUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(searchTerm)}`,
+            caption: searchTerm,
+            title: searchTerm,
+            sourceName: 'Google Imágenes',
+          });
         }
       })
       .catch(() => {

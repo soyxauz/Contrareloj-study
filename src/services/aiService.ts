@@ -168,42 +168,143 @@ export function cleanExplanationBullet(text: string): string {
     .replace(/\*{2,}/g, '')
     .trim();
   if (!cleaned) return '';
-  if (isDocReference && cleaned.length < 80) {
+  if (isDocReference && cleaned.length < 80 && !/principio fundamental|mecanismo causal/i.test(cleaned)) {
     return `Fundamento y marco conceptual correspondiente a ${cleaned.charAt(0).toLowerCase() + cleaned.slice(1)}.`;
   }
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
+export interface TheaOverviewContext {
+  question?: string;
+  correctAnswer?: string;
+  topic?: string;
+  concept?: string;
+  sourceExcerpt?: string;
+  distractors?: string[];
+  options?: string[];
+  type?: string;
+}
+
+/**
+ * Detecta y rechaza viñetas de justificación genéricas, plantillas o placeholders
+ */
+export function isGenericBoilerplateBullet(text: string): boolean {
+  if (!text || typeof text !== 'string') return true;
+  const t = text.trim().toLowerCase();
+  if (t.length < 15) return true;
+  return /principio fundamental verificado|mecanismo causal y v[ií]a fisiopatol[oó]gica|diferenciaci[oó]n conceptual frente a los errores|principio y evidencia corroborados|fundamento causal y explicativo|distinci[oó]n clave frente a los distractores|fundamento conceptual directo comprobado|afirmaci[oó]n directa y nuclear|principio causal, proceso fisiol[oó]gico|diferenciaci[oó]n distintiva de por qu[eé]|primera vi[nñ]eta con el fundamento|segunda vi[nñ]eta con el mecanismo|tercera vi[nñ]eta con la aclaraci[oó]n/i.test(t);
+}
+
 /**
  * Formula una justificación externa tipo Google Search Overview con exactamente 3 viñetas pedagógicas
- * y enlaces de búsqueda interactiva (Google / Wikipedia), sin citas de diapositivas o frases del documento.
+ * rigurosas y específicas al tema (cero placeholders genéricos), con enlaces de búsqueda interactiva.
  */
 export function formatTheaSearchOverview(
   retro: any,
-  defaultQuery: string
+  defaultQuery: string,
+  context?: TheaOverviewContext
 ): { explanation: string; googleOverview: GoogleOverview } {
   const busqueda = retro?.busqueda_google || {};
-  const query = String(busqueda.consulta || defaultQuery || 'Fundamento científico').trim();
 
+  // Limpiar query eliminando placeholders como [concepto evaluado]
+  let rawQuery = String(busqueda.consulta || defaultQuery || '').trim();
+  if (!rawQuery || rawQuery.includes('[') || rawQuery.includes(']')) {
+    rawQuery = String(context?.concept || context?.topic || defaultQuery || 'Fundamento conceptual').trim();
+  }
+  // Eliminar prefijos no naturales si el concepto es una entidad
+  const query = rawQuery.replace(/¿c[oó]mo funciona\s+/i, '').replace(/[¿?¡!]/g, '').trim() || defaultQuery || 'Fundamento conceptual';
+
+  // 1. Extraer viñetas de la IA que NO sean boilerplate
   let rawBullets: string[] = [];
-  if (Array.isArray(busqueda.tres_vinetas) && busqueda.tres_vinetas.length >= 2) {
-    rawBullets = busqueda.tres_vinetas.slice(0, 3).map((b: any) => cleanExplanationBullet(String(b)));
-  } else {
-    const b1 = cleanExplanationBullet(retro?.explicacion_logica || 'Principio fundamental verificado en la literatura académica.');
-    const b2 = cleanExplanationBullet(retro?.por_que_fallan_las_otras || retro?.desmonte_del_error || 'Mecanismo causal y vía fisiopatológica comprobada.');
-    const b3 = 'Diferenciación conceptual frente a los errores y alternativas incorrectas frecuentes.';
-    rawBullets = [b1, b2, b3];
+  if (Array.isArray(busqueda.tres_vinetas) && busqueda.tres_vinetas.length >= 1) {
+    rawBullets = busqueda.tres_vinetas
+      .map((b: any) => cleanExplanationBullet(String(b)))
+      .filter((b: string) => !isGenericBoilerplateBullet(b));
   }
 
-  while (rawBullets.length < 3) {
-    rawBullets.push('Principio y evidencia corroborados en la literatura científica.');
+  // Si faltan viñetas, extraer oraciones lógicas de la retroalimentación
+  if (rawBullets.length < 3) {
+    const candidates = [
+      retro?.explicacion_logica,
+      retro?.por_que_fallan_las_otras,
+      retro?.desmonte_del_error,
+      typeof retro === 'string' ? retro : '',
+    ]
+      .filter(Boolean)
+      .flatMap((c: string) => c.split(/(?<=[.!?])\s+|\n+/))
+      .map(cleanExplanationBullet)
+      .filter((b: string) => b.length >= 20 && !isGenericBoilerplateBullet(b));
+
+    for (const cand of candidates) {
+      if (rawBullets.length >= 3) break;
+      if (!rawBullets.includes(cand)) {
+        rawBullets.push(cand);
+      }
+    }
+  }
+
+  // Si aún faltan viñetas, sintetizar con base en el contexto específico de la pregunta
+  const topicName = String(context?.concept || context?.topic || query || 'el tema').trim();
+  const cleanQ = String(context?.question || '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/^eval[uú]a la veracidad[^:]*:\s*/i, '')
+    .replace(/^[¿?¡!]/g, '')
+    .trim();
+  const cleanAnswer = String(context?.correctAnswer || '').replace(/^[a-d]\)\s*/i, '').trim();
+
+  // Viñeta 1: Conclusión directa y afirmación clave
+  if (rawBullets.length < 1) {
+    if (context?.type === 'true-false') {
+      const isTrue = cleanAnswer.toLowerCase().includes('verdad') || cleanAnswer === '';
+      if (isTrue) {
+        rawBullets.push(`Es verídico que ${cleanQ || topicName}.`);
+      } else {
+        rawBullets.push(`La afirmación es incorrecta: la evidencia en ${topicName} refuta lo planteado.`);
+      }
+    } else if (cleanAnswer) {
+      rawBullets.push(`La respuesta correcta es "${cleanAnswer}", correspondiente al principio clave evaluado en ${topicName}.`);
+    } else {
+      rawBullets.push(`El postulado central confirma el criterio específico correspondiente a ${topicName}.`);
+    }
+  }
+
+  // Viñeta 2: Mecanismo causal o fundamentación textual
+  if (rawBullets.length < 2) {
+    if (context?.sourceExcerpt && context.sourceExcerpt.trim().length >= 15) {
+      const excerpt = context.sourceExcerpt.trim();
+      const truncated = excerpt.length > 140 ? excerpt.slice(0, 135) + '…' : excerpt;
+      rawBullets.push(`Fundamento en el texto de estudio: «${truncated}».`);
+    } else {
+      rawBullets.push(`Mecanismo y vía explicativa: Los procesos fisiológicos y conceptuales descritos en ${topicName} respaldan directamente esta conclusión.`);
+    }
+  }
+
+  // Viñeta 3: Diferenciación conceptual frente a errores
+  if (rawBullets.length < 3) {
+    if (context?.distractors && context.distractors.length > 0) {
+      const distStr = context.distractors.slice(0, 2).map(d => d.replace(/^[a-d]\)\s*/i, '').trim()).filter(Boolean).join(' o ');
+      if (distStr) {
+        rawBullets.push(`Diferenciación conceptual: Se descartan las alternativas erróneas (${distStr}) por diferir en el mecanismo o ámbito de aplicación.`);
+      } else {
+        rawBullets.push(`Diferenciación conceptual: En el análisis de ${topicName}, es fundamental distinguir esta entidad de conceptos o estructuras afines.`);
+      }
+    } else {
+      rawBullets.push(`Diferenciación conceptual: En el análisis de ${topicName}, es fundamental distinguir esta entidad de conceptos o estructuras afines.`);
+    }
   }
 
   const cleanBullets = rawBullets.slice(0, 3).map(b => b.charAt(0).toUpperCase() + b.slice(1));
+
+  let rawImgTerm = String(busqueda.termino_imagen || '').trim();
+  if (!rawImgTerm || rawImgTerm.includes('[') || rawImgTerm.includes(']') || rawImgTerm.toLowerCase().includes('palabras clave')) {
+    rawImgTerm = topicName;
+  }
+  const imageSearchTerm = rawImgTerm.replace(/[¿?¡!.]/g, '').trim();
+
   const googleOverview: GoogleOverview = {
     query,
     bullets: cleanBullets,
-    imageSearchTerm: String(busqueda.termino_imagen || query).trim(),
+    imageSearchTerm,
     searchUrl: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
     wikipediaUrl: `https://es.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query)}`
   };
@@ -3715,23 +3816,35 @@ Genera el JSON completo respetando la estructura exigida:`;
 
       fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
+      const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
+      let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
+        ? p.cita_textual_exacta.trim()
+        : undefined;
+
       const query = String(
         p.retroalimentacion?.busqueda_google?.consulta ||
-        (p.concepto_evaluado ? `¿Cómo funciona ${p.concepto_evaluado}?` : p.pregunta || 'Fundamento conceptual')
+        (p.concepto_evaluado ? `${p.concepto_evaluado}` : p.pregunta || topicFallback || 'Fundamento conceptual')
       ).trim();
 
-      const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query);
+      const distractors = finalOptions ? finalOptions.filter((_, idx) => idx !== finalCorrectIndex) : [];
+
+      const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query, {
+        question: fullQuestion,
+        correctAnswer: correctAnswerString,
+        topic: topicFallback,
+        concept: p.concepto_evaluado,
+        sourceExcerpt,
+        distractors,
+        options: finalOptions,
+        type: qType,
+      });
 
       // RAG Traceability linkage de alta especificidad
       let sourceChunkId = p.chunk_id_origen || undefined;
       let sourceChunkText: string | undefined = undefined;
-      let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
-        ? p.cita_textual_exacta.trim()
-        : undefined;
       let sourcePageOrSlide: number | undefined = undefined;
 
       if (chunks && chunks.length > 0) {
-        const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
         const { bestChunk, passage } = findBestChunkAndExcerpt({
           chunks,
           question: fullQuestion,
@@ -4470,7 +4583,17 @@ Responde ÚNICAMENTE con un JSON con la estructura:
           }
 
           const query = String(p.concepto_evaluado || title).trim();
-          const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query);
+          const distList = correctIndex !== undefined ? options.filter((_, i) => i !== correctIndex) : [];
+          const singleAns = correctIndex !== undefined ? options[correctIndex] : (correctIndices ? correctIndices.map(i => options[i]).join(', ') : '');
+          const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query, {
+            question: p.pregunta,
+            correctAnswer: singleAns,
+            topic: title,
+            concept: p.concepto_evaluado,
+            distractors: distList,
+            options,
+            type: isMulti ? 'multi-select' : 'multiple-choice',
+          });
 
           return {
             id: `q-false-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
@@ -5756,10 +5879,19 @@ Genera la pregunta socrática reformulada en formato JSON:`;
 
   const query = String(
     parsed.retroalimentacion?.busqueda_google?.consulta ||
-    (concept ? `¿Cómo funciona ${concept}?` : parsed.pregunta || 'Refuerzo socrático')
+    (concept ? `${concept}` : parsed.pregunta || 'Refuerzo socrático')
   ).trim();
 
-  const { explanation, googleOverview } = formatTheaSearchOverview(parsed.retroalimentacion, query);
+  const correctOptText = optionsArrayFinal[correctIndex] || '';
+  const distList = optionsArrayFinal.filter((_, idx) => idx !== correctIndex);
+  const { explanation, googleOverview } = formatTheaSearchOverview(parsed.retroalimentacion, query, {
+    question: fullQuestion,
+    correctAnswer: correctOptText,
+    topic: originalQuestion.topic || concept,
+    concept,
+    distractors: distList,
+    options: optionsArrayFinal,
+  });
 
   const candidateQuestion: Question = {
     id: `q-socratic-recall-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -5937,13 +6069,13 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
       "banco_palabras": ["término 1", "término 2", "distractor 1", "distractor 2"],
       "retroalimentacion": {
         "busqueda_google": {
-          "consulta": "¿Cómo funciona [concepto evaluado]?",
+          "consulta": "Ubicación del órgano de Corti y membrana basilar",
           "tres_vinetas": [
-            "Primera viñeta con el fundamento factual directo de la respuesta correcta.",
-            "Segunda viñeta con el mecanismo de acción, vía analítica o justificación científica rigurosa.",
-            "Tercera viñeta con la aclaración conceptual que diferencia la opción correcta de las opciones erróneas."
+            "El órgano de Corti se ubica en la rampa media coclear directamente sobre la membrana basilar.",
+            "Sus células ciliadas internas y externas transforman las ondas líquidas de la endolinfa en impulsos acústicos.",
+            "No debe confundirse con la membrana tectoria (acoplada en la superficie superior) ni con el laberinto vestibular."
           ],
-          "termino_imagen": "Palabras clave concisas para buscar diagrama explicativo en la web"
+          "termino_imagen": "Organ of Corti cochlea basilar membrane"
         }
       }
     }
@@ -5958,6 +6090,7 @@ PARÁMETROS DE GENERACIÓN:
 - Nivel de dificultad: Nivel ${level} (${level === 3 ? 'MÁXIMA EXIGENCIA - OPCIONES SIMILARES' : level === 2 ? 'INTERMEDIO' : 'BÁSICO'})
 - Cantidad de preguntas a generar: ${count}
 - DISTRIBUCIÓN DE EXTENSIÓN: La mayor parte (~75%-80%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Solo una minoría (~20%-25%) deben ser más extensas (entre 35 y 55 palabras) para casos prácticos. Límites: máximo 28 palabras en preguntas directas y 55 palabras en casos prácticos.
+- JUSTIFICACIÓN CIENTÍFICA ESTRICTA (ZERO PLACEHOLDERS): En 'tres_vinetas', queda TERMINANTEMENTE PROHIBIDO usar texto genérico como 'Principio fundamental verificado' o 'Mecanismo comprobado'. Cada viñeta DEBE nombrar los órganos, fármacos, valores o principios reales de la pregunta.
 - TRADUCCIÓN OBLIGATORIA: Si el texto está en inglés u otro idioma, genera las preguntas, opciones y explicaciones 100% en español académico.
 
 Genera las ${count} preguntas en formato JSON estricto:`;
@@ -6127,22 +6260,34 @@ Genera las ${count} preguntas en formato JSON estricto:`;
 
     fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-    const query = String(
-      p.retroalimentacion?.busqueda_google?.consulta ||
-      (p.concepto_evaluado ? `¿Cómo funciona ${p.concepto_evaluado}?` : p.pregunta || 'Fundamento conceptual')
-    ).trim();
-
-    const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query);
-
-    let sourceChunkId = p.chunk_id_origen || undefined;
-    let sourceChunkText: string | undefined = undefined;
+    const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
     let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
       ? p.cita_textual_exacta.trim()
       : undefined;
+
+    const query = String(
+      p.retroalimentacion?.busqueda_google?.consulta ||
+      (p.concepto_evaluado ? `${p.concepto_evaluado}` : p.pregunta || defaultTopic || 'Fundamento conceptual')
+    ).trim();
+
+    const distractors = finalOptions ? finalOptions.filter((_, idx) => idx !== finalCorrectIndex) : [];
+
+    const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query, {
+      question: fullQuestion,
+      correctAnswer: correctAnswerString,
+      topic: defaultTopic,
+      concept: p.concepto_evaluado,
+      sourceExcerpt,
+      distractors,
+      options: finalOptions,
+      type: qType,
+    });
+
+    let sourceChunkId = p.chunk_id_origen || undefined;
+    let sourceChunkText: string | undefined = undefined;
     let sourcePageOrSlide: number | undefined = undefined;
 
     if (chunks && chunks.length > 0) {
-      const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
       const { bestChunk, passage } = findBestChunkAndExcerpt({
         chunks,
         question: fullQuestion,

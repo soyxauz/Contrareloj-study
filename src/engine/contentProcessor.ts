@@ -2941,6 +2941,11 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
         distTerms.push(domainFallbacks[distTerms.length % domainFallbacks.length]);
       }
       const optsA = [card.term, ...distTerms].sort(() => Math.random() - 0.5);
+      const bulletsA = [
+        `Identificación unívoca: "${card.term}" se define con exactitud como ${card.definition.charAt(0).toLowerCase() + card.definition.slice(1)}.`,
+        `Fundamento conceptual: En ${kit.title || kit.category || 'este material'}, este concepto desempeña una función central de diferenciación temática.`,
+        `Diferenciación conceptual: Se distingue netamente de los demás distractores por su función y propiedades específicas.`
+      ];
       questions.push({
         id: `q-fc-term-${card.id || uid()}-${i}`,
         type: 'multiple-choice',
@@ -2949,7 +2954,14 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
         options: optsA,
         correctIndex: Math.max(0, optsA.indexOf(card.term)),
         topic: card.term,
-        explanation: `La descripción corresponde exactamente al concepto de "${card.term}".`
+        explanation: bulletsA.map(b => `• ${b}`).join('\n\n'),
+        googleOverview: {
+          query: card.term,
+          bullets: bulletsA,
+          imageSearchTerm: card.term,
+          searchUrl: `https://www.google.com/search?q=${encodeURIComponent(card.term)}`,
+          wikipediaUrl: `https://es.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(card.term)}`
+        }
       });
 
       // Pregunta B: Definición Directa
@@ -2958,6 +2970,11 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
         distDefs.push(`Propiedad secundaria o principio complementario en ${kit.category || 'el tema'}`);
       }
       const optsB = [card.definition, ...distDefs].sort(() => Math.random() - 0.5);
+      const bulletsB = [
+        `Definición verificada: "${card.term}" corresponde exactamente a: ${card.definition}.`,
+        `Fundamento analítico: Esta caracterización describe de manera rigurosa la naturaleza y alcance de ${card.term}.`,
+        `Diferenciación conceptual: Las opciones alternativas representan atribuciones divergentes o propiedades no aplicables a esta entidad.`
+      ];
       questions.push({
         id: `q-fc-def-${card.id || uid()}-${i}`,
         type: 'multiple-choice',
@@ -2966,11 +2983,23 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
         options: optsB,
         correctIndex: Math.max(0, optsB.indexOf(card.definition)),
         topic: card.term,
-        explanation: `De acuerdo con el material de estudio, "${card.term}" se define como: ${card.definition}.`
+        explanation: bulletsB.map(b => `• ${b}`).join('\n\n'),
+        googleOverview: {
+          query: card.term,
+          bullets: bulletsB,
+          imageSearchTerm: card.term,
+          searchUrl: `https://www.google.com/search?q=${encodeURIComponent(card.term)}`,
+          wikipediaUrl: `https://es.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(card.term)}`
+        }
       });
 
       // Pregunta C: Verdadero / Falso
       if (i < 8) {
+        const bulletsC = [
+          `Aseveración verídica: Es correcto que ${card.term} se corresponde con: ${card.definition}.`,
+          `Fundamento conceptual: Esta premisa está respaldada como definición nuclear en ${kit.title || kit.category || 'el tema'}.`,
+          `Diferenciación analítica: Cualquier alteración en la relación entre el término y su predicado invalidaría la proposición evaluada.`
+        ];
         questions.push({
           id: `q-fc-tf-${card.id || uid()}-${i}`,
           type: 'true-false',
@@ -2979,7 +3008,14 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
           options: ['Verdadero', 'Falso'],
           correctIndex: 0,
           topic: card.term,
-          explanation: `Verdadero. Esta afirmación concuerda fielmente con los conceptos del kit de estudio.`
+          explanation: bulletsC.map(b => `• ${b}`).join('\n\n'),
+          googleOverview: {
+            query: card.term,
+            bullets: bulletsC,
+            imageSearchTerm: card.term,
+            searchUrl: `https://www.google.com/search?q=${encodeURIComponent(card.term)}`,
+            wikipediaUrl: `https://es.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(card.term)}`
+          }
         });
       }
     }

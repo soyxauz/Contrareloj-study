@@ -86,39 +86,61 @@ function normalizeText(text: string): string {
     .toLowerCase();
 }
 
+const BROAD_STOPWORDS = new Set([
+  'de', 'la', 'el', 'los', 'las', 'en', 'para', 'por', 'con', 'sobre', 'que', 'del', 'un', 'una',
+  'unos', 'unas', 'al', 'es', 'son', 'se', 'su', 'sus', 'como', 'cual', 'cuales', 'donde', 'tiene',
+  'funcion', 'efecto', 'afirmacion', 'proposicion', 'opcion', 'opciones', 'selecciona', 'indica',
+  'senala', 'evalua', 'veracidad', 'siguiente', 'siguientes', 'respecto', 'general', 'correcta',
+  'incorrecta', 'falsa', 'verdadera', 'the', 'and', 'for', 'with', 'that', 'from', 'this', 'these',
+  'which', 'where', 'when', 'what', 'how', 'about', 'effect', 'study', 'question',
+  // Palabras metodológicas, sintácticas y médicas generales que NO definen especificidad por sí solas:
+  'criterio', 'criterios', 'regla', 'reglas', 'sistema', 'sistemas', 'sistemico', 'sistemica',
+  'tratamiento', 'tratamientos', 'iniciar', 'inicio', 'indice', 'indices', 'mayor', 'menor',
+  'afectada', 'afectado', 'afectadas', 'afectados', 'extension', 'gravedad', 'calidad', 'vida',
+  'nivel', 'niveles', 'tipo', 'tipos', 'forma', 'formas', 'fase', 'fases', 'caso', 'casos',
+  'paciente', 'pacientes', 'proceso', 'procesos', 'estructura', 'estructuras', 'organo', 'organos',
+  'estudio', 'estudios', 'analisis', 'principio', 'principios', 'definir', 'definicion', 'requiere',
+  'blanco', 'espacio', 'espacios', 'completa', 'completar', 'valor', 'valores', 'tabla', 'figura',
+  'esquema', 'diagrama', 'imagen', 'humano', 'medico', 'medica', 'clinico', 'clinica', 'salud',
+  'termino', 'terminos', 'concepto', 'conceptos', 'respuesta', 'respuestas', 'pregunta', 'preguntas',
+  'oracion', 'oraciones', 'palabra', 'palabras', 'banco', 'fichas', 'ficha', 'drag', 'drop',
+  'primer', 'primera', 'segundo', 'segunda', 'tercer', 'tercera', 'central', 'secundario', 'secundaria',
+  'fundamento', 'fundamentos', 'evidencia', 'mecanismo', 'mecanismos', 'accion', 'via', 'vias'
+]);
+
 /**
- * Extrae anclas semánticas esenciales que DEBEN estar presentes de manera inequívoca en la imagen
+ * Extrae entidades y palabras clave nucleares de alta especificidad (longitud >= 4 o siglas técnicas)
  */
-function extractAnchorKeywords(ctx: IllustrationSearchContext): string[] {
-  const rawSources = [
+export function extractCoreEntityTerms(ctx: IllustrationSearchContext): string[] {
+  const sources = [
     ctx.imageSearchTerm,
     ctx.topic,
     ctx.correctAnswer,
-    ...(ctx.bullets || []),
-    ctx.query,
     ctx.questionText,
-  ]
-    .filter(Boolean)
-    .join(' ');
+    ctx.query,
+  ].filter(Boolean).join(' ');
 
-  const normalized = normalizeText(rawSources);
+  const normalized = normalizeText(sources);
 
-  const stopWords = new Set([
-    'de', 'la', 'el', 'los', 'las', 'en', 'para', 'por', 'con', 'sobre', 'que', 'del', 'un', 'una',
-    'unos', 'unas', 'al', 'es', 'son', 'se', 'su', 'sus', 'como', 'cual', 'cuales', 'donde', 'tiene',
-    'funcion', 'efecto', 'afirmacion', 'proposicion', 'opcion', 'opciones', 'selecciona', 'indica',
-    'senala', 'evalua', 'veracidad', 'siguiente', 'siguientes', 'respecto', 'general', 'correcta',
-    'incorrecta', 'falsa', 'verdadera', 'the', 'and', 'for', 'with', 'that', 'from', 'this', 'these',
-    'which', 'where', 'when', 'what', 'how', 'about', 'effect', 'study', 'question'
-  ]);
+  // 1. Siglas técnicas (ej: PASI, DLQI, BSA, ATP, ECG, ADN, ARN)
+  const acronyms = (sources.match(/\b[A-Z0-9-]{2,}\b/g) || [])
+    .map(a => normalizeText(a))
+    .filter(a => a.length >= 2 && !BROAD_STOPWORDS.has(a));
 
+  // 2. Tokens nucleares no genéricos
   const tokens = normalized
     .replace(/[^a-z0-9-\s]/g, ' ')
     .split(/\s+/)
-    .filter(w => w.length >= 3 && !stopWords.has(w));
+    .filter(w => w.length >= 4 && !BROAD_STOPWORDS.has(w) && !/^\d+$/.test(w));
 
-  const acronyms = (rawSources.match(/\b[A-Z0-9-]{2,}\b/g) || []).map(a => normalizeText(a));
   return [...new Set([...acronyms, ...tokens])];
+}
+
+/**
+ * Extrae anclas semánticas esenciales
+ */
+function extractAnchorKeywords(ctx: IllustrationSearchContext): string[] {
+  return extractCoreEntityTerms(ctx);
 }
 
 /**
@@ -127,48 +149,32 @@ function extractAnchorKeywords(ctx: IllustrationSearchContext): string[] {
 function buildFastSearchTerms(ctx: IllustrationSearchContext): string[] {
   const terms: string[] = [];
 
-  // 1. imageSearchTerm específico generado por la IA (ej: "Colestiramina", "Cotransportador Na K 2Cl")
+  // 1. imageSearchTerm específico generado por la IA (ej: "Organ of Corti", "Psoriasis plaque", "Insulina")
   if (ctx.imageSearchTerm && ctx.imageSearchTerm.trim().length > 2) {
     const cleanImgTerm = ctx.imageSearchTerm
       .replace(/[¿?¡!.]/g, '')
-      .replace(/\b(diagram|esquema|figura)\b/gi, '')
+      .replace(/\b(diagram|esquema|figura|search|image)\b/gi, '')
       .trim();
-    if (cleanImgTerm.length >= 3) {
+    if (cleanImgTerm.length >= 3 && !BROAD_STOPWORDS.has(normalizeText(cleanImgTerm))) {
       terms.push(cleanImgTerm);
     }
   }
 
-  // 2. Subtema o materia si es específico y no "General"
-  if (ctx.topic && ctx.topic.trim().length > 2 && ctx.topic.toLowerCase() !== 'general') {
+  // 2. Entidades nucleares de alta especificidad
+  const coreEntities = extractCoreEntityTerms(ctx);
+  for (const ent of coreEntities) {
+    if (terms.length >= 2) break;
+    if (ent.length >= 4 && !terms.some(t => normalizeText(t).includes(ent))) {
+      terms.push(ent);
+    }
+  }
+
+  // 3. Subtema o materia si es específico y no procedural
+  if (terms.length < 2 && ctx.topic && ctx.topic.trim().length > 2 && ctx.topic.toLowerCase() !== 'general') {
     const cleanTopic = ctx.topic.replace(/[¿?¡!.]/g, '').trim();
-    if (!terms.includes(cleanTopic)) {
+    const normTopic = normalizeText(cleanTopic);
+    if (!terms.includes(cleanTopic) && !normTopic.includes('regla de los') && !normTopic.includes('criterios')) {
       terms.push(cleanTopic);
-    }
-  }
-
-  // 3. Fármaco o entidad clave de la respuesta correcta si es breve
-  if (terms.length < 2 && ctx.correctAnswer && ctx.correctAnswer.trim().length > 2 && ctx.correctAnswer.trim().length < 35) {
-    const cleanAns = ctx.correctAnswer
-      .replace(/^[a-d]\)\s*/i, '')
-      .replace(/[¿?¡!.]/g, '')
-      .trim();
-    if (cleanAns.length >= 3 && !terms.includes(cleanAns)) {
-      terms.push(cleanAns);
-    }
-  }
-
-  // 4. Si aún no hay términos, extraer las 2 primeras palabras nucleares de la consulta
-  if (terms.length === 0 && ctx.query && ctx.query.trim().length > 2) {
-    const cleanQ = ctx.query
-      .replace(/[¿?¡!]/g, '')
-      .replace(/\b(qué|cuál|cuáles|cómo|dónde|por qué|función|tiene|el|la|los|las|en|de|del|un|una|para|sobre|según|evalúa|veracidad|proposición|afirmación|siguiente|siguientes|opción|opciones|selecciona|indica|señala)\b/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const words = cleanQ.split(/\s+/).filter(w => w.length > 3);
-    if (words.length >= 2) {
-      terms.push(`${words[0]} ${words[1]}`);
-    } else if (words.length === 1) {
-      terms.push(words[0]);
     }
   }
 
@@ -176,14 +182,14 @@ function buildFastSearchTerms(ctx: IllustrationSearchContext): string[] {
 }
 
 /**
- * Validador semántico estricto con lista negra y verificación de anclas
+ * Validador semántico estricto con lista negra y verificación de anclas nucleares
  */
 function isImageStrictlyRelevant(
   title: string,
   caption: string,
   imageUrl: string,
   extract: string,
-  anchors: string[]
+  coreEntities: string[]
 ): boolean {
   const fullText = `${title} ${caption} ${imageUrl} ${extract}`;
 
@@ -192,15 +198,18 @@ function isImageStrictlyRelevant(
     return false;
   }
 
-  // 2. Verificación de anclaje semántico
-  const normalizedFullText = normalizeText(fullText);
-  for (const anchor of anchors) {
-    if (anchor.length >= 3 && normalizedFullText.includes(anchor)) {
-      return true;
-    }
+  // 2. Si no hay entidades clave identificadas, no aceptar imágenes aleatorias
+  if (coreEntities.length === 0) {
+    return false;
   }
 
-  return false;
+  // 3. Verificación de anclaje semántico nuclear estricto:
+  // La imagen DEBE contener en su título, leyenda, URL o extracto al menos una de las entidades clave
+  const normalizedFullText = normalizeText(fullText);
+  return coreEntities.some(entity => {
+    if (entity.length < 3) return false;
+    return normalizedFullText.includes(entity);
+  });
 }
 
 /**
@@ -372,13 +381,13 @@ export async function searchIllustrationForQuestion(
   const anchors = extractAnchorKeywords(ctx);
   const terms = buildFastSearchTerms(ctx);
 
-  // 2. Prioridad 0: Activo original del kit de estudio (0ms)
+  // 2. Prioridad 0: Activo original del kit de estudio (0ms) con validación semántica estricta
   const availableAssets = ctx.kitAssets || kitAssets || [];
-  if (availableAssets.length > 0) {
+  if (availableAssets.length > 0 && anchors.length > 0) {
     const matchedAsset = availableAssets.find(a => {
       if (!a.dataUrl) return false;
       const text = `${a.caption || ''} ${a.contextNearby || ''}`.toLowerCase();
-      return anchors.some(anchor => anchor.length >= 3 && text.includes(anchor));
+      return anchors.some(anchor => anchor.length >= 4 && text.includes(anchor));
     });
 
     if (matchedAsset && matchedAsset.dataUrl) {

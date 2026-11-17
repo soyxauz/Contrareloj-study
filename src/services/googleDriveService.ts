@@ -3678,9 +3678,9 @@ export const googleDriveService = {
       flashcards: kit.flashcards,
       podcast: null,
       updatedAt: kit.updatedAt || Date.now(),
-      // Excluir explícitamente guía de estudio redactada y preguntas previas de Smart Study
-      studyGuideMarkdown: '',
-      questions: [],
+      // Preservar guía de estudio y preguntas pedagógicas generadas con sus justificaciones ricas
+      studyGuideMarkdown: kit.studyGuideMarkdown || '',
+      questions: kit.questions || [],
     };
     const fileName = `contrareloj_shared_kit_${kit.id}.json`;
 
@@ -3859,7 +3859,7 @@ export const googleDriveService = {
     const importedKit: StudyKit = {
       ...rawKit,
       id: newKitId,
-      studyGuideMarkdown: '',
+      studyGuideMarkdown: rawKit.studyGuideMarkdown || '',
       questions,
       updatedAt: now,
       isImported: true,
