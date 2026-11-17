@@ -3672,17 +3672,45 @@ Genera el JSON completo respetando la estructura exigida:`;
             blanksCorrect = p.opciones_multiples.slice(0, slotMatches.length);
           }
         }
-        // Banco de palabras enriquecido con distractores para desafío pedagógico
-        const bankSet = new Set<string>(wordBank || []);
-        if (blanksCorrect) {
-          blanksCorrect.forEach((b: string) => { if (b) bankSet.add(b); });
-        }
+        // Banco de palabras enriquecido con distractores garantizando la multiplicidad de blanksCorrect
+        const initialBank: string[] = Array.isArray(wordBank) ? [...wordBank] : [];
+        const finalWordBank: string[] = [];
+
+        const neededCounts = new Map<string, number>();
+        (blanksCorrect || []).forEach((b: string) => {
+          if (b) {
+            const key = String(b).trim().toLowerCase();
+            neededCounts.set(key, (neededCounts.get(key) || 0) + 1);
+          }
+        });
+
+        const initialCounts = new Map<string, number>();
+        initialBank.forEach((item: string) => {
+          if (item) {
+            const key = String(item).trim().toLowerCase();
+            initialCounts.set(key, (initialCounts.get(key) || 0) + 1);
+            finalWordBank.push(String(item).trim());
+          }
+        });
+
+        neededCounts.forEach((needed, key) => {
+          const current = initialCounts.get(key) || 0;
+          if (current < needed) {
+            const originalVal = (blanksCorrect || []).find((b: string) => b && String(b).trim().toLowerCase() === key) || key;
+            for (let i = 0; i < (needed - current); i++) {
+              finalWordBank.push(String(originalVal).trim());
+            }
+          }
+        });
+
         const distractorsPool = ['primario', 'secundario', 'crónico', 'agudo', 'sistémico', 'local', 'benigno', 'patológico'];
         for (const dist of distractorsPool) {
-          if (bankSet.size >= (blanksCorrect?.length || 2) + 2) break;
-          bankSet.add(dist);
+          if (finalWordBank.length >= ((blanksCorrect?.length || 2) + 2)) break;
+          if (!finalWordBank.some(w => w.toLowerCase() === dist.toLowerCase())) {
+            finalWordBank.push(dist);
+          }
         }
-        wordBank = Array.from(bankSet).sort(() => Math.random() - 0.5);
+        wordBank = finalWordBank.sort(() => Math.random() - 0.5);
       }
 
       fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
@@ -6056,16 +6084,45 @@ Genera las ${count} preguntas en formato JSON estricto:`;
           blanksCorrect = p.opciones_multiples.slice(0, slotMatches.length);
         }
       }
-      const bankSet = new Set<string>(wordBank || []);
-      if (blanksCorrect) {
-        blanksCorrect.forEach(b => { if (b) bankSet.add(b); });
-      }
+      // Banco de palabras enriquecido con distractores garantizando la multiplicidad de blanksCorrect
+      const initialBank: string[] = Array.isArray(wordBank) ? [...wordBank] : [];
+      const finalWordBank: string[] = [];
+
+      const neededCounts = new Map<string, number>();
+      (blanksCorrect || []).forEach(b => {
+        if (b) {
+          const key = String(b).trim().toLowerCase();
+          neededCounts.set(key, (neededCounts.get(key) || 0) + 1);
+        }
+      });
+
+      const initialCounts = new Map<string, number>();
+      initialBank.forEach(item => {
+        if (item) {
+          const key = String(item).trim().toLowerCase();
+          initialCounts.set(key, (initialCounts.get(key) || 0) + 1);
+          finalWordBank.push(String(item).trim());
+        }
+      });
+
+      neededCounts.forEach((needed, key) => {
+        const current = initialCounts.get(key) || 0;
+        if (current < needed) {
+          const originalVal = (blanksCorrect || []).find(b => b && String(b).trim().toLowerCase() === key) || key;
+          for (let i = 0; i < (needed - current); i++) {
+            finalWordBank.push(String(originalVal).trim());
+          }
+        }
+      });
+
       const distractorsPool = ['primario', 'secundario', 'crónico', 'agudo', 'sistémico', 'local', 'benigno', 'patológico'];
       for (const dist of distractorsPool) {
-        if (bankSet.size >= (blanksCorrect?.length || 2) + 2) break;
-        bankSet.add(dist);
+        if (finalWordBank.length >= ((blanksCorrect?.length || 2) + 2)) break;
+        if (!finalWordBank.some(w => w.toLowerCase() === dist.toLowerCase())) {
+          finalWordBank.push(dist);
+        }
       }
-      wordBank = Array.from(bankSet).sort(() => Math.random() - 0.5);
+      wordBank = finalWordBank.sort(() => Math.random() - 0.5);
     }
 
     fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);

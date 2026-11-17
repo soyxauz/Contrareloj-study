@@ -2123,16 +2123,43 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
   const effectiveWordBank = useMemo(() => {
     const bank = Array.isArray(currentQ?.wordBank) ? [...currentQ.wordBank] : [];
+
+    // Contar cuántas veces se necesita cada token en las respuestas correctas
+    const neededCounts = new Map<string, number>();
     effectiveBlanksCorrect.forEach(b => {
-      if (b && !bank.some(item => item.toLowerCase() === b.toLowerCase())) {
-        bank.push(b);
+      if (b) {
+        const key = b.trim().toLowerCase();
+        neededCounts.set(key, (neededCounts.get(key) || 0) + 1);
       }
     });
+
+    // Contar cuántas veces está ya presente cada token en el banco
+    const currentBankCounts = new Map<string, number>();
+    bank.forEach(item => {
+      if (item) {
+        const key = item.trim().toLowerCase();
+        currentBankCounts.set(key, (currentBankCounts.get(key) || 0) + 1);
+      }
+    });
+
+    // Suplir las fichas faltantes para respetar la multiplicidad requerida
+    neededCounts.forEach((needed, key) => {
+      const current = currentBankCounts.get(key) || 0;
+      if (current < needed) {
+        const originalVal = effectiveBlanksCorrect.find(b => b && b.trim().toLowerCase() === key) || key;
+        for (let i = 0; i < (needed - current); i++) {
+          bank.push(originalVal);
+        }
+      }
+    });
+
     // Añadir distractores adicionales para garantizar desafío pedagógico
     const defaultDistractors = ['primario', 'secundario', 'crónico', 'agudo', 'sistémico', 'local', 'benigno', 'patológico'];
     for (const dist of defaultDistractors) {
       if (bank.length >= effectiveBlanksCorrect.length + 2) break;
-      if (!bank.includes(dist)) bank.push(dist);
+      if (!bank.some(item => item.trim().toLowerCase() === dist.toLowerCase())) {
+        bank.push(dist);
+      }
     }
     return bank;
   }, [currentQ?.wordBank, effectiveBlanksCorrect]);

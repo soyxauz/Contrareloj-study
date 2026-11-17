@@ -103,11 +103,20 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
         <span className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${
           theme === 'kitty' ? 'text-pink-700 font-black' : theme === 'light' ? 'text-indigo-700 font-black' : 'text-violet-300'
         }`}>
-          Banco de Fichas ({effectiveWordBank.length}):
+          Banco de Fichas (<span className="tabular-nums">{effectiveWordBank.length}</span>):
         </span>
         <div className="flex flex-wrap gap-2">
           {effectiveWordBank.map((chip, cIdx) => {
-            const isUsed = placedChips.includes(chip);
+            const chipClean = chip.trim().toLowerCase();
+            // Soporte robusto de multiplicidad: si un token aparece múltiples veces en el banco,
+            // verificar cuántas ocurrencias de este token específico han sido colocadas en los slots.
+            const countInBankSoFar = effectiveWordBank
+              .slice(0, cIdx + 1)
+              .filter(c => c && c.trim().toLowerCase() === chipClean).length;
+            const countPlaced = placedChips
+              .filter(c => c && c.trim().toLowerCase() === chipClean).length;
+            const isUsed = countPlaced >= countInBankSoFar;
+
             return (
               <button
                 key={cIdx}
@@ -117,13 +126,13 @@ export const DragDropRenderer: React.FC<DragDropRendererProps> = ({
                 onDragStart={() => onSetDraggedChip(chip)}
                 onDragEnd={() => onSetDraggedChip(null)}
                 onClick={() => onPlaceChip(chip)}
-                className={`px-3 py-1.5 rounded-xl text-xs sm:text-[13px] font-semibold border transition-colors duration-150 active:scale-[0.985] cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs sm:text-[13px] font-semibold border transition-[transform,colors,opacity] duration-160 ease-out active:scale-[0.985] cursor-pointer ${
                   isUsed
                     ? theme === 'kitty'
-                      ? 'opacity-30 border-pink-200 bg-pink-50 text-pink-400 line-through'
+                      ? 'opacity-30 border-pink-200 bg-pink-50 text-pink-400 line-through cursor-not-allowed'
                       : theme === 'light'
-                      ? 'opacity-30 border-slate-200 bg-slate-100 text-slate-400 line-through'
-                      : 'opacity-30 border-thea-border bg-thea-surfaceLight text-slate-600 line-through'
+                      ? 'opacity-30 border-slate-200 bg-slate-100 text-slate-400 line-through cursor-not-allowed'
+                      : 'opacity-30 border-thea-border bg-thea-surfaceLight text-slate-600 line-through cursor-not-allowed'
                     : theme === 'kitty'
                     ? 'border-pink-200 bg-white hover:border-pink-400 hover:bg-pink-50 text-pink-950 shadow-xs'
                     : theme === 'light'
