@@ -2110,20 +2110,37 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   }, [currentQ?.templateSentence, currentQ?.question]);
 
   const effectiveBlanksCorrect = useMemo(() => {
+    const slotMatches = effectiveTemplateSentence ? effectiveTemplateSentence.match(/\{\d+\}/g) : null;
+    const numSlots = slotMatches ? slotMatches.length : 0;
+
+    let blanks: string[] = [];
     if (Array.isArray(currentQ?.blanksCorrect) && currentQ.blanksCorrect.length > 0) {
-      return currentQ.blanksCorrect.map(b => String(b).trim());
+      blanks = currentQ.blanksCorrect.map(b => String(b).trim());
     }
-    if (effectiveTemplateSentence) {
-      const slotMatches = effectiveTemplateSentence.match(/\{\d+\}/g);
-      if (slotMatches && currentQ?.wordBank && currentQ.wordBank.length >= slotMatches.length) {
-        return currentQ.wordBank.slice(0, slotMatches.length);
+
+    if (numSlots > 0) {
+      if (blanks.length === 0) {
+        if (currentQ?.wordBank && currentQ.wordBank.length >= numSlots) {
+          blanks = currentQ.wordBank.slice(0, numSlots);
+        }
+      } else if (blanks.length === 1 && numSlots > 1) {
+        // Si hay una sola respuesta para múltiples huecos (ej: "10" para {0}, {1}, {2} en regla de los 10)
+        blanks = Array(numSlots).fill(blanks[0]);
+      } else if (blanks.length < numSlots) {
+        // Expandir rellenando con el último elemento si faltan posiciones
+        while (blanks.length < numSlots) {
+          blanks.push(blanks[blanks.length - 1]);
+        }
       }
     }
-    return currentQ?.blanksCorrect || [];
+
+    return blanks;
   }, [currentQ?.blanksCorrect, effectiveTemplateSentence, currentQ?.wordBank]);
 
   const effectiveWordBank = useMemo(() => {
     const bank = Array.isArray(currentQ?.wordBank) ? [...currentQ.wordBank] : [];
+    const slotMatches = effectiveTemplateSentence ? effectiveTemplateSentence.match(/\{\d+\}/g) : null;
+    const numSlots = slotMatches ? slotMatches.length : effectiveBlanksCorrect.length;
 
     // Contar cuántas veces se necesita cada token en las respuestas correctas
     const neededCounts = new Map<string, number>();
@@ -2157,13 +2174,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Añadir distractores adicionales para garantizar desafío pedagógico
     const defaultDistractors = ['primario', 'secundario', 'crónico', 'agudo', 'sistémico', 'local', 'benigno', 'patológico'];
     for (const dist of defaultDistractors) {
-      if (bank.length >= effectiveBlanksCorrect.length + 2) break;
+      if (bank.length >= Math.max(numSlots, effectiveBlanksCorrect.length) + 2) break;
       if (!bank.some(item => item.trim().toLowerCase() === dist.toLowerCase())) {
         bank.push(dist);
       }
     }
     return bank;
-  }, [currentQ?.wordBank, effectiveBlanksCorrect]);
+  }, [currentQ?.wordBank, effectiveBlanksCorrect, effectiveTemplateSentence]);
 
   const qType = useMemo(() => {
     const baseType = currentQ?.type || 'multiple-choice';
@@ -3314,8 +3331,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const currentPlaced: (string | null)[] = Array.isArray(latestSessionRef.current?.placedChips)
       ? latestSessionRef.current.placedChips
       : placedChips;
+    const slotMatches = effectiveTemplateSentence ? effectiveTemplateSentence.match(/\{\d+\}/g) : null;
+    const totalSlots = slotMatches ? slotMatches.length : effectiveBlanksCorrect.length;
     const newPlaced = [...currentPlaced];
-    while (newPlaced.length < effectiveBlanksCorrect.length) {
+    while (newPlaced.length < totalSlots) {
       newPlaced.push(null);
     }
     if (targetSlot !== undefined) {
@@ -3348,9 +3367,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     hasUserInteractedRef.current = true;
     setDragDropChecked(true);
     const correctBlanks = effectiveBlanksCorrect;
-    const allCorrect = placedChips.every((chip, idx) => {
+    const allCorrect = placedChips.length >= correctBlanks.length && correctBlanks.every((blank, idx) => {
+      const chip = placedChips[idx];
       if (!chip) return false;
-      return chip.trim().toLowerCase() === correctBlanks[idx]?.trim().toLowerCase();
+      return chip.trim().toLowerCase() === blank?.trim().toLowerCase();
     });
 
     const userAns = placedChips

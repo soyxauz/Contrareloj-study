@@ -3766,11 +3766,23 @@ Genera el JSON completo respetando la estructura exigida:`;
           const topicLabel = p.concepto_evaluado ? ` sobre **${String(p.concepto_evaluado).trim()}**` : '';
           fullQuestion = `Completa los espacios en blanco${topicLabel} del siguiente enunciado:`;
         }
-        // Rescatar huecos si templateSentence los contiene pero blanksCorrect no se definió
-        if ((!blanksCorrect || blanksCorrect.length === 0) && templateSentence) {
+        // Rescatar y normalizar huecos para templateSentence garantizando cardinalidad completa
+        if (templateSentence) {
           const slotMatches = templateSentence.match(/\{\d+\}/g);
-          if (slotMatches && Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= slotMatches.length) {
-            blanksCorrect = p.opciones_multiples.slice(0, slotMatches.length);
+          const numSlots = slotMatches ? slotMatches.length : 0;
+          if (numSlots > 0) {
+            if (!blanksCorrect || blanksCorrect.length === 0) {
+              if (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= numSlots) {
+                blanksCorrect = p.opciones_multiples.slice(0, numSlots);
+              }
+            } else if (blanksCorrect.length === 1 && numSlots > 1) {
+              // Un solo valor repetido para todos los huecos (ej: "10" en la regla de los 10)
+              blanksCorrect = Array(numSlots).fill(blanksCorrect[0]);
+            } else if (blanksCorrect.length < numSlots) {
+              while (blanksCorrect.length < numSlots) {
+                blanksCorrect.push(blanksCorrect[blanksCorrect.length - 1]);
+              }
+            }
           }
         }
         // Banco de palabras enriquecido con distractores garantizando la multiplicidad de blanksCorrect
@@ -6211,10 +6223,23 @@ Genera las ${count} preguntas en formato JSON estricto:`;
         const topicLabel = p.concepto_evaluado ? ` sobre **${String(p.concepto_evaluado).trim()}**` : '';
         fullQuestion = `Completa los espacios en blanco${topicLabel} del siguiente enunciado:`;
       }
-      if ((!blanksCorrect || blanksCorrect.length === 0) && templateSentence) {
+      // Rescatar y normalizar huecos para templateSentence garantizando cardinalidad completa
+      if (templateSentence) {
         const slotMatches = templateSentence.match(/\{\d+\}/g);
-        if (slotMatches && Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= slotMatches.length) {
-          blanksCorrect = p.opciones_multiples.slice(0, slotMatches.length);
+        const numSlots = slotMatches ? slotMatches.length : 0;
+        if (numSlots > 0) {
+          if (!blanksCorrect || blanksCorrect.length === 0) {
+            if (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= numSlots) {
+              blanksCorrect = p.opciones_multiples.slice(0, numSlots);
+            }
+          } else if (blanksCorrect.length === 1 && numSlots > 1) {
+            // Un solo valor repetido para todos los huecos (ej: "10" en la regla de los 10)
+            blanksCorrect = Array(numSlots).fill(blanksCorrect[0]);
+          } else if (blanksCorrect.length < numSlots) {
+            while (blanksCorrect.length < numSlots) {
+              blanksCorrect.push(blanksCorrect[blanksCorrect.length - 1]);
+            }
+          }
         }
       }
       // Banco de palabras enriquecido con distractores garantizando la multiplicidad de blanksCorrect
