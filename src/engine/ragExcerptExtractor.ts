@@ -42,7 +42,9 @@ const SPANISH_STOPWORDS = new Set([
 export function splitDocumentIntoSentences(text: string): string[] {
   if (!text) return [];
 
-  let protectedText = text;
+  // Aislar encabezados markdown (#, ##, ###) en sus propias líneas para evitar que se fusionen con oraciones adyacentes
+  let protectedText = text.replace(/(^|\n)\s*(#{1,6}\s+[^\n]+)/g, '$1\n\n$2\n\n');
+
   for (const [pattern, placeholder] of ABBREVIATION_PLACEHOLDERS) {
     protectedText = protectedText.replace(pattern, placeholder);
   }
@@ -63,16 +65,16 @@ export function splitDocumentIntoSentences(text: string): string[] {
         clean = clean.split(placeholder).join(original);
       }
     }
-    // Normalizar espacios internos
-    clean = clean.replace(/\s+/g, ' ').trim();
+    // Normalizar espacios internos y limpiar cualquier prefijo Markdown (#, ##) para un texto legible y pulido
+    clean = clean.replace(/^#{1,6}\s+/, '').replace(/\s+/g, ' ').trim();
     if (clean.length >= 8) {
       restored.push(clean);
     }
   }
 
-  // Si no se detectaron oraciones bien formadas, devolver líneas no vacías
+  // Si no se detectaron oraciones bien formadas, devolver líneas no vacías limpiando marcas Markdown
   if (restored.length === 0) {
-    return text.split(/\n+/).map(s => s.trim()).filter(s => s.length >= 8);
+    return text.split(/\n+/).map(s => s.replace(/^#{1,6}\s+/, '').trim()).filter(s => s.length >= 8);
   }
 
   return restored;
@@ -358,7 +360,7 @@ export function extractSpecificPassage(params: {
   // Se formatea en negrita (**...**) mientras las oraciones adyacentes sirven de contexto natural no resaltado.
   const highlightedParts: string[] = [];
   for (const idx of selectedIndices) {
-    const cleanSentence = sentences[idx].replace(/\*\*/g, '').trim();
+    const cleanSentence = sentences[idx].replace(/\*\*/g, '').replace(/^#{1,6}\s+/, '').trim();
     if (idx === bestIdx || (scores[idx] >= 8.0 && scores[idx] >= maxScore * 0.8)) {
       highlightedParts.push(`**${cleanSentence}**`);
     } else {

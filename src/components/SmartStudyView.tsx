@@ -27,6 +27,7 @@ import {
   FileSearch,
   Image as ImageIcon,
   FileText,
+  Bookmark,
   Settings,
   ThumbsUp,
   ThumbsDown,
@@ -5226,51 +5227,85 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   Tema: <strong>{modalChunk.topic}</strong>
                 </span>
               )}
-              <span className={`px-2.5 py-1 rounded-lg border flex items-center gap-1 font-bold ${
-                modalChunk.matchQuality === 'high'
-                  ? theme === 'dark' ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                  : theme === 'dark' ? 'bg-blue-950/60 border-blue-500/40 text-blue-300' : 'bg-blue-50 border-blue-300 text-blue-800'
-              }`}>
-                <ShieldCheck className="w-3.5 h-3.5" />
-                {modalChunk.matchQuality === 'high' ? 'Alta Fidelidad Textual' : 'Fidelidad RAG Verificada'}
-              </span>
             </div>
 
             {/* 1. Tarjeta Superior: Cita Textual Específica del Documento con Zona Resaltada en Negrita */}
-            <div className={`rounded-2xl p-5 border relative shadow-lg ${
-              theme === 'dark'
-                ? 'bg-thea-bg/90 border-violet-500/50 text-slate-100 shadow-[0_4px_20px_-4px_rgba(139,92,246,0.15)] ring-1 ring-violet-500/20'
-                : theme === 'kitty'
-                ? 'bg-pink-50/70 border-pink-300 text-zinc-950 shadow-pink-200/50'
-                : 'bg-rose-50/60 border-rose-300 text-zinc-950 shadow-slate-200/60'
-            }`} style={{ boxShadow: theme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px -4px rgba(0, 0, 0, 0.4)' : undefined }}>
-              <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
-                <div className={`text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5 ${
-                  theme === 'dark' ? 'text-violet-300' : theme === 'kitty' ? 'text-pink-600' : 'text-rose-600'
-                }`}>
-                  <Target className="w-4 h-4" />
-                  Cita Textual Específica que fundamenta la pregunta:
-                </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+            {(() => {
+              const raw = modalChunk.highlightedExcerpt || modalChunk.excerpt || modalChunk.text || '';
+              // Limpiar marcas Markdown de encabezado (#, ##, ###) tanto al inicio como dentro de negritas
+              let clean = raw
+                .replace(/(\*{1,2}|_{1,2})#{1,6}\s*/g, (_m, p1) => p1)
+                .replace(/(?:^|\n|\r)\s*#{1,6}\s*/g, (m) => m.includes('\n') ? '\n\n' : '')
+                .replace(/#{1,6}\s*/g, '')
+                .trim();
+
+              let header: string | null = null;
+              let body = clean;
+
+              // Detectar si el texto inicia con un encabezado de sección o título de capítulo
+              const headerPatterns = [
+                /^(\*{0,2}(?:Secci[oó]n|Cap[ií]tulo|Tema|\d+(?:\.\d+)*)\s+[^:\n]+:?[^\n]*\*{0,2})\n+([\s\S]+)$/i,
+                /^(\*{0,2}(?:Secci[oó]n|Cap[ií]tulo|Tema)\s+\d+[^:.\n]*:[^.(]+(?:\([^)]+\))?\*{0,2})\s+([A-ZÁÉÍÓÚÑ][\s\S]+)$/i,
+                /^(\*{0,2}[A-ZÁÉÍÓÚÑ\s]{4,35}\*{0,2})\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ][\s\S]+)$/,
+                /^(\*{0,2}\d+(?:\.\d+)+\s+[^.\n]+(?:\([^)]+\))?\*{0,2})\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ][\s\S]+)$/i
+              ];
+
+              for (const pat of headerPatterns) {
+                const m = clean.match(pat);
+                if (m) {
+                  header = m[1].replace(/\*\*/g, '').trim();
+                  body = m[2].trim();
+                  if (m[1].startsWith('**') && !m[1].endsWith('**') && body.includes('**')) {
+                    body = '**' + body;
+                  }
+                  break;
+                }
+              }
+
+              return (
+                <div className={`rounded-2xl p-4 sm:p-5 border relative shadow-lg ${
                   theme === 'dark'
-                    ? 'bg-violet-950/80 border-violet-500/40 text-violet-300'
+                    ? 'bg-thea-bg/90 border-violet-500/50 text-slate-100 ring-1 ring-violet-500/20'
                     : theme === 'kitty'
-                    ? 'bg-pink-100 border-pink-300 text-pink-700'
-                    : 'bg-rose-100 border-rose-300 text-rose-700'
-                }`}>
-                  Pasaje Exacto
-                </span>
-              </div>
-              <div className={`text-[15px] sm:text-[16px] leading-relaxed pl-4 py-2.5 rounded-r-xl border-l-4 font-normal ${
-                theme === 'dark'
-                  ? 'border-violet-500 text-slate-100 bg-violet-950/20 [&_strong]:text-white [&_strong]:font-extrabold [&_strong]:bg-violet-500/30 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-md [&_strong]:ring-1 [&_strong]:ring-violet-400/50 [&_b]:text-white [&_b]:font-extrabold'
-                  : theme === 'kitty'
-                  ? 'border-pink-500 text-zinc-950 bg-pink-100/60 [&_strong]:text-[#9d174d] [&_strong]:font-extrabold [&_strong]:bg-pink-200/90 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-md [&_strong]:ring-1 [&_strong]:ring-pink-400/50'
-                  : 'border-rose-500 text-zinc-950 bg-white/80 [&_strong]:text-rose-950 [&_strong]:font-extrabold [&_strong]:bg-rose-100 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-md [&_strong]:ring-1 [&_strong]:ring-rose-300'
-              }`}>
-                <FormattedText text={modalChunk.highlightedExcerpt || modalChunk.excerpt || modalChunk.text || 'Contenido del fragmento analizado en el material original.'} />
-              </div>
-            </div>
+                    ? 'bg-pink-50/70 border-pink-300 text-zinc-950 shadow-pink-200/50'
+                    : 'bg-rose-50/60 border-rose-300 text-zinc-950 shadow-slate-200/60'
+                }`} style={{ boxShadow: theme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px -4px rgba(0, 0, 0, 0.4)' : undefined }}>
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className={`text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5 ${
+                      theme === 'dark' ? 'text-violet-300' : theme === 'kitty' ? 'text-pink-600' : 'text-rose-600'
+                    }`}>
+                      <Target className="w-4 h-4 shrink-0" />
+                      Cita Textual Específica que fundamenta la pregunta:
+                    </div>
+                  </div>
+
+                  {header && (
+                    <div className={`mb-3 pb-2 flex items-center gap-2 border-b ${
+                      theme === 'dark'
+                        ? 'border-violet-500/30 text-amber-300'
+                        : theme === 'kitty'
+                        ? 'border-pink-200 text-pink-700'
+                        : 'border-slate-200 text-slate-800'
+                    }`}>
+                      <Bookmark className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                      <span className="text-xs sm:text-[13px] font-black uppercase tracking-wider">
+                        {header}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className={`text-[15px] sm:text-[16px] leading-relaxed pl-4 py-2.5 rounded-r-xl border-l-4 font-normal ${
+                    theme === 'dark'
+                      ? 'border-violet-500 text-slate-100 bg-violet-950/20 [&_strong]:text-white [&_strong]:font-extrabold [&_strong]:bg-violet-500/25 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-sm [&_b]:text-white [&_b]:font-extrabold'
+                      : theme === 'kitty'
+                      ? 'border-pink-500 text-zinc-950 bg-pink-100/60 [&_strong]:text-[#9d174d] [&_strong]:font-extrabold [&_strong]:bg-pink-200/90 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-sm'
+                      : 'border-rose-500 text-zinc-950 bg-white/80 [&_strong]:text-rose-950 [&_strong]:font-extrabold [&_strong]:bg-rose-100 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-sm'
+                  }`}>
+                    <FormattedText text={body || raw || 'Contenido del fragmento analizado en el material original.'} />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Multimodal Asset if available */}
             {modalChunk.asset && (

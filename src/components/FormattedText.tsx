@@ -245,6 +245,9 @@ export const FormattedText: React.FC<FormattedTextProps> = ({
       return match;
     });
 
+    // Limpiar marcas Markdown de encabezado sueltas (#, ##, ###) que hayan quedado embebidas dentro de negritas o texto corrido
+    out = out.replace(/(\*{1,2}|_{1,2})#{1,6}\s*/g, (_m, p1) => p1);
+
     return out;
   }, [text]);
 
