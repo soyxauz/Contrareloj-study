@@ -12,6 +12,7 @@ export interface IllustrationSearchContext {
   query?: string;
   imageSearchTerm?: string;
   topic?: string;
+  topicDiscipline?: string;
   questionText?: string;
   correctAnswer?: string;
   bullets?: string[];
@@ -72,9 +73,9 @@ async function fetchWithTimeout(
 }
 
 /**
- * Lista negra rigurosa de dominios no científicos/académicos (flora, fauna, monumentos, vehículos, etc.)
+ * Lista negra rigurosa de dominios no científicos/académicos (arte, pintura, alegorías, mitología, religión, flora, fauna, monumentos, vehículos, etc.)
  */
-const IRRELEVANT_PATTERNS = /\b(cactus|cacto|candelabrum|euphorbia|flower|flor|flores|tree|arbol|arboles|plant|planta|plantas|forest|bosque|leaf|hoja|hojas|shrub|arbusto|botanical|garden|jardin|succulent|botany|flora|fauna|bird|pajaro|ave|aves|insect|insecto|insectos|animal|animales|dog|perro|cat|gato|wildlife|fungus|hongo|hongos|castle|castillo|castillos|palace|palacio|church|iglesia|cathedral|catedral|monument|monumento|monumentos|tower|torre|building|edificio|edificios|bridge|puente|temple|templo|statue|estatua|estatuas|fountain|fuente|facade|fachada|ruins|ruinas|arch|fort|fortaleza|truck|camion|camiones|car|auto|coche|coches|automobile|vehiculo|vehiculos|vehicle|vehicles|train|tren|trenes|plane|airplane|avion|aviones|aircraft|ship|barco|barcos|boat|bote|bus|autobus|motorcycle|moto|motos|tractor|tow truck|grua|flag|bandera|banderas|coat of arms|escudo|escudos|coin|moneda|monedas|banknote|billete|billetes|stamp|sello|sellos|portrait|retrato|retratos|politician|politico|president|presidente|actor|actriz|celebrity|locator map|location map|mapa de localizacion|distrito|provincia|municipio|commune|disambig|question_book|wiki_letter|stub|portal|commons-logo|edit-clear|crystal_clear|ambox|padlock)\b/i;
+const IRRELEVANT_PATTERNS = /\b(cactus|cacto|candelabrum|euphorbia|flower|flor|flores|tree|arbol|arboles|plant|planta|plantas|forest|bosque|leaf|hoja|hojas|shrub|arbusto|botanical|garden|jardin|succulent|botany|flora|fauna|bird|pajaro|ave|aves|insect|insecto|insectos|animal|animales|dog|perro|cat|gato|wildlife|fungus|hongo|hongos|castle|castillo|castillos|palace|palacio|church|iglesia|cathedral|catedral|monument|monumento|monumentos|tower|torre|building|edificio|edificios|bridge|puente|temple|templo|statue|estatua|estatuas|fountain|fuente|facade|fachada|ruins|ruinas|arch|fort|fortaleza|truck|camion|camiones|car|auto|coche|coches|automobile|vehiculo|vehiculos|vehicle|vehicles|train|tren|trenes|plane|airplane|avion|aviones|aircraft|ship|barco|barcos|boat|bote|bus|autobus|motorcycle|moto|motos|tractor|tow truck|grua|flag|bandera|banderas|coat of arms|escudo|escudos|coin|moneda|monedas|banknote|billete|billetes|stamp|sello|sellos|portrait|retrato|retratos|politician|politico|president|presidente|actor|actriz|celebrity|painting|pintura|cuadro|lienzo|allegory|alegoria|allegorical|mythology|mitologia|mythological|mitologico|fable|fabula|god|goddess|dios|diosa|angel|angeles|saturn|saturno|sculpture|escultura|fresco|oil on canvas|oleo sobre lienzo|museum|museo|louvre|prado|hermitage|national gallery|tapestry|tapiz|stained glass|altarpiece|retablo|icon|icono|etching|grabado|woodcut|litografia|lithograph|drawings|dibujo|poetry|poesia|poeta|poet|novel|novela|book cover|portada de libro|presentacion del libro|album|cancion|song|band|musica|discografia|discography|film|movie|pelicula|truth|falsehood|envy|deity|deities|religion|theology|biblical|bible|biblia|saint|santo|santa|christ|cristo|jesus|apocalypse|apocalipsis|virtue|virtud|philosoph|filosof|epistemolog|locator map|location map|mapa de localizacion|distrito|provincia|municipio|commune|disambig|question_book|wiki_letter|stub|portal|commons-logo|edit-clear|crystal_clear|ambox|padlock)\b/i;
 
 /**
  * Normaliza texto eliminando acentos y puntuación
@@ -89,17 +90,25 @@ function normalizeText(text: string): string {
 const BROAD_STOPWORDS = new Set([
   'de', 'la', 'el', 'los', 'las', 'en', 'para', 'por', 'con', 'sobre', 'que', 'del', 'un', 'una',
   'unos', 'unas', 'al', 'es', 'son', 'se', 'su', 'sus', 'como', 'cual', 'cuales', 'donde', 'tiene',
+  'esta', 'estan', 'este', 'estos', 'estas', 'entre', 'hacia', 'hasta', 'desde', 'segun', 'sin',
   'funcion', 'efecto', 'afirmacion', 'proposicion', 'opcion', 'opciones', 'selecciona', 'indica',
-  'senala', 'evalua', 'veracidad', 'siguiente', 'siguientes', 'respecto', 'general', 'correcta',
-  'incorrecta', 'falsa', 'verdadera', 'the', 'and', 'for', 'with', 'that', 'from', 'this', 'these',
-  'which', 'where', 'when', 'what', 'how', 'about', 'effect', 'study', 'question',
-  // Palabras metodológicas, sintácticas y médicas generales que NO definen especificidad por sí solas:
+  'senala', 'evalua', 'evaluar', 'veracidad', 'siguiente', 'siguientes', 'respecto', 'general',
+  'correcta', 'correcto', 'correctas', 'correctos', 'incorrecta', 'incorrecto', 'incorrectas', 'incorrectos',
+  'falsa', 'falso', 'falsas', 'falsos', 'falsedad', 'verdadera', 'verdadero', 'verdaderas', 'verdaderos', 'verdad',
+  'inciso', 'incisos', 'letra', 'letras', 'ambas', 'ninguna', 'todas', 'anterior', 'anteriores',
+  'the', 'and', 'for', 'with', 'that', 'from', 'this', 'these', 'which', 'where', 'when', 'what', 'how', 'about', 'effect', 'study', 'question',
+  // Palabras metodológicas, procedimentales y médicas abstractas que no definen una entidad anatómica/fisiológica/farmacológica por sí solas:
+  'contraindicaciones', 'contraindicacion', 'contraindicada', 'contraindicadas', 'contraindicado', 'contraindicados',
+  'indicaciones', 'indicacion', 'indicada', 'indicadas', 'indicado', 'indicados',
   'criterio', 'criterios', 'regla', 'reglas', 'sistema', 'sistemas', 'sistemico', 'sistemica',
-  'tratamiento', 'tratamientos', 'iniciar', 'inicio', 'indice', 'indices', 'mayor', 'menor',
+  'clasificacion', 'clasificaciones', 'diagnostico', 'diagnosticos', 'signos', 'sintomas', 'sintoma', 'signo',
+  'efectos', 'efecto', 'tratamiento', 'tratamientos', 'iniciar', 'inicio', 'definicion', 'definiciones',
+  'manejo', 'recomendaciones', 'recomendacion', 'guia', 'guias', 'factor', 'factores',
+  'indice', 'indices', 'mayor', 'menor', 'grado', 'grados',
   'afectada', 'afectado', 'afectadas', 'afectados', 'extension', 'gravedad', 'calidad', 'vida',
   'nivel', 'niveles', 'tipo', 'tipos', 'forma', 'formas', 'fase', 'fases', 'caso', 'casos',
   'paciente', 'pacientes', 'proceso', 'procesos', 'estructura', 'estructuras', 'organo', 'organos',
-  'estudio', 'estudios', 'analisis', 'principio', 'principios', 'definir', 'definicion', 'requiere',
+  'estudio', 'estudios', 'analisis', 'principio', 'principios', 'definir', 'requiere',
   'blanco', 'espacio', 'espacios', 'completa', 'completar', 'valor', 'valores', 'tabla', 'figura',
   'esquema', 'diagrama', 'imagen', 'humano', 'medico', 'medica', 'clinico', 'clinica', 'salud',
   'termino', 'terminos', 'concepto', 'conceptos', 'respuesta', 'respuestas', 'pregunta', 'preguntas',
@@ -112,10 +121,16 @@ const BROAD_STOPWORDS = new Set([
  * Extrae entidades y palabras clave nucleares de alta especificidad (longitud >= 4 o siglas técnicas)
  */
 export function extractCoreEntityTerms(ctx: IllustrationSearchContext): string[] {
+  // Ignorar correctAnswer si es únicamente un valor de opción booleana o múltiple (Verdadero/Falso/A/B/C/D)
+  const safeCorrectAnswer =
+    ctx.correctAnswer && !/^(verdadero|falso|verdad|falsa|[a-d]\)?)$/i.test(ctx.correctAnswer.trim())
+      ? ctx.correctAnswer
+      : '';
+
   const sources = [
     ctx.imageSearchTerm,
     ctx.topic,
-    ctx.correctAnswer,
+    safeCorrectAnswer,
     ctx.questionText,
     ctx.query,
   ].filter(Boolean).join(' ');
@@ -144,41 +159,46 @@ function extractAnchorKeywords(ctx: IllustrationSearchContext): string[] {
 }
 
 /**
- * Extrae a lo sumo 2 términos canónicos limpios para consultar de forma hiperrápida
+ * Extrae a lo sumo 3 términos canónicos limpios para consultar de forma hiperrápida
  */
 function buildFastSearchTerms(ctx: IllustrationSearchContext): string[] {
   const terms: string[] = [];
 
-  // 1. imageSearchTerm específico generado por la IA (ej: "Organ of Corti", "Psoriasis plaque", "Insulina")
+  // 1. imageSearchTerm específico si es conciso (1 a 3 palabras concretas)
   if (ctx.imageSearchTerm && ctx.imageSearchTerm.trim().length > 2) {
     const cleanImgTerm = ctx.imageSearchTerm
       .replace(/[¿?¡!.]/g, '')
-      .replace(/\b(diagram|esquema|figura|search|image)\b/gi, '')
+      .replace(/\b(diagram|diagrama|esquema|figura|search|image|imagen|foto|fotografia|ilustracion)\b/gi, '')
       .trim();
-    if (cleanImgTerm.length >= 3 && !BROAD_STOPWORDS.has(normalizeText(cleanImgTerm))) {
-      terms.push(cleanImgTerm);
+    const words = cleanImgTerm.split(/\s+/).filter(w => !BROAD_STOPWORDS.has(normalizeText(w)));
+    if (words.length >= 1 && words.length <= 3 && !BROAD_STOPWORDS.has(normalizeText(cleanImgTerm))) {
+      terms.push(words.join(' '));
     }
   }
 
-  // 2. Entidades nucleares de alta especificidad
+  // 2. Entidades nucleares concretas ordenadas por relevancia
   const coreEntities = extractCoreEntityTerms(ctx);
   for (const ent of coreEntities) {
-    if (terms.length >= 2) break;
-    if (ent.length >= 4 && !terms.some(t => normalizeText(t).includes(ent))) {
-      terms.push(ent);
+    if (terms.length >= 3) break;
+    const cleanEnt = ent.trim();
+    if (cleanEnt.length >= 4 && !terms.some(t => normalizeText(t) === cleanEnt)) {
+      terms.push(cleanEnt);
     }
   }
 
-  // 3. Subtema o materia si es específico y no procedural
+  // 3. Subtema o disciplina si es específico y no procedural
   if (terms.length < 2 && ctx.topic && ctx.topic.trim().length > 2 && ctx.topic.toLowerCase() !== 'general') {
     const cleanTopic = ctx.topic.replace(/[¿?¡!.]/g, '').trim();
-    const normTopic = normalizeText(cleanTopic);
-    if (!terms.includes(cleanTopic) && !normTopic.includes('regla de los') && !normTopic.includes('criterios')) {
-      terms.push(cleanTopic);
+    const words = cleanTopic.split(/\s+/).filter(w => !BROAD_STOPWORDS.has(normalizeText(w)));
+    if (words.length >= 1 && words.length <= 3 && !BROAD_STOPWORDS.has(normalizeText(cleanTopic))) {
+      const topicStr = words.join(' ');
+      if (!terms.some(t => normalizeText(t) === normalizeText(topicStr))) {
+        terms.push(topicStr);
+      }
     }
   }
 
-  return terms.slice(0, 2);
+  return terms.slice(0, 3);
 }
 
 /**
@@ -193,7 +213,7 @@ function isImageStrictlyRelevant(
 ): boolean {
   const fullText = `${title} ${caption} ${imageUrl} ${extract}`;
 
-  // 1. Verificación de lista negra
+  // 1. Verificación de lista negra rigurosa (arte, pintura, alegorías, mitología, monumentos, flora/fauna, etc.)
   if (IRRELEVANT_PATTERNS.test(fullText)) {
     return false;
   }
@@ -204,11 +224,12 @@ function isImageStrictlyRelevant(
   }
 
   // 3. Verificación de anclaje semántico nuclear estricto:
-  // La imagen DEBE contener en su título, leyenda, URL o extracto al menos una de las entidades clave
+  // La imagen DEBE contener en su título, leyenda, URL o extracto al menos una de las entidades clave con frontera de palabra
   const normalizedFullText = normalizeText(fullText);
   return coreEntities.some(entity => {
     if (entity.length < 3) return false;
-    return normalizedFullText.includes(entity);
+    const regex = new RegExp(`(^|[^a-z0-9])${entity}([^a-z0-9]|$)`, 'i');
+    return regex.test(normalizedFullText);
   });
 }
 

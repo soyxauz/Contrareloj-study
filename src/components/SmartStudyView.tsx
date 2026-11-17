@@ -4393,6 +4393,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                           <TheaExplanationView
                             question={explanationQuestion}
                             kitAssets={kit.assets || []}
+                            kitCategory={kit.category}
                             onZoomImage={(asset) => setZoomAsset(asset)}
                           />
                         </div>
@@ -5145,6 +5146,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             <TheaExplanationView
               question={currentQ}
               kitAssets={kit.assets || []}
+              kitCategory={kit.category}
               onZoomImage={(asset) => setZoomAsset(asset)}
             />
           </div>

@@ -25,12 +25,14 @@ export function cleanExplanationBullet(text: string): string {
 interface TheaExplanationViewProps {
   question: Question;
   kitAssets?: DocumentAsset[];
+  kitCategory?: string;
   onZoomImage?: (asset: DocumentAsset) => void;
 }
 
 export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
   question,
   kitAssets = [],
+  kitCategory,
   onZoomImage,
 }) => {
   const { theme } = useTheme();
@@ -186,6 +188,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
         topic: question?.topic,
         questionText: question?.question,
         correctAnswer: correctOpt,
+        topicDiscipline: kitCategory,
         bullets,
         kitAssets,
       },
