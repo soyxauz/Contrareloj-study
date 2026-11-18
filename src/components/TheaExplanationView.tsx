@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Question, DocumentAsset } from '../types';
-import { searchIllustrationForQuestion, type WebImageResult } from '../services/imageSearchService';
+import { searchIllustrationForQuestion, extractCoreEntityTerms, type WebImageResult } from '../services/imageSearchService';
 import { ZoomIn, ExternalLink, Search } from 'lucide-react';
 import { useTheme } from '../services/themeService';
 import { cleanImageBlackBackground } from '../utils/imageCleaner';
@@ -39,13 +39,24 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
   const [imageResult, setImageResult] = useState<WebImageResult | null>(null);
   const [isImgLoaded, setIsImgLoaded] = useState(false);
 
-  // 1. Extraer o formular exactamente 3 viñetas pedagógicas limpias y 100% específicas (cero boilerplate)
-  const bullets = React.useMemo(() => {
-    const safeExplanation = question?.explanation || '';
-    const correctOption =
+  // Extraer la respuesta correcta limpia (para usarla tanto en viñetas como en la búsqueda de imágenes)
+  const correctOption = React.useMemo(() => {
+    let raw =
       question?.options && question.correctIndex !== undefined
         ? question.options[question.correctIndex]
         : question?.idealAnswer || '';
+    if (!raw && Array.isArray(question?.blanksCorrect) && question.blanksCorrect.length > 0) {
+      const nonNumeric = question.blanksCorrect.filter(b => isNaN(Number(b)));
+      if (nonNumeric.length > 0) {
+        raw = nonNumeric[0];
+      }
+    }
+    return raw ? raw.replace(/^[a-d]\)\s*/i, '').trim() : '';
+  }, [question]);
+
+  // 1. Extraer o formular exactamente 3 viñetas pedagógicas limpias y 100% específicas (cero boilerplate)
+  const bullets = React.useMemo(() => {
+    const safeExplanation = question?.explanation || '';
 
     // Filtrar viñetas existentes rechazando cualquier texto genérico o placeholder
     let validBullets = (question?.googleOverview?.bullets || [])
@@ -86,7 +97,7 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
       .replace(/^eval[uú]a la veracidad[^:]*:\s*/i, '')
       .replace(/^[¿?¡!]/g, '')
       .trim();
-    const cleanAns = correctOption ? correctOption.replace(/^[a-d]\)\s*/i, '').trim() : '';
+    const cleanAns = correctOption;
 
     // Viñeta 1: Conclusión directa y afirmación clave
     if (validBullets.length < 1) {
@@ -129,31 +140,50 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
     }
 
     return validBullets.slice(0, 3);
-  }, [question]);
+  }, [question, correctOption]);
 
-  // 2. Término de búsqueda para la consulta e ilustración web (priorizando el término específico de imagen)
+  // 2. Término de búsqueda para la consulta e ilustración web
+  // REQUISITO ESTRICTO: La figura y la búsqueda DEBEN relacionarse prioritariamente con la respuesta de la pregunta y su pregunta
   const searchTerm = React.useMemo(() => {
+    // 1. Si la respuesta es un concepto clínico/sustantivo (no booleano ni letra)
+    const normAns = cleanExplanationBullet(correctOption).toLowerCase();
+    const isBooleanOrLetter = /^(verdadero|falso|verdad|falsa|todas|ninguna|[a-d])$/i.test(normAns);
+    if (correctOption.length >= 3 && !isBooleanOrLetter && correctOption.split(/\s+/).length <= 4) {
+      return correctOption;
+    }
+
+    // 2. imageSearchTerm específico de la IA si es conciso (1 a 4 palabras)
     if (question?.googleOverview?.imageSearchTerm && question.googleOverview.imageSearchTerm.trim().length > 2) {
       const raw = question.googleOverview.imageSearchTerm.trim();
-      if (!raw.includes('[') && !raw.includes(']') && !raw.toLowerCase().includes('palabras clave')) {
+      const words = raw.split(/\s+/);
+      if (!raw.includes('[') && !raw.includes(']') && !raw.toLowerCase().includes('palabras clave') && words.length <= 4) {
         return raw;
       }
     }
-    if (question?.googleOverview?.query && question.googleOverview.query.trim().length > 2) {
-      const cleanQ = question.googleOverview.query
-        .replace(/¿c[oó]mo funciona\s+/i, '')
-        .replace(/[¿?¡!]/g, '')
-        .trim();
-      if (cleanQ.length > 2 && !cleanQ.includes('[') && !cleanQ.includes(']')) {
-        return cleanQ;
+
+    // 3. Subtema conciso si tiene hasta 4 palabras
+    if (question?.topic && question.topic.trim().length > 2 && question.topic.toLowerCase() !== 'general') {
+      const cleanT = question.topic.replace(/[¿?¡!.]/g, '').trim();
+      if (cleanT.split(/\s+/).length <= 4) {
+        return cleanT;
       }
     }
-    if (question?.topic && question.topic.trim().length > 2 && question.topic.toLowerCase() !== 'general') {
-      return question.topic.trim();
+
+    // 4. Si la pregunta o el tema es una frase larga (ej: "Contraindicaciones de la fototerapia en psoriasis"),
+    // extraer la entidad clínica nuclear de mayor relevancia:
+    const entities = extractCoreEntityTerms({
+      query: question?.googleOverview?.query,
+      imageSearchTerm: question?.googleOverview?.imageSearchTerm,
+      topic: question?.topic,
+      questionText: question?.question,
+      correctAnswer: correctOption
+    });
+    if (entities.length > 0) {
+      return entities[0].charAt(0).toUpperCase() + entities[0].slice(1);
     }
-    const safeQ = question?.question || 'Concepto de estudio';
-    return safeQ.replace(/\*\*([^*]+)\*\*/g, '$1').slice(0, 80);
-  }, [question]);
+
+    return question?.topic || 'Concepto de estudio';
+  }, [question, correctOption]);
 
   // 3. Buscar ilustración en la web (Wikipedia / Wikimedia / Fallback con estricta pertinencia)
   useEffect(() => {

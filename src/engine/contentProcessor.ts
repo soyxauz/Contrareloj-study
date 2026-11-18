@@ -1,4 +1,4 @@
-import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentAsset } from '../types';
+import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentAsset, GoogleOverview } from '../types';
 import {
   generateCompleteAIPedagogicalBatch,
   classifyDocumentWithAI,
@@ -288,6 +288,29 @@ function extractSemanticFacts(text: string): SemanticFact[] {
 
 // ── Question Generator ───────────────────────────────────────────────────
 
+function buildQuestionGoogleOverview(
+  query: string,
+  bullets: string[],
+  imageSearchTerm?: string
+): GoogleOverview {
+  const cleanQuery = (query || 'Concepto').replace(/[¿?¡!.]/g, '').trim();
+  const cleanImgTerm = (imageSearchTerm || cleanQuery)
+    .replace(/[¿?¡!.]/g, '')
+    .replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s-]/g, ' ')
+    .split(/\s+/)
+    .slice(0, 3)
+    .join(' ')
+    .trim();
+
+  return {
+    query: cleanQuery,
+    bullets,
+    imageSearchTerm: cleanImgTerm || cleanQuery,
+    searchUrl: `https://www.google.com/search?q=${encodeURIComponent(cleanQuery)}`,
+    wikipediaUrl: `https://es.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(cleanImgTerm || cleanQuery)}`
+  };
+}
+
 function generateQuestions(text: string, _count: number, category: string): Question[] {
   const domainFallbacks = DOMAIN_DISTRACTORS[category] || DOMAIN_DISTRACTORS['General'];
   let facts = extractSemanticFacts(text);
@@ -336,6 +359,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       distPreds.push(domainFallbacks[distPreds.length % domainFallbacks.length]);
     }
     const options = [f.predicate, ...distPreds].sort(() => Math.random() - 0.5);
+    const bullets = [
+      `Afirmación demostrada: "${f.subject}" se caracteriza por: ${f.predicate}.`,
+      `Mecanismo y rol activo: En el contexto de ${category || 'la temática'}, este enunciado define su función primordial.`,
+      `Diferenciación conceptual: Las opciones alternativas representan atribuciones divergentes que no corresponden a ${f.subject}.`
+    ];
 
     easyQuestions.push({
       id: `q-e-def-${uid()}`,
@@ -345,7 +373,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: `De acuerdo con el material de estudio, "${f.subject}" se caracteriza por: ${f.predicate}.`
+      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
 
@@ -357,6 +386,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       distSubs.push(domainFallbacks[distSubs.length % domainFallbacks.length]);
     }
     const options = [f.subject, ...distSubs].sort(() => Math.random() - 0.5);
+    const bullets = [
+      `Identificación unívoca: La descripción "${f.predicate}" corresponde exactamente al concepto de "${f.subject}".`,
+      `Mecanismo y rol activo: En el marco de ${category || 'la disciplina'}, ${f.subject} constituye el elemento rector de dicha propiedad.`,
+      `Diferenciación conceptual: Los distractores corresponden a conceptos afines pero con propiedades y funciones distintas.`
+    ];
 
     easyQuestions.push({
       id: `q-e-term-${uid()}`,
@@ -366,13 +400,19 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.subject)),
       topic: f.subject,
-      explanation: `La descripción corresponde exactamente al concepto de "${f.subject}".`
+      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
 
   // C. Matching básico (Nivel 1)
   if (facts.length >= 4) {
     const slice = facts.slice(0, 4);
+    const bullets = [
+      `Correspondencias fundamentales: Se empareja cada concepto básico con su función directa documentada en el texto.`,
+      `Fundamento de anclaje: ` + slice.map(s => `${s.subject} ➔ ${s.predicate}`).slice(0, 2).join('; ') + `.`,
+      `Diferenciación conceptual: Cualquier cruce alternativo confunde la estructura o propiedad evaluada.`
+    ];
     easyQuestions.push({
       id: `q-e-match-${uid()}`,
       type: 'matching',
@@ -382,14 +422,20 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         term: s.subject,
         definition: s.predicate.length > 85 ? s.predicate.slice(0, 80) + '…' : s.predicate
       })),
-      topic: 'Emparejamiento Básico',
-      explanation: 'Correspondencias conceptuales correctas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n')
+      topic: slice[0]?.subject || 'Emparejamiento Básico',
+      explanation: 'Correspondencias conceptuales correctas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n'),
+      googleOverview: buildQuestionGoogleOverview(slice[0]?.subject || 'Conceptos básicos', bullets, slice[0]?.subject)
     });
   }
 
   // D. True/False básico
   for (let i = 0; i < Math.min(facts.length, 6); i++) {
     const f = facts[i];
+    const bullets = [
+      `Aseveración verídica: Es correcto que ${f.subject} ${f.predicate}.`,
+      `Fundamento textual: Esta proposición concuerda con exactitud con el marco conceptual expuesto en el texto.`,
+      `Diferenciación analítica: La opción "Falso" se descarta porque la aseveración no contiene alteraciones ni errores conceptuales.`
+    ];
     easyQuestions.push({
       id: `q-e-tf-${uid()}`,
       type: 'true-false',
@@ -398,7 +444,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options: ['Verdadero', 'Falso'],
       correctIndex: 0,
       topic: f.subject,
-      explanation: `Verdadero. Esta afirmación concuerda fielmente con lo expuesto en el material de estudio.`
+      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
 
@@ -409,6 +456,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
     const distSubs = allSubs.filter((_, idx) => idx !== (eIdx % facts.length)).sort(() => Math.random() - 0.5).slice(0, 3);
     while (distSubs.length < 3) distSubs.push(domainFallbacks[distSubs.length % domainFallbacks.length]);
     const options = [f.subject, ...distSubs].sort(() => Math.random() - 0.5);
+    const bullets = [
+      `Repaso verificado: "${f.subject}" es el elemento específico que presenta la propiedad: ${f.predicate}.`,
+      `Mecanismo y rol: Constituye un pilar clave en la comprensión de ${category || 'la temática'}.`,
+      `Diferenciación conceptual: Se descartan las alternativas por corresponder a entidades secundarias o no aplicables.`
+    ];
 
     easyQuestions.push({
       id: `q-e-cyc-${uid()}`,
@@ -418,7 +470,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.subject)),
       topic: f.subject,
-      explanation: `El concepto correcto es "${f.subject}".`
+      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
     eIdx++;
   }
@@ -451,6 +504,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
           if (templ.includes('{0}') && templ.includes('{1}')) {
             const dist1 = allSubs.find(s => s.toLowerCase() !== cleanSub.toLowerCase()) || domainFallbacks[0];
             const dist2 = domainFallbacks[1] || 'proceso alternativo';
+            const bullets = [
+              `Completitud contextual: La formulación correcta del principio es: "${f.fullSentence}".`,
+              `Mecanismo y relación: "${cleanSub}" opera directamente como el sujeto rector y "${cleanPredWord}" define su acción o propiedad determinante.`,
+              `Diferenciación conceptual: Los distractores introducidos alterarían la coherencia y el significado técnico del enunciado.`
+            ];
 
             mediumQuestions.push({
               id: `q-m-drag-${uid()}`,
@@ -461,7 +519,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
               blanksCorrect: [cleanSub, cleanPredWord],
               wordBank: [cleanSub, cleanPredWord, dist1, dist2].sort(() => Math.random() - 0.5),
               topic: f.subject,
-              explanation: `El principio correcto según el texto es: "${f.fullSentence}".`
+              explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+              googleOverview: buildQuestionGoogleOverview(f.subject, bullets, cleanSub)
             });
           }
         } catch {
@@ -487,6 +546,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
 
       const allOpts = [...correctStatements, ...falseStatements].map((txt, idx) => ({ txt, isCorrect: idx < 2 })).sort(() => Math.random() - 0.5);
       const correctIndices = allOpts.map((o, idx) => o.isCorrect ? idx : -1).filter(idx => idx !== -1);
+      const bullets = [
+        `Selección validada: Las afirmaciones correctas sobre ${f1.subject} y ${f2.subject} reflejan fielmente el contenido analizado.`,
+        `Fundamento temático: Ambas proposiciones describen relaciones funcionales comprobadas en el material.`,
+        `Diferenciación analítica: Las alternativas no seleccionadas introducen generalizaciones absolutas o negaciones contrarias al texto.`
+      ];
 
       mediumQuestions.push({
         id: `q-m-ms-${uid()}`,
@@ -495,8 +559,9 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         question: `Selecciona todas las afirmaciones correctas sobre el tema expuesto en el texto:`,
         options: allOpts.map(o => o.txt),
         correctIndices,
-        topic: 'Análisis Relacional',
-        explanation: `Afirmaciones verdaderas del texto:\n• ${correctStatements.join('\n• ')}`
+        topic: f1.subject,
+        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        googleOverview: buildQuestionGoogleOverview(f1.subject, bullets, f1.subject)
       });
     }
   }
@@ -504,6 +569,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
   // C. Matching intermedio
   if (facts.length >= 8) {
     const slice = facts.slice(4, 8);
+    const bullets = [
+      `Mecanismos y relaciones: Conexión documentada de estructuras y mecanismos con su comportamiento funcional.`,
+      `Fundamento de anclaje: ` + slice.map(s => `${s.subject} ➔ ${s.predicate}`).slice(0, 2).join('; ') + `.`,
+      `Diferenciación técnica: Cada par obedece a una interacción biológica o conceptual documentada en el texto.`
+    ];
     mediumQuestions.push({
       id: `q-m-match-${uid()}`,
       type: 'matching',
@@ -513,8 +583,9 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         term: s.subject,
         definition: s.predicate.length > 85 ? s.predicate.slice(0, 80) + '…' : s.predicate
       })),
-      topic: 'Mecanismos y Relaciones',
-      explanation: 'Correspondencias correctas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n')
+      topic: slice[0]?.subject || 'Mecanismos y Relaciones',
+      explanation: 'Correspondencias correctas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n'),
+      googleOverview: buildQuestionGoogleOverview(slice[0]?.subject || 'Mecanismos y Relaciones', bullets, slice[0]?.subject)
     });
   }
 
@@ -524,6 +595,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
     const distPreds = allPreds.filter((_, idx) => idx !== i).sort(() => Math.random() - 0.5).slice(0, 3);
     while (distPreds.length < 3) distPreds.push(domainFallbacks[distPreds.length % domainFallbacks.length]);
     const options = [f.predicate, ...distPreds].sort(() => Math.random() - 0.5);
+    const bullets = [
+      `Función clave demostrada: "${f.subject}" desempeña activamente el rol de: ${f.predicate}.`,
+      `Vía causal: Este mecanismo es determinante para el funcionamiento documentado en ${category || 'la temática'}.`,
+      `Diferenciación conceptual: Las opciones alternativas confunden el propósito o atribuyen funciones de componentes externos.`
+    ];
 
     mediumQuestions.push({
       id: `q-m-caus-${uid()}`,
@@ -533,7 +609,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: `Función clave documentada: "${f.subject}" ${f.predicate}.`
+      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
 
@@ -544,6 +621,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
     const distPreds = allPreds.filter((_, idx) => idx !== (mIdx % facts.length)).sort(() => Math.random() - 0.5).slice(0, 3);
     while (distPreds.length < 3) distPreds.push(domainFallbacks[distPreds.length % domainFallbacks.length]);
     const options = [f.predicate, ...distPreds].sort(() => Math.random() - 0.5);
+    const bullets = [
+      `Implicación directa: Para "${f.subject}", la consecuencia o propiedad documentada es: ${f.predicate}.`,
+      `Sustento analítico: Esta relación obedece a los postulados nucleares de ${category || 'el tema'}.`,
+      `Diferenciación conceptual: Las otras alternativas representan distorsiones o deducciones no fundamentadas.`
+    ];
 
     mediumQuestions.push({
       id: `q-m-cyc-${uid()}`,
@@ -553,7 +635,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: `La implicación directa es: ${f.predicate}.`
+      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
     mIdx++;
   }
@@ -565,6 +648,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
     const isFalseVariant = i % 2 === 1;
 
     if (!isFalseVariant) {
+      const bullets = [
+        `Rigurosidad conceptual: La proposición es verídica y concuerda fielmente con: "${f.fullSentence}".`,
+        `Mecanismo de validación: Se constata concordancia total entre el sujeto ("${f.subject}") y el predicado documentado.`,
+        `Diferenciación analítica: La opción "Falso" se desestima al no detectarse falacias ni distorsiones en el enunciado.`
+      ];
       hardQuestions.push({
         id: `q-h-tf-t-${uid()}`,
         type: 'true-false',
@@ -573,11 +661,17 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         options: ['Verdadero', 'Falso'],
         correctIndex: 0,
         topic: f.subject,
-        explanation: `Verdadero. La afirmación concuerda de manera precisa con el marco conceptual expuesto en el texto.`
+        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
       });
     } else {
       const otherSub = allSubs.find(s => s.toLowerCase() !== f.subject.toLowerCase()) || 'un elemento externo';
       const falseSentence = safeReplaceInsensitive(f.fullSentence, f.subject, otherSub);
+      const bullets = [
+        `Detección de falacia: La proposición es conceptualmente falsa debido a un error de atribución temática.`,
+        `Contraste y corrección: La función descrita pertenece en realidad a "${f.subject}" y no a "${otherSub}".`,
+        `Principio verídico: La afirmación rigurosa documentada es: "${f.fullSentence}".`
+      ];
 
       hardQuestions.push({
         id: `q-h-tf-f-${uid()}`,
@@ -587,7 +681,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         options: ['Verdadero', 'Falso'],
         correctIndex: 1,
         topic: f.subject,
-        explanation: `Falso. Hay un error de atribución: la función descrita corresponde a "${f.subject}" y NO a "${otherSub}".\nPrincipio verídico: "${f.fullSentence}".`
+        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
       });
     }
   }
@@ -606,6 +701,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       ].sort(() => Math.random() - 0.5);
 
       const correctIndices = opts.map((o, idx) => o.correct ? idx : -1).filter(idx => idx !== -1);
+      const bullets = [
+        `Discriminación técnica: Únicamente las proposiciones vinculadas a ${f1.subject} y ${f2.subject} conservan rigor científico.`,
+        `Análisis crítico: Los mecanismos y relaciones descritos concuerdan con la bibliografía del documento.`,
+        `Exclusión de errores: Las opciones descartadas incurren en falacias operativas y premisas inválidas.`
+      ];
 
       hardQuestions.push({
         id: `q-h-ms-${uid()}`,
@@ -614,8 +714,9 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         question: `Discriminación Técnica: Selecciona TODAS las proposiciones que representen afirmaciones válidas según el material:`,
         options: opts.map(o => o.text),
         correctIndices,
-        topic: 'Dominio Crítico',
-        explanation: `Las únicas afirmaciones respaldadas por el texto son las que corresponden fielmente a los procesos descritos para ${f1.subject} y ${f2.subject}.`
+        topic: f1.subject,
+        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        googleOverview: buildQuestionGoogleOverview(f1.subject, bullets, f1.subject)
       });
     }
   }
@@ -623,6 +724,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
   // C. Matching avanzado
   if (facts.length >= 4) {
     const slice = facts.slice(0, 4).reverse();
+    const bullets = [
+      `Dominio experto: Correspondencias técnicas exactas entre componentes y sus consecuencias analizadas.`,
+      `Fundamento de anclaje: ` + slice.map(s => `${s.subject} ➔ ${s.predicate}`).slice(0, 2).join('; ') + `.`,
+      `Diferenciación analítica: Los vínculos responden a interacciones rigurosas y excluyen correlaciones espurias.`
+    ];
     hardQuestions.push({
       id: `q-h-match-${uid()}`,
       type: 'matching',
@@ -632,8 +738,9 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         term: s.subject,
         definition: s.predicate.length > 85 ? s.predicate.slice(0, 80) + '…' : s.predicate
       })),
-      topic: 'Dominio Experto',
-      explanation: 'Correspondencias técnicas exactas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n')
+      topic: slice[0]?.subject || 'Dominio Experto',
+      explanation: 'Correspondencias técnicas exactas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n'),
+      googleOverview: buildQuestionGoogleOverview(slice[0]?.subject || 'Dominio Experto', bullets, slice[0]?.subject)
     });
   }
 
@@ -644,6 +751,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
     const distPreds = allPreds.filter((_, idx) => idx !== (hIdx % facts.length)).sort(() => Math.random() - 0.5).slice(0, 3);
     while (distPreds.length < 3) distPreds.push(domainFallbacks[distPreds.length % domainFallbacks.length]);
     const options = [f.predicate, ...distPreds].sort(() => Math.random() - 0.5);
+    const bullets = [
+      `Evaluación de dominio: El principio técnico que distingue la acción de "${f.subject}" es: ${f.predicate}.`,
+      `Profundidad analítica: Esta propiedad específica previene confusiones con estructuras o fenómenos análogos.`,
+      `Diferenciación conceptual: Las opciones rivales no corresponden al nivel de especificidad requerido para ${f.subject}.`
+    ];
 
     hardQuestions.push({
       id: `q-h-cyc-${uid()}`,
@@ -653,7 +765,8 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: `El principio técnico es: "${f.subject}" ${f.predicate}.`
+      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
     hIdx++;
   }
@@ -2893,6 +3006,13 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
   let combinedText = '';
   if (kit.sourceText && kit.sourceText.trim().length > 30) {
     combinedText += kit.sourceText.trim() + '\n\n';
+  }
+  if (kit.studyGuideMarkdown && kit.studyGuideMarkdown.trim().length > 30) {
+    const cleanGuide = kit.studyGuideMarkdown
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .trim();
+    combinedText += cleanGuide + '\n\n';
   }
   if (kit.sourceMaterials && Array.isArray(kit.sourceMaterials)) {
     for (const mat of kit.sourceMaterials) {

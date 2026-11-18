@@ -1,4 +1,4 @@
-import type { StudyKit, DocumentAsset, User, PodcastEpisode, PodcastSettings, SmartStudySessionState, FlashcardProgressState } from '../types';
+import type { StudyKit, DocumentAsset, User, PodcastEpisode, PodcastSettings, SmartStudySessionState, FlashcardProgressState, Question } from '../types';
 import { authService } from './authService';
 import { flashcardProgressService } from './flashcardProgressService';
 import {
@@ -3839,15 +3839,18 @@ export const googleDriveService = {
       throw new Error('No se pudo acceder al kit de Google Drive (código 404 o acceso restringido).');
     }
 
-    // 2. Asociar al usuario actual y generar preguntas inmediatas de práctica si venían vacías
+    // 2. Asociar al usuario actual y generar preguntas interactivas propias para el receptor a partir del kit compartido
     const now = Date.now();
-    let questions = Array.isArray(rawKit.questions) && rawKit.questions.length > 0 ? rawKit.questions : [];
-    if (questions.length === 0) {
-      try {
-        questions = generateKitQuestions(rawKit);
-      } catch (genErr) {
-        console.warn('[GoogleDriveService] Aviso generando preguntas automáticas de kit:', genErr);
-      }
+    let questions: Question[] = [];
+    try {
+      questions = generateKitQuestions(rawKit, 25);
+    } catch (genErr) {
+      console.warn('[GoogleDriveService] Aviso generando preguntas propias de kit:', genErr);
+    }
+
+    // Si por algún motivo extremo no se pudieron generar (ej. kit sin texto ni flashcards), recurrir a las existentes
+    if (questions.length === 0 && Array.isArray(rawKit.questions) && rawKit.questions.length > 0) {
+      questions = rawKit.questions;
     }
 
     // Generar un ID único nuevo e independiente para el receptor

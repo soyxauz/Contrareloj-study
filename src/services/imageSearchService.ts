@@ -124,8 +124,19 @@ export function extractCoreEntityTerms(ctx: IllustrationSearchContext): string[]
   // Ignorar correctAnswer si es únicamente un valor de opción booleana o múltiple (Verdadero/Falso/A/B/C/D)
   const safeCorrectAnswer =
     ctx.correctAnswer && !/^(verdadero|falso|verdad|falsa|[a-d]\)?)$/i.test(ctx.correctAnswer.trim())
-      ? ctx.correctAnswer
+      ? ctx.correctAnswer.replace(/^[a-d]\)\s*/i, '').trim()
       : '';
+
+  // Extraer tokens prioritarios de la respuesta correcta de la pregunta
+  const answerTokens: string[] = [];
+  if (safeCorrectAnswer) {
+    const normAns = normalizeText(safeCorrectAnswer);
+    const ansWords = normAns
+      .replace(/[^a-z0-9-\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 3 && !BROAD_STOPWORDS.has(w) && !/^\d+$/.test(w));
+    answerTokens.push(...ansWords);
+  }
 
   const sources = [
     ctx.imageSearchTerm,
@@ -148,7 +159,7 @@ export function extractCoreEntityTerms(ctx: IllustrationSearchContext): string[]
     .split(/\s+/)
     .filter(w => w.length >= 4 && !BROAD_STOPWORDS.has(w) && !/^\d+$/.test(w));
 
-  return [...new Set([...acronyms, ...tokens])];
+  return [...new Set([...answerTokens, ...acronyms, ...tokens])];
 }
 
 /**
@@ -164,7 +175,32 @@ function extractAnchorKeywords(ctx: IllustrationSearchContext): string[] {
 function buildFastSearchTerms(ctx: IllustrationSearchContext): string[] {
   const terms: string[] = [];
 
-  // 1. imageSearchTerm específico si es conciso (1 a 3 palabras concretas)
+  // 1. PRIORIDAD MÁXIMA: La respuesta correcta de la pregunta (si es sustantiva)
+  // Requisito expreso del usuario: "que la figura esté relacionada con la respuesta de la pregunta y su pregunta"
+  if (ctx.correctAnswer && typeof ctx.correctAnswer === 'string') {
+    const cleanAnswer = ctx.correctAnswer
+      .replace(/^[a-d]\)\s*/i, '')
+      .replace(/[¿?¡!.]/g, '')
+      .trim();
+    const normAns = normalizeText(cleanAnswer);
+    if (
+      cleanAnswer.length >= 3 &&
+      !/^(verdadero|falso|verdad|falsa|todas|ninguna|[a-d])$/i.test(normAns) &&
+      !BROAD_STOPWORDS.has(normAns)
+    ) {
+      const words = cleanAnswer.split(/\s+/).filter(w => !BROAD_STOPWORDS.has(normalizeText(w)));
+      if (words.length >= 1 && words.length <= 4) {
+        terms.push(cleanAnswer);
+      } else if (words.length > 4) {
+        const coreWords = words.slice(0, 3).join(' ');
+        if (coreWords.length >= 3) {
+          terms.push(coreWords);
+        }
+      }
+    }
+  }
+
+  // 2. imageSearchTerm específico si es conciso (1 a 3 palabras concretas)
   if (ctx.imageSearchTerm && ctx.imageSearchTerm.trim().length > 2) {
     const cleanImgTerm = ctx.imageSearchTerm
       .replace(/[¿?¡!.]/g, '')
@@ -172,11 +208,14 @@ function buildFastSearchTerms(ctx: IllustrationSearchContext): string[] {
       .trim();
     const words = cleanImgTerm.split(/\s+/).filter(w => !BROAD_STOPWORDS.has(normalizeText(w)));
     if (words.length >= 1 && words.length <= 3 && !BROAD_STOPWORDS.has(normalizeText(cleanImgTerm))) {
-      terms.push(words.join(' '));
+      const termStr = words.join(' ');
+      if (!terms.some(t => normalizeText(t) === normalizeText(termStr))) {
+        terms.push(termStr);
+      }
     }
   }
 
-  // 2. Entidades nucleares concretas ordenadas por relevancia
+  // 3. Entidades nucleares concretas ordenadas por relevancia
   const coreEntities = extractCoreEntityTerms(ctx);
   for (const ent of coreEntities) {
     if (terms.length >= 3) break;
@@ -186,7 +225,7 @@ function buildFastSearchTerms(ctx: IllustrationSearchContext): string[] {
     }
   }
 
-  // 3. Subtema o disciplina si es específico y no procedural
+  // 4. Subtema o disciplina si es específico y no procedural
   if (terms.length < 2 && ctx.topic && ctx.topic.trim().length > 2 && ctx.topic.toLowerCase() !== 'general') {
     const cleanTopic = ctx.topic.replace(/[¿?¡!.]/g, '').trim();
     const words = cleanTopic.split(/\s+/).filter(w => !BROAD_STOPWORDS.has(normalizeText(w)));
