@@ -20,6 +20,12 @@ export function isPlaceholderOption(text: string | null | undefined): boolean {
   if (SINGLE_LETTER_REGEX.test(trimmed)) return true;
   if (PLACEHOLDER_OPTION_REGEX.test(trimmed)) return true;
 
+  // Fragmentos huérfanos que terminan en dos puntos o frases como "las siguientes:"
+  if (/^(?:las|los)\s+siguientes:?$/i.test(trimmed)) return true;
+  if (/^(?:las|los)\s+anteriores:?$/i.test(trimmed)) return true;
+  if (/^las siguientes$/i.test(trimmed)) return true;
+  if (trimmed.endsWith(':') && trimmed.length < 35) return true;
+
   const lower = trimmed.toLowerCase();
   if (
     lower === 'texto de la opción' ||
@@ -52,7 +58,7 @@ export function isValidQuestionStem(stem: string | null | undefined): boolean {
   const trimmed = stem.trim();
   if (trimmed.length < 12) return false;
 
-  // Enunciados puramente genéricos sin contenido real
+  // Enunciados puramente genéricos o preámbulos vacíos sin contenido real
   const lower = trimmed.toLowerCase();
   if (
     lower === 'selecciona la opción correcta:' ||
@@ -61,7 +67,9 @@ export function isValidQuestionStem(stem: string | null | undefined): boolean {
     lower === 'selecciona la respuesta correcta:' ||
     lower === 'elige la opción correcta:' ||
     lower === 'pregunta 1:' ||
-    lower === 'pregunta:'
+    lower === 'pregunta:' ||
+    /^(?:análisis crítico:\s*)?evalúa la rigurosidad conceptual de la siguiente proposición:?\s*$/i.test(lower) ||
+    /^(?:análisis crítico:\s*)?evalúa si la siguiente proposición es fidedigna o incurre en error conceptual:?\s*$/i.test(lower)
   ) {
     return false;
   }

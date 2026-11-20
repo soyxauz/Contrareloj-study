@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   XCircle,
   ArrowRight,
-  Plus,
   Play,
   TrendingUp,
   Volume2,
@@ -216,47 +215,90 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
     }
   }
 
-  const promptText = q.question || '';
+  let promptText = (q.question || '')
+    .replace(/[•●▪]/g, '')
+    .replace(/«/g, '"')
+    .replace(/»/g, '"')
+    .replace(/^Análisis Crítico:\s*Evalúa la rigurosidad conceptual de la siguiente proposición:\s*/i, '')
+    .replace(/^Análisis Crítico:\s*Evalúa si la siguiente proposición es fidedigna o incurre en error conceptual:\s*/i, '')
+    .replace(/^Evalúa la veracidad de la siguiente afirmación fundamental según el texto:\s*/i, '')
+    .replace(/^Evalúa la veracidad de la siguiente afirmación:\s*/i, '')
+    .replace(/\s*según el (?:texto|documento|material)\??/gi, '')
+    .replace(/\s*conforme al (?:texto|documento)\??/gi, '')
+    .trim();
+
+  // Si tras limpiar el preámbulo quedó un enunciado vacío o un título sin interrogante, dar contexto
+  if (!promptText || promptText.length < 8) {
+    promptText = q.topic ? `¿Cuáles son las características clínicas y conceptuales de ${q.topic}?` : '¿Cuáles son las características principales del tema estudiado?';
+  }
+
   const isSelectionPrompt = /\b(cu[aá]l(es)? de (las|los)|selecciona|indica|señala (la|el|cu[aá]l)|de las siguientes|de los siguientes|de las alternativas|todas las siguientes)\b/i.test(promptText);
 
   // 2. Si tiene 3 o más opciones reales y estaba erróneamente tipada como true-false, restaurarla a multiple-choice
   if (Array.isArray(q.options) && q.options.length >= 3) {
+    let cleanOpts = q.options
+      .map(o => (o || '').replace(/[•●▪]/g, '').replace(/«/g, '"').replace(/»/g, '"').trim())
+      .filter(o => !/^(?:las|los)\s+siguientes:?$/i.test(o) && !o.endsWith(':'));
+
+    if (cleanOpts.length < 2) {
+      cleanOpts = q.options;
+    }
+
+    // Si el enunciado no contiene interrogación ni imperativo de selección (ej: es un título como "lesión cutánea elemental..."),
+    // formularlo con corrección gramatical y rigor académico
+    if (!promptText.includes('?') && !/^(identifica|selecciona|indica|señala|determina|empareja|ordena|completa|cuál|qué|cómo|dónde|por qué|cuándo|en qué|de qué|a qué)\b/i.test(promptText)) {
+      promptText = `¿Cuál de las siguientes opciones describe con mayor precisión a ${promptText}?`;
+    }
+
     if (q.type === 'true-false') {
       return {
         ...q,
+        question: promptText,
+        options: cleanOpts,
         type: 'multiple-choice',
       };
     }
-    return q;
+    return {
+      ...q,
+      question: promptText,
+      options: cleanOpts,
+    };
   }
 
-  // 3. Si solo tiene opciones ['Verdadero', 'Falso'] pero el enunciado pide seleccionar opciones
+  // 3. Si es true-false o solo tiene opciones ['Verdadero', 'Falso'], garantizar proposición declarativa directa
   const isTFOptions = Array.isArray(q.options) &&
     q.options.length === 2 &&
     q.options.some(o => /verdadero/i.test(o)) &&
     q.options.some(o => /falso/i.test(o));
 
-  if ((q.type === 'true-false' || isTFOptions) && isSelectionPrompt) {
+  if (q.type === 'true-false' || isTFOptions) {
     let assertion = '';
-    if (q.idealAnswer && q.idealAnswer.trim().length > 10 && !/\bcu[aá]l\b/i.test(q.idealAnswer)) {
-      assertion = q.idealAnswer.trim();
-    } else if (q.explanation) {
-      const cleanExpl = q.explanation
-        .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '')
-        .replace(/^[*\s]*(Verdadero|Falso|Opción [A-D]|Justificación|Fundamentación):?\s*/i, '')
-        .trim();
-      const firstSentence = cleanExpl.split(/\.\s+/)[0]?.trim();
-      if (firstSentence && firstSentence.length > 12) {
-        assertion = firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
+    const quotedMatch = promptText.match(/(?:describe con mayor precisión a|sobre|respecto a|acerca de)\s*["“«](.+?)["”»]\??/i) ||
+      promptText.match(/^¿(?:cuál de las siguientes opciones|es verdadero o falso que)\s+["“«](.+?)["”»]\??/i) ||
+      promptText.match(/["“«](.+?)["”»]/);
+
+    if (quotedMatch && quotedMatch[1] && quotedMatch[1].trim().length > 8) {
+      assertion = quotedMatch[1].trim();
+    } else if (isSelectionPrompt) {
+      if (q.idealAnswer && q.idealAnswer.trim().length > 10 && !/\bcu[aá]l\b/i.test(q.idealAnswer)) {
+        assertion = q.idealAnswer.trim();
+      } else if (q.explanation) {
+        const cleanExpl = q.explanation
+          .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '')
+          .replace(/^[*\s]*(Verdadero|Falso|Opción [A-D]|Justificación|Fundamentación):?\s*/i, '')
+          .trim();
+        const firstSentence = cleanExpl.split(/\.\s+/)[0]?.trim();
+        if (firstSentence && firstSentence.length > 12) {
+          assertion = firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
+        }
       }
     }
 
     if (assertion) {
-      const topicTag = q.topic ? ` sobre **${q.topic}**` : '';
       return {
         ...q,
         type: 'true-false',
-        question: `Evalúa la veracidad de la siguiente proposición conceptual${topicTag}:\n\n«${assertion}»`,
+        question: `"${assertion}"`,
         options: ['Verdadero', 'Falso'],
         correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
       };
@@ -600,7 +642,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isReadAloudLoading, setIsReadAloudLoading] = useState(false);
   const [readAloudError, setReadAloudError] = useState<string | null>(null);
-  const [isGeneratingMore, setIsGeneratingMore] = useState(false);
 
   // ── Preguntas Reveladas Previamente en Banco ────────────────────────────
   const [revealedQuestionIds, setRevealedQuestionIds] = useState<string[]>(() => {
@@ -795,11 +836,21 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     return ((savedSession as any)?.activePracticeLevel as 1 | 2 | 3) || (savedSession?.level as 1 | 2 | 3) || 1;
   });
   const [targetLevel, setTargetLevel] = useState<1 | 2 | 3>(() => activePracticeLevel);
-  const [targetTopic, setTargetTopic] = useState('');
+  const [targetTopic, setTargetTopic] = useState<string>(() => {
+    return kit?.targetTopic || (savedSession as any)?.targetTopic || (typeof localStorage !== 'undefined' ? localStorage.getItem(`thea_study_target_topic_${kit?.id}`) : null) || '';
+  });
+
+  // Mantener sincronizado el tema activo del kit
+  useEffect(() => {
+    if (kit?.id) {
+      const persisted = kit.targetTopic || (typeof localStorage !== 'undefined' ? localStorage.getItem(`thea_study_target_topic_${kit.id}`) : null) || '';
+      if (persisted) {
+        setTargetTopic(persisted);
+      }
+    }
+  }, [kit?.id, kit?.targetTopic]);
   const targetCount = 10;
   const [isGeneratingTargeted, setIsGeneratingTargeted] = useState(false);
-  const [isSwitchingDifficulty, setIsSwitchingDifficulty] = useState(false);
-  const [switchingDiffMessage, setSwitchingDiffMessage] = useState('');
   const [targetSuccessNotice, setTargetSuccessNotice] = useState('');
   const [targetErrorNotice, setTargetErrorNotice] = useState('');
 
@@ -1098,234 +1149,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     authService.saveSmartStudySession(userId || null, kit.id, merged, { source });
   }, [kit?.id, userId, buildSessionSignature, revealedQuestionIds.length]);
 
-  const handleSelectDifficulty = async (selectedLvl: 1 | 2 | 3) => {
-    if (isSwitchingDifficulty || isGeneratingTargeted) return;
-
+  const handleSelectDifficulty = (selectedLvl: 1 | 2 | 3) => {
+    // La selección de nivel en el panel de calibración es una preferencia previa;
+    // no conmuta la pregunta activa ni dispara peticiones hasta hacer clic en "Generar y Evaluar Ahora".
     setTargetLevel(selectedLvl);
-    setActivePracticeLevel(selectedLvl);
     setTargetErrorNotice('');
     setTargetSuccessNotice('');
-
-    // Marcar la pregunta actual como vista antes de conmutar
-    if (currentQ?.id) {
-      seenQuestionIdsRef.current.add(currentQ.id);
-    }
-
-    const targetDiff: 'easy' | 'medium' | 'hard' = selectedLvl === 1 ? 'easy' : selectedLvl === 2 ? 'medium' : 'hard';
-    const allInDiff = kit.questions.filter(q => q.type !== 'image-labeling' && (q.difficulty || 'easy') === targetDiff);
-
-    // Conjunto de preguntas ya consumidas (respondidas o vistas)
-    const consumedIds = new Set([
-      ...Array.from(answeredQuestionIdsRef.current),
-      ...Array.from(seenQuestionIdsRef.current),
-    ]);
-
-    // Preguntas de este nivel que aún no han sido vistas ni respondidas, y distintas a la actual
-    let availableInDiff = allInDiff.filter(q => !consumedIds.has(q.id) && q.id !== currentQ?.id);
-
-    // Si quedan menos de 7 preguntas disponibles en esta dificultad -> Generar tanda de 10 con IA
-    if (availableInDiff.length < 7 || allInDiff.length < 7) {
-      setIsSwitchingDifficulty(true);
-      setSwitchingDiffMessage(
-        `Generando tanda completa de 10 preguntas de Nivel ${selectedLvl} con IA...`
-      );
-
-      try {
-        let generated: Question[] = [];
-        if (targetTopic && targetTopic.trim()) {
-          generated = await generateTargetedPedagogicalQuestions(
-            kit.sourceText || kit.description,
-            targetTopic,
-            selectedLvl,
-            10,
-            kit.chunks
-          );
-        } else {
-          generated = await generateAIPedagogicalQuestions(
-            kit.sourceText || kit.description,
-            10,
-            targetDiff,
-            kit.chunks
-          );
-        }
-
-        if (generated && generated.length > 0) {
-          const marked = generated.map(q => ({
-            ...q,
-            difficulty: targetDiff,
-          }));
-
-          const existingIds = new Set(kit.questions.map(q => q.id));
-          const fresh = marked.filter(q => !existingIds.has(q.id));
-          const updatedKitQuestions = [...kit.questions, ...fresh];
-
-          if (onUpdateKit) {
-            onUpdateKit({
-              ...kit,
-              questions: updatedKitQuestions,
-            });
-          }
-
-          const firstQ = fresh[0] || marked[0];
-          hasUserInteractedRef.current = true;
-          seenQuestionIdsRef.current.add(firstQ.id);
-          setCurrentQuestion(firstQ);
-          lastQId.current = firstQ.id;
-
-          // Limpieza de respuestas activas
-          setSelectedOption(null);
-          setSelectedMultiIndices([]);
-          setActiveMatchingTerm(null);
-          setMatchingPairsMap({});
-          setMatchingChecked(false);
-          setPlacedChips([]);
-          setDragDropChecked(false);
-          setShortAnswerInput('');
-          setShortAnswerEvalResult(null);
-          setIsManuallyOverridden(false);
-          setIsAnswered(false);
-          setIsCurrentCorrect(null);
-          setFeedbackGiven(null);
-          setCurrentIndex(0);
-
-          // Guardar síncronamente en memoria de sesión
-          persistSessionSnapshot({
-            currentIndex: 0,
-            level,
-            activePracticeLevel: selectedLvl,
-            currentQuestionId: firstQ.id,
-            currentQuestion: firstQ,
-            levelCorrectCount: currentLevelCorrect,
-            levelCorrectCounts,
-            errorQueue: [],
-            isReinforcementMode: false,
-            selectedOption: null,
-            selectedMultiIndices: [],
-            matchingPairsMap: {},
-            matchingChecked: false,
-            placedChips: [],
-            dragDropChecked: false,
-            isAnswered: false,
-            isCurrentCorrect: null,
-            shortAnswerInput: '',
-            activeTab,
-            history: history.slice(0, 50),
-            historyFilter,
-            historyLevelFilter,
-            questionsAnsweredTotal,
-            totalErrorsReinforced,
-            socraticProfile,
-            revealedQuestionIds,
-            seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
-            shuffleSeed: 1,
-          });
-
-          setTargetSuccessNotice(
-            `Se generaron ${fresh.length} preguntas de Nivel ${selectedLvl}. Pregunta activa actualizada.`
-          );
-          setTimeout(() => {
-            setShowConfigDrawer(false);
-            setTargetSuccessNotice('');
-          }, 1200);
-        } else {
-          // Si la IA no generó, pero hay disponibles en el banco, rotar a la siguiente
-          if (availableInDiff.length === 0) {
-            seenQuestionIdsRef.current.clear();
-            availableInDiff = allInDiff.filter(q => q.id !== currentQ?.id);
-          }
-          const fallbackQ = availableInDiff[Math.floor(Math.random() * availableInDiff.length)] || allInDiff[0];
-          if (fallbackQ) {
-            seenQuestionIdsRef.current.add(fallbackQ.id);
-            setCurrentQuestion(fallbackQ);
-            lastQId.current = fallbackQ.id;
-            setSelectedOption(null);
-            setSelectedMultiIndices([]);
-            setIsAnswered(false);
-            setIsCurrentCorrect(null);
-          }
-          setTimeout(() => setShowConfigDrawer(false), 300);
-        }
-      } catch (err) {
-        console.error('Error al generar preguntas de dificultad:', err);
-        const msg = err instanceof Error ? err.message : 'Error al conectar con el servicio de IA.';
-        setTargetErrorNotice(msg);
-        if (availableInDiff.length === 0) {
-          seenQuestionIdsRef.current.clear();
-          availableInDiff = allInDiff.filter(q => q.id !== currentQ?.id);
-        }
-        const fallbackQ = availableInDiff[Math.floor(Math.random() * availableInDiff.length)] || allInDiff[0];
-        if (fallbackQ) {
-          seenQuestionIdsRef.current.add(fallbackQ.id);
-          setCurrentQuestion(fallbackQ);
-          lastQId.current = fallbackQ.id;
-          setSelectedOption(null);
-          setSelectedMultiIndices([]);
-          setIsAnswered(false);
-          setIsCurrentCorrect(null);
-        }
-      } finally {
-        setIsSwitchingDifficulty(false);
-        setSwitchingDiffMessage('');
-      }
-    } else {
-      // El banco tiene 7 o más preguntas disponibles en esta dificultad: tomar una aleatoria no vista
-      const nextQ = availableInDiff[Math.floor(Math.random() * availableInDiff.length)] || availableInDiff[0];
-      hasUserInteractedRef.current = true;
-      seenQuestionIdsRef.current.add(nextQ.id);
-      setCurrentQuestion(nextQ);
-      lastQId.current = nextQ.id;
-
-      // Limpieza de respuestas activas
-      setSelectedOption(null);
-      setSelectedMultiIndices([]);
-      setActiveMatchingTerm(null);
-      setMatchingPairsMap({});
-      setMatchingChecked(false);
-      setPlacedChips([]);
-      setDragDropChecked(false);
-      setShortAnswerInput('');
-      setShortAnswerEvalResult(null);
-      setIsManuallyOverridden(false);
-      setIsAnswered(false);
-      setIsCurrentCorrect(null);
-      setFeedbackGiven(null);
-      setCurrentIndex(0);
-
-      // Guardar síncronamente en memoria de sesión
-      persistSessionSnapshot({
-        currentIndex: 0,
-        level,
-        activePracticeLevel: selectedLvl,
-        currentQuestionId: nextQ.id,
-        currentQuestion: nextQ,
-        levelCorrectCount: currentLevelCorrect,
-        levelCorrectCounts,
-        errorQueue: [],
-        isReinforcementMode: false,
-        selectedOption: null,
-        selectedMultiIndices: [],
-        matchingPairsMap: {},
-        matchingChecked: false,
-        placedChips: [],
-        dragDropChecked: false,
-        isAnswered: false,
-        isCurrentCorrect: null,
-        shortAnswerInput: '',
-        activeTab,
-        history: history.slice(0, 50),
-        historyFilter,
-        historyLevelFilter,
-        questionsAnsweredTotal,
-        totalErrorsReinforced,
-        socraticProfile,
-        revealedQuestionIds,
-        seenQuestionIds: Array.from(seenQuestionIdsRef.current).slice(-100),
-        shuffleSeed: 1,
-      });
-
-      // Cerrar el cajón suavemente para mostrar la nueva pregunta de inmediato
-      setTimeout(() => setShowConfigDrawer(false), 300);
-    }
   };
 
   const handleGenerateTargetedQuestions = async () => {
@@ -1343,25 +1172,53 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         kit.chunks
       );
 
-      if (generated.length > 0) {
-        // Se preserva el nivel de progreso real ganado sin alterarlo por la dificultad de práctica
+      if (generated && generated.length > 0) {
+        // Se adopta la dificultad seleccionada para la práctica
         setActivePracticeLevel(targetLevel);
         setShuffleSeed(1);
         setCurrentIndex(0);
         setIsReinforcementMode(false);
         setSelectedOption(null);
         setSelectedMultiIndices([]);
+        setActiveMatchingTerm(null);
+        setMatchingPairsMap({});
+        setMatchingChecked(false);
+        setPlacedChips([]);
+        setDragDropChecked(false);
+        setShortAnswerInput('');
+        setShortAnswerEvalResult(null);
+        setIsManuallyOverridden(false);
         setIsAnswered(false);
         setIsCurrentCorrect(null);
-        const randomTargetedQ = generated[Math.floor(Math.random() * generated.length)] || generated[0];
-        hasUserInteractedRef.current = true;
-        setCurrentQuestion(randomTargetedQ);
-        lastQId.current = randomTargetedQ.id;
+        setFeedbackGiven(null);
 
-        const updatedQuestions = [...generated, ...kit.questions];
+        // La primera pregunta del nuevo kit generado pasa a ser la pregunta activa
+        const firstTargetedQ = generated[0];
+        hasUserInteractedRef.current = true;
+        setCurrentQuestion(firstTargetedQ);
+        lastQId.current = firstTargetedQ.id;
+
+        // Reiniciar las preguntas vistas y respondidas con el nuevo kit limpio
+        seenQuestionIdsRef.current = new Set([firstTargetedQ.id]);
+        answeredQuestionIdsRef.current = new Set();
+
+        const cleanTopic = targetTopic.trim();
+        if (cleanTopic) {
+          try {
+            localStorage.setItem(`thea_study_target_topic_${kit.id}`, cleanTopic);
+          } catch {}
+        } else {
+          try {
+            localStorage.removeItem(`thea_study_target_topic_${kit.id}`);
+          } catch {}
+        }
+
+        // Reemplazar todo el kit por las nuevas preguntas generadas con esta orientación
+        const updatedQuestions = generated;
         if (onUpdateKit) {
           onUpdateKit({
             ...kit,
+            targetTopic: cleanTopic || undefined,
             questions: updatedQuestions,
           });
         }
@@ -1371,8 +1228,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           currentIndex: 0,
           level,
           activePracticeLevel: targetLevel,
-          currentQuestionId: randomTargetedQ.id,
-          currentQuestion: randomTargetedQ,
+          targetTopic: cleanTopic || undefined,
+          currentQuestionId: firstTargetedQ.id,
+          currentQuestion: firstTargetedQ,
           levelCorrectCount: currentLevelCorrect,
           levelCorrectCounts,
           errorQueue: [],
@@ -1394,6 +1252,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           totalErrorsReinforced,
           socraticProfile,
           revealedQuestionIds,
+          seenQuestionIds: [firstTargetedQ.id],
           shuffleSeed: 1,
         });
 
@@ -1404,44 +1263,15 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         setTimeout(() => {
           setShowConfigDrawer(false);
           setTargetSuccessNotice('');
-        }, 1500);
+        }, 1200);
+      } else {
+        setTargetErrorNotice('No se pudieron generar preguntas para este tema. Intenta con otro término.');
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al generar preguntas calibradas.';
       setTargetErrorNotice(msg);
     } finally {
       setIsGeneratingTargeted(false);
-    }
-  };
-
-  const handleGenerateMoreQuestions = async () => {
-    if (isGeneratingMore) return;
-    setIsGeneratingMore(true);
-    setGenerateMoreError('');
-    try {
-      const targetDiff = level === 1 ? 'easy' : level === 2 ? 'medium' : 'hard';
-      const newQuestions = await generateAIPedagogicalQuestions(
-        kit.sourceText || kit.description,
-        5,
-        targetDiff,
-        kit.chunks
-      );
-      if (newQuestions.length > 0 && onUpdateKit) {
-        const existingIds = new Set(kit.questions.map(q => q.id));
-        const fresh = newQuestions.filter(q => !existingIds.has(q.id));
-        if (fresh.length > 0) {
-          onUpdateKit({
-            ...kit,
-            questions: [...kit.questions, ...fresh],
-          });
-        }
-      }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'No fue posible generar más preguntas con IA.';
-      setGenerateMoreError(msg);
-      setTimeout(() => setGenerateMoreError(''), 8000);
-    } finally {
-      setIsGeneratingMore(false);
     }
   };
 
@@ -1465,7 +1295,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     // Prefetch continuo equilibrado cuando quedan 3 o menos preguntas no dominadas por delante o el banco tiene pocas
     if (remainingAhead <= 3 || unmasteredInPool.length < 6) {
       isAutoGeneratingRef.current = true;
-      setIsGeneratingMore(true);
 
       try {
         // 1. Particionar el documento en 4-6 secciones para ubicar la parte con menor cobertura
@@ -1500,14 +1329,27 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             : undefined,
         };
 
-        const generated = await generateAIPedagogicalQuestions(
-          targetSection.text,
-          5,
-          targetDiff,
-          targetSection.chunks.length > 0 ? targetSection.chunks : kit.chunks,
-          sectionMeta,
-          existingSubtopics
-        );
+        const activeTopic = targetTopic.trim() || kit.targetTopic?.trim();
+        let generated: Question[] = [];
+
+        if (activeTopic) {
+          generated = await generateTargetedPedagogicalQuestions(
+            targetSection.text || kit.sourceText || kit.description,
+            activeTopic,
+            activeLevel,
+            4,
+            targetSection.chunks.length > 0 ? targetSection.chunks : kit.chunks
+          );
+        } else {
+          generated = await generateAIPedagogicalQuestions(
+            targetSection.text,
+            5,
+            targetDiff,
+            targetSection.chunks.length > 0 ? targetSection.chunks : kit.chunks,
+            sectionMeta,
+            existingSubtopics
+          );
+        }
 
         if (generated.length > 0 && onUpdateKit) {
           const existingIds = new Set(kit.questions.map(q => q.id));
@@ -1515,6 +1357,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           if (fresh.length > 0) {
             onUpdateKit({
               ...kit,
+              targetTopic: activeTopic || kit.targetTopic,
               questions: [...kit.questions, ...fresh], // Siempre adjuntar al final para mantener el orden
             });
           }
@@ -1523,7 +1366,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         console.warn('[SmartStudy Continuous Stream] Error en generación en segundo plano:', err);
       } finally {
         isAutoGeneratingRef.current = false;
-        setIsGeneratingMore(false);
       }
     }
   }, [kit, onUpdateKit, isQuestionCorrectlyAnswered]);
@@ -2041,7 +1883,9 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     }
   }, [currentQuestion?.id, currentQuestion?.type, kit.questions]);
 
-  const currentQ: Question = currentQuestion;
+  const currentQ: Question = useMemo(() => {
+    return sanitizeQuestionStructure(currentQuestion, kit.questions);
+  }, [currentQuestion, kit.questions]);
 
   // Carga bajo demanda ultra-ligera de imagen especifica si la pregunta actual la requiere (cero consumo de RAM en kits)
   const [activeAssetDataUrl, setActiveAssetDataUrl] = useState<string | null>(null);
@@ -3262,13 +3106,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       .slice()
       .sort((a, b) => a - b)
       .map(i => safeOptions[i] || `Opción ${i + 1}`)
-      .join(' • ');
+      .join(', ');
 
     const correctAns = target
       .slice()
       .sort((a, b) => a - b)
       .map(i => safeOptions[i] || `Opción ${i + 1}`)
-      .join(' • ');
+      .join(', ');
 
     markQuestionResult(isExactMatch, userAns, correctAns);
   };
@@ -3406,7 +3250,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     } else if (qType === 'true-false') {
       correctAns = safeCorrectIndex === 0 ? 'Verdadero' : 'Falso';
     } else if (qType === 'multi-select') {
-      correctAns = safeCorrectIndices.map(i => safeOptions[i] || `Opción ${i + 1}`).join(' • ');
+      correctAns = safeCorrectIndices.map(i => safeOptions[i] || `Opción ${i + 1}`).join(', ');
       setSelectedMultiIndices(safeCorrectIndices);
     } else if (qType === 'matching' && currentQ.matchingPairs) {
       correctAns = `Emparejamientos: ${correctMatchingFormula}`;
@@ -4231,7 +4075,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                       <span className="text-xs font-bold text-white tabular-nums">
                         Pregunta #{item.attemptNumber ?? Math.max(1, (questionsAnsweredTotal || filteredHistory.length) - idx)}
                       </span>
-                      <span className="text-xs text-slate-500 tabular-nums">• {item.timestamp}</span>
+                      <span className="text-xs text-slate-500 tabular-nums">({item.timestamp})</span>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
@@ -4563,21 +4407,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
           )}
 
-          {isSwitchingDifficulty ? (
-            <div className="p-10 sm:p-16 rounded-3xl bg-[#200814]/90 border border-amber-500/40 flex flex-col items-center justify-center text-center animate-fadeIn my-4 shadow-2xl">
-              <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center mb-5 shadow-lg shadow-amber-500/10">
-                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-              </div>
-              <h3 className="text-lg sm:text-xl font-extrabold text-white mb-2">
-                Generando preguntas de Nivel {activePracticeLevel} con IA...
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-md leading-relaxed">
-                {switchingDiffMessage || 'Ampliando el banco a un mínimo de 7 preguntas para este nivel de exigencia pedagógica.'}
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Visual Diagram/Asset if strictly necessary */}
+          {/* Visual Diagram/Asset if strictly necessary */}
           {isImageStrictlyNecessary(currentQ) && currentQ.sourceAsset && (
             <div className="mb-6 p-4 rounded-2xl bg-[#200814]/80 border border-violet-500/30 overflow-hidden">
               <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
@@ -4671,7 +4501,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           {/* Píldora de Subtema Granular (Diseño Apple / Emil Kowalski / Linear con soporte multitema y sin punto parpadeante) */}
           {currentSubtopic && (
             <div
-              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md mb-2 sm:mb-2.5 select-none animate-fadeIn max-w-full min-w-0 overflow-hidden ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md mb-2 sm:mb-2.5 select-none animate-fadeIn max-w-full min-w-0 overflow-hidden ${
                 theme === 'light'
                   ? 'bg-rose-50/90 border border-rose-200/90 text-rose-950 shadow-xs'
                   : theme === 'kitty'
@@ -4696,21 +4526,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     : 'text-slate-400'
                 }`}
               >
-                Subtema
+                Subtema:
               </span>
               <span
-                className={`shrink-0 ${
-                  theme === 'light'
-                    ? 'text-rose-300'
-                    : theme === 'kitty'
-                    ? 'text-pink-300'
-                    : 'text-slate-600'
-                }`}
-              >
-                •
-              </span>
-              <span
-                className={`font-medium truncate max-w-[200px] xs:max-w-[280px] sm:max-w-none ${
+                className={`font-medium truncate max-w-[220px] xs:max-w-[320px] sm:max-w-none ${
                   theme === 'light'
                     ? 'text-rose-950 font-semibold'
                     : theme === 'kitty'
@@ -4718,7 +4537,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     : 'text-rose-200'
                 }`}
               >
-                {currentSubtopic}
+                {currentSubtopic.replace(/[•●▪]/g, '').trim()}
               </span>
             </div>
           )}
@@ -5151,8 +4970,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             />
           </div>
         )}
-            </>
-          )}
         </div>
       )}
 
@@ -5458,7 +5275,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 <button
                   type="button"
                   onClick={() => handleSelectDifficulty(1)}
-                  disabled={isSwitchingDifficulty || isGeneratingTargeted}
+                  disabled={isGeneratingTargeted}
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer disabled:opacity-50 ${
                     targetLevel === 1
                       ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md ring-1 ring-emerald-500/40'
@@ -5467,9 +5284,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 >
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-[10px] uppercase font-bold text-emerald-400">Nivel 1</span>
-                    {isSwitchingDifficulty && targetLevel === 1 && (
-                      <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                    )}
                   </div>
                   <span className="text-xs font-bold block">Fundamentos</span>
                   <span className="text-[10px] text-slate-400 block mt-1">Retención directa</span>
@@ -5478,7 +5292,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 <button
                   type="button"
                   onClick={() => handleSelectDifficulty(2)}
-                  disabled={isSwitchingDifficulty || isGeneratingTargeted}
+                  disabled={isGeneratingTargeted}
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer disabled:opacity-50 ${
                     targetLevel === 2
                       ? 'bg-blue-950/50 border-blue-500 text-white shadow-md ring-1 ring-blue-500/40'
@@ -5487,9 +5301,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 >
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-[10px] uppercase font-bold text-blue-400">Nivel 2</span>
-                    {isSwitchingDifficulty && targetLevel === 2 && (
-                      <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
-                    )}
                   </div>
                   <span className="text-xs font-bold block">Aplicación</span>
                   <span className="text-[10px] text-slate-400 block mt-1">Casos y causas</span>
@@ -5498,7 +5309,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 <button
                   type="button"
                   onClick={() => handleSelectDifficulty(3)}
-                  disabled={isSwitchingDifficulty || isGeneratingTargeted}
+                  disabled={isGeneratingTargeted}
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative disabled:opacity-50 ${
                     targetLevel === 3
                       ? 'bg-purple-950/60 border-amber-400 text-white shadow-md ring-1 ring-amber-400/50'
@@ -5507,9 +5318,6 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 >
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-[10px] uppercase font-bold text-amber-400">Nivel 3</span>
-                    {isSwitchingDifficulty && targetLevel === 3 && (
-                      <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                    )}
                   </div>
                   <span className="text-xs font-bold block">Máximo</span>
                   <span className="text-[10px] text-amber-300/80 block mt-1">Opciones Similares</span>
@@ -5564,7 +5372,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
                 Acciones Rápidas de Sesión
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div>
                 <button
                   type="button"
                   onClick={() => {
@@ -5609,41 +5417,10 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     });
                     setShowConfigDrawer(false);
                   }}
-                  className="p-3 rounded-2xl border border-thea-border bg-thea-surfaceLight text-slate-300 hover:text-white hover:border-violet-500/50 flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all active:scale-95"
+                  className="w-full p-3.5 rounded-2xl border border-thea-border bg-thea-surfaceLight text-slate-300 hover:text-white hover:border-violet-500/50 flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all active:scale-[0.98]"
                 >
                   <Shuffle className="w-4 h-4 text-violet-400" />
                   <span>Barajar Preguntas</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleGenerateMoreQuestions();
-                  }}
-                  disabled={isGeneratingMore}
-                  className="p-3 rounded-2xl border border-thea-border bg-thea-surfaceLight text-slate-300 hover:text-white hover:border-violet-500/50 flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isGeneratingMore ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                      <span>Generando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      <span>+10 Preguntas ({levelLabels[level].title})</span>
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowConfigDrawer(false);
-                    setShowResetConfirmModal(true);
-                  }}
-                  className="col-span-2 p-3 rounded-2xl border border-rose-500/30 bg-rose-950/20 text-rose-300 hover:text-white hover:bg-rose-900/30 flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all active:scale-95"
-                >
-                  <RotateCcw className="w-4 h-4 text-rose-400" />
-                  <span>Reiniciar Progreso de Estudio a Cero</span>
                 </button>
               </div>
             </div>

@@ -131,8 +131,8 @@ export function deriveGranularSubtopic(q: Question, kitTitle?: string): string {
     normTopic === 'fundamentos';
 
   if (!isGeneric && rawTopic.length >= 4) {
-    // Si viene con formato "Tema: Subtema" o "2.3 Subtema", limpiar prefijos numéricos
-    const cleaned = rawTopic.replace(/^\d+(\.\d+)*\s*[-–—:]*\s*/, '').trim();
+    // Si viene con formato "Tema: Subtema" o "2.3 Subtema", limpiar prefijos numéricos y viñetas
+    const cleaned = rawTopic.replace(/^\d+(\.\d+)*\s*[-–—:]*\s*/, '').replace(/^[•●▪\s*-]+/, '').replace(/[•●▪]/g, '').trim();
     if (cleaned.length >= 4) {
       return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     }

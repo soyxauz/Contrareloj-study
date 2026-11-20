@@ -9,6 +9,7 @@ import { chunkDocument } from './chunker';
 import { LocalVectorStore } from './vectorStore';
 import { findBestChunkAndExcerpt, resolveRealPageNumber } from './ragExcerptExtractor';
 import { analyzeCanvasContent, IMAGE_FILTER_CONFIG } from '../utils/imageClassifier';
+import { filterCompliantQuestions } from '../utils/questionValidator';
 import JSZip from 'jszip';
 
 /**
@@ -225,6 +226,8 @@ interface SemanticFact {
   fullSentence: string;
 }
 
+const INVALID_SUBJECT_REGEX = /^(a diferencia|a diferencia de|a diferencia del|por lo tanto|por ende|en consecuencia|sin embargo|no obstante|por otra parte|por otro lado|por el contrario|en cambio|de acuerdo|de acuerdo con|según|según el|asimismo|en efecto|cabe señalar|cabe destacar|es decir|en este sentido|por consiguiente|a saber|en resumen|en conclusión|concepto|nota|ejemplo|caso|artículo|art|además|por ello|en cuanto a|con respecto a|respecto a|dentro de|a través de)\b/i;
+
 /** Extrae hechos conceptuales estructurados de cualquier texto educativo */
 function extractSemanticFacts(text: string): SemanticFact[] {
   const sents = sentences(text);
@@ -238,8 +241,6 @@ function extractSemanticFacts(text: string): SemanticFact[] {
     { type: 'composition' as const, regex: /^([A-ZÁÉÍÓÚ][a-záéíóúñA-ZÁÉÍÓÚ\s]{2,40}?)\s+(se compone de|está formado por|contiene|incluye|abarca)\s+(.+)/i },
   ];
 
-  const INVALID_SUBJECT_REGEX = /^(a diferencia|a diferencia de|a diferencia del|por lo tanto|por ende|en consecuencia|sin embargo|no obstante|por otra parte|por otro lado|por el contrario|en cambio|de acuerdo|de acuerdo con|según|según el|asimismo|en efecto|cabe señalar|cabe destacar|es decir|en este sentido|por consiguiente|a saber|en resumen|en conclusión|concepto|nota|ejemplo|caso|artículo|art|además|por ello|en cuanto a|con respecto a|respecto a|dentro de|a través de)\b/i;
-
   for (const s of sents) {
     // Si la oración empieza con una cláusula de contraste ("A diferencia del comodato, ..."), limpiar la cláusula para hallar el sujeto real
     const cleanSentence = s.replace(/^(a diferencia de(l)?|en contraste con|al igual que|en comparación con)\s+[^,]{3,60},\s*/i, '');
@@ -251,11 +252,14 @@ function extractSemanticFacts(text: string): SemanticFact[] {
         const cleanSubject = rawSubject.replace(/^(el|la|los|las|un|una|unos|unas|este|esta|estos|estas)\s+/i, '').trim();
         const predicate = m[3].replace(/[.]+$/, '').trim();
 
-        // Validar que el sujeto sea un sustantivo o concepto genuino
+        // Validar que el sujeto sea un sustantivo o concepto genuino y el predicado sea una descripción completa
         if (
           cleanSubject.length >= 3 &&
           cleanSubject.length <= 40 &&
-          predicate.length >= 10 &&
+          predicate.length >= 15 &&
+          !predicate.endsWith(':') &&
+          !/^(?:las|los)\s+siguientes:?$/i.test(predicate) &&
+          !/^(?:a saber|lo siguiente|los siguientes):?/i.test(predicate) &&
           !INVALID_SUBJECT_REGEX.test(cleanSubject) &&
           !cleanSubject.endsWith(' del') &&
           !cleanSubject.endsWith(' de') &&
@@ -315,20 +319,30 @@ function generateQuestions(text: string, _count: number, category: string): Ques
   const domainFallbacks = DOMAIN_DISTRACTORS[category] || DOMAIN_DISTRACTORS['General'];
   let facts = extractSemanticFacts(text);
 
-  // Si hay pocos hechos extraídos, enriquecer a partir de oraciones válidas
+  // Si hay pocos hechos extraídos, enriquecer a partir de oraciones válidas sin generar opciones rotas
   if (facts.length < 6) {
     const sents = sentences(text);
     for (let i = 0; i < sents.length && facts.length < 12; i++) {
       const s = sents[i];
       const words = s.split(/\s+/);
-      if (words.length >= 5) {
+      if (words.length >= 6) {
         const sub = words.slice(0, 2).join(' ').replace(/^(el|la|los|las)\s+/i, '');
-        facts.push({
-          subject: sub,
-          relationType: 'general',
-          predicate: words.slice(2).join(' '),
-          fullSentence: s,
-        });
+        const pred = words.slice(2).join(' ').replace(/[.:]+$/, '').trim();
+        if (
+          sub.length >= 3 &&
+          sub.length <= 35 &&
+          pred.length >= 20 &&
+          !pred.endsWith(':') &&
+          !/^(?:las|los)\s+siguientes:?$/i.test(pred) &&
+          !INVALID_SUBJECT_REGEX.test(sub)
+        ) {
+          facts.push({
+            subject: sub,
+            relationType: 'general',
+            predicate: pred,
+            fullSentence: s,
+          });
+        }
       }
     }
   }
@@ -369,11 +383,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       id: `q-e-def-${uid()}`,
       type: 'multiple-choice',
       difficulty: 'easy',
-      question: `¿Cuál de las siguientes afirmaciones describe con mayor precisión a "${f.subject}" según el texto?`,
+      question: `¿Cuál de las siguientes afirmaciones corresponde a ${f.subject}?`,
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      explanation: bullets.join('\n\n'),
       googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
@@ -400,7 +414,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.subject)),
       topic: f.subject,
-      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      explanation: bullets.join('\n\n'),
       googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
@@ -423,7 +437,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         definition: s.predicate.length > 85 ? s.predicate.slice(0, 80) + '…' : s.predicate
       })),
       topic: slice[0]?.subject || 'Emparejamiento Básico',
-      explanation: 'Correspondencias conceptuales correctas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n'),
+      explanation: 'Correspondencias conceptuales correctas:\n' + slice.map(s => `${s.subject}: ${s.predicate}`).join('\n'),
       googleOverview: buildQuestionGoogleOverview(slice[0]?.subject || 'Conceptos básicos', bullets, slice[0]?.subject)
     });
   }
@@ -440,11 +454,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       id: `q-e-tf-${uid()}`,
       type: 'true-false',
       difficulty: 'easy',
-      question: `Evalúa la veracidad de la siguiente afirmación fundamental según el texto:\n\n"${f.fullSentence}"`,
+      question: `"${f.fullSentence}"`,
       options: ['Verdadero', 'Falso'],
       correctIndex: 0,
       topic: f.subject,
-      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      explanation: bullets.join('\n\n'),
       googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
@@ -470,7 +484,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.subject)),
       topic: f.subject,
-      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      explanation: bullets.join('\n\n'),
       googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
     eIdx++;
@@ -519,7 +533,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
               blanksCorrect: [cleanSub, cleanPredWord],
               wordBank: [cleanSub, cleanPredWord, dist1, dist2].sort(() => Math.random() - 0.5),
               topic: f.subject,
-              explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+              explanation: bullets.join('\n\n'),
               googleOverview: buildQuestionGoogleOverview(f.subject, bullets, cleanSub)
             });
           }
@@ -560,7 +574,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         options: allOpts.map(o => o.txt),
         correctIndices,
         topic: f1.subject,
-        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        explanation: bullets.join('\n\n'),
         googleOverview: buildQuestionGoogleOverview(f1.subject, bullets, f1.subject)
       });
     }
@@ -584,7 +598,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         definition: s.predicate.length > 85 ? s.predicate.slice(0, 80) + '…' : s.predicate
       })),
       topic: slice[0]?.subject || 'Mecanismos y Relaciones',
-      explanation: 'Correspondencias correctas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n'),
+      explanation: 'Correspondencias correctas:\n' + slice.map(s => `${s.subject}: ${s.predicate}`).join('\n'),
       googleOverview: buildQuestionGoogleOverview(slice[0]?.subject || 'Mecanismos y Relaciones', bullets, slice[0]?.subject)
     });
   }
@@ -609,7 +623,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      explanation: bullets.join('\n\n'),
       googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
   }
@@ -631,11 +645,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       id: `q-m-cyc-${uid()}`,
       type: 'multiple-choice',
       difficulty: 'medium',
-      question: `Aplicación Intermedia: ¿Cuál es la implicación directa de "${f.subject}" según el documento?`,
+      question: `¿Cuál es la implicación directa de ${f.subject}?`,
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      explanation: bullets.join('\n\n'),
       googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
     mIdx++;
@@ -657,11 +671,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         id: `q-h-tf-t-${uid()}`,
         type: 'true-false',
         difficulty: 'hard',
-        question: `Análisis Crítico: Evalúa la rigurosidad conceptual de la siguiente proposición:\n\n"${f.fullSentence}"`,
+        question: `"${f.fullSentence}"`,
         options: ['Verdadero', 'Falso'],
         correctIndex: 0,
         topic: f.subject,
-        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        explanation: bullets.join('\n\n'),
         googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
       });
     } else {
@@ -677,11 +691,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         id: `q-h-tf-f-${uid()}`,
         type: 'true-false',
         difficulty: 'hard',
-        question: `Análisis Crítico: Evalúa si la siguiente proposición es fidedigna o incurre en error conceptual:\n\n"${falseSentence}"`,
+        question: `"${falseSentence}"`,
         options: ['Verdadero', 'Falso'],
         correctIndex: 1,
         topic: f.subject,
-        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        explanation: bullets.join('\n\n'),
         googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
       });
     }
@@ -711,11 +725,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
         id: `q-h-ms-${uid()}`,
         type: 'multi-select',
         difficulty: 'hard',
-        question: `Discriminación Técnica: Selecciona TODAS las proposiciones que representen afirmaciones válidas según el material:`,
+        question: `Selecciona todas las proposiciones válidas según los principios descritos:`,
         options: opts.map(o => o.text),
         correctIndices,
         topic: f1.subject,
-        explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+        explanation: bullets.join('\n\n'),
         googleOverview: buildQuestionGoogleOverview(f1.subject, bullets, f1.subject)
       });
     }
@@ -733,13 +747,13 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       id: `q-h-match-${uid()}`,
       type: 'matching',
       difficulty: 'hard',
-      question: `Emparejamiento Experto: Conecta rigurosamente cada componente con su definición o consecuencia técnica:`,
+      question: `Empareja cada componente con su definición o consecuencia técnica:`,
       matchingPairs: slice.map(s => ({
         term: s.subject,
         definition: s.predicate.length > 85 ? s.predicate.slice(0, 80) + '…' : s.predicate
       })),
       topic: slice[0]?.subject || 'Dominio Experto',
-      explanation: 'Correspondencias técnicas exactas:\n' + slice.map(s => `• ${s.subject}: ${s.predicate}`).join('\n'),
+      explanation: 'Correspondencias técnicas exactas:\n' + slice.map(s => `${s.subject}: ${s.predicate}`).join('\n'),
       googleOverview: buildQuestionGoogleOverview(slice[0]?.subject || 'Dominio Experto', bullets, slice[0]?.subject)
     });
   }
@@ -761,11 +775,11 @@ function generateQuestions(text: string, _count: number, category: string): Ques
       id: `q-h-cyc-${uid()}`,
       type: 'multiple-choice',
       difficulty: 'hard',
-      question: `Evaluación de Dominio: ¿Qué principio técnico distingue fundamentalmente la acción de "${f.subject}"?`,
+      question: `¿Qué principio técnico distingue la acción de ${f.subject}?`,
       options,
       correctIndex: Math.max(0, options.indexOf(f.predicate)),
       topic: f.subject,
-      explanation: bullets.map(b => `• ${b}`).join('\n\n'),
+      explanation: bullets.join('\n\n'),
       googleOverview: buildQuestionGoogleOverview(f.subject, bullets, f.subject)
     });
     hIdx++;
@@ -782,7 +796,7 @@ function generateQuestions(text: string, _count: number, category: string): Ques
     ...shuffledHard
   ];
 
-  return finalQuestions;
+  return filterCompliantQuestions(finalQuestions);
 }
 
 // ── Flashcard Generator ──────────────────────────────────────────────────
@@ -3074,7 +3088,7 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
         options: optsA,
         correctIndex: Math.max(0, optsA.indexOf(card.term)),
         topic: card.term,
-        explanation: bulletsA.map(b => `• ${b}`).join('\n\n'),
+        explanation: bulletsA.join('\n\n'),
         googleOverview: {
           query: card.term,
           bullets: bulletsA,
@@ -3099,11 +3113,11 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
         id: `q-fc-def-${card.id || uid()}-${i}`,
         type: 'multiple-choice',
         difficulty: 'medium',
-        question: `¿Cuál de las siguientes afirmaciones describe con mayor precisión a "${card.term}"?`,
+        question: `¿Cuál de las siguientes afirmaciones corresponde a ${card.term}?`,
         options: optsB,
         correctIndex: Math.max(0, optsB.indexOf(card.definition)),
         topic: card.term,
-        explanation: bulletsB.map(b => `• ${b}`).join('\n\n'),
+        explanation: bulletsB.join('\n\n'),
         googleOverview: {
           query: card.term,
           bullets: bulletsB,
@@ -3124,11 +3138,11 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
           id: `q-fc-tf-${card.id || uid()}-${i}`,
           type: 'true-false',
           difficulty: 'easy',
-          question: `Evalúa la veracidad de la siguiente afirmación:\n\n"${card.term}: ${card.definition}"`,
+          question: `"${card.term}: ${card.definition}"`,
           options: ['Verdadero', 'Falso'],
           correctIndex: 0,
           topic: card.term,
-          explanation: bulletsC.map(b => `• ${b}`).join('\n\n'),
+          explanation: bulletsC.join('\n\n'),
           googleOverview: {
             query: card.term,
             bullets: bulletsC,
@@ -3153,7 +3167,7 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
           definition: c.definition.length > 85 ? c.definition.slice(0, 80) + '…' : c.definition,
         })),
         topic: 'Emparejamiento de Flashcards',
-        explanation: 'Correspondencias correctas:\n' + slice.map(c => `• ${c.term}: ${c.definition}`).join('\n')
+        explanation: 'Correspondencias correctas:\n' + slice.map(c => `${c.term}: ${c.definition}`).join('\n')
       });
     }
   }
@@ -3169,7 +3183,7 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
     }
   }
 
-  return uniqueQuestions.sort(() => Math.random() - 0.5);
+  return filterCompliantQuestions(uniqueQuestions.sort(() => Math.random() - 0.5));
 }
 
 

@@ -3839,18 +3839,19 @@ export const googleDriveService = {
       throw new Error('No se pudo acceder al kit de Google Drive (código 404 o acceso restringido).');
     }
 
-    // 2. Asociar al usuario actual y generar preguntas interactivas propias para el receptor a partir del kit compartido
+    // 2. Asociar al usuario actual preservando las preguntas de alta calidad del kit compartido
     const now = Date.now();
-    let questions: Question[] = [];
-    try {
-      questions = generateKitQuestions(rawKit, 25);
-    } catch (genErr) {
-      console.warn('[GoogleDriveService] Aviso generando preguntas propias de kit:', genErr);
-    }
+    let questions: Question[] = Array.isArray(rawKit.questions) && rawKit.questions.length > 0
+      ? [...rawKit.questions]
+      : [];
 
-    // Si por algún motivo extremo no se pudieron generar (ej. kit sin texto ni flashcards), recurrir a las existentes
-    if (questions.length === 0 && Array.isArray(rawKit.questions) && rawKit.questions.length > 0) {
-      questions = rawKit.questions;
+    // Solo generar preguntas si el kit compartido venía sin banco de preguntas
+    if (questions.length === 0) {
+      try {
+        questions = generateKitQuestions(rawKit, 25);
+      } catch (genErr) {
+        console.warn('[GoogleDriveService] Aviso generando preguntas de kit:', genErr);
+      }
     }
 
     // Generar un ID único nuevo e independiente para el receptor

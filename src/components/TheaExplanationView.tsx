@@ -331,9 +331,9 @@ export const TheaExplanationView: React.FC<TheaExplanationViewProps> = ({
           <ul className="space-y-4 text-[15px] sm:text-base leading-relaxed list-none m-0 p-0 w-full max-w-full min-w-0">
             {bullets.map((bullet, idx) => (
               <li key={idx} className="flex items-start gap-3 w-full max-w-full min-w-0">
-                <span className={`text-base leading-none mt-1 select-none shrink-0 ${
-                  theme === 'kitty' ? 'text-pink-600 font-bold' : theme === 'light' ? 'text-rose-600 font-bold' : 'text-indigo-400'
-                }`}>•</span>
+                <span className={`w-1.5 h-1.5 rounded-full mt-2 select-none shrink-0 ${
+                  theme === 'kitty' ? 'bg-pink-500' : theme === 'light' ? 'bg-rose-500' : 'bg-indigo-400'
+                }`} />
                 <span className={`flex-1 min-w-0 w-full overflow-hidden break-words font-normal leading-relaxed text-[15px] sm:text-base ${
                   theme === 'dark' ? 'text-slate-200' : 'text-zinc-900'
                 }`}>

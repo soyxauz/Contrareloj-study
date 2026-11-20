@@ -3745,8 +3745,37 @@ Genera el JSON completo respetando la estructura exigida:`;
         finalCorrectIndex = balanced.correctIndex;
       }
 
-      const rawPregunta = String(p.pregunta || '').trim();
-      const contexto = String(p.contexto_o_enunciado || '').trim();
+      let rawPregunta = String(p.pregunta || '').trim()
+        .replace(/[•●▪]/g, '')
+        .replace(/«/g, '"')
+        .replace(/»/g, '"')
+        .replace(/^Análisis Crítico:\s*Evalúa la rigurosidad conceptual de la siguiente proposición:\s*/i, '')
+        .replace(/^Análisis Crítico:\s*Evalúa si la siguiente proposición es fidedigna o incurre en error conceptual:\s*/i, '')
+        .replace(/^Evalúa la veracidad de la siguiente afirmación fundamental según el texto:\s*/i, '')
+        .replace(/^Evalúa la veracidad de la siguiente afirmación:\s*/i, '')
+        .replace(/\s*según el (?:texto|documento|material)\??/gi, '')
+        .replace(/\s*conforme al (?:texto|documento)\??/gi, '')
+        .trim();
+
+      if (qType === 'true-false' || detectedType.includes('true-false') || detectedType.includes('verdadero')) {
+        qType = 'true-false';
+        const match = rawPregunta.match(/describe con mayor precisión a\s*["“](.+?)["”]\??/i) ||
+          rawPregunta.match(/^¿(?:cuál de las siguientes opciones|es verdadero o falso que)\s+["“](.+?)["”]\??/i) ||
+          rawPregunta.match(/["“](.+?)["”]/);
+        if (match && match[1] && match[1].trim().length > 8) {
+          rawPregunta = `"${match[1].trim()}"`;
+        }
+      } else if (qType === 'multiple-choice' && !rawPregunta.includes('?') && !/^(identifica|selecciona|indica|señala|determina|empareja|ordena|completa|cuál|qué|cómo|dónde|por qué|cuándo|en qué|de qué|a qué)\b/i.test(rawPregunta)) {
+        rawPregunta = `¿Cuál de las siguientes opciones describe con mayor precisión a ${rawPregunta}?`;
+      }
+
+      const contexto = String(p.contexto_o_enunciado || '').trim()
+        .replace(/[•●▪]/g, '')
+        .replace(/«/g, '"')
+        .replace(/»/g, '"')
+        .replace(/\s*según el (?:texto|documento|material)\??/gi, '')
+        .replace(/\s*conforme al (?:texto|documento)\??/gi, '')
+        .trim();
       const isCase = Boolean(
         p.longitud_enunciado === 'extenso_caso' ||
         p.longitud_enunciado === 'medio_largo' ||
@@ -6033,17 +6062,22 @@ DIRECTRICES GENERALES DE GENERACIÓN:
 2. REGLA ESTRICTA DE RETROALIMENTACIÓN (BÚSQUEDA FACTUAL EXTERNA):
    - NO cites fragmentos, diapositivas, números de diapositiva ni uses frases como 'Referencia en el texto'.
    - La justificación DEBE formularse como una búsqueda enciclopédica externa en Google/Wikipedia ("Google Overview") con exactamente 3 viñetas completas, gramaticalmente perfectas y con rigor científico universal.
-3. ROTACIÓN DE ESTILOS: Alterna estilos interactivos:
-   - "multiple-choice": 4 opciones con distractores plausibles del texto. Incluye preguntas donde se deba señalar la afirmación falsa o el concepto equivocado ("¿Cuál es falsa?", "Señala el concepto equivocado", "Todas excepto...").
-   - "matching": Emparejar 3 o 4 conceptos específicos con sus definiciones/roles.
-   - "drag-drop": Oración con huecos {0}, {1} y banco de palabras con distractores.
-   - "multi-select": 4 o 5 opciones con 2 o 3 respuestas a marcar (tanto para seleccionar las correctas como para seleccionar las afirmaciones falsas).
-   - "true-false": Afirmación conceptual declarativa directa para evaluar veracidad (afirmación declarativa con opciones Verdadero o Falso, NUNCA redactar como "¿Cuál de las siguientes..." ni con 4 alternativas).
-4. DISTRIBUCIÓN DE EXTENSIÓN (PREDOMINIO DE PREGUNTAS CORTAS):
-   - La gran mayoría (~75% a 80%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 a 2 líneas concisas sin preámbulos) para agilidad mental y memorización activa de conceptos específicos.
-   - Una minoría (~20% a 25%) pueden ser MÁS EXTENSAS (entre 35 y 55 palabras) cuando se trate de casos prácticos o problemas aplicados.
-5. LÍMITES ESTRICTOS DE PALABRAS: Máximo 28 palabras para preguntas directas; máximo 55 palabras para casos prácticos. Queda prohibido inflar preguntas con párrafos introductorios innecesarios.
-6. Tema Enfocado: ${topicQuery.trim() ? `TODAS las preguntas deben abordar exclusivamente: "${topicQuery.trim()}".` : 'Aborda los núcleos temáticos más desafiantes del documento.'}
+3. PROHIBICIÓN TOTAL DE PREÁMBULOS VACÍOS O METATEXTO:
+   - Queda TERMINANTEMENTE PROHIBIDO anteponer preámbulos tipo "Análisis Crítico:", "Evalúa la rigurosidad conceptual de la siguiente proposición:", "A continuación se presenta...", etc.
+   - El enunciado debe formular el escenario o la interrogante directamente, nombrando la patología, fármaco, precepto o concepto involucrado.
+4. PROHIBICIÓN DE "SEGÚN EL TEXTO":
+   - NUNCA uses "según el texto", "conforme al documento" o frases similares. Las preguntas evalúan la materia de estudio directamente.
+5. PROHIBICIÓN DE COMILLAS ANGULARES «»:
+   - Queda prohibido usar « y ». Usa comillas dobles estándar " o negritas **...**.
+6. OPCIONES EQUILIBRADAS Y PARALELAS:
+   - Las 4 opciones deben ser frases u oraciones completas, con longitud similar (±20%), misma categoría gramatical y alta plausibilidad pedagógica.
+   - Prohibido terminantemente opciones fragmentarias como "las siguientes:", palabras sueltas o mezclar opciones de 2 palabras con opciones de 40 palabras.
+7. VERDADERO/FALSO DECLARATIVO:
+   - Para "true-false", el campo "pregunta" DEBE ser una aseveración declarativa directa completa. NUNCA redactar como selección múltiple ("¿Cuál de las siguientes...").
+8. DISTRIBUCIÓN DE EXTENSIÓN (RELACIÓN 1:8 CORTAS vs DENSAS):
+   - La gran mayoría (~80%-85%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 a 2 líneas concisas sin preámbulos).
+   - Máximo 1 de cada 8 preguntas puede ser un caso clínico aplicado más extenso (entre 35 y 50 palabras).
+9. Tema Enfocado: ${topicQuery.trim() ? `TODAS las preguntas deben abordar exclusivamente: "${topicQuery.trim()}".` : 'Aborda los núcleos temáticos más desafiantes del documento.'}
 
 FORMATO DE SALIDA (JSON ÚNICAMENTE):
 {
@@ -6094,278 +6128,317 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
   ]
 }`;
 
-  const userPrompt = `MATERIAL DE ESTUDIO DE REFERENCIA:
+  const defaultTopic = topicQuery.trim() || 'Calibración Personalizada';
+  const BATCH_SIZE = 2;
+  const targetTotal = count || 10;
+  const numBatches = Math.ceil(targetTotal / BATCH_SIZE);
+  const collectedQuestions: Question[] = [];
+
+  for (let b = 0; b < numBatches && collectedQuestions.length < targetTotal; b++) {
+    const batchCount = Math.min(BATCH_SIZE, targetTotal - collectedQuestions.length);
+    const userPrompt = `MATERIAL DE ESTUDIO DE REFERENCIA:
 ${sourceRepresentation}
 
 PARÁMETROS DE GENERACIÓN:
 - Subtema concreto solicitado: ${topicQuery.trim() || 'General del documento'}
 - Nivel de dificultad: Nivel ${level} (${level === 3 ? 'MÁXIMA EXIGENCIA - OPCIONES SIMILARES' : level === 2 ? 'INTERMEDIO' : 'BÁSICO'})
-- Cantidad de preguntas a generar: ${count}
-- DISTRIBUCIÓN DE EXTENSIÓN: La mayor parte (~75%-80%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Solo una minoría (~20%-25%) deben ser más extensas (entre 35 y 55 palabras) para casos prácticos. Límites: máximo 28 palabras en preguntas directas y 55 palabras en casos prácticos.
+- Cantidad de preguntas a generar en este micro-lote: ${batchCount}
+- DISTRIBUCIÓN DE EXTENSIÓN (RELACIÓN 1:8 CORTAS vs DENSAS): La gran mayoría (~80%-85%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Máximo 1 de cada 8 preguntas puede ser un caso clínico más extenso (35-50 palabras).
+- PROHIBICIÓN TOTAL DE PREÁMBULOS: CERO preámbulos como "Análisis Crítico:", "Evalúa la rigurosidad...", etc. El enunciado debe nombrar directamente la patología, fármaco o concepto central con su contexto fáctico.
+- CERO REFERENCIAS AL TEXTO: PROHIBIDO usar "según el texto", "conforme al documento" o frases similares.
+- CERO COMILLAS «»: Prohibido usar « y ». Usar comillas simples o dobles normales.
+- OPCIONES EQUILIBRADAS Y COMPLETAS: Las 4 opciones deben ser frases completas, con extensión similar (±20%), misma categoría gramatical y alta plausibilidad. PROHIBIDO opciones como "las siguientes:", palabras sueltas o mezclar largos dispares.
+- VERDADERO/FALSO DECLARATIVO: Si tipo es 'true-false', el campo 'pregunta' DEBE ser una aseveración declarativa directa completa. NUNCA redactar como "¿Cuál de las siguientes...".
 - JUSTIFICACIÓN CIENTÍFICA ESTRICTA (ZERO PLACEHOLDERS): En 'tres_vinetas', queda TERMINANTEMENTE PROHIBIDO usar texto genérico como 'Principio fundamental verificado' o 'Mecanismo comprobado'. Cada viñeta DEBE nombrar los órganos, fármacos, valores o principios reales de la pregunta.
 - TRADUCCIÓN OBLIGATORIA: Si el texto está en inglés u otro idioma, genera las preguntas, opciones y explicaciones 100% en español académico.
 
-Genera las ${count} preguntas en formato JSON estricto:`;
+Genera exactamente ${batchCount} preguntas en formato JSON estricto:`;
 
-  const rawResponse = await queryAICompletion(
-    [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    true
-  );
+    try {
+      const rawResponse = await queryAICompletion(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        true
+      );
 
-  const parsed = safeParseAIJSON<any>(rawResponse);
-  if (!parsed || !Array.isArray(parsed.preguntas) || parsed.preguntas.length === 0) {
-    throw new Error('El modelo de IA no devolvió preguntas en el formato esperado.');
+      const parsed = safeParseAIJSON<any>(rawResponse);
+      if (parsed && Array.isArray(parsed.preguntas) && parsed.preguntas.length > 0) {
+        for (let pIdx = 0; pIdx < parsed.preguntas.length; pIdx++) {
+          const p = parsed.preguntas[pIdx];
+          const detectedType = (p.tipo || p.type || '').toLowerCase();
+          let templateSentence = p.oracion_plantilla || p.templateSentence || undefined;
+          let blanksCorrect: string[] | undefined = Array.isArray(p.huecos_correctos)
+            ? p.huecos_correctos.map((h: any) => String(h).trim())
+            : (typeof p.huecos_correctos === 'string' && p.huecos_correctos.trim()
+                ? p.huecos_correctos.split(',').map((h: string) => h.trim())
+                : undefined);
+
+          let wordBank: string[] | undefined = Array.isArray(p.banco_palabras)
+            ? p.banco_palabras.map((w: any) => String(w).trim())
+            : (typeof p.banco_palabras === 'string' && p.banco_palabras.trim()
+                ? p.banco_palabras.split(',').map((w: string) => w.trim())
+                : undefined);
+
+          const hasPlaceholders = Boolean(
+            (p.pregunta && /\{\d+\}/.test(p.pregunta)) ||
+            (templateSentence && /\{\d+\}/.test(templateSentence))
+          );
+
+          let qType: Question['type'] = 'multiple-choice';
+
+          if (detectedType.includes('matching') || (Array.isArray(p.pares_emparejamiento) && p.pares_emparejamiento.length >= 2)) {
+            qType = 'matching';
+          } else if (
+            detectedType.includes('drag') ||
+            detectedType.includes('blanks') ||
+            detectedType.includes('huecos') ||
+            detectedType.includes('completar') ||
+            (templateSentence && blanksCorrect && blanksCorrect.length > 0) ||
+            (hasPlaceholders && (blanksCorrect || wordBank || detectedType.includes('drag')))
+          ) {
+            qType = 'drag-drop';
+          } else if (detectedType.includes('multi-select') || (Array.isArray(p.indices_correctos) && p.indices_correctos.length > 1)) {
+            qType = 'multi-select';
+          } else {
+            qType = 'multiple-choice';
+          }
+
+          const optsObj = p.opciones || {};
+          let optionsArray: string[] = Array.isArray(p.opciones_multiples) && p.opciones_multiples.length > 0
+            ? p.opciones_multiples.map((o: any) => String(o).trim()).filter(Boolean)
+            : [
+                String(optsObj.A || optsObj['a'] || '').trim(),
+                String(optsObj.B || optsObj['b'] || '').trim(),
+                String(optsObj.C || optsObj['c'] || '').trim(),
+                String(optsObj.D || optsObj['d'] || '').trim(),
+              ].filter(Boolean);
+
+          optionsArray = optionsArray
+            .map(o => o.replace(/«/g, '"').replace(/»/g, '"').trim())
+            .filter(o => !/^(?:las|los)\s+siguientes:?$/i.test(o) && !o.endsWith(':'));
+
+          const hasMultipleOptions = (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 3) ||
+            Boolean(optsObj.C || optsObj['c'] || optsObj.D || optsObj['d']);
+          const isSelectionPrompt = /\b(cu[aá]l(es)? de (las|los)|selecciona|indica|señala (la|el|cu[aá]l)|de las siguientes|de los siguientes|de las alternativas|todas las siguientes)\b/i.test(String(p.pregunta || ''));
+
+          if (
+            (detectedType === 'true-false' || detectedType === 'verdadero-falso' || detectedType === 'true/false' || detectedType === 'verdadero_falso') &&
+            !hasMultipleOptions &&
+            !isSelectionPrompt
+          ) {
+            qType = 'true-false';
+          }
+
+          const correctIndex = parseCorrectIndex(p.respuesta_correcta, optionsArray, qType);
+
+          let finalOptions = optionsArray;
+          let finalCorrectIndex = correctIndex;
+          if (qType === 'multiple-choice') {
+            const balanced = shuffleOptionsWithEqualProbability(optionsArray, correctIndex);
+            finalOptions = balanced.options;
+            finalCorrectIndex = balanced.correctIndex;
+          }
+
+          let rawPregunta = String(p.pregunta || '').trim()
+            .replace(/«/g, '"')
+            .replace(/»/g, '"')
+            .replace(/^Análisis Crítico:\s*Evalúa la rigurosidad conceptual de la siguiente proposición:\s*/i, '')
+            .replace(/^Análisis Crítico:\s*Evalúa si la siguiente proposición es fidedigna o incurre en error conceptual:\s*/i, '')
+            .replace(/^Evalúa la veracidad de la siguiente afirmación fundamental según el texto:\s*/i, '')
+            .replace(/^Evalúa la veracidad de la siguiente afirmación:\s*/i, '')
+            .replace(/\s*según el (?:texto|documento|material)\??/gi, '')
+            .replace(/\s*conforme al (?:texto|documento)\??/gi, '')
+            .trim();
+
+          if (qType === 'true-false' || detectedType.includes('true-false') || detectedType.includes('verdadero')) {
+            qType = 'true-false';
+            const match = rawPregunta.match(/¿Cuál de las siguientes opciones describe con mayor precisión a\s*["“](.+?)["”]\??/i);
+            if (match && match[1]) {
+              rawPregunta = `"${match[1].trim()}"`;
+            }
+          }
+
+          const contexto = String(p.contexto_o_enunciado || '').trim()
+            .replace(/«/g, '"')
+            .replace(/»/g, '"')
+            .replace(/\s*según el (?:texto|documento|material)\??/gi, '')
+            .trim();
+
+          const isCase = Boolean(
+            p.longitud_enunciado === 'extenso_caso' ||
+            p.longitud_enunciado === 'medio_largo' ||
+            /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${rawPregunta}`)
+          );
+
+          let fullQuestion = combineCaseContextAndQuestion(contexto, rawPregunta, isCase);
+
+          if (qType === 'drag-drop') {
+            if (!templateSentence && /\{\d+\}/.test(fullQuestion)) {
+              templateSentence = fullQuestion;
+            }
+            if (/\{\d+\}/.test(fullQuestion)) {
+              const topicLabel = p.concepto_evaluado ? ` sobre **${String(p.concepto_evaluado).trim()}**` : '';
+              fullQuestion = `Completa los espacios en blanco${topicLabel} del siguiente enunciado:`;
+            }
+            if (templateSentence) {
+              const slotMatches = templateSentence.match(/\{\d+\}/g);
+              const numSlots = slotMatches ? slotMatches.length : 0;
+              if (numSlots > 0) {
+                if (!blanksCorrect || blanksCorrect.length === 0) {
+                  if (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= numSlots) {
+                    blanksCorrect = p.opciones_multiples.slice(0, numSlots);
+                  }
+                } else if (blanksCorrect.length === 1 && numSlots > 1) {
+                  blanksCorrect = Array(numSlots).fill(blanksCorrect[0]);
+                } else if (blanksCorrect.length < numSlots) {
+                  while (blanksCorrect.length < numSlots) {
+                    blanksCorrect.push(blanksCorrect[blanksCorrect.length - 1]);
+                  }
+                }
+              }
+            }
+            const initialBank: string[] = Array.isArray(wordBank) ? [...wordBank] : [];
+            const finalWordBank: string[] = [];
+
+            const neededCounts = new Map<string, number>();
+            (blanksCorrect || []).forEach(b => {
+              if (b) {
+                const key = String(b).trim().toLowerCase();
+                neededCounts.set(key, (neededCounts.get(key) || 0) + 1);
+              }
+            });
+
+            const initialCounts = new Map<string, number>();
+            initialBank.forEach(item => {
+              if (item) {
+                const key = String(item).trim().toLowerCase();
+                initialCounts.set(key, (initialCounts.get(key) || 0) + 1);
+                finalWordBank.push(String(item).trim());
+              }
+            });
+
+            neededCounts.forEach((needed, key) => {
+              const current = initialCounts.get(key) || 0;
+              if (current < needed) {
+                const originalVal = (blanksCorrect || []).find(b => b && String(b).trim().toLowerCase() === key) || key;
+                for (let i = 0; i < (needed - current); i++) {
+                  finalWordBank.push(String(originalVal).trim());
+                }
+              }
+            });
+
+            const distractorsPool = ['primario', 'secundario', 'crónico', 'agudo', 'sistémico', 'local', 'benigno', 'patológico'];
+            for (const dist of distractorsPool) {
+              if (finalWordBank.length >= ((blanksCorrect?.length || 2) + 2)) break;
+              if (!finalWordBank.some(w => w.toLowerCase() === dist.toLowerCase())) {
+                finalWordBank.push(dist);
+              }
+            }
+            wordBank = finalWordBank.sort(() => Math.random() - 0.5);
+          }
+
+          fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
+
+          const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
+          let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
+            ? p.cita_textual_exacta.trim()
+            : undefined;
+
+          const query = String(
+            p.retroalimentacion?.busqueda_google?.consulta ||
+            (p.concepto_evaluado ? `${p.concepto_evaluado}` : p.pregunta || defaultTopic || 'Fundamento conceptual')
+          ).trim();
+
+          const distractors = finalOptions ? finalOptions.filter((_, idx) => idx !== finalCorrectIndex) : [];
+
+          const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query, {
+            question: fullQuestion,
+            correctAnswer: correctAnswerString,
+            topic: defaultTopic,
+            concept: p.concepto_evaluado,
+            sourceExcerpt,
+            distractors,
+            options: finalOptions,
+            type: qType,
+          });
+
+          let sourceChunkId = p.chunk_id_origen || undefined;
+          let sourceChunkText: string | undefined = undefined;
+          let sourcePageOrSlide: number | undefined = undefined;
+
+          if (chunks && chunks.length > 0) {
+            const { bestChunk, passage } = findBestChunkAndExcerpt({
+              chunks,
+              question: fullQuestion,
+              correctAnswer: correctAnswerString,
+              concept: String(p.concepto_evaluado || defaultTopic).trim(),
+              preferredChunkId: p.chunk_id_origen,
+              exactCitation: sourceExcerpt,
+            });
+
+            if (bestChunk) {
+              sourceChunkId = bestChunk.id;
+              sourceChunkText = bestChunk.text;
+              sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || sourceExcerpt, bestChunk.pageOrSlide);
+              if (!sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
+                sourceExcerpt = passage.excerpt;
+              }
+            }
+          }
+
+          const matchingPairs = Array.isArray(p.pares_emparejamiento)
+            ? p.pares_emparejamiento.map((pair: any) => ({
+                term: String(pair.termino || pair.term || 'Concepto').trim(),
+                definition: String(pair.definicion || pair.definition || 'Definición').trim()
+              }))
+            : undefined;
+
+          const correctIndices = Array.isArray(p.indices_correctos)
+            ? parseCorrectIndices(p.indices_correctos, optionsArray)
+            : undefined;
+
+          const candidateQ: Question = {
+            id: `q-calibrated-lvl${level}-${Date.now()}-${collectedQuestions.length}-${Math.random().toString(36).slice(2, 6)}`,
+            type: qType,
+            difficulty,
+            topic: String(p.concepto_evaluado || defaultTopic).trim(),
+            question: fullQuestion || 'Pregunta calibrada de alta exigencia.',
+            options: qType === 'true-false' ? ['Verdadero', 'Falso'] : finalOptions,
+            correctIndex: finalCorrectIndex,
+            correctIndices,
+            matchingPairs,
+            templateSentence,
+            blanksCorrect,
+            wordBank,
+            explanation,
+            googleOverview,
+            sourceChunkId,
+            sourceChunkText,
+            sourceExcerpt,
+            sourcePageOrSlide,
+          };
+
+          if (isQuestionCompliantWithStandard(candidateQ)) {
+            collectedQuestions.push(candidateQ);
+          }
+        }
+      }
+    } catch (batchErr) {
+      console.warn(`[generateTargetedPedagogicalQuestions] Error en micro-lote ${b + 1}:`, batchErr);
+      if (collectedQuestions.length > 0) {
+        break;
+      }
+      throw batchErr;
+    }
   }
 
-  const defaultTopic = topicQuery.trim() || parsed.tema_calibrado || 'Calibración Personalizada';
+  if (collectedQuestions.length === 0) {
+    throw new Error('El modelo de IA no devolvió preguntas válidas en el formato esperado.');
+  }
 
-  const mapped: Question[] = parsed.preguntas.map((p: any, idx: number) => {
-    const detectedType = (p.tipo || p.type || '').toLowerCase();
-    let templateSentence = p.oracion_plantilla || p.templateSentence || undefined;
-    let blanksCorrect: string[] | undefined = Array.isArray(p.huecos_correctos)
-      ? p.huecos_correctos.map((h: any) => String(h).trim())
-      : (typeof p.huecos_correctos === 'string' && p.huecos_correctos.trim()
-          ? p.huecos_correctos.split(',').map((h: string) => h.trim())
-          : undefined);
-
-    let wordBank: string[] | undefined = Array.isArray(p.banco_palabras)
-      ? p.banco_palabras.map((w: any) => String(w).trim())
-      : (typeof p.banco_palabras === 'string' && p.banco_palabras.trim()
-          ? p.banco_palabras.split(',').map((w: string) => w.trim())
-          : undefined);
-
-    const hasPlaceholders = Boolean(
-      (p.pregunta && /\{\d+\}/.test(p.pregunta)) ||
-      (templateSentence && /\{\d+\}/.test(templateSentence))
-    );
-
-    let qType: Question['type'] = 'multiple-choice';
-
-    if (detectedType.includes('matching') || (Array.isArray(p.pares_emparejamiento) && p.pares_emparejamiento.length >= 2)) {
-      qType = 'matching';
-    } else if (
-      detectedType.includes('drag') ||
-      detectedType.includes('blanks') ||
-      detectedType.includes('huecos') ||
-      detectedType.includes('completar') ||
-      (templateSentence && blanksCorrect && blanksCorrect.length > 0) ||
-      (hasPlaceholders && (blanksCorrect || wordBank || detectedType.includes('drag')))
-    ) {
-      qType = 'drag-drop';
-    } else if (detectedType.includes('multi-select') || (Array.isArray(p.indices_correctos) && p.indices_correctos.length > 1)) {
-      qType = 'multi-select';
-    } else if (detectedType.includes('image') || detectedType.includes('labeling') || (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 1)) {
-      if (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 2) {
-        qType = 'matching';
-        p.pares_emparejamiento = p.etiquetas_diagrama.map((h: any, i: number) => ({
-          termino: String(h.etiqueta || h.label || `Elemento ${i + 1}`).trim(),
-          definicion: String(h.pista || h.hint || p.titulo_diagrama || `Fase o componente ${i + 1}`).trim(),
-        }));
-      } else {
-        qType = 'multiple-choice';
-      }
-    } else {
-      qType = 'multiple-choice';
-    }
-
-    const optsObj = p.opciones || {};
-    const optionsArray: string[] = Array.isArray(p.opciones_multiples) && p.opciones_multiples.length > 0
-      ? p.opciones_multiples.map((o: any) => String(o).trim()).filter(Boolean)
-      : [
-          String(optsObj.A || optsObj['a'] || '').trim(),
-          String(optsObj.B || optsObj['b'] || '').trim(),
-          String(optsObj.C || optsObj['c'] || '').trim(),
-          String(optsObj.D || optsObj['d'] || '').trim(),
-        ].filter(Boolean);
-
-    const hasMultipleOptions = (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= 3) ||
-      Boolean(optsObj.C || optsObj['c'] || optsObj.D || optsObj['d']);
-    const isSelectionPrompt = /\b(cu[aá]l(es)? de (las|los)|selecciona|indica|señala (la|el|cu[aá]l)|de las siguientes|de los siguientes|de las alternativas|todas las siguientes)\b/i.test(String(p.pregunta || ''));
-
-    // Solo clasificar como true-false si es declarativa directa, sin 4 opciones y sin enunciado de selección
-    if (
-      (detectedType === 'true-false' || detectedType === 'verdadero-falso' || detectedType === 'true/false' || detectedType === 'verdadero_falso') &&
-      !hasMultipleOptions &&
-      !isSelectionPrompt
-    ) {
-      qType = 'true-false';
-    }
-
-    const correctIndex = parseCorrectIndex(p.respuesta_correcta, optionsArray, qType);
-
-    let finalOptions = optionsArray;
-    let finalCorrectIndex = correctIndex;
-    if (qType === 'multiple-choice') {
-      const balanced = shuffleOptionsWithEqualProbability(optionsArray, correctIndex);
-      finalOptions = balanced.options;
-      finalCorrectIndex = balanced.correctIndex;
-    }
-
-    const rawPregunta = String(p.pregunta || '').trim();
-    const contexto = String(p.contexto_o_enunciado || '').trim();
-    const isCase = Boolean(
-      p.longitud_enunciado === 'extenso_caso' ||
-      p.longitud_enunciado === 'medio_largo' ||
-      /\b(caso\s+(clínico|práctico|jurídico|real)|supuesto\s+de\s+hecho|paciente\s+de|viñeta\s+clínica|escenario\s+práctico)\b/i.test(`${contexto} ${rawPregunta}`)
-    );
-
-    let fullQuestion = combineCaseContextAndQuestion(contexto, rawPregunta, isCase);
-
-    // Normalización pedagógica para preguntas drag-drop
-    if (qType === 'drag-drop') {
-      if (!templateSentence && /\{\d+\}/.test(fullQuestion)) {
-        templateSentence = fullQuestion;
-      }
-      if (/\{\d+\}/.test(fullQuestion)) {
-        const topicLabel = p.concepto_evaluado ? ` sobre **${String(p.concepto_evaluado).trim()}**` : '';
-        fullQuestion = `Completa los espacios en blanco${topicLabel} del siguiente enunciado:`;
-      }
-      // Rescatar y normalizar huecos para templateSentence garantizando cardinalidad completa
-      if (templateSentence) {
-        const slotMatches = templateSentence.match(/\{\d+\}/g);
-        const numSlots = slotMatches ? slotMatches.length : 0;
-        if (numSlots > 0) {
-          if (!blanksCorrect || blanksCorrect.length === 0) {
-            if (Array.isArray(p.opciones_multiples) && p.opciones_multiples.length >= numSlots) {
-              blanksCorrect = p.opciones_multiples.slice(0, numSlots);
-            }
-          } else if (blanksCorrect.length === 1 && numSlots > 1) {
-            // Un solo valor repetido para todos los huecos (ej: "10" en la regla de los 10)
-            blanksCorrect = Array(numSlots).fill(blanksCorrect[0]);
-          } else if (blanksCorrect.length < numSlots) {
-            while (blanksCorrect.length < numSlots) {
-              blanksCorrect.push(blanksCorrect[blanksCorrect.length - 1]);
-            }
-          }
-        }
-      }
-      // Banco de palabras enriquecido con distractores garantizando la multiplicidad de blanksCorrect
-      const initialBank: string[] = Array.isArray(wordBank) ? [...wordBank] : [];
-      const finalWordBank: string[] = [];
-
-      const neededCounts = new Map<string, number>();
-      (blanksCorrect || []).forEach(b => {
-        if (b) {
-          const key = String(b).trim().toLowerCase();
-          neededCounts.set(key, (neededCounts.get(key) || 0) + 1);
-        }
-      });
-
-      const initialCounts = new Map<string, number>();
-      initialBank.forEach(item => {
-        if (item) {
-          const key = String(item).trim().toLowerCase();
-          initialCounts.set(key, (initialCounts.get(key) || 0) + 1);
-          finalWordBank.push(String(item).trim());
-        }
-      });
-
-      neededCounts.forEach((needed, key) => {
-        const current = initialCounts.get(key) || 0;
-        if (current < needed) {
-          const originalVal = (blanksCorrect || []).find(b => b && String(b).trim().toLowerCase() === key) || key;
-          for (let i = 0; i < (needed - current); i++) {
-            finalWordBank.push(String(originalVal).trim());
-          }
-        }
-      });
-
-      const distractorsPool = ['primario', 'secundario', 'crónico', 'agudo', 'sistémico', 'local', 'benigno', 'patológico'];
-      for (const dist of distractorsPool) {
-        if (finalWordBank.length >= ((blanksCorrect?.length || 2) + 2)) break;
-        if (!finalWordBank.some(w => w.toLowerCase() === dist.toLowerCase())) {
-          finalWordBank.push(dist);
-        }
-      }
-      wordBank = finalWordBank.sort(() => Math.random() - 0.5);
-    }
-
-    fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
-
-    const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
-    let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
-      ? p.cita_textual_exacta.trim()
-      : undefined;
-
-    const query = String(
-      p.retroalimentacion?.busqueda_google?.consulta ||
-      (p.concepto_evaluado ? `${p.concepto_evaluado}` : p.pregunta || defaultTopic || 'Fundamento conceptual')
-    ).trim();
-
-    const distractors = finalOptions ? finalOptions.filter((_, idx) => idx !== finalCorrectIndex) : [];
-
-    const { explanation, googleOverview } = formatTheaSearchOverview(p.retroalimentacion, query, {
-      question: fullQuestion,
-      correctAnswer: correctAnswerString,
-      topic: defaultTopic,
-      concept: p.concepto_evaluado,
-      sourceExcerpt,
-      distractors,
-      options: finalOptions,
-      type: qType,
-    });
-
-    let sourceChunkId = p.chunk_id_origen || undefined;
-    let sourceChunkText: string | undefined = undefined;
-    let sourcePageOrSlide: number | undefined = undefined;
-
-    if (chunks && chunks.length > 0) {
-      const { bestChunk, passage } = findBestChunkAndExcerpt({
-        chunks,
-        question: fullQuestion,
-        correctAnswer: correctAnswerString,
-        concept: String(p.concepto_evaluado || defaultTopic).trim(),
-        preferredChunkId: p.chunk_id_origen,
-        exactCitation: sourceExcerpt,
-      });
-
-      if (bestChunk) {
-        sourceChunkId = bestChunk.id;
-        sourceChunkText = bestChunk.text;
-        sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || sourceExcerpt, bestChunk.pageOrSlide);
-        if (!sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
-          sourceExcerpt = passage.excerpt;
-        }
-      }
-    }
-
-    const matchingPairs = Array.isArray(p.pares_emparejamiento)
-      ? p.pares_emparejamiento.map((pair: any) => ({
-          term: String(pair.termino || pair.term || 'Concepto').trim(),
-          definition: String(pair.definicion || pair.definition || 'Definición').trim()
-        }))
-      : undefined;
-
-    const correctIndices = Array.isArray(p.indices_correctos)
-      ? parseCorrectIndices(p.indices_correctos, optionsArray)
-      : undefined;
-
-    return {
-      id: `q-calibrated-lvl${level}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-      type: qType,
-      difficulty,
-      topic: String(p.concepto_evaluado || defaultTopic).trim(),
-      question: fullQuestion || 'Pregunta calibrada de alta exigencia.',
-      options: qType === 'true-false' ? ['Verdadero', 'Falso'] : finalOptions,
-      correctIndex: finalCorrectIndex,
-      correctIndices,
-      matchingPairs,
-      templateSentence,
-      blanksCorrect,
-      wordBank,
-      explanation,
-      googleOverview,
-      sourceChunkId,
-      sourceChunkText,
-      sourceExcerpt,
-      sourcePageOrSlide,
-    };
-  });
-
-  return filterCompliantQuestions(mapped);
+  return filterCompliantQuestions(collectedQuestions);
 }
 
 export interface DocumentClassification {

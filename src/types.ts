@@ -200,6 +200,7 @@ export interface StudyKit {
   assets?: DocumentAsset[];
   archivedFlashcards?: Flashcard[];
   sourceLanguage?: string;
+  targetTopic?: string;
   updatedAt?: number;
   isImported?: boolean;
 }
@@ -269,6 +270,7 @@ export interface SmartStudySessionState {
   shortAnswerInput?: string;
   activePracticeLevel?: 1 | 2 | 3;
   activePracticeDifficulty?: 'easy' | 'medium' | 'hard';
+  targetTopic?: string;
   seenQuestionIds?: string[];
   answeredQuestionIds?: string[];
   resetAt?: number;
