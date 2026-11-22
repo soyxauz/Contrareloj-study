@@ -43,6 +43,7 @@ import {
   SkipForward,
   Share2,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { findBestChunkAndExcerpt, extractSpecificPassage, resolveRealPageNumber, extractMeaningfulTokens } from '../engine/ragExcerptExtractor';
 import { chunkDocument } from '../engine/chunker';
@@ -1162,6 +1163,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     setIsGeneratingTargeted(true);
     setTargetErrorNotice('');
     setTargetSuccessNotice('');
+    // Cierre inmediato del panel lateral conforme a la solicitud del usuario
+    setShowConfigDrawer(false);
 
     try {
       const generated = await generateTargetedPedagogicalQuestions(
@@ -1261,9 +1264,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         );
 
         setTimeout(() => {
-          setShowConfigDrawer(false);
           setTargetSuccessNotice('');
-        }, 1200);
+        }, 3000);
       } else {
         setTargetErrorNotice('No se pudieron generar preguntas para este tema. Intenta con otro término.');
       }
@@ -4407,6 +4409,130 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
           )}
 
+          {/* Notificación de Error en Generación Calibrada */}
+          {targetErrorNotice && (
+            <div className="mb-4 p-3 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-xs sm:text-sm text-rose-200 flex items-center justify-between shadow-lg animate-fadeIn">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{targetErrorNotice}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfigDrawer(true);
+                    setTargetErrorNotice('');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  Reintentar en panel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetErrorNotice('')}
+                  className="text-rose-400 hover:text-white p-1 rounded-lg hover:bg-rose-800/40 cursor-pointer"
+                  title="Descartar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── ANIMACIÓN DE CARGA REDONDA LIGERA MIENTRAS SE GENERAN NUEVAS PREGUNTAS ── */}
+          {isGeneratingTargeted ? (
+            <div
+              className={`w-full min-h-[380px] sm:min-h-[440px] flex flex-col items-center justify-center p-8 rounded-3xl border shadow-2xl animate-fadeIn select-none my-4 ${
+                theme === 'light'
+                  ? 'bg-white/90 border-slate-200 shadow-slate-200/50'
+                  : theme === 'kitty'
+                  ? 'bg-pink-50/90 border-pink-200 shadow-pink-200/40'
+                  : 'bg-white/[0.02] border-white/[0.08] shadow-[0_24px_48px_-12px_rgba(0,0,0,0.7)] backdrop-blur-md'
+              }`}
+            >
+              <div className="relative mb-5 flex items-center justify-center">
+                {/* Halo ambiental suave */}
+                <div
+                  className={`absolute w-28 h-28 rounded-full blur-2xl pointer-events-none animate-pulse ${
+                    theme === 'light'
+                      ? 'bg-sky-500/15'
+                      : theme === 'kitty'
+                      ? 'bg-pink-500/20'
+                      : 'bg-rose-500/15'
+                  }`}
+                />
+
+                {/* Spinner circular de autor (ligero, redondo y a 120 FPS) */}
+                <div className="relative w-14 h-14 flex items-center justify-center">
+                  <svg
+                    className={`w-14 h-14 animate-spin ${
+                      theme === 'light'
+                        ? 'text-sky-200'
+                        : theme === 'kitty'
+                        ? 'text-pink-200'
+                        : 'text-rose-950/70'
+                    }`}
+                    viewBox="0 0 48 48"
+                    fill="none"
+                  >
+                    <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2.5" />
+                  </svg>
+                  <svg
+                    className={`absolute inset-0 w-14 h-14 animate-spin ${
+                      theme === 'light'
+                        ? 'text-sky-600'
+                        : theme === 'kitty'
+                        ? 'text-pink-600'
+                        : 'text-rose-400'
+                    }`}
+                    viewBox="0 0 48 48"
+                    fill="none"
+                    style={{ animationDuration: '0.85s' }}
+                  >
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeDasharray="32 100"
+                    />
+                  </svg>
+                  {/* Micro-icono sutil al centro */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Sparkles
+                      className={`w-4 h-4 animate-pulse ${
+                        theme === 'light'
+                          ? 'text-sky-600'
+                          : theme === 'kitty'
+                          ? 'text-pink-500'
+                          : 'text-rose-300'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <h3
+                className={`text-base sm:text-lg font-bold tracking-tight text-center ${
+                  theme === 'light' ? 'text-slate-900' : theme === 'kitty' ? 'text-pink-950' : 'text-white'
+                }`}
+              >
+                Generando nuevas preguntas con IA
+              </h3>
+              <p
+                className={`text-xs text-center mt-1.5 max-w-sm ${
+                  theme === 'light' ? 'text-slate-500' : theme === 'kitty' ? 'text-pink-800/70' : 'text-slate-400'
+                }`}
+              >
+                {targetTopic.trim()
+                  ? `Calibrando preguntas específicas sobre "${targetTopic.trim()}" (Nivel ${targetLevel})`
+                  : `Preparando lote pedagógico adaptado a Nivel ${targetLevel}`}
+              </p>
+            </div>
+          ) : (
+            <>
           {/* Visual Diagram/Asset if strictly necessary */}
           {isImageStrictlyNecessary(currentQ) && currentQ.sourceAsset && (
             <div className="mb-6 p-4 rounded-2xl bg-[#200814]/80 border border-violet-500/30 overflow-hidden">
@@ -4970,6 +5096,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             />
           </div>
         )}
+            </>
+          )}
         </div>
       )}
 
@@ -5338,6 +5466,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   type="text"
                   value={targetTopic}
                   onChange={e => setTargetTopic(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleGenerateTargetedQuestions();
+                    }
+                  }}
                   placeholder="Ej: Mecanismo de acción, Diagnóstico diferencial, Artículos..."
                   className="w-full px-4 py-3 rounded-2xl bg-thea-surfaceLight border border-thea-border text-base md:text-sm text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500/80 transition-colors"
                 />
