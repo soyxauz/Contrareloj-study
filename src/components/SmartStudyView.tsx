@@ -4461,7 +4461,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               <div className="relative mb-5 flex items-center justify-center">
                 {/* Halo ambiental suave basado en gradiente radial GPU-nativo (sin blur-2xl costoso) */}
                 <div
-                  className="absolute w-28 h-28 rounded-full pointer-events-none animate-pulse motion-reduce:animate-none"
+                  className="absolute w-28 h-28 rounded-full pointer-events-none animate-pulse"
                   style={{
                     background:
                       theme === 'light'
@@ -4469,14 +4469,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                         : theme === 'kitty'
                         ? 'radial-gradient(circle, rgba(236,72,153,0.22) 0%, rgba(236,72,153,0.05) 50%, transparent 70%)'
                         : 'radial-gradient(circle, rgba(244,63,94,0.2) 0%, rgba(244,63,94,0.04) 50%, transparent 70%)',
-                    transform: 'translateZ(0)',
-                    willChange: 'opacity',
                   }}
                 />
 
                 {/* Spinner circular de autor (ligero, redondo y a 120 FPS) */}
                 <div className="relative w-14 h-14 flex items-center justify-center">
-                  {/* Pista circular base ESTÁTICA (0 overhead de GPU/rotación) */}
+                  {/* Pista circular base ESTÁTICA (0 overhead de rotación) */}
                   <svg
                     className={`w-14 h-14 ${
                       theme === 'light'
@@ -4491,44 +4489,33 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   >
                     <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2.5" />
                   </svg>
-                  {/* Arco activo giratorio acelerado por GPU (hilo compositor / 120 FPS) */}
-                  <svg
-                    className={`absolute inset-0 w-14 h-14 animate-spin motion-reduce:animate-none ${
-                      theme === 'light'
-                        ? 'text-sky-600'
-                        : theme === 'kitty'
-                        ? 'text-pink-600'
-                        : 'text-rose-400'
-                    }`}
-                    viewBox="0 0 48 48"
-                    fill="none"
-                    aria-hidden="true"
-                    style={{
-                      animationDuration: '0.9s',
-                      animationTimingFunction: 'linear',
-                      willChange: 'transform',
-                      transform: 'translateZ(0)',
-                    }}
-                  >
-                    <circle
-                      cx="24"
-                      cy="24"
-                      r="20"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeDasharray="32 100"
-                    />
-                  </svg>
-                  {/* Micro-icono Gemini de 4 puntas al centro con respiración sutil y aceleración GPU */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none animate-pulse motion-reduce:animate-none"
-                    style={{
-                      willChange: 'opacity, transform',
-                      transform: 'translateZ(0)',
-                      animationDuration: '2s',
-                    }}
-                  >
+                  {/* Arco activo giratorio acelerado en contenedor con rotación centrada continua */}
+                  <div className="absolute inset-0 w-14 h-14 animate-spin origin-center pointer-events-none">
+                    <svg
+                      className={`w-14 h-14 ${
+                        theme === 'light'
+                          ? 'text-sky-600'
+                          : theme === 'kitty'
+                          ? 'text-pink-600'
+                          : 'text-rose-400'
+                      }`}
+                      viewBox="0 0 48 48"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeDasharray="32 100"
+                      />
+                    </svg>
+                  </div>
+                  {/* Micro-icono Gemini de 4 puntas al centro con respiración suave */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none animate-pulse">
                     <GeminiIcon
                       className="w-5 h-5 drop-shadow-[0_0_8px_rgba(155,114,207,0.45)]"
                       variant="gradient"
@@ -5617,7 +5604,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             >
               {isGeneratingTargeted ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-300" style={{ willChange: 'transform', transform: 'translateZ(0)' }} />
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
                   <span>Generando Preguntas con IA...</span>
                 </>
               ) : (
