@@ -4439,33 +4439,46 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
             </div>
           )}
 
-          {/* ── ANIMACIÓN DE CARGA REDONDA LIGERA MIENTRAS SE GENERAN NUEVAS PREGUNTAS ── */}
+          {/* ── ANIMACIÓN DE CARGA REDONDA LIGERA MIENTRAS SE GENERAN NUEVAS PREGUNTAS (120 FPS / ZERO JANK) ── */}
           {isGeneratingTargeted ? (
             <div
-              className={`w-full min-h-[380px] sm:min-h-[440px] flex flex-col items-center justify-center p-8 rounded-3xl border shadow-2xl animate-fadeIn select-none my-4 ${
+              className={`w-full min-h-[380px] sm:min-h-[440px] flex flex-col items-center justify-center p-8 rounded-3xl border select-none my-4 animate-fadeIn ${
                 theme === 'light'
-                  ? 'bg-white/90 border-slate-200 shadow-slate-200/50'
+                  ? 'bg-white/90 border-slate-200'
                   : theme === 'kitty'
-                  ? 'bg-pink-50/90 border-pink-200 shadow-pink-200/40'
-                  : 'bg-white/[0.02] border-white/[0.08] shadow-[0_24px_48px_-12px_rgba(0,0,0,0.7)] backdrop-blur-md'
+                  ? 'bg-pink-50/90 border-pink-200'
+                  : 'bg-white/[0.02] border-white/[0.08] backdrop-blur-md'
               }`}
+              style={{
+                boxShadow:
+                  theme === 'light'
+                    ? '0 1px 3px rgba(0,0,0,0.06), 0 20px 35px -10px rgba(0,0,0,0.08)'
+                    : theme === 'kitty'
+                    ? '0 1px 3px rgba(236,72,153,0.1), 0 20px 35px -10px rgba(236,72,153,0.15)'
+                    : 'inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0,0,0,0.5), 0 24px 48px -12px rgba(0,0,0,0.7)',
+              }}
             >
               <div className="relative mb-5 flex items-center justify-center">
-                {/* Halo ambiental suave */}
+                {/* Halo ambiental suave basado en gradiente radial GPU-nativo (sin blur-2xl costoso) */}
                 <div
-                  className={`absolute w-28 h-28 rounded-full blur-2xl pointer-events-none animate-pulse ${
-                    theme === 'light'
-                      ? 'bg-sky-500/15'
-                      : theme === 'kitty'
-                      ? 'bg-pink-500/20'
-                      : 'bg-rose-500/15'
-                  }`}
+                  className="absolute w-28 h-28 rounded-full pointer-events-none animate-pulse motion-reduce:animate-none"
+                  style={{
+                    background:
+                      theme === 'light'
+                        ? 'radial-gradient(circle, rgba(14,165,233,0.18) 0%, rgba(14,165,233,0.04) 50%, transparent 70%)'
+                        : theme === 'kitty'
+                        ? 'radial-gradient(circle, rgba(236,72,153,0.22) 0%, rgba(236,72,153,0.05) 50%, transparent 70%)'
+                        : 'radial-gradient(circle, rgba(244,63,94,0.2) 0%, rgba(244,63,94,0.04) 50%, transparent 70%)',
+                    transform: 'translateZ(0)',
+                    willChange: 'opacity',
+                  }}
                 />
 
                 {/* Spinner circular de autor (ligero, redondo y a 120 FPS) */}
                 <div className="relative w-14 h-14 flex items-center justify-center">
+                  {/* Pista circular base ESTÁTICA (0 overhead de GPU/rotación) */}
                   <svg
-                    className={`w-14 h-14 animate-spin ${
+                    className={`w-14 h-14 ${
                       theme === 'light'
                         ? 'text-sky-200'
                         : theme === 'kitty'
@@ -4474,11 +4487,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     }`}
                     viewBox="0 0 48 48"
                     fill="none"
+                    aria-hidden="true"
                   >
                     <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2.5" />
                   </svg>
+                  {/* Arco activo giratorio acelerado por GPU (hilo compositor / 120 FPS) */}
                   <svg
-                    className={`absolute inset-0 w-14 h-14 animate-spin ${
+                    className={`absolute inset-0 w-14 h-14 animate-spin motion-reduce:animate-none ${
                       theme === 'light'
                         ? 'text-sky-600'
                         : theme === 'kitty'
@@ -4487,7 +4502,13 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                     }`}
                     viewBox="0 0 48 48"
                     fill="none"
-                    style={{ animationDuration: '0.85s' }}
+                    aria-hidden="true"
+                    style={{
+                      animationDuration: '0.9s',
+                      animationTimingFunction: 'linear',
+                      willChange: 'transform',
+                      transform: 'translateZ(0)',
+                    }}
                   >
                     <circle
                       cx="24"
@@ -4499,10 +4520,17 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                       strokeDasharray="32 100"
                     />
                   </svg>
-                  {/* Micro-icono Gemini de 4 puntas al centro */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  {/* Micro-icono Gemini de 4 puntas al centro con respiración sutil y aceleración GPU */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none animate-pulse motion-reduce:animate-none"
+                    style={{
+                      willChange: 'opacity, transform',
+                      transform: 'translateZ(0)',
+                      animationDuration: '2s',
+                    }}
+                  >
                     <GeminiIcon
-                      className="w-5 h-5 animate-pulse drop-shadow-[0_0_8px_rgba(155,114,207,0.45)]"
+                      className="w-5 h-5 drop-shadow-[0_0_8px_rgba(155,114,207,0.45)]"
                       variant="gradient"
                       duo={false}
                     />
@@ -5585,11 +5613,11 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
               type="button"
               onClick={handleGenerateTargetedQuestions}
               disabled={isGeneratingTargeted}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 hover:border-slate-600 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer disabled:opacity-60 active:scale-[0.99]"
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 hover:border-slate-600 text-white font-bold text-xs sm:text-sm shadow-md transition-[transform,background-color,border-color,opacity] duration-150 ease-out cursor-pointer disabled:opacity-60 active:scale-[0.985]"
             >
               {isGeneratingTargeted ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-300" style={{ willChange: 'transform', transform: 'translateZ(0)' }} />
                   <span>Generando Preguntas con IA...</span>
                 </>
               ) : (
