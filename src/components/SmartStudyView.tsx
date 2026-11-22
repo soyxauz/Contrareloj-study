@@ -43,12 +43,12 @@ import {
   SkipForward,
   Share2,
   RefreshCw,
-  Sparkles,
 } from 'lucide-react';
 import { findBestChunkAndExcerpt, extractSpecificPassage, resolveRealPageNumber, extractMeaningfulTokens } from '../engine/ragExcerptExtractor';
 import { chunkDocument } from '../engine/chunker';
 import { generateKitQuestions } from '../engine/contentProcessor';
 import { ImageZoomModal } from './ImageZoomModal';
+import { GeminiIcon } from './GeminiIcon';
 import { TheaExplanationView } from './TheaExplanationView';
 import { triggerThemeAwareConfetti as confetti } from '../utils/kittyConfetti';
 import { useTheme } from '../services/themeService';
@@ -4499,16 +4499,12 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                       strokeDasharray="32 100"
                     />
                   </svg>
-                  {/* Micro-icono sutil al centro */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles
-                      className={`w-4 h-4 animate-pulse ${
-                        theme === 'light'
-                          ? 'text-sky-600'
-                          : theme === 'kitty'
-                          ? 'text-pink-500'
-                          : 'text-rose-300'
-                      }`}
+                  {/* Micro-icono Gemini de 4 puntas al centro */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <GeminiIcon
+                      className="w-5 h-5 animate-pulse drop-shadow-[0_0_8px_rgba(155,114,207,0.45)]"
+                      variant="gradient"
+                      duo={false}
                     />
                   </div>
                 </div>
