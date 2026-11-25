@@ -3487,16 +3487,16 @@ FASE 1: ANÁLISIS DEL TEXTO Y DETECCIÓN CONCEPTUAL
 3. Fidelidad (Anclaje): Toda pregunta debe sustentarse estrictamente en la lógica y contenido del texto.
 4. Directriz de dificultad: ${difficultyDirectives[difficulty]}
 
-FASE 2: DISTRIBUCIÓN Y VARIEDAD DINÁMICA DE ESTILOS DE PREGUNTA (PROPORCIÓN REQUERIDA)
-Para una experiencia pedagógica estimulante y variada, DEBES respetar rigurosamente la siguiente proporción:
-1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe representar aproximadamente el 45% del lote con variedad pedagógica amplia:
-   - Preguntas afirmativas de comprensión directa, principios clave y deducción en casos prácticos (la gran mayoría, ~80%-85%).
+FASE 2: DISTRIBUCIÓN Y VARIEDAD DINÁMICA DE ESTILOS DE PREGUNTA (PROPORCIÓN REQUERIDA: 60% OPCIÓN MÚLTIPLE DE 4 OPCIONES, 40% ESTILOS VARIADOS)
+Para una experiencia pedagógica estimulante, sólida y variada, DEBES respetar rigurosamente la siguiente proporción:
+1. "multiple-choice" (OPCIÓN MÚLTIPLE CLÁSICA A, B, C, D): Debe PREDOMINAR representando aproximadamente el 60% del lote (6 de cada 10 preguntas) con 4 opciones equilibradas de alta calidad académica:
+   - Preguntas afirmativas de comprensión directa, principios clave y deducción en casos prácticos (la gran mayoría, ~80%-85% de las de opción múltiple).
    - Preguntas de detección de concepto equivocado, afirmación falsa o elemento impostor de forma moderada (~15%-20% del total de opción múltiple: ej. '¿Cuál de los siguientes enunciados es FALSO respecto a...', 'Señala el concepto EQUIVOCADO sobre...', 'Todas las siguientes afirmaciones son correctas, EXCEPTO:').
-2. El 55% restante DEBE distribuirse de forma equitativa y activa entre los otros 4 formatos interactivos:
-   - "matching": Emparejar conceptos (3 o 4 pares de "termino" <-> "definicion" exacta del texto).
-   - "true-false": Pregunta de Verdadero o Falso donde el campo "pregunta" DEBE ser una afirmación conceptual declarativa directa (ej. "La fosforilación oxidativa se produce en la membrana interna mitocondrial.") para juzgar si es Verdadera o Falsa, con "opciones": { "A": "Verdadero", "B": "Falso" } y "respuesta_correcta": "A" o "B". ESTÁ ESTRICTAMENTE PROHIBIDO redactar 'true-false' como pregunta de selección múltiple (ej. "¿Cuál de las siguientes..." o "Selecciona la opción...").
-   - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas (tanto para marcar afirmaciones verdaderas como ocasionalmente para identificar errores).
-   - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores).
+2. El 40% restante DEBE distribuirse de forma equilibrada y activa entre los otros 4 formatos interactivos (asegurando variedad constante):
+   - "true-false": Pregunta de Verdadero o Falso donde el campo "pregunta" DEBE ser una afirmación conceptual declarativa directa (ej. "La fosforilación oxidativa se produce en la membrana interna mitocondrial.") para juzgar si es Verdadera o Falsa, con "opciones": { "A": "Verdadero", "B": "Falso" } y "respuesta_correcta": "A" o "B" (~15% del lote). ESTÁ ESTRICTAMENTE PROHIBIDO redactar 'true-false' como pregunta de selección múltiple (ej. "¿Cuál de las siguientes..." o "Selecciona la opción...").
+   - "matching": Emparejar conceptos (3 o 4 pares de "termino" <-> "definicion" exacta del texto) (~10% del lote).
+   - "drag-drop": Completar espacios en blanco (oración con huecos {0}, {1} y banco de palabras con distractores) (~10% del lote).
+   - "multi-select": Pregunta con selección múltiple sobre una lista de 4 o 5 alternativas donde exactamente 2 son correctas (~5% del lote).
 
 FASE 3: INTEGRIDAD Y AUTOSUFICIENCIA DE ENUNCIADOS (CASOS CLÍNICOS Y SUPUESTOS DE HECHO)
 - AUTOSUFICIENCIA ABSOLUTA DEL CONTEXTO: Si formulas una pregunta que hace referencia a un paciente, caso clínico, supuesto de hecho jurídico o escenario específico (ej. '¿Cuál es el diagnóstico de este paciente?', '¿Qué indemnización corresponde a dicho trabajador?'), ES TERMINANTEMENTE OBLIGATORIO que el campo "pregunta" contenga el caso completo y autosuficiente (edad, antecedentes, síntomas clave, analítica de laboratorio o hechos fácticos) ANTES del signo de interrogación. Queda TERMINANTEMENTE PROHIBIDO formular preguntas referidas a "este paciente" o "el caso descrito" sin haber expuesto previamente todos sus datos y síntomas en ese mismo enunciado.
@@ -6078,6 +6078,10 @@ DIRECTRICES GENERALES DE GENERACIÓN:
    - La gran mayoría (~80%-85%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 a 2 líneas concisas sin preámbulos).
    - Máximo 1 de cada 8 preguntas puede ser un caso clínico aplicado más extenso (entre 35 y 50 palabras).
 9. Tema Enfocado: ${topicQuery.trim() ? `TODAS las preguntas deben abordar exclusivamente: "${topicQuery.trim()}".` : 'Aborda los núcleos temáticos más desafiantes del documento.'}
+10. DISTRIBUCIÓN OBLIGATORIA DE FORMATOS (60% OPCIÓN MÚLTIPLE DE 4 OPCIONES / 40% ESTILOS VARIADOS):
+   - Las preguntas de 'multiple-choice' (4 opciones) DEBEN PREDOMINAR, representando el 60% del contenido generado (~6 de cada 10 preguntas).
+   - El 40% restante DEBE distribuirse de forma rotativa y balanceada entre los formatos interactivos: 'true-false' (Verdadero/Falso), 'matching' (Emparejamiento), 'drag-drop' (Completar huecos) y 'multi-select' (Selección múltiple).
+   - Respeta estrictamente los tipos solicitados para cada pregunta en los parámetros del lote.
 
 FORMATO DE SALIDA (JSON ÚNICAMENTE):
 {
@@ -6134,8 +6138,26 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
   const numBatches = Math.ceil(targetTotal / BATCH_SIZE);
   const collectedQuestions: Question[] = [];
 
+  // Planificación determinista de tipos con proporción 60% opción múltiple / 40% estilos variados
+  const nonMcRotation: Array<Question['type']> = ['true-false', 'matching', 'drag-drop', 'multi-select'];
+  let nonMcIndex = 0;
+  const scheduledTypes: Array<Question['type']> = [];
+  for (let i = 0; i < targetTotal; i++) {
+    // En ciclos de 5 preguntas: posiciones 0, 1 y 3 son opción múltiple (60%), posiciones 2 y 4 son estilos variados (40%)
+    const cyclePos = i % 5;
+    if (cyclePos === 0 || cyclePos === 1 || cyclePos === 3) {
+      scheduledTypes.push('multiple-choice');
+    } else {
+      scheduledTypes.push(nonMcRotation[nonMcIndex % nonMcRotation.length]);
+      nonMcIndex++;
+    }
+  }
+
   for (let b = 0; b < numBatches && collectedQuestions.length < targetTotal; b++) {
     const batchCount = Math.min(BATCH_SIZE, targetTotal - collectedQuestions.length);
+    const startIdx = collectedQuestions.length;
+    const currentBatchTypes = scheduledTypes.slice(startIdx, startIdx + batchCount);
+
     const userPrompt = `MATERIAL DE ESTUDIO DE REFERENCIA:
 ${sourceRepresentation}
 
@@ -6143,6 +6165,18 @@ PARÁMETROS DE GENERACIÓN:
 - Subtema concreto solicitado: ${topicQuery.trim() || 'General del documento'}
 - Nivel de dificultad: Nivel ${level} (${level === 3 ? 'MÁXIMA EXIGENCIA - OPCIONES SIMILARES' : level === 2 ? 'INTERMEDIO' : 'BÁSICO'})
 - Cantidad de preguntas a generar en este micro-lote: ${batchCount}
+- TIPOS OBLIGATORIOS PARA ESTE LOTE (PROPORCIÓN REQUERIDA 60% OPCIÓN MÚLTIPLE DE 4 OPCIONES / 40% ESTILOS VARIADOS):
+${currentBatchTypes.map((t, idx) => `  * Pregunta ${idx + 1}: DEBE ser tipo '${t}'${
+  t === 'multiple-choice'
+    ? ' (Opción múltiple clásica con exactamente 4 opciones A, B, C, D equilibradas, completas y sustantivas)'
+    : t === 'true-false'
+    ? ' (Verdadero o Falso directo. El campo "pregunta" debe ser una afirmación conceptual declarativa directa, sin redactar como selección múltiple)'
+    : t === 'matching'
+    ? ' (Emparejamiento conceptual con 3 o 4 pares en "pares_emparejamiento" con { "termino": "...", "definicion": "..." })'
+    : t === 'drag-drop'
+    ? ' (Completar espacios en blanco con "oracion_plantilla" que use {0} y {1}, "huecos_correctos" y "banco_palabras")'
+    : ' (Selección múltiple con "opciones_multiples" de 4 alternativas e "indices_correctos" con exactamente 2 respuestas correctas)'
+}`).join('\n')}
 - DISTRIBUCIÓN DE EXTENSIÓN (RELACIÓN 1:8 CORTAS vs DENSAS): La gran mayoría (~80%-85%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Máximo 1 de cada 8 preguntas puede ser un caso clínico más extenso (35-50 palabras).
 - PROHIBICIÓN TOTAL DE PREÁMBULOS: CERO preámbulos como "Análisis Crítico:", "Evalúa la rigurosidad...", etc. El enunciado debe nombrar directamente la patología, fármaco o concepto central con su contexto fáctico.
 - CERO REFERENCIAS AL TEXTO: PROHIBIDO usar "según el texto", "conforme al documento" o frases similares.

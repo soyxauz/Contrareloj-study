@@ -1384,7 +1384,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     const t = q.type || 'multiple-choice';
     if (t === 'short-answer') return 'shortAnswer';
     if (t === 'true-false') return 'trueFalse';
-    if (t === 'matching' || t === 'drag-drop') return 'practical';
+    if (t === 'matching' || t === 'drag-drop' || t === 'multi-select' || t === 'image-labeling') return 'practical';
     return 'multipleChoice';
   }, []);
 
@@ -1500,16 +1500,42 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     ).filter(cat => typeFilters[cat]);
     const safeActiveCategories = activeCategories.length > 0 ? activeCategories : (['multipleChoice'] as (keyof SmartStudyTypeFilters)[]);
 
-    // Barajado inteligente: mezclar formatos para una secuencia impredecible y estimulante sin rachas monótonas
+    // Barajado inteligente ponderado (60% Opción Múltiple de 4 opciones / 40% Estilos Variados con máx 3 consecutivas)
     let targetCat: keyof SmartStudyTypeFilters;
     if (safeActiveCategories.length === 1) {
       targetCat = safeActiveCategories[0];
     } else {
       const recent = recentCategoriesRef.current;
-      const lastCat = recent[recent.length - 1];
-      const nonConsecutive = safeActiveCategories.filter(c => c !== lastCat);
-      const candidatesToPick = nonConsecutive.length > 0 ? nonConsecutive : safeActiveCategories;
-      targetCat = candidatesToPick[Math.floor(Math.random() * candidatesToPick.length)];
+      const otherActiveCategories = safeActiveCategories.filter(c => c !== 'multipleChoice');
+
+      // Control estricto de rachas: permitir hasta 3 preguntas seguidas de 4 opciones antes de alternar obligatoriamente
+      const lastThree = recent.slice(-3);
+      const isConsecutiveThreeMC = lastThree.length >= 3 && lastThree.every(c => c === 'multipleChoice');
+
+      if (isConsecutiveThreeMC && otherActiveCategories.length > 0) {
+        // Se cumplieron 3 seguidas de opción múltiple: forzar un formato variado activo para asegurar variedad continua
+        const lastCat = recent[recent.length - 1];
+        const nonConsecutiveOthers = otherActiveCategories.filter(c => c !== lastCat);
+        const candidates = nonConsecutiveOthers.length > 0 ? nonConsecutiveOthers : otherActiveCategories;
+        targetCat = candidates[Math.floor(Math.random() * candidates.length)];
+      } else if (safeActiveCategories.includes('multipleChoice') && otherActiveCategories.length > 0) {
+        // Ponderación precisa: 60% probabilidad para Opción Múltiple (4 opciones) y 40% para Estilos Variados
+        const roll = Math.random();
+        if (roll < 0.60) {
+          targetCat = 'multipleChoice';
+        } else {
+          // 40% restante distribuido entre los otros formatos activos (evitando repetir el mismo estilo no-MC inmediatamente)
+          const lastCat = recent[recent.length - 1];
+          const nonConsecutiveOthers = otherActiveCategories.filter(c => c !== lastCat);
+          const candidates = nonConsecutiveOthers.length > 0 ? nonConsecutiveOthers : otherActiveCategories;
+          targetCat = candidates[Math.floor(Math.random() * candidates.length)];
+        }
+      } else {
+        const lastCat = recent[recent.length - 1];
+        const nonConsecutive = safeActiveCategories.filter(c => c !== lastCat);
+        const candidatesToPick = nonConsecutive.length > 0 ? nonConsecutive : safeActiveCategories;
+        targetCat = candidatesToPick[Math.floor(Math.random() * candidatesToPick.length)];
+      }
     }
     recentCategoriesRef.current = [...recentCategoriesRef.current.slice(-5), targetCat];
 
