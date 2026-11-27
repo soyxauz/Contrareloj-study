@@ -483,7 +483,8 @@ export const App: React.FC = () => {
         if (isCancelled) return;
         const cleanKits = secondKits.filter(k => !isCorruptedKit(k));
         if (cleanKits.length > 0) {
-          setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits.map(stripAssetDataUrlsFromKit)));
+          const savedRestoreKitId = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_CURRENT_KIT_KEY) : null;
+          setKits(prev => mergeKitsByUpdatedAt(prev, cleanKits.map(k => stripAssetDataUrlsFromKit(k, k.id === savedRestoreKitId))));
         }
         authService.restoreAllSessionsFromIndexedDB().catch(() => {});
       }

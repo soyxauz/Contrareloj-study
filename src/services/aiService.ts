@@ -2,7 +2,7 @@ import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, Shor
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 import { safeLocalStorageSetItem } from './storageService';
 import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
-import { filterCompliantQuestions, isQuestionCompliantWithStandard, repairQuestionStructure } from '../utils/questionValidator';
+import { filterCompliantQuestions, isPlaceholderMatchingValue, isQuestionCompliantWithStandard, repairQuestionStructure } from '../utils/questionValidator';
 import { extractCleanTokens } from '../engine/topicInterleaving';
 import { resolveQuestionRagEvidences } from '../engine/ragExcerptExtractor';
 import {
@@ -3478,6 +3478,45 @@ function buildFormatAwareAnswerSummary(params: {
   return options[correctIndex] || '';
 }
 
+function sanitizeRawMatchingPairs(rawPairs: any): { term: string; definition: string }[] | undefined {
+  if (!Array.isArray(rawPairs)) return undefined;
+  const seenTerms = new Set<string>();
+  const cleaned = rawPairs
+    .map((pair: any) => {
+      const term = String(
+        pair?.termino ?? pair?.term ?? pair?.concepto ?? pair?.concept ?? pair?.etiqueta ?? pair?.label ?? pair?.izquierda ?? ''
+      ).trim();
+      const definition = String(
+        pair?.definicion ??
+          pair?.definition ??
+          pair?.descripcion ??
+          pair?.description ??
+          pair?.rol ??
+          pair?.significado ??
+          pair?.explicacion ??
+          pair?.propiedad ??
+          pair?.valor ??
+          pair?.match ??
+          pair?.pista ??
+          pair?.hint ??
+          pair?.derecha ??
+          ''
+      ).trim();
+      return { term, definition };
+    })
+    .filter(pair => {
+      if (isPlaceholderMatchingValue(pair.term, 'term') || isPlaceholderMatchingValue(pair.definition, 'definition')) {
+        return false;
+      }
+      const key = pair.term.toLowerCase();
+      if (seenTerms.has(key)) return false;
+      seenTerms.add(key);
+      return true;
+    });
+
+  return cleaned.length >= 2 ? cleaned : undefined;
+}
+
 function bindQuestionRagMetadata(q: Question, chunks?: DocumentChunk[]): Question {
   const repaired = repairQuestionStructure(q);
   if (!chunks || chunks.length === 0) return repaired;
@@ -3750,11 +3789,18 @@ Genera el JSON completo respetando la estructura exigida:`;
         qType = 'multi-select';
       } else if (detectedType.includes('image') || detectedType.includes('labeling') || (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 2)) {
         if (Array.isArray(p.etiquetas_diagrama) && p.etiquetas_diagrama.length >= 2) {
-          qType = 'matching';
-          p.pares_emparejamiento = p.etiquetas_diagrama.map((h: any, i: number) => ({
-            termino: String(h.etiqueta || h.label || `Elemento ${i + 1}`).trim(),
-            definicion: String(h.pista || h.hint || p.titulo_diagrama || `Fase o componente ${i + 1}`).trim(),
-          }));
+          const validDiagramPairs = p.etiquetas_diagrama
+            .map((h: any) => ({
+              termino: String(h?.etiqueta ?? h?.label ?? '').trim(),
+              definicion: String(h?.pista ?? h?.hint ?? '').trim(),
+            }))
+            .filter((pair: any) => !isPlaceholderMatchingValue(pair.termino, 'term') && !isPlaceholderMatchingValue(pair.definicion, 'definition'));
+          if (validDiagramPairs.length >= 2) {
+            qType = 'matching';
+            p.pares_emparejamiento = validDiagramPairs;
+          } else {
+            qType = 'multiple-choice';
+          }
         } else {
           qType = 'multiple-choice';
         }
@@ -3919,12 +3965,7 @@ Genera el JSON completo respetando la estructura exigida:`;
 
       fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-      const matchingPairs = Array.isArray(p.pares_emparejamiento)
-        ? p.pares_emparejamiento.map((pair: any) => ({
-            term: String(pair.termino || pair.term || 'Concepto').trim(),
-            definition: String(pair.definicion || pair.definition || 'Definición').trim()
-          }))
-        : undefined;
+      const matchingPairs = sanitizeRawMatchingPairs(p.pares_emparejamiento);
 
       const correctIndices = Array.isArray(p.indices_correctos)
         ? parseCorrectIndices(p.indices_correctos, optionsArray)
@@ -6431,12 +6472,7 @@ Genera exactamente ${batchCount} preguntas en formato JSON estricto:`;
 
           fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-          const matchingPairs = Array.isArray(p.pares_emparejamiento)
-            ? p.pares_emparejamiento.map((pair: any) => ({
-                term: String(pair.termino || pair.term || 'Concepto').trim(),
-                definition: String(pair.definicion || pair.definition || 'Definición').trim()
-              }))
-            : undefined;
+          const matchingPairs = sanitizeRawMatchingPairs(p.pares_emparejamiento);
 
           const correctIndices = Array.isArray(p.indices_correctos)
             ? parseCorrectIndices(p.indices_correctos, optionsArray)

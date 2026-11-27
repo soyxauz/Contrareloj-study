@@ -229,10 +229,10 @@ function splitIntoPreservedUnits(text: string): Array<{ text: string; sepBefore:
   const DANGLING_CONNECTOR = /\b(?:de|del|la|el|los|las|un|una|unos|unas|en|con|por|para|y|o|a|al|e|u|ni|que|como|sobre|entre|hasta|hacia|desde|durante|mediante|tras|según|sin)$/i;
 
   const marked = protectedText.replace(
-    /(?<=[.?!])(\s+)(?=[A-ZÁÉÍÓÚÑ"«0-9(•\-*])|(\n\s*\n+)|(\n+)(?=\s*(?:[•●▪\-*]|\d+[.)]|[A-ZÁÉÍÓÚÑ]))/g,
-    (fullMatch, ws, dblNl, nlBeforeItem, offset: number, fullStr: string) => {
-      if (ws || dblNl) {
-        return `${SPLIT_TOKEN}${ws || dblNl}${SPLIT_TOKEN}`;
+    /(?<=[.?!])(\s+)(?=[A-ZÁÉÍÓÚÑ"«0-9(•\-*])|(\n\s*\n+)|(\n+)(?=\s*(?:[•●▪\-*]|\d+[.)]|[A-ZÁÉÍÓÚÑ]))|(?<=[\d%\)a-záéíóúñ]|\b[A-Z0-9]{1,3})(\s+)(?=[A-ZÁÉÍÓÚÑ]{4,}(?:\s+[A-ZÁÉÍÓÚÑ]{2,}){1,4}\s*=)/g,
+    (fullMatch, ws, dblNl, nlBeforeItem, wsUpperEq, offset: number, fullStr: string) => {
+      if (ws || dblNl || wsUpperEq) {
+        return `${SPLIT_TOKEN}${ws || dblNl || wsUpperEq}${SPLIT_TOKEN}`;
       }
       if (nlBeforeItem) {
         const beforeTrim = fullStr.slice(0, offset).trimEnd();
@@ -371,7 +371,8 @@ export function cleanVisibleParagraphMarkers(text: string): string {
   if (!text) return '';
   return cleanDocumentText(text)
     .replace(/\r\n/g, '\n')
-    .replace(/\[(?:Página|Diapositiva)\s+\d+\]\s*/gi, '')
+    .replace(/\[(?:Página|P[aá]g\.?|Diapositiva|Diap\.?|Slide)\s+\d+\]\s*/gi, '')
+    .replace(/(?<!\[)\b\d{1,3}\](?=\s|$)/g, '')
     .replace(/^=== MATERIAL DE ESTUDIO\s+\d+:[^\n]+===\s*/gim, '')
     .replace(/(\*{1,2}|_{1,2})#{1,6}\s*/g, '$1')
     .replace(/(^|\n)\s*#{1,6}\s*/g, '$1')
@@ -379,6 +380,38 @@ export function cleanVisibleParagraphMarkers(text: string): string {
     .replace(/(?<![.!?:;\n])\n(?=[a-záéíóúñ(,])/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function evaluatePreferredTermMatch(
+  normText: string,
+  textTokens: Set<string>,
+  preferredTerm: string,
+  preferredTokens: Set<string>
+): { exactHit: boolean; allTokensHit: boolean; matchedCount: number; coverageRatio: number; isStrongMatch: boolean } {
+  const normPref = normalizeForMatch(preferredTerm || '');
+  if (!normPref && preferredTokens.size === 0) {
+    return { exactHit: false, allTokensHit: false, matchedCount: 0, coverageRatio: 0, isStrongMatch: false };
+  }
+
+  const compactText = normText.replace(/\s*([\/\-])\s*/g, '$1');
+  const compactPref = normPref.replace(/\s*([\/\-])\s*/g, '$1');
+  const noSepText = compactText.replace(/[\/\-]/g, ' ');
+  const noSepPref = compactPref.replace(/[\/\-]/g, ' ');
+
+  const exactHit =
+    (compactPref.length >= 2 && compactText.includes(compactPref)) ||
+    (noSepPref.length >= 3 && noSepText.includes(noSepPref));
+
+  let matchedCount = 0;
+  for (const pt of preferredTokens) {
+    if (textTokens.has(pt)) matchedCount++;
+  }
+  const denom = Math.max(1, preferredTokens.size);
+  const coverageRatio = preferredTokens.size > 0 ? matchedCount / denom : exactHit ? 1 : 0;
+  const allTokensHit = preferredTokens.size > 0 && matchedCount === preferredTokens.size;
+  const isStrongMatch = exactHit || allTokensHit;
+
+  return { exactHit, allTokensHit, matchedCount, coverageRatio, isStrongMatch };
 }
 
 /**
@@ -572,10 +605,10 @@ function isolateSubClause(
     );
   }
 
-  // 2. Dividir también por delimitadores sintácticos fuertes (; y conectores explicativos)
+  // 2. Dividir también por delimitadores sintácticos fuertes (; , encabezados de fórmula con '=' y conectores explicativos)
   if (!delimited.includes(SPLIT_MARKER)) {
     delimited = body.replace(
-      /(;\s+|(?<=[^0-9]),\s+(?=(?:mientras\s+que|a\s+diferencia\s+de|sin\s+embargo|aunque|debido\s+a|ya\s+que|puesto\s+que|lo\s+cual|los\s+cuales|las\s+cuales|la\s+cual|el\s+cual|donde|cuya|cuyo|por\s+lo\s+que|pero\s+el\s+hecho|excepto|salvo|siendo|mediante|produc[ei]|inhib[ei]|activ[ao]|induc[ei]|reduc[ei]|aument[ao]|mediad[ao]|caracteriz[aá]ndose|presenta)\b)|(?<=.{35}),\s+(?=.{22,}))/gi,
+      /(;\s+|(?<=[\d%\)a-záéíóúñ]|\b[A-Z0-9]{1,3})\s+(?=[A-ZÁÉÍÓÚÑ]{4,}(?:\s+[A-ZÁÉÍÓÚÑ]{2,}){1,4}\s*=)|(?<=[^0-9]),\s+(?=(?:mientras\s+que|a\s+diferencia\s+de|sin\s+embargo|aunque|debido\s+a|ya\s+que|puesto\s+que|lo\s+cual|los\s+cuales|las\s+cuales|la\s+cual|el\s+cual|donde|cuya|cuyo|por\s+lo\s+que|pero\s+el\s+hecho|excepto|salvo|siendo|mediante|produc[ei]|inhib[ei]|activ[ao]|induc[ei]|reduc[ei]|aument[ao]|mediad[ao]|caracteriz[aá]ndose|presenta)\b)|(?<=.{35}),\s+(?=.{22,}))/gi,
       (m) => `${SPLIT_MARKER}${m}${SPLIT_MARKER}`
     );
   }
@@ -716,6 +749,9 @@ export function highlightAnswerInParagraph(
         bestIdx = i;
       }
     }
+
+    // Si ningún fragmento tuvo coincidencia real (maxScore <= 0), NO resaltar arbitrariamente todo un párrafo ajeno
+    if (maxScore <= 0) continue;
 
     if (maxScore > globalBestScore) {
       globalBestScore = maxScore;
@@ -889,17 +925,13 @@ function selectBestParagraphFromChunk(
     const pTokens = extractMeaningfulTokens(pText);
     const normPara = normalizeForMatch(pText);
 
-    // Bonus fuerte si contiene explícitamente el término emparejado buscado
-    if (preferredTokens.size > 0) {
-      const normTerm = normalizeForMatch(preferredTerm || '');
-      let prefMatches = 0;
-      for (const pt of preferredTokens) {
-        if (pTokens.has(pt)) prefMatches++;
-      }
-      if (normTerm.length >= 3 && normPara.includes(normTerm)) {
-        paraScore += 90.0;
-      } else if (prefMatches > 0) {
-        paraScore += 55.0 * (prefMatches / preferredTokens.size);
+    // Bonus fuerte si contiene explícitamente el término emparejado buscado (exigiendo cobertura completa en términos compuestos tipo FEV1/FVC)
+    if (preferredTerm && preferredTokens.size > 0) {
+      const termMatch = evaluatePreferredTermMatch(normPara, pTokens, preferredTerm, preferredTokens);
+      if (termMatch.isStrongMatch) {
+        paraScore += termMatch.exactHit ? 140.0 : 95.0;
+      } else if (termMatch.matchedCount > 0) {
+        paraScore += preferredTokens.size >= 2 ? 14.0 * termMatch.coverageRatio : 55.0 * termMatch.coverageRatio;
       }
     }
 
@@ -1145,16 +1177,15 @@ export function findBestChunkAndExcerpt(params: {
     const chunkTokens = extractMeaningfulTokens(chunk.text);
 
     // 1. Afinidad con término clave obligatorio (determinante en matching multi-fragmento)
+    let hasStrongPrefHit = false;
     if (preferredTerm && preferredTerm.trim().length >= 2) {
-      const normPref = normalizeForMatch(preferredTerm);
-      if (normPref.length >= 3 && normChunk.includes(normPref)) {
-        chunkBonus += 180.0;
-      } else if (preferredTokens.size > 0) {
-        let pMatch = 0;
-        for (const t of preferredTokens) {
-          if (chunkTokens.has(t)) pMatch++;
-        }
-        if (pMatch > 0) chunkBonus += 120.0 * (pMatch / preferredTokens.size);
+      const prefMatch = evaluatePreferredTermMatch(normChunk, chunkTokens, preferredTerm, preferredTokens);
+      if (prefMatch.isStrongMatch) {
+        chunkBonus += prefMatch.exactHit ? 240.0 : 185.0;
+        hasStrongPrefHit = true;
+      } else if (prefMatch.matchedCount > 0) {
+        // Coincidencia parcial en término compuesto (ej. solo FVC al buscar FEV1/FVC): peso menor
+        chunkBonus += preferredTokens.size >= 2 ? 28.0 * prefMatch.coverageRatio : 120.0 * prefMatch.coverageRatio;
       }
     }
 
@@ -1186,13 +1217,13 @@ export function findBestChunkAndExcerpt(params: {
     }
 
     // 3. Bonus si el fragmento contiene términos y bigramas de la respuesta correcta
+    let answerTokenMatches = 0;
     if (answerTokens.size > 0) {
-      let matchCount = 0;
       for (const t of answerTokens) {
-        if (chunkTokens.has(t)) matchCount++;
+        if (chunkTokens.has(t)) answerTokenMatches++;
       }
-      if (matchCount > 0) {
-        chunkBonus += 160.0 * (matchCount / answerTokens.size);
+      if (answerTokenMatches > 0) {
+        chunkBonus += 160.0 * (answerTokenMatches / answerTokens.size);
       }
     }
 
@@ -1200,6 +1231,8 @@ export function findBestChunkAndExcerpt(params: {
     let effectiveScore = passage.score + chunkBonus;
     if ((answerTokens.size > 0 || preferredTokens.size > 0 || (exactCitation && exactCitation.length >= 10)) && chunkBonus === 0) {
       effectiveScore = Math.min(2.5, effectiveScore * 0.1);
+    } else if (preferredTerm && preferredTokens.size >= 2 && !hasStrongPrefHit && answerTokenMatches < 2) {
+      effectiveScore *= 0.35;
     }
 
     // Desfavorecer fragmentos con alto ruido OCR de esquemas rotos
@@ -1529,23 +1562,39 @@ export function resolveQuestionRagEvidences(params: {
     const resolvedPage = resolveRealPageNumber(
       targetChunk.text,
       para.rawAnchorForPage || para.paragraphBody || args.exactCitation,
-      targetChunk.pageOrSlide || args.fallbackPage,
+      args.term ? targetChunk.pageOrSlide : (targetChunk.pageOrSlide || args.fallbackPage),
       effectiveChunks
     );
 
-    const displayHighlighted = para.heading && !para.highlightedParagraph.startsWith(para.heading)
-      ? `${para.heading}\n${para.highlightedParagraph}`
-      : para.highlightedParagraph;
     const displayPlain = para.heading && !para.paragraphBody.startsWith(para.heading)
       ? `${para.heading}\n${para.paragraphBody}`
       : para.paragraphBody;
+    let displayHighlighted = para.heading && !para.highlightedParagraph.startsWith(para.heading)
+      ? `${para.heading}\n${para.highlightedParagraph}`
+      : para.highlightedParagraph;
 
-    // Verificar honestamente si las entidades discriminadoras nucleares de la pregunta realmente están en el texto encontrado
+    // Verificar honestamente si las entidades discriminadoras nucleares o el término emparejado realmente están en el texto encontrado
     const discEntities = extractDiscriminatingEntities(args.queryText, args.concept || '');
+    const normFound = normalizeForMatch(displayPlain);
+    const foundTokens = extractMeaningfulTokens(displayPlain);
     let honestQuality = para.matchQuality;
-    if (discEntities.size > 0 && !args.term) {
-      const normFound = normalizeForMatch(displayPlain);
-      const foundTokens = extractMeaningfulTokens(displayPlain);
+
+    if (args.term) {
+      const termTokens = args.requiredTokens || extractMeaningfulTokens(args.term);
+      const termCheck = evaluatePreferredTermMatch(normFound, foundTokens, args.term, termTokens);
+      const defTokens = extractMeaningfulTokens(args.definition || '');
+      let defOverlap = 0;
+      for (const dt of defTokens) {
+        if (foundTokens.has(dt)) defOverlap++;
+      }
+      if (!termCheck.isStrongMatch && defOverlap < 2) {
+        honestQuality = 'low';
+        // Si no hay coincidencia real ni del término ni de su definición, no resaltar texto ajeno
+        if (defOverlap === 0 && termCheck.matchedCount === 0) {
+          displayHighlighted = displayPlain;
+        }
+      }
+    } else if (discEntities.size > 0) {
       const hasDiscMatch = [...discEntities].some(de => foundTokens.has(de) || normFound.includes(de));
       if (!hasDiscMatch) {
         honestQuality = 'low';

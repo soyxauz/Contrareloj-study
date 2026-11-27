@@ -9,6 +9,25 @@ const PLACEHOLDER_OPTION_REGEX =
 
 const SINGLE_LETTER_REGEX = /^[a-e][\.\)\:\-]?$/i;
 
+const PLACEHOLDER_MATCHING_VALUE_REGEX =
+  /^(?:elemento|concepto|termino|t[eé]rmino|item|[ií]tem|definici[oó]n|descripci[oó]n|fase|etapa|fase\s+o\s+(?:etapa|componente)|propiedad|respuesta|significado|match|clave|valor|n\/a|ningun[oa]?|undefined|null)(?:\s*(?:#?\d+|[a-e]))?$/i;
+
+/**
+ * Determina si un término o definición dentro de un par de emparejamiento es vacío o texto de relleno.
+ */
+export function isPlaceholderMatchingValue(
+  text: string | null | undefined,
+  role: 'term' | 'definition'
+): boolean {
+  if (typeof text !== 'string') return true;
+  const trimmed = text.trim();
+  const minLen = role === 'term' ? 2 : 4;
+  if (trimmed.length < minLen) return true;
+  if (PLACEHOLDER_MATCHING_VALUE_REGEX.test(trimmed)) return true;
+  if (/^(?:sin|falta)\s+(?:definici[oó]n|concepto|descripci[oó]n)$/i.test(trimmed)) return true;
+  return false;
+}
+
 /**
  * Determina si el texto de una opción es un comodín o marcador de posición sin contenido sustantivo.
  */
@@ -160,19 +179,22 @@ export function explainQuestionNonCompliance(q: any): string | null {
     if (!Array.isArray(pairs) || pairs.length < 2) {
       return `Tipo matching requiere al menos 2 pares de conceptos (tiene ${pairs?.length || 0})`;
     }
+    const seenTerms = new Set<string>();
     for (let i = 0; i < pairs.length; i++) {
       const p = pairs[i];
-      const term = (p?.term || p?.termino || '').trim();
-      const def = (p?.definition || p?.definicion || '').trim();
-      if (term.length < 2 || def.length < 3) {
-        return `Par ${i + 1} con término o definición demasiado cortos`;
+      const term = String(p?.term || p?.termino || '').trim();
+      const def = String(p?.definition || p?.definicion || '').trim();
+      if (isPlaceholderMatchingValue(term, 'term')) {
+        return `Par ${i + 1} tiene término inválido o de relleno ("${term}")`;
       }
-      if (/^(?:elemento|concepto|termino|término)\s*\d+$/i.test(term)) {
-        return `Par ${i + 1} tiene término de relleno ("${term}")`;
+      if (isPlaceholderMatchingValue(def, 'definition')) {
+        return `Par ${i + 1} tiene definición inválida o de relleno ("${def}")`;
       }
-      if (/^(?:fase|etapa|definici[oó]n)\s*\d+$/i.test(def)) {
-        return `Par ${i + 1} tiene definición de relleno ("${def}")`;
+      const normTerm = term.toLowerCase();
+      if (seenTerms.has(normTerm)) {
+        return `Par ${i + 1} repite el término "${term}"`;
       }
+      seenTerms.add(normTerm);
     }
     return null;
   }
@@ -354,17 +376,47 @@ export function repairQuestionStructure(q: Question): Question {
   if (currentType === 'matching' || Array.isArray(q.matchingPairs)) {
     const rawPairs = q.matchingPairs || (q as any).pares_emparejamiento;
     if (Array.isArray(rawPairs)) {
-      const sanitizedPairs = rawPairs.map((p: any) => {
-        let term = String(p.term || p.termino || '').trim();
-        let def = String(p.definition || p.definicion || (p as any).def || '').trim();
-        // Inversión semántica: si el término es largo (definición) y la definición es corta (término/concepto), invertirlos
-        if (term.split(/\s+/).length > 5 && def.split(/\s+/).length <= 4) {
-          const temp = term;
-          term = def;
-          def = temp;
-        }
-        return { term, definition: def };
-      }).filter(p => p.term.length >= 2 && p.definition.length >= 3 && !/^(?:concepto|término|elemento)\s*\d+$/i.test(p.term));
+      const seenTerms = new Set<string>();
+      const sanitizedPairs = rawPairs
+        .map((p: any) => {
+          let term = String(p?.term ?? p?.termino ?? p?.concepto ?? p?.concept ?? p?.izquierda ?? '').trim();
+          let def = String(
+            p?.definition ??
+              p?.definicion ??
+              p?.def ??
+              p?.descripcion ??
+              p?.description ??
+              p?.rol ??
+              p?.significado ??
+              p?.explicacion ??
+              p?.propiedad ??
+              p?.valor ??
+              p?.match ??
+              p?.derecha ??
+              ''
+          ).trim();
+          // Inversión semántica: si el término es largo (definición) y la definición es corta (término/concepto), invertirlos
+          if (
+            term.split(/\s+/).length > 5 &&
+            def.split(/\s+/).length <= 4 &&
+            !isPlaceholderMatchingValue(def, 'term') &&
+            !isPlaceholderMatchingValue(term, 'definition')
+          ) {
+            const temp = term;
+            term = def;
+            def = temp;
+          }
+          return { term, definition: def };
+        })
+        .filter(p => {
+          if (isPlaceholderMatchingValue(p.term, 'term') || isPlaceholderMatchingValue(p.definition, 'definition')) {
+            return false;
+          }
+          const key = p.term.toLowerCase();
+          if (seenTerms.has(key)) return false;
+          seenTerms.add(key);
+          return true;
+        });
 
       return {
         ...q,

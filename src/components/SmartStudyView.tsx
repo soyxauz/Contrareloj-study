@@ -88,7 +88,7 @@ import {
   ShortAnswerRenderer,
 } from './smart-study';
 import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
-import { filterCompliantQuestions, repairQuestionStructure } from '../utils/questionValidator';
+import { filterCompliantQuestions, isPlaceholderMatchingValue, repairQuestionStructure } from '../utils/questionValidator';
 import { syncBrowserHierarchicalUrl } from '../utils/hierarchicalLink';
 
 // ── Indicador Minimalista de Nivel de Dominio (Apple / Linear Studio) ──
@@ -164,8 +164,8 @@ export interface StudyHistoryItem {
 function resolveHistoryQuestionForModal(item: StudyHistoryItem, kitQuestions: Question[]): Question {
   const cleanQId = (item.questionId || '').replace(/^(tf-|sa-|mc-|dd-|drag-drop-)/, '');
   const liveMatch = kitQuestions.find(q => q.id === item.questionId || q.id === cleanQId);
-  if (liveMatch) return liveMatch;
-  if (item.questionSnapshot) return item.questionSnapshot;
+  if (liveMatch) return sanitizeQuestionStructure(liveMatch, kitQuestions);
+  if (item.questionSnapshot) return sanitizeQuestionStructure(item.questionSnapshot, kitQuestions);
 
   const inferredType = ((item.type as QuestionType) || 'multiple-choice');
   const baseQ: Question = {
@@ -316,16 +316,31 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
       .trim();
 
     if (Array.isArray(hotspots) && hotspots.length >= 2) {
-      baseQ = {
-        ...restQ,
-        type: 'matching',
-        question: cleanQuestionText || (diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : 'Empareja los conceptos correspondientes:'),
-        matchingPairs: hotspots.map((h: any, i: number) => ({
-          term: h.label || h.termino || `Elemento ${i + 1}`,
-          definition: h.hint || h.pista || h.definicion || `Fase o etapa ${i + 1}`,
-        })),
-        sourceAsset: undefined,
-      };
+      const validHotspotPairs = hotspots
+        .map((h: any) => ({
+          term: String(h?.label ?? h?.termino ?? '').trim(),
+          definition: String(h?.hint ?? h?.pista ?? h?.definicion ?? '').trim(),
+        }))
+        .filter((pair: { term: string; definition: string }) => !isPlaceholderMatchingValue(pair.term, 'term') && !isPlaceholderMatchingValue(pair.definition, 'definition'));
+
+      if (validHotspotPairs.length >= 2) {
+        baseQ = {
+          ...restQ,
+          type: 'matching',
+          question: cleanQuestionText || (diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : 'Empareja los conceptos correspondientes:'),
+          matchingPairs: validHotspotPairs,
+          sourceAsset: undefined,
+        };
+      } else {
+        baseQ = {
+          ...restQ,
+          type: 'multiple-choice',
+          question: cleanQuestionText || restQ.question || 'Selecciona la opción correcta:',
+          options: Array.isArray(restQ.options) ? restQ.options : [],
+          correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
+          sourceAsset: undefined,
+        };
+      }
     } else {
       baseQ = {
         ...restQ,
@@ -613,114 +628,148 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
   const [zoomAsset, setZoomAsset] = useState<DocumentAsset | null>(null);
   const [generateMoreError, setGenerateMoreError] = useState<string>('');
 
+  const ragModalRequestIdRef = useRef(0);
+
   const handleOpenRAGModal = (targetQ: Question, preferredAnswerText?: string) => {
-    const resolvedType: QuestionType = targetQ.type || 'multiple-choice';
+    const cleanTargetQ = sanitizeQuestionStructure(targetQ, kit.questions);
+    const resolvedType: QuestionType = cleanTargetQ.type || 'multiple-choice';
+    const requestId = ++ragModalRequestIdRef.current;
 
-    // Priorizar el texto original real del documento (sourceMaterials y sourceText con párrafos y páginas intactas)
-    // EXCLUYENDO studyGuideMarkdown para evitar pérdida o desfase de páginas reales en kits guardados.
-    const chunkPool: DocumentChunk[] = [];
-    const seenTexts = new Set<string>();
+    const buildModalPayload = (sourceKit: StudyKit) => {
+      // Priorizar el texto original real del documento (sourceMaterials y sourceText con párrafos y páginas intactas)
+      // EXCLUYENDO studyGuideMarkdown para evitar pérdida o desfase de páginas reales en kits guardados.
+      const chunkPool: DocumentChunk[] = [];
+      const seenTexts = new Set<string>();
 
-    const addChunkSafely = (chunk: DocumentChunk) => {
-      if (!chunk || !chunk.text || chunk.text.trim().length < 20) return;
-      const normalizedPrefix = chunk.text.replace(/\s+/g, ' ').trim().slice(0, 110);
-      if (seenTexts.has(normalizedPrefix)) return;
-      seenTexts.add(normalizedPrefix);
-      chunkPool.push(chunk);
-    };
+      const addChunkSafely = (chunk: DocumentChunk) => {
+        if (!chunk || !chunk.text || chunk.text.trim().length < 20) return;
+        const normalizedPrefix = chunk.text.replace(/\s+/g, ' ').trim().slice(0, 110);
+        if (seenTexts.has(normalizedPrefix)) return;
+        seenTexts.add(normalizedPrefix);
+        chunkPool.push(chunk);
+      };
 
-    if (kit.sourceMaterials && Array.isArray(kit.sourceMaterials)) {
-      for (const sm of kit.sourceMaterials) {
-        if (sm && sm.rawText && sm.rawText.length > 50) {
-          try {
-            chunkDocument(sm.rawText, kit.assets || []).forEach(addChunkSafely);
-          } catch {}
+      if (sourceKit.sourceMaterials && Array.isArray(sourceKit.sourceMaterials)) {
+        for (const sm of sourceKit.sourceMaterials) {
+          if (sm && sm.rawText && sm.rawText.length > 50) {
+            try {
+              chunkDocument(sm.rawText, sourceKit.assets || []).forEach(addChunkSafely);
+            } catch {}
+          }
         }
       }
-    }
-    if (kit.sourceText && kit.sourceText.length > 50) {
-      try {
-        chunkDocument(kit.sourceText, kit.assets || []).forEach(addChunkSafely);
-      } catch {}
-    }
-    if (kit.chunks && kit.chunks.length > 0) {
-      kit.chunks.forEach(addChunkSafely);
-    }
-    if (targetQ.sourceChunkText) {
-      addChunkSafely({
-        id: targetQ.sourceChunkId || 'target-q-chunk',
-        chunkIndex: 0,
-        pageOrSlide: targetQ.sourcePageOrSlide,
-        text: targetQ.sourceChunkText,
-        tokenCount: Math.ceil(targetQ.sourceChunkText.length / 4),
+      if (sourceKit.sourceText && sourceKit.sourceText.length > 50) {
+        try {
+          chunkDocument(sourceKit.sourceText, sourceKit.assets || []).forEach(addChunkSafely);
+        } catch {}
+      }
+      if (sourceKit.chunks && sourceKit.chunks.length > 0) {
+        sourceKit.chunks.forEach(addChunkSafely);
+      }
+      if (cleanTargetQ.sourceChunkText) {
+        addChunkSafely({
+          id: cleanTargetQ.sourceChunkId || 'target-q-chunk',
+          chunkIndex: 0,
+          pageOrSlide: cleanTargetQ.sourcePageOrSlide,
+          text: cleanTargetQ.sourceChunkText,
+          tokenCount: Math.ceil(cleanTargetQ.sourceChunkText.length / 4),
+        });
+      }
+      if (sourceKit.questions && sourceKit.questions.length > 0) {
+        sourceKit.questions.forEach((q, idx) => {
+          if (q.sourceChunkText) {
+            addChunkSafely({
+              id: q.sourceChunkId || `q-chunk-${idx}`,
+              chunkIndex: idx,
+              pageOrSlide: q.sourcePageOrSlide,
+              text: q.sourceChunkText,
+              tokenCount: Math.ceil(q.sourceChunkText.length / 4),
+            });
+          }
+        });
+      }
+      // Solo usar la guía generada como recurso extremo si no existe ningún fragmento del material fuente original
+      if (chunkPool.length === 0 && sourceKit.studyGuideMarkdown && sourceKit.studyGuideMarkdown.length > 100) {
+        try {
+          chunkDocument(sourceKit.studyGuideMarkdown).forEach(addChunkSafely);
+        } catch {}
+      }
+
+      // Respetar el tipo completo de la pregunta para no limitar multi-select / matching / drag-drop a una sola cadena
+      let overrideAnswers: string[] | undefined = undefined;
+      if (resolvedType === 'multiple-choice' && preferredAnswerText && preferredAnswerText.trim().length > 0) {
+        overrideAnswers = [preferredAnswerText.trim()];
+      } else if (
+        resolvedType === 'multi-select' &&
+        (!Array.isArray(cleanTargetQ.correctIndices) || cleanTargetQ.correctIndices.length <= 1) &&
+        preferredAnswerText &&
+        preferredAnswerText.trim().length > 0
+      ) {
+        overrideAnswers = preferredAnswerText.split(',').map(s => s.trim()).filter(Boolean);
+      }
+
+      const evidences = resolveQuestionRagEvidences({
+        question: cleanTargetQ,
+        chunks: chunkPool,
+        assets: sourceKit.assets || [],
+        overrideAnswers,
       });
-    }
-    if (kit.questions && kit.questions.length > 0) {
-      kit.questions.forEach((q, idx) => {
-        if (q.sourceChunkText) {
-          addChunkSafely({
-            id: q.sourceChunkId || `q-chunk-${idx}`,
-            chunkIndex: idx,
-            pageOrSlide: q.sourcePageOrSlide,
-            text: q.sourceChunkText,
-            tokenCount: Math.ceil(q.sourceChunkText.length / 4),
-          });
-        }
-      });
-    }
-    // Solo usar la guía generada como recurso extremo si no existe ningún fragmento del material fuente original
-    if (chunkPool.length === 0 && kit.studyGuideMarkdown && kit.studyGuideMarkdown.length > 100) {
-      try {
-        chunkDocument(kit.studyGuideMarkdown).forEach(addChunkSafely);
-      } catch {}
-    }
 
-    // Respetar el tipo completo de la pregunta para no limitar multi-select / matching / drag-drop a una sola cadena
-    let overrideAnswers: string[] | undefined = undefined;
-    if (resolvedType === 'multiple-choice' && preferredAnswerText && preferredAnswerText.trim().length > 0) {
-      overrideAnswers = [preferredAnswerText.trim()];
-    } else if (
-      resolvedType === 'multi-select' &&
-      (!Array.isArray(targetQ.correctIndices) || targetQ.correctIndices.length <= 1) &&
-      preferredAnswerText &&
-      preferredAnswerText.trim().length > 0
-    ) {
-      overrideAnswers = preferredAnswerText.split(',').map(s => s.trim()).filter(Boolean);
-    }
+      const primary = evidences[0];
+      const resolvedPrimaryPage =
+        primary?.pageOrSlide ||
+        resolveRealPageNumber(
+          primary?.text || cleanTargetQ.sourceChunkText,
+          primary?.excerpt || cleanTargetQ.sourceExcerpt,
+          cleanTargetQ.sourcePageOrSlide,
+          chunkPool
+        ) ||
+        1;
 
-    const evidences = resolveQuestionRagEvidences({
-      question: targetQ,
-      chunks: chunkPool,
-      assets: kit.assets || [],
-      overrideAnswers,
-    });
+      return {
+        id: primary?.chunkId || cleanTargetQ.sourceChunkId,
+        text: primary?.text || cleanTargetQ.sourceChunkText || cleanTargetQ.explanation || '',
+        excerpt: primary?.excerpt || cleanTargetQ.sourceExcerpt || '',
+        highlightedExcerpt: primary?.highlightedExcerpt || primary?.text || '',
+        questionText: cleanTargetQ.question,
+        correctAnswerText: preferredAnswerText || '',
+        topic: cleanTargetQ.topic,
+        pageOrSlide: resolvedPrimaryPage,
+        asset: primary?.asset || cleanTargetQ.sourceAsset,
+        matchQuality: primary?.matchQuality || 'low',
+        questionType: resolvedType,
+        evidences,
+      };
+    };
 
-    const primary = evidences[0];
-    const resolvedPrimaryPage =
-      primary?.pageOrSlide ||
-      resolveRealPageNumber(
-        primary?.text || targetQ.sourceChunkText,
-        primary?.excerpt || targetQ.sourceExcerpt,
-        targetQ.sourcePageOrSlide,
-        chunkPool
-      ) ||
-      1;
-
-    setModalChunk({
-      id: primary?.chunkId || targetQ.sourceChunkId,
-      text: primary?.text || targetQ.sourceChunkText || targetQ.explanation || '',
-      excerpt: primary?.excerpt || targetQ.sourceExcerpt || '',
-      highlightedExcerpt: primary?.highlightedExcerpt || primary?.text || '',
-      questionText: targetQ.question,
-      correctAnswerText: preferredAnswerText || '',
-      topic: targetQ.topic,
-      pageOrSlide: resolvedPrimaryPage,
-      asset: primary?.asset || targetQ.sourceAsset,
-      matchQuality: primary?.matchQuality || 'low',
-      questionType: resolvedType,
-      evidences,
-    });
+    setModalChunk(buildModalPayload(kit));
     setShowSourceModal(true);
+
+    // Si en memoria aún no está el documento fuente completo (ej. fallback de localStorage), recuperarlo desde IndexedDB y recalcular
+    const maxMatLen = Math.max(0, ...(kit.sourceMaterials || []).map(m => m?.rawText?.length || 0));
+    const hasFullSourceInRam =
+      (kit.sourceText && kit.sourceText.length > 400) ||
+      maxMatLen > 400 ||
+      (kit.chunks && kit.chunks.length > 3);
+
+    if (!hasFullSourceInRam) {
+      authService
+        .restoreUserKitsAsync(userId || null)
+        .then(recovered => {
+          if (ragModalRequestIdRef.current !== requestId) return;
+          const fullKit = recovered.find(k => k.id === kit.id);
+          if (!fullKit) return;
+          const fullMatLen = Math.max(0, ...(fullKit.sourceMaterials || []).map(m => m?.rawText?.length || 0));
+          const hasBetterSource =
+            (fullKit.sourceText?.length || 0) > (kit.sourceText?.length || 0) ||
+            fullMatLen > maxMatLen ||
+            (fullKit.chunks?.length || 0) > (kit.chunks?.length || 0);
+          if (hasBetterSource) {
+            setModalChunk(buildModalPayload(fullKit));
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   // ── Calibración Pedagógica & Preguntas Dirigidas (Tuerca) ───────────────
@@ -5152,7 +5201,8 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                   {evidenceItems.map((ev, idx) => {
                     const raw = ev.highlightedExcerpt || ev.excerpt || ev.text || '';
                     let clean = raw
-                      .replace(/\[(?:Página|Diapositiva)\s+\d+\]\s*/gi, '')
+                      .replace(/\[(?:Página|P[aá]g\.?|Diapositiva|Diap\.?|Slide)\s+\d+\]\s*/gi, '')
+                      .replace(/(?<!\[)\b\d{1,3}\](?=\s|$)/g, '')
                       .replace(/(\*{1,2}|_{1,2})#{1,6}\s*/g, (_m, p1) => p1)
                       .replace(/(?:^|\n|\r)\s*#{1,6}\s*/g, (m) => (m.includes('\n') ? '\n\n' : ''))
                       .replace(/#{1,6}\s*/g, '')

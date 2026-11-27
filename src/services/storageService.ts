@@ -671,13 +671,18 @@ export function buildLocalStorageKitsSnapshot(
 export function stripAssetDataUrlsFromKit(kit: StudyKit, isActiveKit?: boolean | unknown): StudyKit {
   if (!kit) return kit;
   const isTargetActive = typeof isActiveKit === 'boolean' ? isActiveKit : false;
+  const MAX_INACTIVE_TEXT = 600000;
   return {
     ...kit,
-    sourceText: isTargetActive ? kit.sourceText : (kit.sourceText && kit.sourceText.length > 300 ? kit.sourceText.slice(0, 300) : kit.sourceText),
+    // Conservar sourceText y sourceMaterials completos en RAM salvo textos gigantes (>600KB) en kits inactivos,
+    // evitando que abrir un kit o cambiar entre kits trunque las páginas reales necesarias para RAG.
+    sourceText: isTargetActive
+      ? kit.sourceText
+      : (kit.sourceText && kit.sourceText.length > MAX_INACTIVE_TEXT ? kit.sourceText.slice(0, MAX_INACTIVE_TEXT) : kit.sourceText),
     sourceMaterials: Array.isArray(kit.sourceMaterials)
       ? kit.sourceMaterials.map(m => {
-          if (m && m.rawText && !isTargetActive && m.rawText.length > 300) {
-            return { ...m, rawText: m.rawText.slice(0, 300) };
+          if (m && m.rawText && !isTargetActive && m.rawText.length > MAX_INACTIVE_TEXT) {
+            return { ...m, rawText: m.rawText.slice(0, MAX_INACTIVE_TEXT) };
           }
           return m;
         })
