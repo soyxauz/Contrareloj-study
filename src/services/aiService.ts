@@ -4,7 +4,7 @@ import { safeLocalStorageSetItem } from './storageService';
 import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
 import { filterCompliantQuestions, isQuestionCompliantWithStandard, repairQuestionStructure } from '../utils/questionValidator';
 import { extractCleanTokens } from '../engine/topicInterleaving';
-import { findBestChunkAndExcerpt, resolveRealPageNumber } from '../engine/ragExcerptExtractor';
+import { resolveQuestionRagEvidences } from '../engine/ragExcerptExtractor';
 import {
   computePodcastLengthPlan,
   buildPodcastActPrompts,
@@ -3445,6 +3445,61 @@ export function partitionDocumentIntoSections(
 }
 
 /**
+ * Construye una síntesis de respuesta correcta representativa para cualquier formato
+ * (usada por la ficha explicativa y resumen de búsqueda) y enlaza evidencias RAG por tipo/par.
+ */
+function buildFormatAwareAnswerSummary(params: {
+  qType: Question['type'];
+  options: string[];
+  correctIndex: number;
+  correctIndices?: number[];
+  matchingPairs?: { term: string; definition: string }[];
+  templateSentence?: string;
+  blanksCorrect?: string[];
+  rawCorrectFlag?: any;
+}): string {
+  const { qType, options, correctIndex, correctIndices, matchingPairs, templateSentence, blanksCorrect, rawCorrectFlag } = params;
+  if (qType === 'true-false') {
+    return rawCorrectFlag === 'B' || correctIndex === 1 ? 'Falso' : 'Verdadero';
+  }
+  if (qType === 'matching' && Array.isArray(matchingPairs) && matchingPairs.length > 0) {
+    return matchingPairs.map(pair => `${pair.term}: ${pair.definition}`).join(' | ');
+  }
+  if (qType === 'drag-drop' && Array.isArray(blanksCorrect) && blanksCorrect.length > 0) {
+    let sentence = templateSentence || '';
+    blanksCorrect.forEach((b, i) => {
+      sentence = sentence.replace(new RegExp(`\\{${i}\\}`, 'g'), b);
+    });
+    return sentence || blanksCorrect.join(', ');
+  }
+  if (qType === 'multi-select' && Array.isArray(correctIndices) && correctIndices.length > 0) {
+    return correctIndices.map(i => options[i]).filter(Boolean).join(', ');
+  }
+  return options[correctIndex] || '';
+}
+
+function bindQuestionRagMetadata(q: Question, chunks?: DocumentChunk[]): Question {
+  const repaired = repairQuestionStructure(q);
+  if (!chunks || chunks.length === 0) return repaired;
+
+  const evidences = resolveQuestionRagEvidences({
+    question: repaired,
+    chunks,
+  });
+
+  if (evidences.length === 0) return repaired;
+  const primary = evidences[0];
+  return {
+    ...repaired,
+    ragEvidences: evidences,
+    sourceChunkId: primary.chunkId || repaired.sourceChunkId,
+    sourceChunkText: primary.text || repaired.sourceChunkText,
+    sourcePageOrSlide: primary.pageOrSlide || repaired.sourcePageOrSlide,
+    sourceExcerpt: !repaired.sourceExcerpt || primary.matchQuality === 'high' ? primary.excerpt : repaired.sourceExcerpt,
+  };
+}
+
+/**
  * Motor de Inteligencia Pedagógica ContraReloj Study
  * FASE 1: Análisis profundo del texto (disciplina, naturaleza, anclaje y limpieza).
  * FASE 2: Preguntas de alta calidad con sentido lógico, contexto, distractores inteligentes y retroalimentación trifásica.
@@ -3864,8 +3919,29 @@ Genera el JSON completo respetando la estructura exigida:`;
 
       fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-      const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
-      let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
+      const matchingPairs = Array.isArray(p.pares_emparejamiento)
+        ? p.pares_emparejamiento.map((pair: any) => ({
+            term: String(pair.termino || pair.term || 'Concepto').trim(),
+            definition: String(pair.definicion || pair.definition || 'Definición').trim()
+          }))
+        : undefined;
+
+      const correctIndices = Array.isArray(p.indices_correctos)
+        ? parseCorrectIndices(p.indices_correctos, optionsArray)
+        : undefined;
+
+      const correctAnswerString = buildFormatAwareAnswerSummary({
+        qType,
+        options: finalOptions,
+        correctIndex: finalCorrectIndex,
+        correctIndices,
+        matchingPairs,
+        templateSentence,
+        blanksCorrect,
+        rawCorrectFlag: p.respuesta_correcta,
+      });
+
+      const sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
         ? p.cita_textual_exacta.trim()
         : undefined;
 
@@ -3887,63 +3963,27 @@ Genera el JSON completo respetando la estructura exigida:`;
         type: qType,
       });
 
-      // RAG Traceability linkage de alta especificidad
-      let sourceChunkId = p.chunk_id_origen || undefined;
-      let sourceChunkText: string | undefined = undefined;
-      let sourcePageOrSlide: number | undefined = undefined;
-
-      if (chunks && chunks.length > 0) {
-        const { bestChunk, passage } = findBestChunkAndExcerpt({
-          chunks,
-          question: fullQuestion,
-          correctAnswer: correctAnswerString,
-          concept: String(p.concepto_evaluado || topicFallback).trim(),
-          preferredChunkId: p.chunk_id_origen,
-          exactCitation: sourceExcerpt,
-        });
-
-        if (bestChunk) {
-          sourceChunkId = bestChunk.id;
-          sourceChunkText = bestChunk.text;
-          sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || sourceExcerpt, bestChunk.pageOrSlide);
-          if (!sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
-            sourceExcerpt = passage.excerpt;
-          }
-        }
-      }
-
-      // Estructuras especializadas por tipo interactivo
-      const matchingPairs = Array.isArray(p.pares_emparejamiento)
-        ? p.pares_emparejamiento.map((pair: any) => ({
-            term: String(pair.termino || pair.term || 'Concepto').trim(),
-            definition: String(pair.definicion || pair.definition || 'Definición').trim()
-          }))
-        : undefined;
-
-      const correctIndices = Array.isArray(p.indices_correctos)
-        ? parseCorrectIndices(p.indices_correctos, optionsArray)
-        : undefined;
-
-      return repairQuestionStructure({
-        id: `q-pedagogical-${difficulty}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-        type: qType,
-        difficulty,
-        topic: String(p.concepto_evaluado || topicFallback).trim(),
-        question: fullQuestion || 'Pregunta pedagógica de evaluación.',
-        options: qType === 'true-false' ? ['Verdadero', 'Falso'] : finalOptions,
-        correctIndex: finalCorrectIndex,
-        correctIndices,
-        matchingPairs,
-        templateSentence,
-        blanksCorrect,
-        wordBank,
-        explanation,
-        googleOverview,
-        sourceChunkId,
-        sourceChunkText,
-        sourceExcerpt,
-        sourcePageOrSlide,
-      });
+      return bindQuestionRagMetadata(
+        {
+          id: `q-pedagogical-${difficulty}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          type: qType,
+          difficulty,
+          topic: String(p.concepto_evaluado || topicFallback).trim(),
+          question: fullQuestion || 'Pregunta pedagógica de evaluación.',
+          options: qType === 'true-false' ? ['Verdadero', 'Falso'] : finalOptions,
+          correctIndex: finalCorrectIndex,
+          correctIndices,
+          matchingPairs,
+          templateSentence,
+          blanksCorrect,
+          wordBank,
+          explanation,
+          googleOverview,
+          sourceChunkId: p.chunk_id_origen || undefined,
+          sourceExcerpt,
+        },
+        chunks
+      );
     });
 
     // Barajado aleatorio (Fisher-Yates) para que el orden de generación de la IA sea impredecible y no comience siempre igual
@@ -6391,8 +6431,29 @@ Genera exactamente ${batchCount} preguntas en formato JSON estricto:`;
 
           fullQuestion = enforceQuestionLengthLimit(fullQuestion, isCase);
 
-          const correctAnswerString = (qType === 'true-false' ? (p.respuesta_correcta === 'B' ? 'Falso' : 'Verdadero') : finalOptions[finalCorrectIndex]) || '';
-          let sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
+          const matchingPairs = Array.isArray(p.pares_emparejamiento)
+            ? p.pares_emparejamiento.map((pair: any) => ({
+                term: String(pair.termino || pair.term || 'Concepto').trim(),
+                definition: String(pair.definicion || pair.definition || 'Definición').trim()
+              }))
+            : undefined;
+
+          const correctIndices = Array.isArray(p.indices_correctos)
+            ? parseCorrectIndices(p.indices_correctos, optionsArray)
+            : undefined;
+
+          const correctAnswerString = buildFormatAwareAnswerSummary({
+            qType,
+            options: finalOptions,
+            correctIndex: finalCorrectIndex,
+            correctIndices,
+            matchingPairs,
+            templateSentence,
+            blanksCorrect,
+            rawCorrectFlag: p.respuesta_correcta,
+          });
+
+          const sourceExcerpt: string | undefined = typeof p.cita_textual_exacta === 'string' && p.cita_textual_exacta.trim().length >= 10
             ? p.cita_textual_exacta.trim()
             : undefined;
 
@@ -6414,63 +6475,28 @@ Genera exactamente ${batchCount} preguntas en formato JSON estricto:`;
             type: qType,
           });
 
-          let sourceChunkId = p.chunk_id_origen || undefined;
-          let sourceChunkText: string | undefined = undefined;
-          let sourcePageOrSlide: number | undefined = undefined;
+          const repairedQ = bindQuestionRagMetadata(
+            {
+              id: `q-calibrated-lvl${level}-${Date.now()}-${collectedQuestions.length}-${Math.random().toString(36).slice(2, 6)}`,
+              type: qType,
+              difficulty,
+              topic: String(p.concepto_evaluado || defaultTopic).trim(),
+              question: fullQuestion || 'Pregunta calibrada de alta exigencia.',
+              options: qType === 'true-false' ? ['Verdadero', 'Falso'] : finalOptions,
+              correctIndex: finalCorrectIndex,
+              correctIndices,
+              matchingPairs,
+              templateSentence,
+              blanksCorrect,
+              wordBank,
+              explanation,
+              googleOverview,
+              sourceChunkId: p.chunk_id_origen || undefined,
+              sourceExcerpt,
+            },
+            chunks
+          );
 
-          if (chunks && chunks.length > 0) {
-            const { bestChunk, passage } = findBestChunkAndExcerpt({
-              chunks,
-              question: fullQuestion,
-              correctAnswer: correctAnswerString,
-              concept: String(p.concepto_evaluado || defaultTopic).trim(),
-              preferredChunkId: p.chunk_id_origen,
-              exactCitation: sourceExcerpt,
-            });
-
-            if (bestChunk) {
-              sourceChunkId = bestChunk.id;
-              sourceChunkText = bestChunk.text;
-              sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || sourceExcerpt, bestChunk.pageOrSlide);
-              if (!sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
-                sourceExcerpt = passage.excerpt;
-              }
-            }
-          }
-
-          const matchingPairs = Array.isArray(p.pares_emparejamiento)
-            ? p.pares_emparejamiento.map((pair: any) => ({
-                term: String(pair.termino || pair.term || 'Concepto').trim(),
-                definition: String(pair.definicion || pair.definition || 'Definición').trim()
-              }))
-            : undefined;
-
-          const correctIndices = Array.isArray(p.indices_correctos)
-            ? parseCorrectIndices(p.indices_correctos, optionsArray)
-            : undefined;
-
-          const candidateQ: Question = {
-            id: `q-calibrated-lvl${level}-${Date.now()}-${collectedQuestions.length}-${Math.random().toString(36).slice(2, 6)}`,
-            type: qType,
-            difficulty,
-            topic: String(p.concepto_evaluado || defaultTopic).trim(),
-            question: fullQuestion || 'Pregunta calibrada de alta exigencia.',
-            options: qType === 'true-false' ? ['Verdadero', 'Falso'] : finalOptions,
-            correctIndex: finalCorrectIndex,
-            correctIndices,
-            matchingPairs,
-            templateSentence,
-            blanksCorrect,
-            wordBank,
-            explanation,
-            googleOverview,
-            sourceChunkId,
-            sourceChunkText,
-            sourceExcerpt,
-            sourcePageOrSlide,
-          };
-
-          const repairedQ = repairQuestionStructure(candidateQ);
           if (isQuestionCompliantWithStandard(repairedQ)) {
             collectedQuestions.push(repairedQ);
           }

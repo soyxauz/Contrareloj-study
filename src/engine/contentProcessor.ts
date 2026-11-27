@@ -7,7 +7,7 @@ import {
 import { detectDocumentLanguage } from '../services/languageService';
 import { chunkDocument } from './chunker';
 import { LocalVectorStore } from './vectorStore';
-import { findBestChunkAndExcerpt, resolveRealPageNumber } from './ragExcerptExtractor';
+import { resolveQuestionRagEvidences } from './ragExcerptExtractor';
 import { analyzeCanvasContent, IMAGE_FILTER_CONFIG } from '../utils/imageClassifier';
 import { filterCompliantQuestions } from '../utils/questionValidator';
 import JSZip from 'jszip';
@@ -1027,6 +1027,53 @@ export interface ProcessedContent {
   };
 }
 
+/**
+ * Enlaza cada pregunta (de cualquier formato: MC, V/F, matching, drag-drop, multi-select, abierta)
+ * con sus párrafos específicos, página exacta y activos multimodales pertinentes.
+ */
+function attachQuestionRagMetadata(
+  q: Question,
+  chunks: import('../types').DocumentChunk[],
+  assets: DocumentAsset[] = []
+): void {
+  if (!chunks || chunks.length === 0) return;
+
+  const evidences = resolveQuestionRagEvidences({
+    question: q,
+    chunks,
+    assets,
+  });
+
+  if (evidences.length > 0) {
+    const primary = evidences[0];
+    q.ragEvidences = evidences;
+    q.sourceChunkId = primary.chunkId;
+    q.sourceChunkText = primary.text;
+    q.sourcePageOrSlide = primary.pageOrSlide;
+    if (!q.sourceExcerpt || primary.matchQuality === 'high') {
+      q.sourceExcerpt = primary.excerpt;
+    }
+
+    if (!q.sourceAsset && assets.length > 0 && primary.chunkId) {
+      const targetChunk = chunks.find(c => c.id === primary.chunkId);
+      if (targetChunk?.assetIds && targetChunk.assetIds.length > 0) {
+        const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test(
+          (q.question || '') + ' ' + (q.explanation || '')
+        );
+        if (needsVisual) {
+          const matchingAsset = assets.find(
+            a =>
+              targetChunk.assetIds!.includes(a.id) &&
+              (a as any).type !== 'page' &&
+              !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || '')
+          );
+          if (matchingAsset) q.sourceAsset = matchingAsset;
+        }
+      }
+    }
+  }
+}
+
 export function processContent(
   rawText: string,
   title: string,
@@ -1055,29 +1102,7 @@ export function processContent(
 
   // Vincular cada pregunta a su fragmento de origen (RAG) de alta especificidad y activo multimodal
   for (const q of questions) {
-    const correctAnswerString = (q.options && q.correctIndex !== undefined ? q.options[q.correctIndex] : '') || '';
-    const { bestChunk, passage } = findBestChunkAndExcerpt({
-      chunks,
-      question: q.question,
-      correctAnswer: correctAnswerString,
-      concept: q.topic,
-      preferredChunkId: q.sourceChunkId,
-      exactCitation: q.sourceExcerpt,
-    });
-
-    if (bestChunk) {
-      q.sourceChunkId = bestChunk.id;
-      q.sourceChunkText = bestChunk.text;
-      q.sourceExcerpt = q.sourceExcerpt || passage.excerpt;
-      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || q.sourceExcerpt, bestChunk.pageOrSlide);
-      if (bestChunk.assetIds && bestChunk.assetIds.length > 0) {
-        const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
-        if (needsVisual) {
-          const matchingAsset = assets.find(a => bestChunk.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
-          if (matchingAsset) q.sourceAsset = matchingAsset;
-        }
-      }
-    }
+    attachQuestionRagMetadata(q, chunks, assets);
   }
 
   const kit: StudyKit = {
@@ -1188,39 +1213,9 @@ export async function processContentAsync(
     );
   }
 
-  // Vincular RAG de alta especificidad y activos multimodales a las preguntas de IA
+  // Vincular RAG de alta especificidad y activos multimodales a las preguntas de IA (soporte multi-formato completo)
   for (let idx = 0; idx < aiQuestions.length; idx++) {
-    const q = aiQuestions[idx];
-    const correctAnswerString = (q.options && q.correctIndex !== undefined ? q.options[q.correctIndex] : '') || '';
-    const { bestChunk, passage } = findBestChunkAndExcerpt({
-      chunks,
-      question: q.question,
-      correctAnswer: correctAnswerString,
-      concept: q.topic,
-      preferredChunkId: q.sourceChunkId,
-      exactCitation: q.sourceExcerpt,
-    });
-
-    if (bestChunk) {
-      // Si se identificó un chunk de mayor precisión textual o la pregunta no tenía texto de origen válido, vincular el mejor chunk
-      q.sourceChunkId = bestChunk.id;
-      q.sourceChunkText = bestChunk.text;
-      q.sourcePageOrSlide = resolveRealPageNumber(bestChunk.text, passage.excerpt || q.sourceExcerpt, bestChunk.pageOrSlide);
-      if (!q.sourceExcerpt || passage.matchQuality === 'high' || (passage.score >= 25.0 && passage.excerpt.length >= 15)) {
-        q.sourceExcerpt = passage.excerpt;
-      }
-
-      if (!q.sourceAsset && assets.length > 0) {
-        const targetChunk = chunks.find(c => c.id === q.sourceChunkId) || bestChunk;
-        if (targetChunk.assetIds && targetChunk.assetIds.length > 0) {
-          const needsVisual = /\b(seg[uú]n el esquema|en la figura|observa la imagen|en el gr[aá]fico|diagrama adjunto|tabla adjunta|en la tabla|en la imagen|como se muestra en la figura|ilustrado en el esquema)\b/i.test((q.question || '') + ' ' + (q.explanation || ''));
-          if (needsVisual) {
-            const matchingAsset = assets.find(a => targetChunk.assetIds!.includes(a.id) && (a as any).type !== 'page' && !/cap[ií]tulo|p[aá]g|secci[oó]n|texto|documento/i.test(a.caption || ''));
-            if (matchingAsset) q.sourceAsset = matchingAsset;
-          }
-        }
-      }
-    }
+    attachQuestionRagMetadata(aiQuestions[idx], chunks, assets);
   }
 
   // Barajado aleatorio para garantizar variedad impredecible desde la primera pregunta
@@ -1644,8 +1639,9 @@ async function extractContentFromPDF(file: File): Promise<{ text: string; assets
             for (const item of textContent.items as any[]) {
               if (!item.str) continue;
               if (lastY !== null && Math.abs(item.transform[5] - lastY) > 8) {
-                pageStr += '\n';
-              } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !item.str.startsWith(' ')) {
+                const dy = Math.abs(item.transform[5] - lastY);
+                pageStr += dy > 21 ? '\n\n' : '\n';
+              } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !pageStr.endsWith('\n') && !item.str.startsWith(' ')) {
                 pageStr += ' ';
               }
               pageStr += item.str;
@@ -1952,18 +1948,34 @@ async function extractTextFromDocx(file: File): Promise<{ text: string; assets: 
       } catch {}
     }
 
-    // Recorrer párrafos y tablas capturando contexto cercano a imágenes
+    // Recorrer párrafos y tablas capturando contexto cercano a imágenes y saltos de página reales de Word
     const children = Array.from(body.childNodes);
     const imageContextMap = new Map<string, string>();
+    let currentDocxPage = 1;
+    let hasDetectedDocxPageBreaks = false;
 
     for (const node of children) {
       const nodeName = node.nodeName.toLowerCase();
       if (nodeName.endsWith(':p') || nodeName === 'p') {
-        const textNodes = Array.from((node as Element).getElementsByTagName('w:t'));
+        const el = node as Element;
+        const hasRenderedBreak = el.getElementsByTagName('w:lastRenderedPageBreak').length > 0;
+        const hasExplicitBreak = Array.from(el.getElementsByTagName('w:br')).some(
+          b => b.getAttribute('w:type') === 'page'
+        );
+        if (hasRenderedBreak || hasExplicitBreak) {
+          if (!hasDetectedDocxPageBreaks && extractedBlocks.length > 0) {
+            extractedBlocks.unshift('[Página 1]');
+          }
+          hasDetectedDocxPageBreaks = true;
+          currentDocxPage++;
+          extractedBlocks.push(`[Página ${currentDocxPage}]`);
+        }
+
+        const textNodes = Array.from(el.getElementsByTagName('w:t'));
         const paragraphText = textNodes.map(t => t.textContent || '').join('').trim();
         if (paragraphText) extractedBlocks.push(paragraphText);
 
-        const blips = Array.from((node as Element).getElementsByTagName('a:blip'));
+        const blips = Array.from(el.getElementsByTagName('a:blip'));
         for (const blip of blips) {
           const embedId = blip.getAttribute('r:embed') || blip.getAttribute('r:link');
           if (embedId && relsMap.has(embedId)) {
@@ -3201,7 +3213,16 @@ export function generateKitQuestions(kit: StudyKit, count: number = 20): Questio
     }
   }
 
-  return filterCompliantQuestions(uniqueQuestions.sort(() => Math.random() - 0.5));
+  const compliant = filterCompliantQuestions(uniqueQuestions.sort(() => Math.random() - 0.5));
+  const kitChunks = kit.chunks && kit.chunks.length > 0
+    ? kit.chunks
+    : (cleanText.length >= 60 ? chunkDocument(cleanText, kit.assets || []) : []);
+  if (kitChunks.length > 0) {
+    for (const q of compliant) {
+      attachQuestionRagMetadata(q, kitChunks, kit.assets || []);
+    }
+  }
+  return compliant;
 }
 
 

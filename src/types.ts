@@ -53,6 +53,21 @@ export interface ParsedDocument {
   };
 }
 
+export interface RagEvidenceItem {
+  id?: string;
+  label?: string;
+  term?: string;
+  definition?: string;
+  chunkId?: string;
+  heading?: string;
+  text: string;
+  excerpt: string;
+  highlightedExcerpt: string;
+  pageOrSlide: number;
+  matchQuality: 'high' | 'medium' | 'low';
+  asset?: DocumentAsset;
+}
+
 export interface Question {
   id: string;
   type?: QuestionType; // Defaults to 'multiple-choice' if undefined
@@ -93,6 +108,7 @@ export interface Question {
   sourceExcerpt?: string;
   sourcePageOrSlide?: number;
   sourceAsset?: DocumentAsset;
+  ragEvidences?: RagEvidenceItem[];
 
   // Socratic Reformulation & Active Recall
   isSocraticReformulation?: boolean;

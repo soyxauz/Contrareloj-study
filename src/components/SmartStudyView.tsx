@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import type { StudyKit, Question, StudyMode, DocumentAsset, DocumentChunk, ShortAnswerEvaluation, SmartStudyTypeFilters } from '../types';
+import type { StudyKit, Question, QuestionType, StudyMode, DocumentAsset, DocumentChunk, ShortAnswerEvaluation, SmartStudyTypeFilters, RagEvidenceItem } from '../types';
 import { authService } from '../services/authService';
 import { googleDriveService } from '../services/googleDriveService';
 import { getAssetById, safeLocalStorageSetItem } from '../services/storageService';
@@ -44,7 +44,7 @@ import {
   Share2,
   RefreshCw,
 } from 'lucide-react';
-import { findBestChunkAndExcerpt, extractSpecificPassage, resolveRealPageNumber, extractMeaningfulTokens } from '../engine/ragExcerptExtractor';
+import { resolveRealPageNumber, resolveQuestionRagEvidences } from '../engine/ragExcerptExtractor';
 import { chunkDocument } from '../engine/chunker';
 import { generateKitQuestions } from '../engine/contentProcessor';
 import { ImageZoomModal } from './ImageZoomModal';
@@ -154,6 +154,85 @@ export interface StudyHistoryItem {
   timestampEpoch?: number;
   attemptNumber?: number;
   level: number;
+  questionSnapshot?: Question;
+}
+
+/**
+ * Recupera o reconstruye con fidelidad una pregunta del historial (incluyendo su formato real:
+ * matching, multi-select, drag-drop, true-false) para evitar perder tarjetas multi-fragmento tras recalibrar el kit.
+ */
+function resolveHistoryQuestionForModal(item: StudyHistoryItem, kitQuestions: Question[]): Question {
+  const cleanQId = (item.questionId || '').replace(/^(tf-|sa-|mc-|dd-|drag-drop-)/, '');
+  const liveMatch = kitQuestions.find(q => q.id === item.questionId || q.id === cleanQId);
+  if (liveMatch) return liveMatch;
+  if (item.questionSnapshot) return item.questionSnapshot;
+
+  const inferredType = ((item.type as QuestionType) || 'multiple-choice');
+  const baseQ: Question = {
+    id: item.questionId,
+    type: inferredType,
+    question: item.questionText || 'Concepto evaluado',
+    difficulty: item.difficulty || 'easy',
+    topic: item.topic || 'General',
+    explanation: item.explanation || 'Respuesta fundamentada en el material de estudio analizado.',
+  };
+
+  if (inferredType === 'true-false') {
+    const isFalse = /\bfalso\b/i.test(item.correctAnswer || '');
+    return {
+      ...baseQ,
+      options: ['Verdadero', 'Falso'],
+      correctIndex: isFalse ? 1 : 0,
+    };
+  }
+
+  if (inferredType === 'matching' && item.explanation) {
+    const extractedPairs: Array<{ term: string; definition: string }> = [];
+    const lines = item.explanation
+      .split(/\n+/)
+      .map(l => l.replace(/^(?:>\s*[•\-*]?|\s*[•\-*])\s*/, '').trim())
+      .filter(l => l.length >= 15 && !/^###\s*b[uú]squeda/i.test(l) && !/^correspondencias/i.test(l));
+
+    for (const line of lines) {
+      const cleanLine = line.replace(/\*\*/g, '').trim();
+      const colonM = cleanLine.match(/^([^:]{2,45}):\s+(.{8,})$/);
+      if (colonM) {
+        const termCand = colonM[1].trim();
+        if (!/^(?:fundamento|mecanismo|diferenciaci[oó]n|referencia|respuesta)/i.test(termCand)) {
+          extractedPairs.push({ term: termCand, definition: colonM[2].trim() });
+          continue;
+        }
+      }
+      const verbM = cleanLine.match(
+        /^(?:El|La|Los|Las)?\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñ0-9\s\-]{2,42}?)\s+(?:se caracteriza por|se debe a|corresponde a|presenta|act[uú]a|inhibe|estimula|reduce|es un[a]?)\s+(.{8,})$/
+      );
+      if (verbM) {
+        extractedPairs.push({ term: verbM[1].trim(), definition: verbM[2].trim() });
+      }
+    }
+
+    if (extractedPairs.length >= 2) {
+      return {
+        ...baseQ,
+        matchingPairs: extractedPairs.slice(0, 4),
+      };
+    }
+  }
+
+  if (inferredType === 'drag-drop') {
+    const cleanedCorrect = (item.correctAnswer || '').replace(/\[\d+\]\s*/g, '').trim();
+    return {
+      ...baseQ,
+      templateSentence: cleanedCorrect || item.questionText,
+      blanksCorrect: cleanedCorrect ? cleanedCorrect.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [],
+    };
+  }
+
+  return {
+    ...baseQ,
+    options: [item.correctAnswer || 'Respuesta verificada'],
+    correctIndex: 0,
+  };
 }
 
 interface SmartStudyViewProps {
@@ -528,41 +607,53 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
     pageOrSlide?: number;
     asset?: any;
     matchQuality?: 'high' | 'medium' | 'low';
+    questionType?: QuestionType;
+    evidences?: RagEvidenceItem[];
   } | null>(null);
   const [zoomAsset, setZoomAsset] = useState<DocumentAsset | null>(null);
   const [generateMoreError, setGenerateMoreError] = useState<string>('');
 
   const handleOpenRAGModal = (targetQ: Question, preferredAnswerText?: string) => {
-    const rawAnswerText = preferredAnswerText || (targetQ.options && targetQ.correctIndex !== undefined ? targetQ.options[targetQ.correctIndex] : '') || '';
-    
-    // Obtener fragmentos disponibles de todas las fuentes disponibles del kit (incluyendo sourceMaterials, sourceText, otras preguntas y guía de estudio)
+    const resolvedType: QuestionType = targetQ.type || 'multiple-choice';
+
+    // Priorizar el texto original real del documento (sourceMaterials y sourceText con párrafos y páginas intactas)
+    // EXCLUYENDO studyGuideMarkdown para evitar pérdida o desfase de páginas reales en kits guardados.
     const chunkPool: DocumentChunk[] = [];
     const seenTexts = new Set<string>();
 
     const addChunkSafely = (chunk: DocumentChunk) => {
       if (!chunk || !chunk.text || chunk.text.trim().length < 20) return;
-      const normalizedPrefix = chunk.text.trim().slice(0, 100);
+      const normalizedPrefix = chunk.text.replace(/\s+/g, ' ').trim().slice(0, 110);
       if (seenTexts.has(normalizedPrefix)) return;
       seenTexts.add(normalizedPrefix);
       chunkPool.push(chunk);
     };
 
-    if (kit.chunks && kit.chunks.length > 0) {
-      kit.chunks.forEach(addChunkSafely);
-    }
     if (kit.sourceMaterials && Array.isArray(kit.sourceMaterials)) {
       for (const sm of kit.sourceMaterials) {
         if (sm && sm.rawText && sm.rawText.length > 50) {
           try {
-            chunkDocument(sm.rawText).forEach(addChunkSafely);
+            chunkDocument(sm.rawText, kit.assets || []).forEach(addChunkSafely);
           } catch {}
         }
       }
     }
     if (kit.sourceText && kit.sourceText.length > 50) {
       try {
-        chunkDocument(kit.sourceText).forEach(addChunkSafely);
+        chunkDocument(kit.sourceText, kit.assets || []).forEach(addChunkSafely);
       } catch {}
+    }
+    if (kit.chunks && kit.chunks.length > 0) {
+      kit.chunks.forEach(addChunkSafely);
+    }
+    if (targetQ.sourceChunkText) {
+      addChunkSafely({
+        id: targetQ.sourceChunkId || 'target-q-chunk',
+        chunkIndex: 0,
+        pageOrSlide: targetQ.sourcePageOrSlide,
+        text: targetQ.sourceChunkText,
+        tokenCount: Math.ceil(targetQ.sourceChunkText.length / 4),
+      });
     }
     if (kit.questions && kit.questions.length > 0) {
       kit.questions.forEach((q, idx) => {
@@ -577,102 +668,57 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
         }
       });
     }
-    if (kit.studyGuideMarkdown && kit.studyGuideMarkdown.length > 100) {
+    // Solo usar la guía generada como recurso extremo si no existe ningún fragmento del material fuente original
+    if (chunkPool.length === 0 && kit.studyGuideMarkdown && kit.studyGuideMarkdown.length > 100) {
       try {
         chunkDocument(kit.studyGuideMarkdown).forEach(addChunkSafely);
       } catch {}
     }
-    if (targetQ.sourceChunkText) {
-      addChunkSafely({
-        id: targetQ.sourceChunkId || 'target-q-chunk',
-        chunkIndex: 0,
-        pageOrSlide: targetQ.sourcePageOrSlide,
-        text: targetQ.sourceChunkText,
-        tokenCount: Math.ceil(targetQ.sourceChunkText.length / 4),
-      });
+
+    // Respetar el tipo completo de la pregunta para no limitar multi-select / matching / drag-drop a una sola cadena
+    let overrideAnswers: string[] | undefined = undefined;
+    if (resolvedType === 'multiple-choice' && preferredAnswerText && preferredAnswerText.trim().length > 0) {
+      overrideAnswers = [preferredAnswerText.trim()];
+    } else if (
+      resolvedType === 'multi-select' &&
+      (!Array.isArray(targetQ.correctIndices) || targetQ.correctIndices.length <= 1) &&
+      preferredAnswerText &&
+      preferredAnswerText.trim().length > 0
+    ) {
+      overrideAnswers = preferredAnswerText.split(',').map(s => s.trim()).filter(Boolean);
     }
 
-    // Buscar el chunk y pasaje con mayor especificidad semántica anclado en la respuesta correcta y la cita de la IA
-    const { bestChunk, passage } = findBestChunkAndExcerpt({
+    const evidences = resolveQuestionRagEvidences({
+      question: targetQ,
       chunks: chunkPool,
-      question: targetQ.question,
-      correctAnswer: rawAnswerText,
-      concept: targetQ.topic,
-      preferredChunkId: targetQ.sourceChunkId,
-      exactCitation: targetQ.sourceExcerpt,
+      assets: kit.assets || [],
+      overrideAnswers,
     });
 
-    const candidateChunk = bestChunk || chunkPool.find(c => c.id === targetQ.sourceChunkId);
-    let fullText = candidateChunk?.text || targetQ.sourceChunkText || targetQ.explanation || '';
-
-    let finalExcerpt = passage.excerpt;
-    let finalHighlighted = passage.highlightedExcerpt;
-    let quality = passage.matchQuality;
-
-    // Si la cita guardada en la pregunta es más específica o contiene la respuesta correcta directamente
-    if (targetQ.sourceExcerpt && targetQ.sourceExcerpt.length >= 15) {
-      const citTokens = extractMeaningfulTokens(targetQ.sourceExcerpt);
-      const ansTokens = extractMeaningfulTokens(rawAnswerText);
-      const hasAnswerInCitation = [...ansTokens].some(t => citTokens.has(t));
-      if (hasAnswerInCitation || quality === 'low') {
-        finalExcerpt = targetQ.sourceExcerpt;
-        finalHighlighted = `**${targetQ.sourceExcerpt.trim()}**`;
-        quality = 'high';
-      }
-    }
-
-    // Si el texto del fragmento no contenía la respuesta pero la explicación de la pregunta sí la detalla textualmente,
-    // utilizar la explicación como pasaje contextual complementario
-    if (quality === 'low' && targetQ.explanation && targetQ.explanation.length > 20) {
-      const expPassage = extractSpecificPassage({
-        fullText: targetQ.explanation,
-        question: targetQ.question,
-        correctAnswer: rawAnswerText,
-        concept: targetQ.topic,
-        exactCitation: targetQ.sourceExcerpt,
-      });
-      if (expPassage.score > passage.score) {
-        finalExcerpt = expPassage.excerpt;
-        finalHighlighted = expPassage.highlightedExcerpt;
-        fullText = targetQ.explanation;
-        quality = expPassage.matchQuality;
-      }
-    }
-
-    // Si el pasaje no tiene resaltado en negrita o se dispone de un sourceExcerpt más específico, asegurar que la zona clave esté destacada
-    if (!finalHighlighted || !finalHighlighted.includes('**')) {
-      const textToExtract = finalExcerpt || targetQ.sourceExcerpt || fullText;
-      const extracted = extractSpecificPassage({
-        fullText: textToExtract,
-        question: targetQ.question,
-        correctAnswer: rawAnswerText,
-        concept: targetQ.topic,
-        exactCitation: targetQ.sourceExcerpt,
-      });
-      finalExcerpt = extracted.excerpt || textToExtract;
-      finalHighlighted = extracted.highlightedExcerpt || (textToExtract ? `**${textToExtract.trim()}**` : '');
-      quality = extracted.matchQuality;
-    }
-
-    // Resolver la página exacta del documento de forma infalible
-    const resolvedPage = resolveRealPageNumber(
-      fullText,
-      finalExcerpt || targetQ.sourceExcerpt,
-      targetQ.sourcePageOrSlide || candidateChunk?.pageOrSlide,
-      chunkPool
-    );
+    const primary = evidences[0];
+    const resolvedPrimaryPage =
+      primary?.pageOrSlide ||
+      resolveRealPageNumber(
+        primary?.text || targetQ.sourceChunkText,
+        primary?.excerpt || targetQ.sourceExcerpt,
+        targetQ.sourcePageOrSlide,
+        chunkPool
+      ) ||
+      1;
 
     setModalChunk({
-      id: candidateChunk?.id || targetQ.sourceChunkId,
-      text: fullText,
-      excerpt: finalExcerpt || fullText.slice(0, 300),
-      highlightedExcerpt: finalHighlighted || (finalExcerpt ? `**${finalExcerpt}**` : fullText.slice(0, 300)),
+      id: primary?.chunkId || targetQ.sourceChunkId,
+      text: primary?.text || targetQ.sourceChunkText || targetQ.explanation || '',
+      excerpt: primary?.excerpt || targetQ.sourceExcerpt || '',
+      highlightedExcerpt: primary?.highlightedExcerpt || primary?.text || '',
       questionText: targetQ.question,
-      correctAnswerText: rawAnswerText,
+      correctAnswerText: preferredAnswerText || '',
       topic: targetQ.topic,
-      pageOrSlide: resolvedPage || 1,
-      asset: targetQ.sourceAsset || (candidateChunk?.assetIds?.length ? kit.assets?.find(a => candidateChunk.assetIds!.includes(a.id)) : undefined),
-      matchQuality: quality,
+      pageOrSlide: resolvedPrimaryPage,
+      asset: primary?.asset || targetQ.sourceAsset,
+      matchQuality: primary?.matchQuality || 'low',
+      questionType: resolvedType,
+      evidences,
     });
     setShowSourceModal(true);
   };
@@ -2681,6 +2727,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
       timestampEpoch: nowEpoch,
       attemptNumber: nextQuestionsAnsweredTotal,
       level,
+      questionSnapshot: { ...currentQ, type: qType },
     };
     const nextHistory = [historyItem, ...history].slice(0, 50);
     setHistory(nextHistory);
@@ -4044,16 +4091,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
 
                         {/* Explicación Pedagógica (solo una activa a la vez) */}
                         {isJustificationOpen && (() => {
-                    const cleanQId = (item.questionId || '').replace(/^(tf-|sa-|mc-|dd-|drag-drop-)/, '');
-                    const matchedQ: Question = kit.questions.find(q => q.id === item.questionId || q.id === cleanQId) || {
-                      id: item.questionId,
-                      question: item.questionText || 'Concepto evaluado',
-                      difficulty: item.difficulty || 'easy',
-                      topic: item.topic || 'General',
-                      explanation: item.explanation || 'Respuesta fundamentada en el material de estudio analizado.',
-                      options: [item.correctAnswer || 'Respuesta verificada'],
-                      correctIndex: 0,
-                    };
+                    const matchedQ: Question = resolveHistoryQuestionForModal(item, kit.questions);
 
                     const effectiveExplanation = item.explanation || matchedQ.explanation || 'Respuesta fundamentada en el material de estudio analizado.';
                     const explanationQuestion: Question = matchedQ.explanation
@@ -4427,7 +4465,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
                 <div className="flex items-center gap-2">
                   {currentQ.sourcePageOrSlide && (
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-thea-bg border border-thea-border text-slate-300 tabular-nums">
-                      Diapositiva / Pág. {resolveRealPageNumber(currentQ.sourceChunkText, currentQ.sourceExcerpt, currentQ.sourcePageOrSlide) || currentQ.sourcePageOrSlide}
+                      Diapositiva / Pág. {resolveRealPageNumber(currentQ.sourceChunkText, currentQ.sourceExcerpt, currentQ.sourcePageOrSlide, kit.chunks) || currentQ.sourcePageOrSlide}
                     </span>
                   )}
                   <button
@@ -5045,165 +5083,261 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           </div>
 
           {/* Modal Body */}
-          <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
-            {/* Metadata badges */}
-            <div className="flex items-center gap-2 flex-wrap text-xs">
-              <span className={`px-3 py-1 rounded-lg border font-medium tabular-nums ${
-                theme === 'dark'
-                  ? 'bg-thea-surfaceLight border-thea-border text-slate-300'
-                  : theme === 'kitty'
-                  ? 'bg-pink-50 border-pink-200 text-pink-800'
-                  : 'bg-slate-100 border-slate-200 text-slate-700'
-              }`}>
-                Fragmento: <strong>#{modalChunk.id || '1'}</strong>
-              </span>
-              <span className={`px-3 py-1 rounded-lg border font-medium tabular-nums ${
-                theme === 'dark'
-                  ? 'bg-violet-950/60 border-violet-500/40 text-violet-300'
-                  : theme === 'kitty'
-                  ? 'bg-pink-100 border-pink-200 text-pink-800'
-                  : 'bg-rose-50 border-rose-200 text-rose-800'
-              }`}>
-                Ubicación: <strong>Página o Diapositiva {modalChunk.pageOrSlide || 1}</strong>
-              </span>
-              {modalChunk.topic && (
-                <span className={`px-3 py-1 rounded-lg border font-medium truncate max-w-xs ${
-                  theme === 'dark'
-                    ? 'bg-thea-surfaceLight border-thea-border text-amber-300'
-                    : theme === 'kitty'
-                    ? 'bg-pink-50 border-pink-200 text-pink-700'
-                    : 'bg-slate-100 border-slate-200 text-slate-700'
-                }`}>
-                  Tema: <strong>{modalChunk.topic}</strong>
-                </span>
-              )}
-            </div>
+          {(() => {
+            const fallbackSingle: RagEvidenceItem = {
+              id: modalChunk.id,
+              chunkId: modalChunk.id,
+              text: modalChunk.text || '',
+              excerpt: modalChunk.excerpt || modalChunk.text || '',
+              highlightedExcerpt: modalChunk.highlightedExcerpt || modalChunk.excerpt || modalChunk.text || '',
+              pageOrSlide: modalChunk.pageOrSlide || 1,
+              matchQuality: modalChunk.matchQuality || 'low',
+              asset: modalChunk.asset,
+            };
+            const evidenceItems: RagEvidenceItem[] =
+              modalChunk.evidences && modalChunk.evidences.length > 0
+                ? modalChunk.evidences
+                : [fallbackSingle];
+            const uniquePages = Array.from(
+              new Set(evidenceItems.map(ev => ev.pageOrSlide).filter((p): p is number => typeof p === 'number' && p > 0))
+            ).sort((a, b) => a - b);
+            const isMultiFragment = evidenceItems.length > 1;
+            const displayAsset = evidenceItems.find(ev => ev.asset)?.asset || modalChunk.asset;
 
-            {/* 1. Tarjeta Superior: Cita Textual Específica del Documento con Zona Resaltada en Negrita */}
-            {(() => {
-              const raw = modalChunk.highlightedExcerpt || modalChunk.excerpt || modalChunk.text || '';
-              // Limpiar marcas Markdown de encabezado (#, ##, ###) tanto al inicio como dentro de negritas
-              let clean = raw
-                .replace(/(\*{1,2}|_{1,2})#{1,6}\s*/g, (_m, p1) => p1)
-                .replace(/(?:^|\n|\r)\s*#{1,6}\s*/g, (m) => m.includes('\n') ? '\n\n' : '')
-                .replace(/#{1,6}\s*/g, '')
-                .trim();
-
-              let header: string | null = null;
-              let body = clean;
-
-              // Detectar si el texto inicia con un encabezado de sección o título de capítulo
-              const headerPatterns = [
-                /^(\*{0,2}(?:Secci[oó]n|Cap[ií]tulo|Tema|\d+(?:\.\d+)*)\s+[^:\n]+:?[^\n]*\*{0,2})\n+([\s\S]+)$/i,
-                /^(\*{0,2}(?:Secci[oó]n|Cap[ií]tulo|Tema)\s+\d+[^:.\n]*:[^.(]+(?:\([^)]+\))?\*{0,2})\s+([A-ZÁÉÍÓÚÑ][\s\S]+)$/i,
-                /^(\*{0,2}[A-ZÁÉÍÓÚÑ\s]{4,35}\*{0,2})\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ][\s\S]+)$/,
-                /^(\*{0,2}\d+(?:\.\d+)+\s+[^.\n]+(?:\([^)]+\))?\*{0,2})\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ][\s\S]+)$/i
-              ];
-
-              for (const pat of headerPatterns) {
-                const m = clean.match(pat);
-                if (m) {
-                  header = m[1].replace(/\*\*/g, '').trim();
-                  body = m[2].trim();
-                  if (m[1].startsWith('**') && !m[1].endsWith('**') && body.includes('**')) {
-                    body = '**' + body;
-                  }
-                  break;
-                }
-              }
-
-              return (
-                <div className={`rounded-2xl p-4 sm:p-5 border relative shadow-lg ${
-                  theme === 'dark'
-                    ? 'bg-thea-bg/90 border-violet-500/50 text-slate-100 ring-1 ring-violet-500/20'
-                    : theme === 'kitty'
-                    ? 'bg-pink-50/70 border-pink-300 text-zinc-950 shadow-pink-200/50'
-                    : 'bg-rose-50/60 border-rose-300 text-zinc-950 shadow-slate-200/60'
-                }`} style={{ boxShadow: theme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px -4px rgba(0, 0, 0, 0.4)' : undefined }}>
-                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                    <div className={`text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5 ${
-                      theme === 'dark' ? 'text-violet-300' : theme === 'kitty' ? 'text-pink-600' : 'text-rose-600'
-                    }`}>
-                      <Target className="w-4 h-4 shrink-0" />
-                      Cita Textual Específica que fundamenta la pregunta:
-                    </div>
-                  </div>
-
-                  {header && (
-                    <div className={`mb-3 pb-2 flex items-center gap-2 border-b ${
-                      theme === 'dark'
-                        ? 'border-violet-500/30 text-amber-300'
-                        : theme === 'kitty'
-                        ? 'border-pink-200 text-pink-700'
-                        : 'border-slate-200 text-slate-800'
-                    }`}>
-                      <Bookmark className="w-3.5 h-3.5 shrink-0 opacity-80" />
-                      <span className="text-xs sm:text-[13px] font-black uppercase tracking-wider">
-                        {header}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className={`text-[15px] sm:text-[16px] leading-relaxed pl-4 py-2.5 rounded-r-xl border-l-4 font-normal ${
+            return (
+              <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
+                {/* Metadata badges */}
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <span className={`px-3 py-1 rounded-lg border font-medium tabular-nums ${
                     theme === 'dark'
-                      ? 'border-violet-500 text-slate-100 bg-violet-950/20 [&_strong]:text-white [&_strong]:font-extrabold [&_strong]:bg-violet-500/25 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-sm [&_b]:text-white [&_b]:font-extrabold'
+                      ? 'bg-thea-surfaceLight border-thea-border text-slate-300'
                       : theme === 'kitty'
-                      ? 'border-pink-500 text-zinc-950 bg-pink-100/60 [&_strong]:text-[#9d174d] [&_strong]:font-extrabold [&_strong]:bg-pink-200/90 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-sm'
-                      : 'border-rose-500 text-zinc-950 bg-white/80 [&_strong]:text-rose-950 [&_strong]:font-extrabold [&_strong]:bg-rose-100 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded-sm'
+                      ? 'bg-pink-50 border-pink-200 text-pink-800'
+                      : 'bg-slate-100 border-slate-200 text-slate-700'
                   }`}>
-                    <FormattedText text={body || raw || 'Contenido del fragmento analizado en el material original.'} />
-                  </div>
+                    {isMultiFragment ? (
+                      <>Evidencias: <strong>{evidenceItems.length} fragmentos</strong></>
+                    ) : (
+                      <>Fragmento: <strong>#{evidenceItems[0].chunkId || modalChunk.id || '1'}</strong></>
+                    )}
+                  </span>
+                  <span className={`px-3 py-1 rounded-lg border font-medium tabular-nums ${
+                    theme === 'dark'
+                      ? 'bg-violet-950/60 border-violet-500/40 text-violet-300'
+                      : theme === 'kitty'
+                      ? 'bg-pink-100 border-pink-200 text-pink-800'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                  }`}>
+                    {uniquePages.length > 1 ? (
+                      <>Ubicaciones: <strong>Págs. / Diaps. {uniquePages.join(', ')}</strong></>
+                    ) : (
+                      <>Ubicación: <strong>Página o Diapositiva {uniquePages[0] || modalChunk.pageOrSlide || 1}</strong></>
+                    )}
+                  </span>
+                  {modalChunk.topic && (
+                    <span className={`px-3 py-1 rounded-lg border font-medium truncate max-w-xs ${
+                      theme === 'dark'
+                        ? 'bg-thea-surfaceLight border-thea-border text-amber-300'
+                        : theme === 'kitty'
+                        ? 'bg-pink-50 border-pink-200 text-pink-700'
+                        : 'bg-slate-100 border-slate-200 text-slate-700'
+                    }`}>
+                      Tema: <strong>{modalChunk.topic}</strong>
+                    </span>
+                  )}
                 </div>
-              );
-            })()}
 
-            {/* Multimodal Asset if available */}
-            {modalChunk.asset && (
-              <div className={`p-4 rounded-2xl border ${
-                theme === 'dark'
-                  ? 'bg-thea-surfaceLight border-thea-border/80'
-                  : theme === 'kitty'
-                  ? 'bg-pink-50/40 border-pink-200'
-                  : 'bg-slate-50 border-slate-200'
-              }`}>
-                <span className={`text-xs font-bold block mb-2 flex items-center gap-1.5 ${
-                  theme === 'dark' ? 'text-slate-300' : 'text-zinc-900'
-                }`}>
-                  <ImageIcon className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-600' : 'text-violet-400'}`} />
-                  Activo multimodal vinculado: {modalChunk.asset.caption || 'Figura del documento'}
-                </span>
-                {modalChunk.asset.dataUrl && (
-                  <div
-                    onClick={() => setZoomAsset(modalChunk.asset)}
-                    className="rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center p-2 max-h-60 cursor-pointer hover:border-rose-500/80 transition-colors group relative"
-                    title="Clic para ampliar con zoom interactivo"
-                  >
-                    <img
-                      src={modalChunk.asset.dataUrl}
-                      alt={modalChunk.asset.caption || 'Gráfico'}
-                      className="max-h-56 object-contain rounded-lg group-hover:scale-[1.02] transition-transform duration-200 bg-white"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                      <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
-                        <ZoomIn className="w-4 h-4" />
+                {/* Tarjetas apiladas de Cita Textual Específica (1 tarjeta en preguntas simples; 1 por cada par/fuente en Emparejar y Multi-select) */}
+                <div className="space-y-3.5">
+                  {evidenceItems.map((ev, idx) => {
+                    const raw = ev.highlightedExcerpt || ev.excerpt || ev.text || '';
+                    let clean = raw
+                      .replace(/\[(?:Página|Diapositiva)\s+\d+\]\s*/gi, '')
+                      .replace(/(\*{1,2}|_{1,2})#{1,6}\s*/g, (_m, p1) => p1)
+                      .replace(/(?:^|\n|\r)\s*#{1,6}\s*/g, (m) => (m.includes('\n') ? '\n\n' : ''))
+                      .replace(/#{1,6}\s*/g, '')
+                      .trim();
+
+                    let header: string | null = ev.heading ? ev.heading.replace(/^#{1,6}\s+/, '').trim() : null;
+                    let body = clean;
+
+                    if (header) {
+                      const cleanHeaderEscaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                      const headerLineRegex = new RegExp(`^\\*{0,2}${cleanHeaderEscaped}\\*{0,2}\\s*\\n+([\\s\\S]+)$`, 'i');
+                      const hm = clean.match(headerLineRegex);
+                      if (hm) {
+                        body = hm[1].trim();
+                      }
+                    } else {
+                      const explicitHeaderMatch = clean.match(
+                        /^(\*{0,2}(?:Secci[oó]n|Cap[ií]tulo|Tema|Diapositiva)\s+[^:\n]+:?[^\n]*\*{0,2})\n+([\s\S]+)$/i
+                      );
+                      if (explicitHeaderMatch) {
+                        header = explicitHeaderMatch[1].replace(/\*\*/g, '').trim();
+                        body = explicitHeaderMatch[2].trim();
+                      }
+                    }
+
+                    const isPairCard = Boolean(ev.term && ev.definition);
+
+                    return (
+                      <div
+                        key={`rag-ev-${idx}-${ev.chunkId || ev.id || 'item'}`}
+                        className={`rounded-2xl p-4 sm:p-5 border relative shadow-lg animate-fadeIn ${
+                          theme === 'dark'
+                            ? 'bg-thea-bg/90 border-violet-500/50 text-slate-100 ring-1 ring-violet-500/20'
+                            : theme === 'kitty'
+                            ? 'bg-pink-50/70 border-pink-300 text-zinc-950 shadow-pink-200/50'
+                            : 'bg-rose-50/60 border-rose-300 text-zinc-950 shadow-slate-200/60'
+                        }`}
+                        style={{
+                          animationDelay: `${idx * 40}ms`,
+                          boxShadow:
+                            theme === 'dark'
+                              ? 'inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px -4px rgba(0, 0, 0, 0.4)'
+                              : undefined,
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-3 gap-2 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            {isPairCard ? (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold uppercase tracking-wider tabular-nums ${
+                                    theme === 'dark'
+                                      ? 'bg-violet-500/25 text-violet-200 border border-violet-400/30'
+                                      : theme === 'kitty'
+                                      ? 'bg-pink-200/80 text-pink-900 border border-pink-300'
+                                      : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  }`}>
+                                    Par {idx + 1}
+                                  </span>
+                                  <span className={`text-xs sm:text-[13px] font-bold ${
+                                    theme === 'dark' ? 'text-white' : 'text-zinc-900'
+                                  }`}>
+                                    {ev.term}
+                                  </span>
+                                </div>
+                                <p className={`text-xs leading-snug ${
+                                  theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+                                }`}>
+                                  ➔ {ev.definition}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className={`text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5 ${
+                                theme === 'dark' ? 'text-violet-300' : theme === 'kitty' ? 'text-pink-600' : 'text-rose-600'
+                              }`}>
+                                <Target className="w-4 h-4 shrink-0" />
+                                <span>{ev.label || 'Cita Textual Específica que fundamenta la pregunta:'}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {ev.matchQuality === 'low' && (
+                              <span className={`px-2 py-1 rounded-lg border text-[10px] font-semibold ${
+                                theme === 'dark'
+                                  ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                                  : theme === 'kitty'
+                                  ? 'bg-amber-50 border-amber-300 text-amber-800'
+                                  : 'bg-amber-50 border-amber-300 text-amber-900'
+                              }`}>
+                                Contexto cercano
+                              </span>
+                            )}
+                            <span className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold tabular-nums ${
+                              theme === 'dark'
+                                ? 'bg-violet-950/70 border-violet-400/40 text-violet-200'
+                                : theme === 'kitty'
+                                ? 'bg-white border-pink-300 text-pink-800 shadow-xs'
+                                : 'bg-white border-rose-200 text-rose-800 shadow-xs'
+                            }`}>
+                              Pág. / Diap. {ev.pageOrSlide || 1}
+                            </span>
+                          </div>
+                        </div>
+
+                        {header && (
+                          <div className={`mb-3 pb-2 flex items-center gap-2 border-b ${
+                            theme === 'dark'
+                              ? 'border-violet-500/30 text-amber-300'
+                              : theme === 'kitty'
+                              ? 'border-pink-200 text-pink-700'
+                              : 'border-slate-200 text-slate-800'
+                          }`}>
+                            <Bookmark className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                            <span className="text-xs sm:text-[13px] font-black uppercase tracking-wider">
+                              {header}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className={`text-[15px] sm:text-[16px] leading-relaxed pl-4 py-2.5 rounded-r-xl border-l-4 font-normal ${
+                          theme === 'dark'
+                            ? 'border-violet-500 text-slate-100 bg-violet-950/20 [&_strong]:text-white [&_strong]:font-extrabold [&_strong]:bg-violet-500/30 [&_strong]:ring-1 [&_strong]:ring-violet-400/40 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded [&_b]:text-white [&_b]:font-extrabold'
+                            : theme === 'kitty'
+                            ? 'border-pink-500 text-zinc-950 bg-pink-100/60 [&_strong]:text-[#9d174d] [&_strong]:font-extrabold [&_strong]:bg-pink-200/90 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded'
+                            : 'border-rose-500 text-zinc-950 bg-white/80 [&_strong]:text-rose-950 [&_strong]:font-extrabold [&_strong]:bg-rose-100 [&_strong]:ring-1 [&_strong]:ring-rose-300/60 [&_strong]:px-1.5 [&_strong]:py-0.5 [&_strong]:rounded'
+                        }`}>
+                          <FormattedText text={body || raw || 'Contenido del fragmento analizado en el material original.'} />
+                        </div>
                       </div>
-                    </div>
+                    );
+                  })}
+                </div>
+
+                {/* Multimodal Asset if available */}
+                {displayAsset && (
+                  <div className={`p-4 rounded-2xl border ${
+                    theme === 'dark'
+                      ? 'bg-thea-surfaceLight border-thea-border/80'
+                      : theme === 'kitty'
+                      ? 'bg-pink-50/40 border-pink-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <span className={`text-xs font-bold block mb-2 flex items-center gap-1.5 ${
+                      theme === 'dark' ? 'text-slate-300' : 'text-zinc-900'
+                    }`}>
+                      <ImageIcon className={`w-3.5 h-3.5 ${theme === 'kitty' ? 'text-pink-500' : theme === 'light' ? 'text-rose-600' : 'text-violet-400'}`} />
+                      Activo multimodal vinculado: {displayAsset.caption || 'Figura del documento'}
+                    </span>
+                    {displayAsset.dataUrl && (
+                      <div
+                        onClick={() => setZoomAsset(displayAsset)}
+                        className="rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center p-2 max-h-60 cursor-pointer hover:border-rose-500/80 transition-colors group relative"
+                        title="Clic para ampliar con zoom interactivo"
+                      >
+                        <img
+                          src={displayAsset.dataUrl}
+                          alt={displayAsset.caption || 'Gráfico'}
+                          className="max-h-56 object-contain rounded-lg group-hover:scale-[1.02] transition-transform duration-200 bg-white"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                          <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                            <ZoomIn className="w-4 h-4" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            <div className={`border rounded-2xl p-4 text-xs leading-relaxed flex items-start gap-2.5 ${
-              theme === 'dark'
-                ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
-                : 'bg-emerald-50 border-emerald-300 text-emerald-900'
-            }`}>
-              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <p>
-                <strong>Garantía de Fidelidad RAG:</strong> La pregunta, la respuesta correcta y las retroalimentaciones de descarte fueron contrastadas rigurosamente contra este segmento del documento, asegurando coherencia y anclaje total.
-              </p>
-            </div>
-          </div>
+                <div className={`border rounded-2xl p-4 text-xs leading-relaxed flex items-start gap-2.5 ${
+                  theme === 'dark'
+                    ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                }`}>
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <p>
+                    <strong>Garantía de Fidelidad RAG:</strong> {isMultiFragment
+                      ? 'Cada componente de la pregunta fue contrastado individualmente contra su párrafo de origen y ubicación exacta dentro del material original.'
+                      : 'La pregunta, la respuesta correcta y las retroalimentaciones de descarte fueron contrastadas rigurosamente contra este párrafo específico del documento, resaltando únicamente la parte resolutiva.'}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Modal Footer */}
           <div className={`pt-4 border-t flex justify-end ${
@@ -5211,7 +5345,7 @@ export const SmartStudyView: React.FC<SmartStudyViewProps> = ({ kit, userId, onU
           }`}>
             <button
               onClick={() => setShowSourceModal(false)}
-              className={`px-5 py-2 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer ${
+              className={`px-5 py-2 rounded-xl font-bold text-xs shadow-md transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] cursor-pointer ${
                 theme === 'kitty'
                   ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-500/30'
                   : theme === 'light'
