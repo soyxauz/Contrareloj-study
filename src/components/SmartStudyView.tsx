@@ -88,7 +88,7 @@ import {
   ShortAnswerRenderer,
 } from './smart-study';
 import { synthesizeAzureEdgeSpeech } from '../services/azureEdgeTtsService';
-import { filterCompliantQuestions } from '../utils/questionValidator';
+import { filterCompliantQuestions, repairQuestionStructure } from '../utils/questionValidator';
 import { syncBrowserHierarchicalUrl } from '../utils/hierarchicalLink';
 
 // ── Indicador Minimalista de Nivel de Dominio (Apple / Linear Studio) ──
@@ -212,101 +212,11 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
     const rawId = q.id.replace(/^(tf-|sa-|mc-)/, '');
     const original = allKitQuestions.find(item => item.id === rawId);
     if (original && Array.isArray(original.options) && original.options.length >= 3) {
-      return { ...original };
+      return repairQuestionStructure({ ...original });
     }
   }
 
-  let promptText = (q.question || '')
-    .replace(/[•●▪]/g, '')
-    .replace(/«/g, '"')
-    .replace(/»/g, '"')
-    .replace(/^Análisis Crítico:\s*Evalúa la rigurosidad conceptual de la siguiente proposición:\s*/i, '')
-    .replace(/^Análisis Crítico:\s*Evalúa si la siguiente proposición es fidedigna o incurre en error conceptual:\s*/i, '')
-    .replace(/^Evalúa la veracidad de la siguiente afirmación fundamental según el texto:\s*/i, '')
-    .replace(/^Evalúa la veracidad de la siguiente afirmación:\s*/i, '')
-    .replace(/\s*según el (?:texto|documento|material)\??/gi, '')
-    .replace(/\s*conforme al (?:texto|documento)\??/gi, '')
-    .trim();
-
-  // Si tras limpiar el preámbulo quedó un enunciado vacío o un título sin interrogante, dar contexto
-  if (!promptText || promptText.length < 8) {
-    promptText = q.topic ? `¿Cuáles son las características clínicas y conceptuales de ${q.topic}?` : '¿Cuáles son las características principales del tema estudiado?';
-  }
-
-  const isSelectionPrompt = /\b(cu[aá]l(es)? de (las|los)|selecciona|indica|señala (la|el|cu[aá]l)|de las siguientes|de los siguientes|de las alternativas|todas las siguientes)\b/i.test(promptText);
-
-  // 2. Si tiene 3 o más opciones reales y estaba erróneamente tipada como true-false, restaurarla a multiple-choice
-  if (Array.isArray(q.options) && q.options.length >= 3) {
-    let cleanOpts = q.options
-      .map(o => (o || '').replace(/[•●▪]/g, '').replace(/«/g, '"').replace(/»/g, '"').trim())
-      .filter(o => !/^(?:las|los)\s+siguientes:?$/i.test(o) && !o.endsWith(':'));
-
-    if (cleanOpts.length < 2) {
-      cleanOpts = q.options;
-    }
-
-    // Si el enunciado no contiene interrogación ni imperativo de selección (ej: es un título como "lesión cutánea elemental..."),
-    // formularlo con corrección gramatical y rigor académico
-    if (!promptText.includes('?') && !/^(identifica|selecciona|indica|señala|determina|empareja|ordena|completa|cuál|qué|cómo|dónde|por qué|cuándo|en qué|de qué|a qué)\b/i.test(promptText)) {
-      promptText = `¿Cuál de las siguientes opciones describe con mayor precisión a ${promptText}?`;
-    }
-
-    if (q.type === 'true-false') {
-      return {
-        ...q,
-        question: promptText,
-        options: cleanOpts,
-        type: 'multiple-choice',
-      };
-    }
-    return {
-      ...q,
-      question: promptText,
-      options: cleanOpts,
-    };
-  }
-
-  // 3. Si es true-false o solo tiene opciones ['Verdadero', 'Falso'], garantizar proposición declarativa directa
-  const isTFOptions = Array.isArray(q.options) &&
-    q.options.length === 2 &&
-    q.options.some(o => /verdadero/i.test(o)) &&
-    q.options.some(o => /falso/i.test(o));
-
-  if (q.type === 'true-false' || isTFOptions) {
-    let assertion = '';
-    const quotedMatch = promptText.match(/(?:describe con mayor precisión a|sobre|respecto a|acerca de)\s*["“«](.+?)["”»]\??/i) ||
-      promptText.match(/^¿(?:cuál de las siguientes opciones|es verdadero o falso que)\s+["“«](.+?)["”»]\??/i) ||
-      promptText.match(/["“«](.+?)["”»]/);
-
-    if (quotedMatch && quotedMatch[1] && quotedMatch[1].trim().length > 8) {
-      assertion = quotedMatch[1].trim();
-    } else if (isSelectionPrompt) {
-      if (q.idealAnswer && q.idealAnswer.trim().length > 10 && !/\bcu[aá]l\b/i.test(q.idealAnswer)) {
-        assertion = q.idealAnswer.trim();
-      } else if (q.explanation) {
-        const cleanExpl = q.explanation
-          .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '')
-          .replace(/^[*\s]*(Verdadero|Falso|Opción [A-D]|Justificación|Fundamentación):?\s*/i, '')
-          .trim();
-        const firstSentence = cleanExpl.split(/\.\s+/)[0]?.trim();
-        if (firstSentence && firstSentence.length > 12) {
-          assertion = firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
-        }
-      }
-    }
-
-    if (assertion) {
-      return {
-        ...q,
-        type: 'true-false',
-        question: `"${assertion}"`,
-        options: ['Verdadero', 'Falso'],
-        correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
-      };
-    }
-  }
-
-  // 4. Si la pregunta es de tipo 'image-labeling', contiene etiquetas o instrucciones de arrastrar cuadros, convertirla inmediatamente a matching conceptual o multiple-choice desprendiendo cualquier foto o activo de imagen
+  // 2. Si la pregunta es de tipo 'image-labeling' o contiene residuos de diagramas/etiquetas, convertirla
   const isDiagramOrLabeling =
     q.type === 'image-labeling' ||
     Boolean((q as any).imageHotspots) ||
@@ -315,8 +225,10 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
     Boolean((q as any).diagramTitle) ||
     /cuadro de texto del banco|punto correspondiente del esquema|etapas del algoritmo|diabetes tipo 2|esquema de terapia/i.test(q.question || '');
 
+  let baseQ: Question = { ...q };
+
   if (isDiagramOrLabeling) {
-    const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, etiquetas_diagrama, ...restQ } = q as any;
+    const { imageHotspots, diagramTitle, imageWordBank, sourceAsset, etiquetas_diagrama, ...restQ } = baseQ as any;
     const hotspots = imageHotspots || etiquetas_diagrama;
     let cleanQuestionText = (restQ.question || '')
       .replace(/Arrastra o selecciona un cuadro de texto del banco inferior y col[oó]calo en el punto correspondiente del esquema:?/gi, '')
@@ -325,7 +237,7 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
       .trim();
 
     if (Array.isArray(hotspots) && hotspots.length >= 2) {
-      return {
+      baseQ = {
         ...restQ,
         type: 'matching',
         question: cleanQuestionText || (diagramTitle ? `Empareja las etapas o componentes del esquema (${diagramTitle}):` : 'Empareja los conceptos correspondientes:'),
@@ -335,20 +247,21 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
         })),
         sourceAsset: undefined,
       };
+    } else {
+      baseQ = {
+        ...restQ,
+        type: 'multiple-choice',
+        question: cleanQuestionText || restQ.question || 'Selecciona la opción correcta:',
+        options: Array.isArray(restQ.options) ? restQ.options : [],
+        correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
+        sourceAsset: undefined,
+      };
     }
-    return {
-      ...restQ,
-      type: 'multiple-choice',
-      question: cleanQuestionText || restQ.question || 'Selecciona la opción correcta:',
-      options: Array.isArray(restQ.options) ? restQ.options : [],
-      correctIndex: typeof restQ.correctIndex === 'number' ? restQ.correctIndex : 0,
-      sourceAsset: undefined,
-    };
   }
 
-  // 5. Desprender activos de páginas escaneadas de libros que no son diagramas puros
-  if (q.sourceAsset) {
-    const caption = (q.sourceAsset.caption || '').toLowerCase();
+  // 3. Desprender activos escaneados de páginas que no son diagramas interactivos
+  if (baseQ.sourceAsset) {
+    const caption = (baseQ.sourceAsset.caption || '').toLowerCase();
     const isBookPageScan =
       caption.includes('capítulo') ||
       caption.includes('capitulo') ||
@@ -361,84 +274,17 @@ export function sanitizeQuestionStructure(q: Question, allKitQuestions?: Questio
       caption.includes('metabolismo') ||
       caption.includes('fármaco') ||
       caption.includes('farmaco') ||
-      (q.sourceAsset as any).type === 'page';
+      (baseQ.sourceAsset as any).type === 'page';
     if (isBookPageScan) {
-      return {
-        ...q,
+      baseQ = {
+        ...baseQ,
         sourceAsset: undefined,
       };
     }
   }
 
-  // 6. Si es 'matching' pero NO tiene pares válidos suficientes (mínimo 2), degradar a multiple-choice
-  if (q.type === 'matching' && (!Array.isArray(q.matchingPairs) || q.matchingPairs.length < 2)) {
-    let opts = Array.isArray(q.options) && q.options.length >= 2 ? [...q.options] : [];
-    if (opts.length < 2) {
-      opts = [
-        q.idealAnswer || 'Alternativa correcta fundamentada en el texto',
-        'Postulado inconsistente con el material analizado',
-        'Principio secundario no aplicable al supuesto evaluado',
-        'Concepto contrapuesto a la evidencia presentada',
-      ];
-    }
-    while (opts.length < 4) {
-      opts.push(`Alternativa complementaria ${opts.length + 1}`);
-    }
-    return {
-      ...q,
-      type: 'multiple-choice',
-      options: opts,
-      correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0,
-    };
-  }
-
-  // 7. Si es 'drag-drop' pero NO tiene la plantilla con {0} o los huecos válidos, degradar a multiple-choice
-  if (q.type === 'drag-drop' && (!q.templateSentence || !/\{\d+\}/.test(q.templateSentence) || !Array.isArray(q.blanksCorrect) || q.blanksCorrect.length === 0)) {
-    let opts = Array.isArray(q.options) && q.options.length >= 2 ? [...q.options] : [];
-    if (opts.length < 2 && Array.isArray(q.blanksCorrect) && q.blanksCorrect.length >= 2) {
-      opts = [...q.blanksCorrect];
-    }
-    if (opts.length < 2) {
-      opts = [
-        q.idealAnswer || 'Opción correcta fundamentada',
-        'Alternativa plausible no confirmada por el texto',
-        'Distractor conceptual divergente',
-        'Interpretación contraria a los postulados académicos',
-      ];
-    }
-    while (opts.length < 4) {
-      opts.push(`Alternativa complementaria ${opts.length + 1}`);
-    }
-    return {
-      ...q,
-      type: 'multiple-choice',
-      options: opts,
-      correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0,
-    };
-  }
-
-  // 8. Para multiple-choice y multi-select, asegurar que options siempre tenga al menos 4 literales
-  if (q.type === 'multiple-choice' || q.type === 'multi-select') {
-    let opts = Array.isArray(q.options) ? q.options.filter(Boolean) : [];
-    if (opts.length < 2) {
-      opts = [
-        q.idealAnswer || 'Opción correcta fundamentada',
-        'Alternativa plausible no confirmada por el texto',
-        'Distractor conceptual divergente',
-        'Interpretación contraria a los postulados académicos',
-      ];
-    }
-    while (opts.length < 4) {
-      opts.push(`Alternativa complementaria ${opts.length + 1}`);
-    }
-    return {
-      ...q,
-      options: opts,
-      correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0,
-    };
-  }
-
-  return q;
+  // 4. Delegar la reparación semántica, gramatical y estructural al validador central riguroso
+  return repairQuestionStructure(baseQ);
 }
 
 const normalizeQId = (id: string): string => (!id ? '' : id.replace(/^(?:tf-|sa-|mc-|dd-|drag-drop-)/, ''));

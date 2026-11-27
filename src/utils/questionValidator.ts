@@ -221,19 +221,199 @@ export function isQuestionCompliantWithStandard(q: unknown): q is Question {
 }
 
 /**
+ * Limpia y normaliza el texto de una opción eliminando prefijos de numeración/letras,
+ * viñetas y marcadores espurios ("Literal C)", "Opción A:", "• B.", etc.).
+ */
+export function sanitizeOptionText(raw: string | null | undefined): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let t = raw.trim();
+  // Eliminar viñetas
+  t = t.replace(/^[•●▪-]\s*/, '');
+  // Reemplazar comillas tipográficas angulares
+  t = t.replace(/\u00AB/g, '"').replace(/\u00BB/g, '"');
+  // Eliminar prefijos tipo "Literal A)", "Opción B:", "Alternativa 1)", "Inciso C -"
+  t = t.replace(/^(?:Literal|Opción|Opcion|Alternativa|Inciso|Respuesta)\s+[A-Ea-e0-9][:.\s-)\/]\s*/i, '');
+  // Eliminar marcadores directos "(A)", "[A]", "A)", "A.", "A -", "**A)**", etc.
+  t = t.replace(/^(?:\*\*)?(?:\([A-Ea-e0-9]\)|\[[A-Ea-e0-9]\]|[A-Ea-e0-9][\).:\-])(?:\*\*)?\s+/, '');
+  // Segunda pasada por si había combinaciones como "Opción A) Texto"
+  t = t.replace(/^(?:Literal|Opción|Opcion|Alternativa|Inciso|Respuesta)\s+[A-Ea-e0-9][:.\s-)\/]\s*/i, '');
+  return t.trim();
+}
+
+/**
+ * Repara y normaliza la estructura completa de una pregunta pedagógica.
+ * Corrige enunciados huérfanos, rescata afirmaciones directas de Verdadero/Falso,
+ * limpia opciones de distractores espurios, invierte pares de emparejamiento desbalanceados
+ * y garantiza congruencia entre tipo y opciones.
+ */
+export function repairQuestionStructure(q: Question): Question {
+  if (!q || typeof q !== 'object') return q;
+
+  let currentType: QuestionType = q.type || 'multiple-choice';
+  let promptText = String(q.question || '').trim();
+
+  // 1. Limpieza de preámbulos, metatexto y fórmulas redundantes
+  promptText = promptText
+    .replace(/[•●▪]/g, '')
+    .replace(/\u00AB/g, '"')
+    .replace(/\u00BB/g, '"')
+    .replace(/^Análisis Crítico:\s*Evalúa la rigurosidad conceptual de la siguiente proposición:?\s*/i, '')
+    .replace(/^Análisis Crítico:\s*Evalúa si la siguiente proposición es fidedigna o incurre en error conceptual:?\s*/i, '')
+    .replace(/^Evalúa la veracidad de la siguiente afirmación fundamental según el texto:?\s*/i, '')
+    .replace(/^Evalúa la veracidad de la siguiente afirmación:?\s*/i, '')
+    .replace(/\s*según el (?:texto|documento|material)\??/gi, '')
+    .replace(/\s*conforme al (?:texto|documento)\??/gi, '')
+    .trim();
+
+  // 2. Normalización y limpieza de opciones
+  let cleanOptions: string[] = [];
+  if (Array.isArray(q.options)) {
+    cleanOptions = q.options
+      .map(sanitizeOptionText)
+      .filter(o => o.length > 0 && !isPlaceholderOption(o));
+  }
+
+  // Detección de si es Verdadero / Falso
+  const isTFOptions = cleanOptions.length === 2 &&
+    cleanOptions.some(o => /^verdadero$/i.test(o)) &&
+    cleanOptions.some(o => /^falso$/i.test(o));
+
+  if (currentType === 'true-false' || isTFOptions) {
+    currentType = 'true-false';
+    let assertion = '';
+    const quotedMatch = promptText.match(/(?:describe con mayor precisión a|sobre|respecto a|acerca de)\s*["“«](.+?)["”»]\??/i) ||
+      promptText.match(/^¿(?:cuál de las siguientes opciones|es verdadero o falso que)\s+["“«](.+?)["”»]\??/i) ||
+      promptText.match(/["“«](.+?)["”»]/);
+
+    if (quotedMatch && quotedMatch[1] && quotedMatch[1].trim().length > 10) {
+      assertion = quotedMatch[1].trim();
+    } else {
+      // Limpiar prefijos de pregunta retórica para dejar la afirmación directa
+      assertion = promptText
+        .replace(/^¿(?:es\s+verdadero\s+o\s+falso\s+que|es\s+correcto\s+afirmar\s+que)\s+/i, '')
+        .replace(/\?$/, '')
+        .trim();
+    }
+
+    if (!assertion || assertion.length < 10) {
+      if (q.idealAnswer && q.idealAnswer.trim().length > 10 && !/\bcu[aá]l\b/i.test(q.idealAnswer)) {
+        assertion = q.idealAnswer.trim();
+      } else if (q.explanation) {
+        const cleanExpl = q.explanation
+          .replace(/### Búsqueda en Google:[\s\S]*?(?=\*\*Fundamentación|\n\n[A-Z]|\n\n$|$)/i, '')
+          .replace(/^[*\s]*(Verdadero|Falso|Opción [A-D]|Justificación|Fundamentación):?\s*/i, '')
+          .trim();
+        const firstSentence = cleanExpl.split(/\.\s+/)[0]?.trim();
+        if (firstSentence && firstSentence.length > 15) {
+          assertion = firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
+        }
+      }
+    }
+
+    let finalAssertion = assertion || promptText;
+    finalAssertion = finalAssertion.replace(/^["'“«]+|["'”»]+$/g, '').trim();
+    const formattedAssertion = `"${finalAssertion}"`;
+
+    let cIndex = typeof q.correctIndex === 'number' ? q.correctIndex : 0;
+    if (cIndex !== 0 && cIndex !== 1) cIndex = 0;
+
+    return {
+      ...q,
+      type: 'true-false',
+      question: formattedAssertion,
+      options: ['Verdadero', 'Falso'],
+      correctIndex: cIndex,
+    };
+  }
+
+  // 3. Si tiene opciones de multiple-choice (al menos 2 opciones sustantivas)
+  if (cleanOptions.length >= 2) {
+    if (!promptText.includes('?') && !/^(identifica|selecciona|indica|señala|determina|empareja|ordena|completa|cuál|qué|cómo|dónde|por qué|cuándo|en qué|de qué|a qué)\b/i.test(promptText)) {
+      if (promptText.length > 0) {
+        promptText = `¿Cuál de las siguientes opciones describe con mayor precisión a ${promptText}?`;
+      } else {
+        promptText = q.topic ? `¿Cuáles son las características principales de ${q.topic}?` : '¿Cuál de las siguientes opciones es la correcta?';
+      }
+    }
+
+    let cIndex = typeof q.correctIndex === 'number' ? q.correctIndex : 0;
+    if (cIndex < 0 || cIndex >= cleanOptions.length) {
+      cIndex = 0;
+    }
+
+    return {
+      ...q,
+      type: currentType,
+      question: promptText,
+      options: cleanOptions,
+      correctIndex: cIndex,
+    };
+  }
+
+  // 4. Normalización de emparejamiento (matching)
+  if (currentType === 'matching' || Array.isArray(q.matchingPairs)) {
+    const rawPairs = q.matchingPairs || (q as any).pares_emparejamiento;
+    if (Array.isArray(rawPairs)) {
+      const sanitizedPairs = rawPairs.map((p: any) => {
+        let term = String(p.term || p.termino || '').trim();
+        let def = String(p.definition || p.definicion || (p as any).def || '').trim();
+        // Inversión semántica: si el término es largo (definición) y la definición es corta (término/concepto), invertirlos
+        if (term.split(/\s+/).length > 5 && def.split(/\s+/).length <= 4) {
+          const temp = term;
+          term = def;
+          def = temp;
+        }
+        return { term, definition: def };
+      }).filter(p => p.term.length >= 2 && p.definition.length >= 3 && !/^(?:concepto|término|elemento)\s*\d+$/i.test(p.term));
+
+      return {
+        ...q,
+        type: 'matching',
+        question: promptText.includes('?') || promptText.length >= 15 ? promptText : 'Empareja cada concepto clave con su definición o propiedad correspondiente:',
+        matchingPairs: sanitizedPairs,
+      };
+    }
+  }
+
+  // 5. Normalización de arrastrar y soltar (drag-drop)
+  if (currentType === 'drag-drop') {
+    let template = q.templateSentence || (q as any).oracion_plantilla || '';
+    if (!template && /\{\d+\}/.test(promptText)) {
+      template = promptText;
+      promptText = 'Arrastra y coloca los conceptos en los espacios correspondientes para completar el enunciado:';
+    }
+    return {
+      ...q,
+      type: 'drag-drop',
+      question: promptText.length >= 15 ? promptText : 'Completa los espacios en blanco del siguiente enunciado:',
+      templateSentence: template,
+    };
+  }
+
+  return {
+    ...q,
+    question: promptText,
+    options: cleanOptions.length > 0 ? cleanOptions : q.options,
+  };
+}
+
+/**
  * Filtra una lista de preguntas excluyendo terminantemente cualquier pregunta
  * que contenga "Opción A/B/C/D", enunciados incompletos o estructuras defectuosas.
+ * Aplica previamente la reparación estructural para salvar preguntas válidas con defectos menores.
  */
 export function filterCompliantQuestions(questions: Question[] | null | undefined): Question[] {
   if (!Array.isArray(questions) || questions.length === 0) return [];
-  return questions.filter((q): q is Question => {
-    const qCandidate = q as unknown;
-    const isValid = isQuestionCompliantWithStandard(qCandidate);
-    if (!isValid) {
-      const qAny = q as any;
-      const reason = explainQuestionNonCompliance(qAny);
-      console.warn(`[QuestionStandard] Pregunta descartada (${qAny?.id || 'sin-id'}): ${reason}`);
-    }
-    return isValid;
-  });
+  return questions
+    .map(q => repairQuestionStructure(q))
+    .filter((q): q is Question => {
+      const qCandidate = q as unknown;
+      const isValid = isQuestionCompliantWithStandard(qCandidate);
+      if (!isValid) {
+        const qAny = q as any;
+        const reason = explainQuestionNonCompliance(qAny);
+        console.warn(`[QuestionStandard] Pregunta descartada (${qAny?.id || 'sin-id'}): ${reason}`);
+      }
+      return isValid;
+    });
 }

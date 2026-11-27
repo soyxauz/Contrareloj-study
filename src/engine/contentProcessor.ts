@@ -319,30 +319,48 @@ function generateQuestions(text: string, _count: number, category: string): Ques
   const domainFallbacks = DOMAIN_DISTRACTORS[category] || DOMAIN_DISTRACTORS['General'];
   let facts = extractSemanticFacts(text);
 
-  // Si hay pocos hechos extraídos, enriquecer a partir de oraciones válidas sin generar opciones rotas
+  // Si hay pocos hechos extraídos, enriquecer ÚNICAMENTE a partir de oraciones con verbos conectores y núcleos sustantivos reales
   if (facts.length < 6) {
     const sents = sentences(text);
+    const connectorRegex = /^([A-ZÁÉÍÓÚ][a-záéíóúñA-ZÁÉÍÓÚ\s]{3,35}?)\s+(se caracteriza por|implica|requiere|favorece|presenta|disminuye|aumenta|inhibe|estimula|asocia|describe|comprende|origina|actúa en|consiste en)\s+(.+)/i;
+    const colonRegex = /^([A-ZÁÉÍÓÚ][a-záéíóúñA-ZÁÉÍÓÚ\s]{3,35}?):\s+(.+)/;
+
     for (let i = 0; i < sents.length && facts.length < 12; i++) {
       const s = sents[i];
-      const words = s.split(/\s+/);
-      if (words.length >= 6) {
-        const sub = words.slice(0, 2).join(' ').replace(/^(el|la|los|las)\s+/i, '');
-        const pred = words.slice(2).join(' ').replace(/[.:]+$/, '').trim();
-        if (
-          sub.length >= 3 &&
-          sub.length <= 35 &&
-          pred.length >= 20 &&
-          !pred.endsWith(':') &&
-          !/^(?:las|los)\s+siguientes:?$/i.test(pred) &&
-          !INVALID_SUBJECT_REGEX.test(sub)
-        ) {
-          facts.push({
-            subject: sub,
-            relationType: 'general',
-            predicate: pred,
-            fullSentence: s,
-          });
+      let sub = '';
+      let pred = '';
+
+      const mConn = s.match(connectorRegex);
+      if (mConn) {
+        sub = mConn[1].trim().replace(/^(el|la|los|las)\s+/i, '');
+        pred = `${mConn[2]} ${mConn[3]}`.replace(/[.:]+$/, '').trim();
+      } else {
+        const mColon = s.match(colonRegex);
+        if (mColon) {
+          sub = mColon[1].trim().replace(/^(el|la|los|las)\s+/i, '');
+          pred = mColon[2].replace(/[.:]+$/, '').trim();
         }
+      }
+
+      if (
+        sub.length >= 3 &&
+        sub.length <= 35 &&
+        pred.length >= 20 &&
+        !pred.endsWith(':') &&
+        !/^(?:las|los)\s+siguientes:?$/i.test(pred) &&
+        !INVALID_SUBJECT_REGEX.test(sub) &&
+        !sub.endsWith(' de') &&
+        !sub.endsWith(' del') &&
+        !sub.endsWith(' la') &&
+        !sub.endsWith(' el') &&
+        !/[(),;:]/.test(sub)
+      ) {
+        facts.push({
+          subject: sub,
+          relationType: 'general',
+          predicate: pred,
+          fullSentence: s,
+        });
       }
     }
   }

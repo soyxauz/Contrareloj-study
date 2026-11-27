@@ -2,7 +2,7 @@ import type { StudyKit, Question, Flashcard, PodcastEpisode, DocumentChunk, Shor
 import { detectDocumentLanguage, getSpanishTranslationDirective } from './languageService';
 import { safeLocalStorageSetItem } from './storageService';
 import { sanitizePodcastText } from '../utils/podcastTextSanitizer';
-import { filterCompliantQuestions, isQuestionCompliantWithStandard } from '../utils/questionValidator';
+import { filterCompliantQuestions, isQuestionCompliantWithStandard, repairQuestionStructure } from '../utils/questionValidator';
 import { extractCleanTokens } from '../engine/topicInterleaving';
 import { findBestChunkAndExcerpt, resolveRealPageNumber } from '../engine/ragExcerptExtractor';
 import {
@@ -3565,10 +3565,17 @@ REGLA ESTRICTA DE ENUNCIADOS LIMPIOS (SIN OPCIONES EN EL TALLO):
 - Queda TERMINANTEMENTE PROHIBIDO incluir las opciones A), B), C), D) o 1), 2), 3), 4) dentro del campo "pregunta" o "contexto_o_enunciado".
 - El campo "pregunta" debe contener única y exclusivamente el escenario o caso clínico y la interrogante directa. Las alternativas van exclusivamente en el objeto o arreglo de opciones.
 
-REGLA ESTRICTA DE CALIDAD DE OPCIONES (PROHIBIDO PLACEHOLDERS):
+REGLA ESTRICTA DE CALIDAD DE OPCIONES (PROHIBIDO PLACEHOLDERS Y ETIQUETAS):
 - Queda TERMINANTEMENTE PROHIBIDO generar opciones como 'Opción A', 'Opción B', 'Opción C', 'Opción D', 'Opción 1', 'Literal A', 'Alternativa 1' o una sola letra.
+- Queda PROHIBIDO incluir prefijos como "A)", "B)", "Literal C)" dentro del texto de las opciones. Cada opción debe contener únicamente el texto sustantivo.
 - Cada opción DEBE contener el texto explicativo completo, sustantivo y técnicamente riguroso de la alternativa.
 - Si formulas una pregunta tipo 'multi-select', el arreglo 'opciones_multiples' DEBE contener afirmaciones completas y detalladas, NUNCA marcadores de posición.
+
+REGLA ESTRICTA DE ENUNCIADOS COMPLETOS (CERO TÍTULOS SUELTOS):
+- El campo "pregunta" NUNCA debe ser un título de diapositiva o frase nominal huérfana (ej: 'lesión cutánea elemental...', 'fisiopatología de la diabetes...'). Debe ser SIEMPRE una oración interrogativa gramaticalmente completa con signos de interrogación ¿?, o una viñeta clínica/caso práctico con contexto y pregunta final.
+
+REGLA ESTRICTA DE EMPAREJAMIENTO (MATCHING):
+- En "pares_emparejamiento", el campo "termino" debe ser el concepto o término breve (1 a 4 palabras) y el campo "definicion" debe ser la explicación descriptiva (oración o frase completa de 5 a 20 palabras). NUNCA invertirlos.
 
 REGLA ESTRICTA DE DIVERSIDAD DE SUBTEMAS (INTERLEAVING TEMÁTICO):
 - Cada pregunta DEBE poseer un "concepto_evaluado" específico, granular y diferente del resto (ej. 'Mecanismo de Biguanidas', 'Fisiopatología de Resistencia a la Insulina', 'Factores de Riesgo', 'Criterios de Laboratorio HbA1c'). Queda TERMINANTEMENTE PROHIBIDO poner el mismo tema general a todas las preguntas.
@@ -3917,7 +3924,7 @@ Genera el JSON completo respetando la estructura exigida:`;
         ? parseCorrectIndices(p.indices_correctos, optionsArray)
         : undefined;
 
-      return {
+      return repairQuestionStructure({
         id: `q-pedagogical-${difficulty}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
         type: qType,
         difficulty,
@@ -3936,7 +3943,7 @@ Genera el JSON completo respetando la estructura exigida:`;
         sourceChunkText,
         sourceExcerpt,
         sourcePageOrSlide,
-      };
+      });
     });
 
     // Barajado aleatorio (Fisher-Yates) para que el orden de generación de la IA sea impredecible y no comience siempre igual
@@ -6082,6 +6089,12 @@ DIRECTRICES GENERALES DE GENERACIÓN:
    - Las preguntas de 'multiple-choice' (4 opciones) DEBEN PREDOMINAR, representando el 60% del contenido generado (~6 de cada 10 preguntas).
    - El 40% restante DEBE distribuirse de forma rotativa y balanceada entre los formatos interactivos: 'true-false' (Verdadero/Falso), 'matching' (Emparejamiento), 'drag-drop' (Completar huecos) y 'multi-select' (Selección múltiple).
    - Respeta estrictamente los tipos solicitados para cada pregunta en los parámetros del lote.
+11. PROHIBICIÓN ESTRICTA DE ENCABEZADOS O TÍTULOS COMO PREGUNTAS:
+   - El campo "pregunta" NUNCA debe ser una frase nominal o título suelto (ej. 'lesión cutánea elemental...', 'fisiopatología de la diabetes...'). Debe ser SIEMPRE una pregunta gramaticalmente completa con signos de interrogación ¿?, o una viñeta clínica/caso práctico contextualizado.
+12. REGLA ESTRICTA DE EMPAREJAMIENTO (MATCHING):
+   - En "pares_emparejamiento", el campo "termino" debe ser el concepto o término breve (1 a 4 palabras) y el campo "definicion" debe ser la explicación descriptiva (oración o frase completa de 5 a 20 palabras). NUNCA invertirlos.
+13. CERO PREFIJOS EN OPCIONES:
+   - Queda PROHIBIDO incluir prefijos como "A)", "B)", "Literal C)" dentro del texto de las opciones. Cada opción debe contener únicamente el texto sustantivo.
 
 FORMATO DE SALIDA (JSON ÚNICAMENTE):
 {
@@ -6179,6 +6192,9 @@ ${currentBatchTypes.map((t, idx) => `  * Pregunta ${idx + 1}: DEBE ser tipo '${t
 }`).join('\n')}
 - DISTRIBUCIÓN DE EXTENSIÓN (RELACIÓN 1:8 CORTAS vs DENSAS): La gran mayoría (~80%-85%) DEBEN ser enunciados CORTOS Y DIRECTOS (entre 8 y 22 palabras, 1 o 2 líneas sin preámbulos). Máximo 1 de cada 8 preguntas puede ser un caso clínico más extenso (35-50 palabras).
 - PROHIBICIÓN TOTAL DE PREÁMBULOS: CERO preámbulos como "Análisis Crítico:", "Evalúa la rigurosidad...", etc. El enunciado debe nombrar directamente la patología, fármaco o concepto central con su contexto fáctico.
+- CERO TÍTULOS SUELTOS: El enunciado de la pregunta DEBE ser una interrogación gramaticalmente completa con signos de interrogación ¿?, NUNCA un título copiado de diapositiva o frase nominal huérfana.
+- CERO PREFIJOS EN OPCIONES: Prohibido incluir 'A)', 'B)', 'Literal C)' dentro del texto de las opciones. Cada opción debe contener únicamente el texto sustantivo.
+- EMPAREJAMIENTO PRECISO: En 'pares_emparejamiento', 'termino' es el concepto o nombre breve (1 a 4 palabras) y 'definicion' es la explicación descriptiva (5 a 20 palabras).
 - CERO REFERENCIAS AL TEXTO: PROHIBIDO usar "según el texto", "conforme al documento" o frases similares.
 - CERO COMILLAS «»: Prohibido usar « y ». Usar comillas simples o dobles normales.
 - OPCIONES EQUILIBRADAS Y COMPLETAS: Las 4 opciones deben ser frases completas, con extensión similar (±20%), misma categoría gramatical y alta plausibilidad. PROHIBIDO opciones como "las siguientes:", palabras sueltas o mezclar largos dispares.
@@ -6454,8 +6470,9 @@ Genera exactamente ${batchCount} preguntas en formato JSON estricto:`;
             sourcePageOrSlide,
           };
 
-          if (isQuestionCompliantWithStandard(candidateQ)) {
-            collectedQuestions.push(candidateQ);
+          const repairedQ = repairQuestionStructure(candidateQ);
+          if (isQuestionCompliantWithStandard(repairedQ)) {
+            collectedQuestions.push(repairedQ);
           }
         }
       }
